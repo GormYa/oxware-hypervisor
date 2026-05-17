@@ -6197,7 +6197,8 @@ async function loadNodeSummary() {
     const swapPct = s.swap.percent;
     const load1m = s.cpu.load_avg["1min"];
     const cpuCount = infoData.host?.cpu_count_logical || 0;
-    const hostname = infoData.host?.hostname || "oxware";
+    const _hn = infoData.host?.hostname || "oxware";
+    const hostname = _hn.includes('.') ? _hn : _hn + ".local";
     const uptime = infoData.host?.uptime || "—";
 
     // Header
