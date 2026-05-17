@@ -354,9 +354,10 @@ def _flush_dnsmasq_lease(mac: str):
 
 def add_dhcp_host(network: str, mac: str, ip: str, hostname: str = "") -> bool:
     """Libvirt ağına static DHCP kaydı ekle (MAC→IP). dnsmasq anında görür."""
-    host_xml = f'<host mac="{mac}" ip="{ip}"'
+    import html as _html
+    host_xml = f'<host mac="{_html.escape(mac, quote=True)}" ip="{_html.escape(ip, quote=True)}"'
     if hostname:
-        host_xml += f' name="{hostname}"'
+        host_xml += f' name="{_html.escape(hostname, quote=True)}"'
     host_xml += '/>'
 
     # Önce aynı MAC için var olan eski kayıtları temizle
@@ -429,26 +430,35 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
         ci_dir = _tf.mkdtemp(prefix=f"ci-{vm_name}-")
         hostname = ci.get("hostname") or vm_name
 
+        # Sanitize: newline injection would break YAML structure
+        def _safe(s: str) -> str:
+            return s.replace("\r", "").replace("\n", "")
+
+        safe_user     = _safe(ci.get("user", "") or "")
+        safe_hostname = _safe(hostname)
+        safe_password = _safe(ci.get("password", "") or "")
+        safe_ssh_key  = _safe(ci.get("ssh_key", "") or "")
+
         # meta-data
-        meta = f"instance-id: {vm_name}\nlocal-hostname: {hostname}\n"
+        meta = f"instance-id: {vm_name}\nlocal-hostname: {safe_hostname}\n"
 
         # user-data YAML
         lines = ["#cloud-config"]
-        if ci.get("user"):
+        if safe_user:
             user_block = f"""users:
-  - name: {ci['user']}
+  - name: {safe_user}
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash"""
-            if ci.get("ssh_key"):
-                user_block += f"\n    ssh_authorized_keys:\n      - {ci['ssh_key'].strip()}"
-            if ci.get("password"):
+            if safe_ssh_key:
+                user_block += f"\n    ssh_authorized_keys:\n      - {safe_ssh_key}"
+            if safe_password:
                 user_block += f"\n    lock_passwd: false"
                 lines.append("chpasswd:")
-                lines.append(f"  list: |\n    {ci['user']}:{ci['password']}")
+                lines.append(f"  list: |\n    {safe_user}:{safe_password}")
                 lines.append("  expire: false")
             lines.append(user_block)
-        elif ci.get("ssh_key"):
-            lines.append(f"ssh_authorized_keys:\n  - {ci['ssh_key'].strip()}")
+        elif safe_ssh_key:
+            lines.append(f"ssh_authorized_keys:\n  - {safe_ssh_key}")
         if ci.get("user_data"):
             lines.append(ci["user_data"].strip())
 
@@ -513,7 +523,10 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
         check=True, capture_output=True
     )
 
-    # XML şablonu
+    # XML şablonu — kullanıcı girdilerini XML attribute injection'dan koru
+    import html as _html
+    network = _html.escape(network, quote=True)
+
     cpu_check = "none" if cpu_mode == "host-passthrough" else "partial"
     cpu_model_xml = "" if cpu_mode == "host-passthrough" else "    <model fallback='allow'/>"
     # cdrom her zaman sata/sdb — disk ile çakışmaz (virtio vda, sata sda)
@@ -1096,8 +1109,7 @@ def hot_attach_nic(vm_id: str, network: str = "default", model: str = "virtio") 
         running = (state_val == libvirt.VIR_DOMAIN_RUNNING)
 
         # Rastgele MAC üret
-        import random
-        mac = "52:54:00:%02x:%02x:%02x" % (random.randint(0,255), random.randint(0,255), random.randint(0,255))
+        mac = _generate_mac()
         nic_xml = f"""<interface type='network'>
   <mac address='{mac}'/>
   <source network='{network}'/>

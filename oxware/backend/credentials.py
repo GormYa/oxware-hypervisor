@@ -35,6 +35,9 @@ except ImportError:
     _CRYPTO = False
 
 
+_FALLBACK_KEY_FILE = "/etc/oxware/.machine_fallback_key"
+
+
 def _machine_key() -> bytes:
     """Makineye özgü şifreleme anahtarı üretir."""
     seeds = []
@@ -44,8 +47,18 @@ def _machine_key() -> bytes:
         except Exception:
             pass
     if not seeds:
-        # Fallback: sabit ama tutarlı bir seed
-        seeds.append("adaos-fallback-key-2024")
+        # machine-id yoksa: cihaza özel rastgele anahtar üret ve sakla
+        try:
+            if os.path.exists(_FALLBACK_KEY_FILE):
+                seeds.append(Path(_FALLBACK_KEY_FILE).read_text().strip())
+            else:
+                fallback = secrets.token_hex(32)
+                os.makedirs(os.path.dirname(_FALLBACK_KEY_FILE), exist_ok=True)
+                Path(_FALLBACK_KEY_FILE).write_text(fallback)
+                os.chmod(_FALLBACK_KEY_FILE, 0o600)
+                seeds.append(fallback)
+        except Exception:
+            seeds.append(secrets.token_hex(32))
     combined = "|".join(seeds) + "|adaos-v1"
     return hashlib.sha256(combined.encode()).digest()
 
