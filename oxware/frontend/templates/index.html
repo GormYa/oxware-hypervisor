@@ -180,23 +180,24 @@
     .esxi-host-left{width:340px;flex-shrink:0;padding:16px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;border-right:1px solid var(--border);background:var(--surface2)}
     .esxi-server-svg{width:80px;height:80px;flex-shrink:0;opacity:0.75}
     .esxi-host-identity{text-align:center}
-    .esxi-host-name{font-size:15px;font-weight:700;color:var(--accent-lt);margin-bottom:2px;word-break:break-all}
-    .esxi-host-state{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#22c55e;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:1px 8px;margin-top:4px}
-    .esxi-host-meta{width:100%;margin-top:4px}
-    .esxi-meta-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:10px;gap:8px}
+    .esxi-host-name{font-size:16px;font-weight:400;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#c8d6e8;margin-bottom:2px;word-break:break-all;letter-spacing:0}
+    .esxi-host-state{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:'Segoe UI',Arial,sans-serif;color:#22c55e;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:2px;padding:1px 8px;margin-top:4px;letter-spacing:.3px}
+    .esxi-host-meta{width:100%;margin-top:6px}
+    .esxi-meta-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid rgba(30,45,69,.6);font-size:11px;gap:8px;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif}
     .esxi-meta-row:last-child{border-bottom:none}
-    .esxi-meta-key{color:var(--text-dim);flex-shrink:0}
-    .esxi-meta-val{color:var(--text);text-align:right;font-size:10px;word-break:break-all}
-    .esxi-host-right{flex:1;padding:16px 22px;display:flex;flex-direction:column;justify-content:space-around;gap:4px}
-    .esxi-res-block{margin-bottom:8px}
+    .esxi-meta-key{color:#5a7494;flex-shrink:0;font-weight:400}
+    .esxi-meta-val{color:#8ba7c4;text-align:right;font-size:11px;word-break:break-all;font-weight:400}
+    .esxi-meta-val.accent{color:#5b9bd5;font-weight:600}
+    .esxi-host-right{flex:1;padding:18px 26px;display:flex;flex-direction:column;justify-content:space-around;gap:4px}
+    .esxi-res-block{margin-bottom:10px}
     .esxi-res-block:last-child{margin-bottom:0}
-    .esxi-res-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
-    .esxi-res-name{font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--text-dim)}
-    .esxi-res-stats{display:flex;gap:14px;font-size:10px;color:var(--text-muted)}
-    .esxi-res-stats .free{color:#64748b}
-    .esxi-res-stats .used{color:var(--text)}
-    .esxi-res-stats .cap{color:var(--text-dim)}
-    .esxi-res-stats span b{font-weight:600;color:var(--text)}
+    .esxi-res-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+    .esxi-res-name{font-size:11px;font-weight:600;letter-spacing:.6px;color:#5a7494;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif}
+    .esxi-res-stats{display:flex;gap:18px;font-size:11px;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif}
+    .esxi-res-stats .free{color:#4a6480}
+    .esxi-res-stats .used{color:#8ba7c4}
+    .esxi-res-stats .cap{color:#4a6480}
+    .esxi-res-stats span b{font-weight:600;color:#a8c0d8}
     .esxi-bar{height:10px;background:var(--surface3);border-radius:2px;overflow:hidden;position:relative}
     .esxi-bar-fill{height:100%;border-radius:2px;transition:width .5s ease;min-width:2px}
     .esxi-bar-fill.cpu{background:linear-gradient(90deg,#2a6dd9,#3d82f0)}
@@ -901,7 +902,7 @@
         <!-- ─────── Node Summary Page ─────── -->
         <div class="page active" id="page-summary">
           <div class="node-hdr" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div class="node-hdr-title" style="flex:1">Node '<span id="ns-hostname">oxware</span>'<span class="node-hdr-uptime">(Uptime: <span id="ns-uptime">—</span>)</span></div>
+            <div class="node-hdr-title" style="flex:1">Node '<span id="ns-hostname">oxware</span>'</div>
             <span id="ssh-status-badge" title="SSH Watchdog" style="font-size:11px;padding:2px 10px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.06);color:var(--text-muted)" onclick="openSshStatusModal()">🔑 SSH —</span>
             <button id="dash-edit-btn" class="btn sm" onclick="toggleDashEdit()" title="Widget sıralamasını düzenle">✏️ Düzenle</button>
           </div>
@@ -955,7 +956,7 @@
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Hypervisor</span>
-                  <span class="esxi-meta-val" id="ns-hv">QEMU/KVM</span>
+                  <span class="esxi-meta-val accent" id="ns-hv">QEMU/KVM</span>
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Version</span>
