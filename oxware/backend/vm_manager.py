@@ -193,19 +193,52 @@ def _parse_disk_info(xml_str):
     return disks
 
 
-def _parse_net_info(xml_str):
+def _get_dhcp_ip_for_mac(network: str, mac: str) -> str:
+    """
+    virsh net-dhcp-leases <network> çıktısından MAC'e karşılık gelen IP'yi döner.
+    Windows VM'lerde guest agent olmadan IP tespiti için kullanılır.
+    """
+    if not network or not mac:
+        return ""
+    try:
+        r = subprocess.run(
+            ["virsh", "net-dhcp-leases", network],
+            capture_output=True, text=True, timeout=5
+        )
+        mac_lower = mac.lower()
+        for line in r.stdout.splitlines():
+            if mac_lower in line.lower():
+                # Satır: <expiry>  <mac>  <proto>  <ip/prefix>  <hostname>  <clientid>
+                parts = line.split()
+                for part in parts:
+                    if "/" in part and "." in part:          # ipv4/prefix
+                        return part.split("/")[0]
+                    if ":" not in part and "." in part and part.count(".") == 3:
+                        return part                           # bare IP (no prefix)
+    except Exception:
+        pass
+    return ""
+
+
+def _parse_net_info(xml_str, resolve_ip: bool = False):
     interfaces = []
     try:
         root = ET.fromstring(xml_str)
         for iface in root.findall(".//interface"):
-            mac = iface.find("mac")
+            mac    = iface.find("mac")
             source = iface.find("source")
             target = iface.find("target")
+            mac_addr = mac.get("address", "") if mac is not None else ""
+            network  = source.get("network", source.get("bridge", "")) if source is not None else ""
+            ip_addr  = ""
+            if resolve_ip and mac_addr and network:
+                ip_addr = _get_dhcp_ip_for_mac(network, mac_addr)
             interfaces.append({
-                "mac": mac.get("address", "") if mac is not None else "",
-                "network": source.get("network", source.get("bridge", "")) if source is not None else "",
-                "device": target.get("dev", "") if target is not None else "",
-                "type": iface.get("type", ""),
+                "mac":     mac_addr,
+                "network": network,
+                "device":  target.get("dev", "") if target is not None else "",
+                "type":    iface.get("type", ""),
+                "ip":      ip_addr,
             })
     except Exception:
         pass
@@ -265,7 +298,7 @@ def get_vm(vm_id):
         stats = _get_domain_stats(dom)
         xml_str = dom.XMLDesc()
         disks = _parse_disk_info(xml_str)
-        nets = _parse_net_info(xml_str)
+        nets = _parse_net_info(xml_str, resolve_ip=True)   # DHCP lease lookup for IP
         vnc_port = _parse_vnc_port(xml_str)
         info = dom.info()
 
@@ -520,8 +553,6 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
       <spinlocks state='on' retries='8191'/>
       <vpindex state='on'/>
       <synic state='on'/>
-      <time state='on'/>
-      <stimer state='on'/>
       <reset state='on'/>
     </hyperv>""" if is_windows else ""
 
