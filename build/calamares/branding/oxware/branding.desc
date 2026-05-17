@@ -1,0 +1,32 @@
+---
+componentName: oxware
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo:  true
+
+strings:
+    productName:      "OXware Hypervisor"
+    shortProductName: "OXware"
+    version:          "2.0"
+    shortVersion:     "2.0"
+    versionedName:    "OXware Hypervisor 2.0"
+    shortVersionedName: "OXware 2.0"
+    bootloaderEntryName: "OXware"
+    productUrl:       "https://oxware.io"
+    supportUrl:       "https://oxware.io/support"
+    knownIssuesUrl:   "https://oxware.io/issues"
+    releaseNotesUrl:  "https://oxware.io/release-notes"
+
+images:
+    productLogo:      "oxware_logo.png"
+    productIcon:      "oxware_logo.png"
+    productWelcome:   "oxware_welcome.png"
+
+slideshow:               "show.qml"
+slideshowAPI:            2
+
+style:
+   sidebarBackground:    "#0d2340"
+   sidebarText:          "#c5d8f0"
+   sidebarTextSelect:    "#ffffff"
+   sidebarTextHighlight: "#1565c0"

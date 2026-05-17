@@ -43,7 +43,8 @@ apt-get update -qq
 apt-get install -y -qq \
     xorriso squashfs-tools wget curl \
     genisoimage grub-pc-bin grub-efi-amd64-bin mtools \
-    debootstrap git python3 rsync 2>/dev/null || true
+    debootstrap git python3 rsync \
+    python3-yaml 2>/dev/null || true
 log "Bağımlılıklar hazır"
 
 # ── Disk alanı kontrolü (15GB gerek) ──────────────────────────────────────────
@@ -197,34 +198,71 @@ done
 
 log "Tüm Ubuntu live servisler maskelendi (subiquity/console-conf/cloud-init)"
 
-# 3. OXware installer script kopyala
+# 3. OXware headless installer kopyala (Calamares job tarafından çağrılır)
 mkdir -p "$SQUASHFS_ROOT/opt/oxware-installer"
 cp "$SCRIPT_DIR/installer/install.py" "$SQUASHFS_ROOT/opt/oxware-installer/install.py"
 chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/install.py"
-log "install.py kopyalandı"
+cp "$SCRIPT_DIR/installer/oxware-start.sh" "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh"
+chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh"
 
-# 3b. TUI installer kopyala (curses tabanlı, X11/GTK gerektirmez)
-mkdir -p "$SQUASHFS_ROOT/opt/oxware-installer"
-[ -f "$SCRIPT_DIR/tui-installer/installer.py" ] && \
-    cp "$SCRIPT_DIR/tui-installer/installer.py" "$SQUASHFS_ROOT/opt/oxware-installer/installer.py"
-chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/installer.py"
-
-# Logo kopyala (gelecekte framebuffer kullanımı için)
+# Logo kopyala (Calamares branding için)
 [ -f "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" ] && \
-    cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" "$SQUASHFS_ROOT/opt/oxware-installer/oxware2.png"
+    cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" \
+       "$SQUASHFS_ROOT/opt/oxware-installer/oxware2.png"
 
-log "TUI installer kopyalandı"
+log "OXware installer kopyalandı"
 
-# 4. OXware kaynak kopyala (offline fallback için)
+# 4. Calamares branding ve config kopyala
+CALA_SRC="$SCRIPT_DIR/calamares"
+
+# Branding
+mkdir -p "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware"
+cp "$CALA_SRC/branding/oxware/branding.desc" \
+   "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/"
+cp "$CALA_SRC/branding/oxware/show.qml" \
+   "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/"
+# Logo: from installer assets
+[ -f "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" ] && {
+    cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" \
+       "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_logo.png"
+    cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" \
+       "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_welcome.png"
+}
+
+# Main settings
+mkdir -p "$SQUASHFS_ROOT/etc/calamares"
+cp "$CALA_SRC/settings.conf" "$SQUASHFS_ROOT/etc/calamares/"
+
+# Module confs
+mkdir -p "$SQUASHFS_ROOT/etc/calamares/modules"
+for conf in welcome locale keyboard partition users summary finished; do
+    [ -f "$CALA_SRC/modules/${conf}.conf" ] && \
+        cp "$CALA_SRC/modules/${conf}.conf" "$SQUASHFS_ROOT/etc/calamares/modules/"
+done
+
+# Custom Python job module
+mkdir -p "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install"
+cp "$CALA_SRC/modules/oxware_install/module.desc" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install/"
+cp "$CALA_SRC/modules/oxware_install/main.py" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install/"
+
+# Xorg config
+mkdir -p "$SQUASHFS_ROOT/etc/X11"
+cp "$CALA_SRC/oxware-xorg.conf" "$SQUASHFS_ROOT/etc/X11/oxware-xorg.conf"
+
+log "Calamares config kopyalandı"
+
+# 5. OXware kaynak kopyala (offline fallback için)
 mkdir -p "$SQUASHFS_ROOT/opt/oxware"
 rsync -a --exclude='.git' --exclude='*.pyc' --exclude='__pycache__' \
     "$REPO_ROOT/oxware/" "$SQUASHFS_ROOT/opt/oxware/"
 log "OXware kaynakları kopyalandı"
 
-# 5. oxware-installer.service — tty1'e bağlı, ilk çalışan servis
+# 6. oxware-installer.service — grafik Calamares başlat
 cat > "$SQUASHFS_ROOT/etc/systemd/system/oxware-installer.service" << 'SVC'
 [Unit]
-Description=OXware Hypervisor Installer
+Description=OXware Hypervisor Graphical Installer (Calamares)
 After=systemd-remount-fs.service systemd-udevd.service local-fs.target
 DefaultDependencies=no
 Conflicts=getty@tty1.service
@@ -234,29 +272,29 @@ Conflicts=console-conf@tty1.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /opt/oxware-installer/installer.py
-StandardInput=tty
-StandardOutput=tty
-StandardError=tty
+ExecStart=/opt/oxware-installer/oxware-start.sh
+StandardOutput=journal
+StandardError=journal
 TTYPath=/dev/tty1
-TTYReset=yes
-TTYVHangup=yes
 KillMode=process
 IgnoreSIGPIPE=no
 Restart=on-failure
-RestartSec=3
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=HOME=/root
+Environment=XDG_RUNTIME_DIR=/tmp/xdg-runtime-oxware
 
 [Install]
 WantedBy=multi-user.target
 SVC
 
-# 6. Servisi etkinleştir
+# 7. Servisi etkinleştir
 mkdir -p "$SQUASHFS_ROOT/etc/systemd/system/multi-user.target.wants"
 ln -sf /etc/systemd/system/oxware-installer.service \
     "$SQUASHFS_ROOT/etc/systemd/system/multi-user.target.wants/oxware-installer.service"
-log "oxware-installer.service etkinleştirildi"
+log "oxware-installer.service (Calamares) etkinleştirildi"
 
-# 7. debootstrap'i build host'tan kopyala (chroot apt genelde başarısız olur)
+# 8. debootstrap'i build host'tan kopyala
 log "debootstrap build host'tan kopyalanıyor..."
 if [ -f "/usr/sbin/debootstrap" ]; then
     cp /usr/sbin/debootstrap "$SQUASHFS_ROOT/usr/sbin/debootstrap"
@@ -266,7 +304,6 @@ if [ -d "/usr/share/debootstrap" ]; then
     mkdir -p "$SQUASHFS_ROOT/usr/share/debootstrap"
     cp -r /usr/share/debootstrap/. "$SQUASHFS_ROOT/usr/share/debootstrap/"
 fi
-# Debian bookworm keyring (debootstrap için gerekli)
 for keyring_dir in /usr/share/keyrings /etc/apt/trusted.gpg.d; do
     [ -d "$keyring_dir" ] && {
         mkdir -p "$SQUASHFS_ROOT$keyring_dir"
@@ -276,17 +313,14 @@ for keyring_dir in /usr/share/keyrings /etc/apt/trusted.gpg.d; do
 done
 log "debootstrap hazır: $(debootstrap --version 2>/dev/null || echo 'version unknown')"
 
-# 8. Chroot: python3-curses, git, parted kur
-log "Chroot: paketler kuruluyor..."
+# 9. Chroot: Calamares + X11 + Qt5 kur
+log "Chroot: Calamares + X11 + Qt5 paketleri kuruluyor (~10 dk)..."
 
-# Mount noktaları squashfs içinde yoksa oluştur
 mkdir -p "$SQUASHFS_ROOT/proc" "$SQUASHFS_ROOT/sys" \
          "$SQUASHFS_ROOT/dev"  "$SQUASHFS_ROOT/dev/pts"
 
-# Network: resolv.conf kopyala (apt-get için internet erişimi)
 cp /etc/resolv.conf "$SQUASHFS_ROOT/etc/resolv.conf" 2>/dev/null || true
 
-# Trap ÖNCE kur — herhangi bir mount failse cleanup çalışsın
 cleanup_mounts() {
     umount "$SQUASHFS_ROOT/dev/pts" 2>/dev/null || true
     umount "$SQUASHFS_ROOT/dev"     2>/dev/null || true
@@ -303,18 +337,60 @@ mount --bind /dev/pts "$SQUASHFS_ROOT/dev/pts"
 chroot "$SQUASHFS_ROOT" /bin/bash << 'CHROOT'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq 2>/dev/null || true
-# TUI installer: sadece curses (stdlib) + disk/ağ araçları gerekli
-# X11/GTK/webkit GEREKMEZ — curses terminal üzerinde çalışır
+
+# Calamares grafik installer: Qt5 + X11 + Calamares + KPMcore
 apt-get install -y -qq --no-install-recommends \
-    python3 python3-curses \
+    calamares \
+    calamares-data \
+    calamares-settings-ubuntu 2>/dev/null || true
+
+# Calamares bağımlılıkları (Ubuntu 22.04'te package name farklı olabilir)
+apt-get install -y -qq --no-install-recommends \
+    xorg \
+    xinit \
+    xserver-xorg-video-all \
+    xserver-xorg-input-all \
+    openbox \
+    qt5-default \
+    libqt5core5a \
+    libqt5gui5 \
+    libqt5widgets5 \
+    libqt5qml5 \
+    qml-module-qtquick2 \
+    qml-module-qtquick-controls2 \
+    2>/dev/null || true
+
+# KPMcore (partition module için)
+apt-get install -y -qq --no-install-recommends \
+    libkpmcore11 \
+    kpmcore \
+    2>/dev/null || true
+
+# Python Calamares modülleri için
+apt-get install -y -qq --no-install-recommends \
+    python3 \
+    python3-yaml \
+    python3-parted \
+    2>/dev/null || true
+
+# Disk/ağ araçları (headless installer çağırır)
+apt-get install -y -qq --no-install-recommends \
+    python3-curses \
     git parted dosfstools e2fsprogs util-linux \
     iproute2 dhclient \
     2>/dev/null || true
+
+# Calamares Ubuntu package farklı isimde gelebilir — fallback
+if ! command -v calamares &>/dev/null; then
+    apt-get install -y -qq --no-install-recommends \
+        calamares \
+        2>/dev/null || true
+fi
 CHROOT
 
 cleanup_mounts
 trap - EXIT
-log "Chroot paketler tamam"
+log "Chroot paketler tamam (Calamares + X11)"
 
 # ── Squashfs Yeniden Paketle ──────────────────────────────────────────────────
 step "Squashfs Yeniden Paketleniyor (~10 dk)"
@@ -444,8 +520,8 @@ echo -e "${CYAN}║${NC}  Dosya  : ${WHITE}$(basename "$OUTPUT_ISO")${NC}"
 echo -e "${CYAN}║${NC}  Boyut  : ${WHITE}${ISO_SIZE}${NC}"
 echo -e "${CYAN}║${NC}  SHA256 : ${WHITE}$(head -c 32 "${OUTPUT_ISO}.sha256")...${NC}"
 echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
-echo -e "${CYAN}║${NC}  Boot edince: OXware TUI installer açılır                  ${CYAN}║${NC}"
-echo -e "${CYAN}║${NC}  Kurulum: TUI'de kullanıcı adı ve şifre belirle            ${CYAN}║${NC}"
+echo -e "${CYAN}║${NC}  Boot edince: OXware grafik installer açılır (Calamares)   ${CYAN}║${NC}"
+echo -e "${CYAN}║${NC}  Kurulum: Qt5 GUI'de disk, kullanıcı ve locale seç         ${CYAN}║${NC}"
 echo -e "${CYAN}║${NC}  Web UI  : https://<ip>:8006 (kurulum sonrası)             ${CYAN}║${NC}"
 echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${NC}"
 echo -e "${CYAN}║${NC}  USB: sudo dd if=$(basename "$OUTPUT_ISO") of=/dev/sdX bs=4M${NC}"
