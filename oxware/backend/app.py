@@ -3487,7 +3487,7 @@ def ws_shell_open(data=None):
 
         # bash -i: interactive mode zorla (PTY stdin olsa bile bazı env'lerde gerekli)
         proc = subprocess.Popen(
-            ["/bin/bash", "-i", "--norc", "--noprofile"],
+            ["/bin/bash"],
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
             close_fds=True, preexec_fn=os.setsid,
             env={**os.environ, "TERM": "xterm-256color", "PS1": r"\u@oxware:\w\$ "},
