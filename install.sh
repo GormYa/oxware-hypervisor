@@ -399,6 +399,9 @@ generate_ssl() {
 write_config() {
     step "Konfigürasyon Yazılıyor"
     mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$DATA_DIR"/{isos,disks,backups,templates}
+    # Sadece root yazabilsin — root olmayan SSH kullanıcıları .passwd_reset oluşturamaz
+    chown root:root "$CONFIG_DIR"
+    chmod 700 "$CONFIG_DIR"
     SECRET=$(openssl rand -hex 32)
     cat > "$CONFIG_DIR/oxware.conf" << CONF
 [server]
@@ -469,7 +472,7 @@ Environment=OXWARE_CONFIG=${CONFIG_DIR}/oxware.conf
 Environment=PYTHONUNBUFFERED=1
 
 # Dizinleri oluştur
-ExecStartPre=/bin/bash -c 'mkdir -p ${LOG_DIR} ${DATA_DIR}/{isos,disks,backups,templates} /etc/oxware'
+ExecStartPre=/bin/bash -c 'mkdir -p ${LOG_DIR} ${DATA_DIR}/{isos,disks,backups,templates} /etc/oxware && chown root:root /etc/oxware && chmod 700 /etc/oxware'
 # libvirtd soketini bekle (reboot sonrası geç hazır olabilir)
 ExecStartPre=/bin/bash -c 'for i in \$(seq 1 15); do virsh list >/dev/null 2>&1 && break; sleep 2; done; true'
 # default ağı başlat (autostart bazen reboot'ta çalışmıyor)

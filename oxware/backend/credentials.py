@@ -180,13 +180,23 @@ def apply_reset_if_exists():
         return False
 
     try:
-        # Güvenlik: dosya world/group-readable ise reddet
         import stat as _stat
         _st = os.stat(RESET_FILE)
-        if _st.st_mode & (_stat.S_IRWXG | _stat.S_IRWXO):
-            print(f"[credentials] RESET_FILE group/world-readable — güvenlik riski, işlem reddedildi: {RESET_FILE}")
+
+        # Dosya root (uid=0) tarafından oluşturulmuş olmalı
+        if _st.st_uid != 0:
+            print(f"[credentials] RESET_FILE root'a ait değil (uid={_st.st_uid}) — reddedildi: {RESET_FILE}")
             try:
-                os.chmod(RESET_FILE, 0o600)
+                os.remove(RESET_FILE)
+            except OSError:
+                pass
+            return False
+
+        # Güvenlik: dosya group/world-readable ise reddet
+        if _st.st_mode & (_stat.S_IRWXG | _stat.S_IRWXO):
+            print(f"[credentials] RESET_FILE group/world-readable — güvenlik riski, reddedildi: {RESET_FILE}")
+            try:
+                os.remove(RESET_FILE)
             except OSError:
                 pass
             return False
