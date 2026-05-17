@@ -3190,12 +3190,15 @@ def api_event_stats():
 @require_role("admin", "administrator")
 def api_system_reboot():
     try:
-        if os.geteuid() != 0:
-            return err("Backend root olarak çalışmıyor — reboot yetkisi yok", 403)
-        subprocess.Popen(["reboot"])
+        if os.geteuid() == 0:
+            subprocess.Popen(["reboot"])
+        else:
+            r = subprocess.run(["sudo", "-n", "reboot"], capture_output=True)
+            if r.returncode != 0:
+                return err("Reboot başarısız: sudo yetkisi yok. Backend'i root olarak çalıştırın veya sudoers'a ekleyin.", 403)
         return ok(message="Yeniden başlatılıyor")
     except Exception as e:
-        return err(e, 500)
+        return err(str(e), 500)
 
 
 @app.route("/api/system/shutdown", methods=["POST"])
@@ -3203,12 +3206,15 @@ def api_system_reboot():
 @require_role("admin", "administrator")
 def api_system_shutdown():
     try:
-        if os.geteuid() != 0:
-            return err("Backend root olarak çalışmıyor — shutdown yetkisi yok", 403)
-        subprocess.Popen(["shutdown", "-h", "now"])
+        if os.geteuid() == 0:
+            subprocess.Popen(["shutdown", "-h", "now"])
+        else:
+            r = subprocess.run(["sudo", "-n", "shutdown", "-h", "now"], capture_output=True)
+            if r.returncode != 0:
+                return err("Shutdown başarısız: sudo yetkisi yok. Backend'i root olarak çalıştırın veya sudoers'a ekleyin.", 403)
         return ok(message="Kapatılıyor")
     except Exception as e:
-        return err(e, 500)
+        return err(str(e), 500)
 
 
 @app.route("/api/system/info")

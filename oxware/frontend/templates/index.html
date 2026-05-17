@@ -737,9 +737,10 @@
       .tb-logo-icon img{width:30px!important;height:30px!important}
       .btn,.btn-primary,.btn-sm{padding:5px 8px!important;font-size:11px!important}
       .badge{font-size:9px!important;padding:1px 5px!important}
-      /* telefonda topbar'da sadece Create VM + OXY göster */
-      .tb-actions .tb-action:not(.primary):not(#oxy-btn){display:none!important}
+      /* telefonda tüm topbar butonları icon-only göster (900px kuralı text'i zaten gizliyor) */
       .tb-actions #oxy-btn>span:first-of-type{display:none}
+      .tb-actions .tb-action{padding:0 8px!important}
+      .tb-actions .tb-action svg{width:16px!important;height:16px!important}
       .page{padding:8px!important}
       .chart-container{height:140px!important}
     }
@@ -8790,7 +8791,9 @@ function confirmShutdown(action) {
 /* ══════════════════ Host Power Control ══════════════════ */
 
 function confirmHostAction(action) {
-  if (!isAdmin) { toast("Yetki gerekli: admin", "error"); return; }
+  const _role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "administrator").toLowerCase();
+  const _isAdmin = _role === "administrator" || _role === "admin";
+  if (!_isAdmin) { toast("Yetki gerekli: admin (mevcut rol: " + _role + ")", "error"); return; }
   const msg = action === 'reboot'
     ? 'Host sunucu yeniden başlatılsın mı? Tüm VM bağlantıları kesilecek.'
     : 'Host sunucu kapatılsın mı? Tüm VM\'ler durdurulacak.';

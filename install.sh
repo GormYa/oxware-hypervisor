@@ -617,7 +617,7 @@ systemctl stop oxware 2>/dev/null || true
 if [ -d "\${INSTALL_DIR}/.git" ]; then
     echo -e "\${CYAN}[i]\${NC} GitHub'dan güncelleniyor..."
     cd "\${INSTALL_DIR}"
-    git fetch origin master
+    git fetch origin main
     git reset --hard origin/main
     echo -e "\${GREEN}[✓]\${NC} Kod güncellendi"
 else
