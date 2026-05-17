@@ -114,7 +114,11 @@ def run(cmd, check=True, capture=False, input_text=None):
     return subprocess.run(cmd, **kwargs)
 
 def run_chroot(cmd, check=True):
-    return run(f"chroot {TARGET_MOUNT} /bin/bash -c {repr(cmd)}", check=check)
+    # Use list args — no shell, no repr() injection risk
+    return subprocess.run(
+        ["chroot", TARGET_MOUNT, "/bin/bash", "-c", cmd],
+        check=check
+    )
 
 # ── drawing primitives ─────────────────────────────────────────────────────────
 
@@ -832,8 +836,11 @@ def do_install(progress_cb):
         _ifaces = [i.strip() for i in _ifaces_raw.stdout.splitlines() if i.strip()]
 
         for _iface in _ifaces:
-            subprocess.run(f"ip link set {_iface} up", shell=True, check=False)
-            subprocess.run(f"dhclient -v {_iface}", shell=True, check=False, timeout=30)
+            # Validate interface name — allow only safe characters (prevent injection)
+            if not __import__("re").match(r"^[a-zA-Z0-9_@.-]{1,15}$", _iface):
+                continue
+            subprocess.run(["ip", "link", "set", _iface, "up"], check=False)
+            subprocess.run(["dhclient", "-v", _iface], check=False, timeout=30)
             # Quick check after each iface
             _chk = subprocess.run(
                 "curl -sf --max-time 4 http://archive.ubuntu.com/ubuntu/dists/jammy/Release -o /dev/null",

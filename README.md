@@ -369,7 +369,7 @@ Bitiş IP:     192.168.100.100
 ### API ile:
 
 ```bash
-curl -k -s -X POST https://localhost:8006/api/ippool \
+curl --cacert /etc/oxware/ssl/oxware.crt -s -X POST https://localhost:8006/api/ippool \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -414,7 +414,7 @@ curl -k -s -X POST https://localhost:8006/api/ippool \
 IP havuzu tanımlıysa `POST /api/provision` ile tam otomatik:
 
 ```bash
-curl -k -X POST https://localhost:8006/api/provision \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST https://localhost:8006/api/provision \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -636,11 +636,11 @@ sysctl -w net.ipv4.conf.all.accept_redirects=0
 
 ```bash
 # API ile kilitli hesapları görüntüle
-curl -k -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/security/lockouts
 
 # Belirli bir hesabı manuel aç
-curl -k -X DELETE -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X DELETE -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/security/lockouts/<username>
 ```
 
@@ -665,13 +665,13 @@ Her gün belirlenen saatte tüm VM'lerin snapshot'ını otomatik alır, eski sna
 
 ```bash
 # Konfigürasyonu güncelle
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/auto-snapshot/config \
   -d '{"enabled": true, "hour": 3, "minute": 0, "keep_days": 14}'
 
 # Manuel tetikle
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/auto-snapshot/run
 ```
 
@@ -688,7 +688,7 @@ Bir VM'e özel yedekleme diski bağlamak için:
 
 ```bash
 # API ile
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/backup/disks \
   -d '{"vm_id": "vm-01", "label": "backup", "size_gb": 100, "bus": "sata"}'
@@ -718,11 +718,11 @@ AI ajan yapılandırıldıysa yeni commit'ler Türkçe olarak özetlenir:
 ### Manuel kontrol
 
 ```bash
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/update/check
 
 # Son kontrol sonucunu al
-curl -k -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/update/last
 ```
 
@@ -803,11 +803,11 @@ OXware her girişte JWT token oluşturur ve sunucu tarafında takip eder.
 
 ```bash
 # Tüm aktif oturumları listele
-curl -k -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/sessions
 
 # Belirli oturumu iptal et (session_id = jti'nin ilk 8 karakteri)
-curl -k -X DELETE -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X DELETE -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/sessions/<session_id>
 ```
 
@@ -834,11 +834,11 @@ API ve web arayüzüne yalnızca belirli IP adreslerinden erişimi kısıtlayabi
 
 ```bash
 # Mevcut listeyi görüntüle
-curl -k -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/settings/ip-allowlist
 
 # Güncelle
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/settings/ip-allowlist \
   -d '{"enabled": true, "allowed_ips": ["203.0.113.10", "192.168.1.0/24"]}'
@@ -873,17 +873,17 @@ VM'leri belirli saat ve günlerde otomatik olarak başlatın, durdurun veya yeni
 
 ```bash
 # Zamanlamaları listele
-curl -k -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/vm-schedules
 
 # Yeni zamanlama ekle (her gün 02:00'da vm-01'i kapat)
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/vm-schedules \
   -d '{"vm_id": "vm-01", "vm_name": "web-server", "action": "shutdown", "hour": 2, "minute": 0}'
 
 # Zamanlama sil
-curl -k -X DELETE -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X DELETE -H "Authorization: Bearer <TOKEN>" \
   https://localhost:8006/api/vm-schedules/<sched_id>
 ```
 
@@ -898,7 +898,7 @@ Zamanlama kayıtları `/var/lib/oxware/vm_schedules.json` dosyasında saklanır.
 Mevcut bir VM'in tam kopyasını oluşturun:
 
 ```bash
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/vms/<vm_id>/clone \
   -d '{"new_name": "web-server-clone"}'
@@ -912,7 +912,7 @@ Birden fazla VM'i tek seferde yönetin:
 
 ```bash
 # Birden fazla VM'i başlat
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/vms/bulk \
   -d '{"vm_ids": ["vm-01", "vm-02", "vm-03"], "action": "start"}'
@@ -1078,7 +1078,7 @@ Web arayüzü: **Ayarlar → SSL Sertifika Yönetimi → Let's Encrypt** alanın
 
 Veya API:
 ```bash
-curl -k -X POST -H "Authorization: Bearer <TOKEN>" \
+curl --cacert /etc/oxware/ssl/oxware.crt -X POST -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   https://localhost:8006/api/ssl/letsencrypt \
   -d '{"domain": "oxware.domain.com", "email": "admin@domain.com"}'
@@ -1469,7 +1469,7 @@ sudo ufw reload
 ```bash
 sudo systemctl status oxware
 sudo journalctl -u oxware -n 20 --no-pager
-curl -k -s -o /dev/null -w "%{http_code}" https://localhost:8006/
+curl --cacert /etc/oxware/ssl/oxware.crt -s -o /dev/null -w "%{http_code}" https://localhost:8006/
 # 200 veya 302 çıkmalı
 echo "Web: https://$(hostname -I | awk '{print $1}'):8006"
 ```

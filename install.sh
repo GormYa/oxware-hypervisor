@@ -180,6 +180,7 @@ update_mode() {
         source "${VENV_DIR}/bin/activate"
         if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
             _REQ_TMP=$(mktemp)
+            trap 'rm -f "$_REQ_TMP"' RETURN EXIT
             grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
             pip install -r "$_REQ_TMP" -q 2>/dev/null || true
             rm -f "$_REQ_TMP"
@@ -328,6 +329,7 @@ setup_python() {
         # libvirt-python: apt paketi kullan (pip derlemesi Ubuntu <24.04'te bozuk)
         # blinker: sistem distutils paketi varsa pip uninstall yapamaz — filtrele
         _REQ_TMP=$(mktemp)
+        trap 'rm -f "$_REQ_TMP"' RETURN EXIT
         grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
         log "Python bağımlılıkları yükleniyor..."
         if ! pip install -r "$_REQ_TMP" --quiet 2>&1; then
