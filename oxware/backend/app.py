@@ -3185,6 +3185,32 @@ def api_event_stats():
     return ok(stats=ev.get_event_stats())
 
 # ── Sistem ────────────────────────────────────────────────────────────────────
+@app.route("/api/system/reboot", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_system_reboot():
+    try:
+        if os.geteuid() != 0:
+            return err("Backend root olarak çalışmıyor — reboot yetkisi yok", 403)
+        subprocess.Popen(["reboot"])
+        return ok(message="Yeniden başlatılıyor")
+    except Exception as e:
+        return err(e, 500)
+
+
+@app.route("/api/system/shutdown", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_system_shutdown():
+    try:
+        if os.geteuid() != 0:
+            return err("Backend root olarak çalışmıyor — shutdown yetkisi yok", 403)
+        subprocess.Popen(["shutdown", "-h", "now"])
+        return ok(message="Kapatılıyor")
+    except Exception as e:
+        return err(e, 500)
+
+
 @app.route("/api/system/info")
 @require_auth
 def api_system_info():
@@ -3489,7 +3515,8 @@ def ws_shell_open(data=None):
                       to=sid, namespace="/")
 
         eventlet.spawn(_read_loop)
-        _shell_emit("\r\nOXware Host Shell — güvenli terminal\r\n")
+        root_warn = "" if os.geteuid() == 0 else "\r\n\x1b[33m[Uyarı: Backend root değil — bazı komutlar çalışmayabilir]\x1b[0m"
+        _shell_emit(f"\r\nOXware Host Shell — {'root' if os.geteuid() == 0 else os.getlogin() if hasattr(os, 'getlogin') else 'user'}{root_warn}\r\n")
         log.info("Shell başlatıldı: sid=%s pid=%d", sid, proc.pid)
 
     except Exception as e:

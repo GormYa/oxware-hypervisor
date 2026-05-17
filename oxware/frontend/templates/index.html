@@ -737,6 +737,9 @@
       .tb-logo-icon img{width:30px!important;height:30px!important}
       .btn,.btn-primary,.btn-sm{padding:5px 8px!important;font-size:11px!important}
       .badge{font-size:9px!important;padding:1px 5px!important}
+      /* telefonda topbar'da sadece Create VM + OXY göster */
+      .tb-actions .tb-action:not(.primary):not(#oxy-btn){display:none!important}
+      .tb-actions #oxy-btn>span:first-of-type{display:none}
       .page{padding:8px!important}
       .chart-container{height:140px!important}
     }
@@ -820,11 +823,11 @@
         <svg viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 01.192.41l-1.966 2.36a.25.25 0 01-.384 0l-1.966-2.36a.25.25 0 01.192-.41zm-11 2h3.932a.25.25 0 00.192-.41L2.692 6.23a.25.25 0 00-.384 0L.342 8.59A.25.25 0 00.534 9z"/></svg>
         <span data-i18n="Updates">Updates</span> <span id="update-badge" style="display:none;background:var(--orange);color:#000;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px">!</span>
       </button>
-      <button class="tb-action" onclick="confirmShutdown('reboot')">
+      <button class="tb-action" onclick="confirmHostAction('reboot')">
         <svg viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 00-1 0V9a.5.5 0 00.252.434l3.5 2a.5.5 0 00.496-.868L8 8.71V3.5z"/><path d="M8 16A8 8 0 108 0a8 8 0 000 16zm7-8A7 7 0 111 8a7 7 0 0114 0z"/></svg>
         <span data-i18n="Reboot">Reboot</span>
       </button>
-      <button class="tb-action" onclick="confirmShutdown('shutdown')">
+      <button class="tb-action" onclick="confirmHostAction('shutdown')">
         <svg viewBox="0 0 16 16"><path d="M7.5 1v7h1V1h-1z"/><path d="M3 8.812a4.999 4.999 0 012.578-4.375l-.485-.874A6 6 0 1011 3.616l-.501.865A5 5 0 113 8.812z"/></svg>
         <span data-i18n="Shutdown">Shutdown</span>
       </button>
@@ -6247,13 +6250,11 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `${infoData.host?.os || "Linux"} ${infoData.host?.kernel || ""}`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.0.0"}-generic#Ubuntu`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available ✓" : "Not Available ✗";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
-    if (infoData.libvirt) {
-      document.getElementById("ns-hv").textContent = `${infoData.libvirt.hypervisor_type || "QEMU"} ${infoData.libvirt.hypervisor_version || ""}`;
-    }
+    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.0.0"}`;
 
     // Topbar stats
     document.getElementById("tb-cpu").textContent = cpuPct.toFixed(0) + "%";
@@ -8784,6 +8785,26 @@ function confirmShutdown(action) {
     // Graceful stop kaldırıldı — force stop kullan
     vmForceStop(currentVmId);
   }
+}
+
+/* ══════════════════ Host Power Control ══════════════════ */
+
+function confirmHostAction(action) {
+  if (!isAdmin) { toast("Yetki gerekli: admin", "error"); return; }
+  const msg = action === 'reboot'
+    ? 'Host sunucu yeniden başlatılsın mı? Tüm VM bağlantıları kesilecek.'
+    : 'Host sunucu kapatılsın mı? Tüm VM\'ler durdurulacak.';
+  if (!confirm(msg)) return;
+  fetch(`/api/system/${action}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${TOKEN()}`, 'Content-Type': 'application/json' }
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.status === 'ok') toast(action === 'reboot' ? 'Yeniden başlatılıyor...' : 'Kapatılıyor...', 'info');
+      else toast(d.error || 'İşlem başarısız', 'error');
+    })
+    .catch(() => toast('Bağlantı hatası', 'error'));
 }
 
 /* ══════════════════ Shell Console ══════════════════ */
