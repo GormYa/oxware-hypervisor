@@ -1459,15 +1459,48 @@ def api_create_vm():
         pool_name = security.sanitize_str(data.get("ip_pool", ""), 64)
         if auto_ip and pool_name and vm_mac:
             try:
-                alloc = ip_pool_mgr.allocate_ip(pool_name, vm_id, name, vm_mac)
-                # Pool'un libvirt_network'ünü kullan (VM'in network'ü değil)
-                dhcp_net = alloc.get("libvirt_network") or network
-                vm_manager.add_dhcp_host(dhcp_net, vm_mac, alloc["ip"], name)
-                result["assigned_ip"] = alloc["ip"]
-                result["gateway"]     = alloc["gateway"]
-                result["dns"]         = alloc["dns"]
-                result["netmask"]     = alloc["netmask"]
-                ev.vm_event(f"IP atandı: {alloc['ip']} ({pool_name})", vm_id, level="INFO")
+                alloc        = ip_pool_mgr.allocate_ip(pool_name, vm_id, name, vm_mac)
+                assigned_ip  = alloc["ip"]
+                dhcp_net     = alloc.get("libvirt_network") or network
+
+                # NAT gerekli mi? (public IP libvirt subnet dışındaysa)
+                _nat_needed   = False
+                _internal_ip  = assigned_ip
+                try:
+                    _lv_nets  = network_manager.list_networks()
+                    _virbr    = next((n for n in _lv_nets if n["name"] == "default"), None)
+                    if _virbr:
+                        _virbr_net = ipaddress.IPv4Network(
+                            f"{_virbr['ip']}/{_virbr.get('netmask','255.255.255.0')}", strict=False
+                        )
+                        if ipaddress.IPv4Address(assigned_ip) not in _virbr_net:
+                            _nat_needed  = True
+                            _internal_ip = _mac_to_internal_ip(vm_mac)
+                            dhcp_net     = "default"
+                except Exception:
+                    pass
+
+                vm_manager.add_dhcp_host(dhcp_net, vm_mac, _internal_ip, name)
+
+                if _nat_needed:
+                    _setup_nat(assigned_ip, _internal_ip)
+                    ip_pool_mgr.manual_assign(ip=_internal_ip, mac=vm_mac, vm_name=name,
+                                              pool_name="__internal__", vm_id=vm_id)
+                    threading.Thread(
+                        target=_post_install_nat_sync,
+                        args=(vm_id, name, vm_mac, assigned_ip),
+                        daemon=True,
+                        name=f"post-install-nat-{name}"
+                    ).start()
+                    log.info("Auto IP + NAT kuruldu: %s → %s (internal: %s)", name, assigned_ip, _internal_ip)
+
+                result["assigned_ip"]  = assigned_ip
+                result["internal_ip"]  = _internal_ip if _nat_needed else None
+                result["nat_mode"]     = _nat_needed
+                result["gateway"]      = alloc["gateway"]
+                result["dns"]          = alloc["dns"]
+                result["netmask"]      = alloc["netmask"]
+                ev.vm_event(f"IP atandı: {assigned_ip} ({pool_name}){' [NAT]' if _nat_needed else ''}", vm_id, level="INFO")
             except Exception as _ip_e:
                 log.warning("Auto IP atama başarısız vm=%s: %s", vm_id, _ip_e)
                 result["auto_ip_error"] = str(_ip_e)
@@ -1567,6 +1600,29 @@ def api_start_vm(vm_id):
         if hook_mgr:
             try: hook_mgr.run_hooks("post-start", vm_id, _vm_name_start)
             except Exception as _he: log.warning("post-start hook hatası vm=%s: %s", vm_id, _he)
+
+        # VM'in public IP ataması varsa NAT kurallarını arka planda senkronize et
+        try:
+            _si   = _vm_start_info if "_vm_start_info" in dir() else vm_manager.get_vm(vm_id)
+            _nets = (_si.get("networks", []) or []) if _si else []
+            _mac  = (_si.get("mac", "") or (_nets[0].get("mac", "") if _nets else "")) if _si else ""
+            if _mac:
+                _pub = next(
+                    (a for a in ip_pool_mgr.list_assignments()
+                     if a.get("mac") == _mac and a.get("pool") not in ("__internal__", "")),
+                    None
+                )
+                if _pub:
+                    threading.Thread(
+                        target=_post_install_nat_sync,
+                        args=(vm_id, _vm_name_start, _mac, _pub["ip"]),
+                        daemon=True,
+                        name=f"nat-autostart-{vm_id[:8]}"
+                    ).start()
+                    log.info("NAT auto-sync tetiklendi: %s → %s", _mac, _pub["ip"])
+        except Exception as _nse:
+            log.warning("NAT auto-sync başlatılamadı vm=%s: %s", vm_id, _nse)
+
         return ok(**r)
     except Exception as e:
         return err(e, 500)
