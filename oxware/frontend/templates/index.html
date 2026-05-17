@@ -2519,27 +2519,23 @@
             </div>
           </div>
 
-          <!-- Şifre Sıfırlama -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title"><i class="fa-solid fa-key" style="color:var(--yellow-lt);margin-right:6px"></i>Şifre Sıfırlama</div>
+          <!-- SSH Şifre Sıfırlama (Yalnızca Yönetici) -->
+          <div class="card" id="ssh-reset-panel" style="margin-top:14px;display:none">
+            <div class="card-title"><i class="fa-solid fa-terminal" style="color:var(--yellow-lt);margin-right:6px"></i>SSH ile Şifre Sıfırlama <span style="font-size:10px;font-weight:400;color:var(--text-muted);margin-left:8px">Yalnızca Yönetici</span></div>
             <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px">
-              Şifreyi unuttuysan token oluştur. SMTP yapılandırılmışsa e-posta gönderilir, yoksa token bu ekranda gösterilir.
+              Şifreyi değiştirmek için SSH ile sunucuya root olarak bağlan ve aşağıdaki komutu çalıştır. Servis yeniden başlatıldığında uygulanır ve dosya silinir.
             </p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:flex-end">
-              <div class="form-row" style="margin:0"><label>Kullanıcı Adı</label><input id="pwreset-user" type="text" class="form-control" placeholder="admin"></div>
-              <button class="btn-primary" onclick="requestPasswordReset()" style="height:36px">🔑 Token Oluştur</button>
+            <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;font-family:monospace;font-size:12px;color:#79c0ff;line-height:1.8">
+              <div style="color:#8b949e;font-size:10px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px"># Adım 1 — Sıfırlama dosyasını oluştur (root)</div>
+              <div>printf 'USERNAME=<span style="color:#e6edf3">yeni_kullanici</span>\nPASSWORD=<span style="color:#e6edf3">yeni_sifre</span>\n' &gt; /etc/oxware/.passwd_reset</div>
+              <div>chmod 600 /etc/oxware/.passwd_reset</div>
+              <div style="color:#8b949e;font-size:10px;margin-top:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.6px"># Adım 2 — Servisi yeniden başlat</div>
+              <div>systemctl restart oxware</div>
             </div>
-            <div id="pwreset-token-row" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2);border-radius:6px">
-              <p style="font-size:11px;color:var(--yellow-lt);font-weight:600;margin-bottom:6px">⚠️ Token (1 saat geçerli):</p>
-              <code id="pwreset-token-val" style="font-size:12px;word-break:break-all"></code>
-            </div>
-            <div id="pwreset-confirm-row" style="display:none;margin-top:12px">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:flex-end">
-                <div class="form-row" style="margin:0"><label>Sıfırlama Token</label><input id="pwreset-token-input" type="text" class="form-control" placeholder="Token gir..."></div>
-                <div class="form-row" style="margin:0"><label>Yeni Şifre</label><input id="pwreset-newpass" type="password" class="form-control" placeholder="En az 8 karakter"></div>
-              </div>
-              <button class="btn-primary" onclick="confirmPasswordReset()" style="margin-top:10px">✅ Şifreyi Sıfırla</button>
-            </div>
+            <p style="font-size:10px;color:var(--text-muted);margin-top:10px">
+              <i class="fa-solid fa-shield-halved" style="color:#3fb950;margin-right:4px"></i>
+              Dosya yalnızca root (uid=0) tarafından oluşturulduğunda işlenir. Servis uyguladıktan sonra otomatik siler.
+            </p>
           </div>
 
           <!-- Auto-Snapshot Yönetimi -->
@@ -7723,6 +7719,10 @@ function switchSettingsTab(tab) {
 }
 
 async function loadSettings() {
+  const _role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "").toLowerCase();
+  const _sshPanel = document.getElementById("ssh-reset-panel");
+  if (_sshPanel) _sshPanel.style.display = (_role === "administrator" || _role === "admin") ? "block" : "none";
+
   try {
     const data = await api("/notifications/config");
     const tgBadge = document.getElementById("tg-status-badge");
@@ -8397,39 +8397,6 @@ function shellSend(cmd) {
 
 function shellClear() {
   if (_shellTerm) _shellTerm.clear();
-}
-
-/* ══════════════════ Şifre Sıfırlama ══════════════════ */
-async function requestPasswordReset() {
-  const user = document.getElementById('pwreset-user').value.trim();
-  if (!user) { showToast('Kullanıcı adı gerekli', 'error'); return; }
-  try {
-    const d = await api('/auth/password-reset/request', {method:'POST', body:{username:user}});
-    if (d.dev_mode && d.token) {
-      // SMTP yok — token'ı ekranda göster
-      document.getElementById('pwreset-token-val').textContent = d.token;
-      document.getElementById('pwreset-token-row').style.display = 'block';
-      document.getElementById('pwreset-token-input').value = d.token;
-    }
-    document.getElementById('pwreset-confirm-row').style.display = 'block';
-    showToast(d.message || 'Token oluşturuldu', 'success');
-  } catch(e) {
-    showToast('Hata: ' + e, 'error');
-  }
-}
-async function confirmPasswordReset() {
-  const token   = document.getElementById('pwreset-token-input').value.trim();
-  const newpass = document.getElementById('pwreset-newpass').value;
-  if (!token)  { showToast('Token gerekli', 'error'); return; }
-  if (newpass.length < 8) { showToast('Şifre en az 8 karakter olmalı', 'error'); return; }
-  try {
-    const d = await api('/auth/password-reset/confirm', {method:'POST', body:{token, new_password:newpass}});
-    showToast(d.message || 'Şifre sıfırlandı!', 'success');
-    document.getElementById('pwreset-confirm-row').style.display = 'none';
-    document.getElementById('pwreset-token-row').style.display = 'none';
-  } catch(e) {
-    showToast('Token geçersiz veya süresi dolmuş', 'error');
-  }
 }
 
 /* ══════════════════ Auto-Snapshot ══════════════════ */

@@ -1355,6 +1355,7 @@ def api_me():
 
 @app.route("/api/auth/change-password", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator")
 def api_change_password():
     data = request.get_json() or {}
     old_pass = data.get("old_password", "")
