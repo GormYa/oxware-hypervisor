@@ -73,7 +73,7 @@ OXware runs as root on a KVM hypervisor host. The attack surface includes:
 
 | CVE / ID | Severity | Component | Status |
 |----------|----------|-----------|--------|
-| — | — | — | No public CVEs yet |
+| OMERATI-2026-001 | **Critical** (CVSS 9.4) | VNC WebSocket middleware | ✅ Fixed in v2.2.1 |
 
 ---
 
@@ -81,7 +81,7 @@ OXware runs as root on a KVM hypervisor host. The attack surface includes:
 
 We thank the following researchers for responsible disclosures:
 
-*(None yet — be the first!)*
+- **OMERATI-2026-001** — Reported by a customer security researcher. VNC WebSocket (`/ws/vnc/<vm_id>`) accepted any valid JWT regardless of user role or VM ownership, allowing any authenticated user to access any VM's console. Fixed by enforcing operator/admin role check in `_vnc_ws_middleware`.
 
 ---
 

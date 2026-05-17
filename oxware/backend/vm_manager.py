@@ -520,6 +520,7 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
       <spinlocks state='on' retries='8191'/>
       <vpindex state='on'/>
       <synic state='on'/>
+      <time state='on'/>
       <stimer state='on'/>
       <reset state='on'/>
     </hyperv>""" if is_windows else ""

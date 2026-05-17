@@ -242,15 +242,36 @@ def _vnc_ws_middleware(environ, start_response):
             token = _unquote(p[6:])
             break
 
-    # ── Auth ──
+    # ── Auth + OMERATI-2026-001 role check ──
+    _vnc_caller = ""
     try:
         with app.app_context():
             from flask_jwt_extended import decode_token
-            decode_token(token)
+            _decoded = decode_token(token)
+            _vnc_caller = _decoded.get("sub", "")
     except Exception as _e:
         log.warning("VNC WS: auth failed vm=%s: %s", vm_id, _e)
         start_response("401 Unauthorized", [("Content-Type", "text/plain")])
         return [b"Unauthorized"]
+
+    # OMERATI-2026-001: enforce role — viewer cannot access arbitrary VMs via raw WS
+    try:
+        with app.app_context():
+            _prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+            if _vnc_caller == _prim:
+                _vnc_role = "admin"
+            elif hasattr(cred_mgr, "get_role"):
+                _vnc_role = cred_mgr.get_role(_vnc_caller) or "viewer"
+            else:
+                _vnc_role = user_manager.get_user_role(_vnc_caller) if user_manager else "viewer"
+    except Exception:
+        _vnc_role = "viewer"
+
+    if _vnc_role not in ("admin", "administrator", "operator"):
+        log.warning("VNC WS [OMERATI-2026-001] blocked: vm=%s user=%s role=%s",
+                    vm_id, _vnc_caller, _vnc_role)
+        start_response("403 Forbidden", [("Content-Type", "text/plain")])
+        return [b"Forbidden: VNC access requires operator or admin role"]
 
     # ── VNC port from libvirt XML ──
     try:
@@ -2320,9 +2341,16 @@ def api_upload_iso():
     except ValueError as e:
         return err(str(e))
     dest = os.path.join(config.ISO_DIR, safe_name)
-    os.makedirs(config.ISO_DIR, exist_ok=True)
-    f.save(dest)
-    os.chmod(dest, 0o640)
+    try:
+        os.makedirs(config.ISO_DIR, exist_ok=True)
+        f.save(dest)
+        os.chmod(dest, 0o640)
+    except OSError as _iso_e:
+        log.error("ISO kaydetme hatası: %s → %s", safe_name, _iso_e)
+        if os.path.exists(dest):
+            try: os.remove(dest)
+            except OSError: pass
+        return err(f"ISO kaydedilemedi: {_iso_e}"), 500
     ev.info(f"ISO yüklendi: {safe_name}", category="storage")
     return ok(name=safe_name, path=dest, size=os.path.getsize(dest)), 201
 
