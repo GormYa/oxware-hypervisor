@@ -8896,17 +8896,30 @@ function shellConnect() {
     timeout: 30000,
   });
 
+  let _shellOutputReceived = false;
+
   _shellSocket.on("connect", () => {
     _shellConnected = true;
+    _shellOutputReceived = false;
     _shellUpdateStatus(true);
+    // Ensure terminal is sized before starting session
+    if (_shellFit) { try { _shellFit.fit(); } catch(e) {} }
     _shellSocket.emit("shell_open", { token: TOKEN() });
     _shellDataDisposable = _shellTerm.onData(data => {
       _shellSocket.emit("shell_input", { data });
     });
     _shellSendResize();
+    // Timeout: show diagnostic if backend doesn't respond in 6s
+    setTimeout(() => {
+      if (_shellConnected && !_shellOutputReceived && _shellTerm) {
+        _shellTerm.writeln("\r\n\x1b[33m[Uyarı: Sunucudan yanıt gelmedi — backend loglarını kontrol edin]\x1b[0m");
+      }
+    }, 6000);
   });
 
   _shellSocket.on("shell_output", (msg) => {
+    _shellOutputReceived = true;
+    if (!_shellTerm) { _initShellTerminal(); }
     if (_shellTerm && msg.data) _shellTerm.write(msg.data);
   });
 

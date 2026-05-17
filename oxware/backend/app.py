@@ -3439,11 +3439,11 @@ def ws_shell_open(data=None):
         emit("shell_output", {"data": f"\r\n[Yetkilendirme hatası: {e}]\r\n"})
         return
 
-    from flask_socketio import join_room
-    import pty, fcntl, struct, termios
     session_id = request.sid
 
     try:
+        import pty, fcntl, struct, termios, eventlet
+
         master_fd, slave_fd = pty.openpty()
         proc = subprocess.Popen(
             ["/bin/bash", "--norc", "--noprofile"],
@@ -3454,12 +3454,9 @@ def ws_shell_open(data=None):
         os.close(slave_fd)
         _shell_sessions[session_id] = {"proc": proc, "master_fd": master_fd}
 
-        import eventlet
-        import fcntl as _fcntl2
-
         # Non-blocking yaparak eventlet ile uyumlu hale getir
-        fl = _fcntl2.fcntl(master_fd, _fcntl2.F_GETFL)
-        _fcntl2.fcntl(master_fd, _fcntl2.F_SETFL, fl | os.O_NONBLOCK)
+        fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
         def _read_loop():
             while True:
@@ -3486,6 +3483,7 @@ def ws_shell_open(data=None):
         emit("shell_output", {"data": "\r\nOXware Host Shell — güvenli terminal\r\n"})
 
     except Exception as e:
+        log.error("Shell açma hatası: %s", e)
         emit("shell_output", {"data": f"\r\n[Shell açılamadı: {e}]\r\n"})
 
 
