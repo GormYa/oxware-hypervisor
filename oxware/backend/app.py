@@ -6349,6 +6349,7 @@ def api_vm_export(vm_id):
 
 # ── OpenAPI / Swagger Docs ────────────────────────────────────────────────────
 @app.route("/api/docs", methods=["GET"])
+@app.route("/api/swagger", methods=["GET"])
 def api_swagger_ui():
     html = """<!DOCTYPE html>
 <html>
