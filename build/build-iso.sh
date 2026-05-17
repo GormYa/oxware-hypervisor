@@ -221,13 +221,16 @@ cp "$CALA_SRC/branding/oxware/branding.desc" \
    "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/"
 cp "$CALA_SRC/branding/oxware/show.qml" \
    "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/"
-# Logo: from installer assets
+# Logo: from installer assets (oxware2.png = full logo, sadeceikon.png = icon)
 [ -f "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" ] && {
     cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" \
        "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_logo.png"
     cp "$REPO_ROOT/oxware/frontend/static/img/oxware2.png" \
        "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_welcome.png"
 }
+[ -f "$REPO_ROOT/oxware/frontend/static/img/sadeceikon.png" ] && \
+    cp "$REPO_ROOT/oxware/frontend/static/img/sadeceikon.png" \
+       "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_icon.png"
 
 # Main settings
 mkdir -p "$SQUASHFS_ROOT/etc/calamares"

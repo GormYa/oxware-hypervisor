@@ -19,7 +19,7 @@ strings:
 
 images:
     productLogo:      "oxware_logo.png"
-    productIcon:      "oxware_logo.png"
+    productIcon:      "oxware_icon.png"
     productWelcome:   "oxware_welcome.png"
 
 slideshow:               "show.qml"
