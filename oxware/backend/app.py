@@ -7503,6 +7503,233 @@ def api_vm_nic_qos_clear(vm_name, iface):
     if not net_qos: return err("Network QoS manager unavailable")
     return ok(net_qos.clear_nic_qos(vm_name, iface))
 
+# ── API Key yönetimi (UI) ─────────────────────────────────────────────────────
+@app.route("/api/api-keys", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_list_api_keys():
+    if not api_key_mgr:
+        return err("API key manager mevcut değil", 503)
+    return ok(keys=api_key_mgr.list_keys())
+
+@app.route("/api/api-keys", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_create_api_key():
+    if not api_key_mgr:
+        return err("API key manager mevcut değil", 503)
+    d = request.get_json() or {}
+    name        = d.get("name", "key").strip()
+    permissions = d.get("permissions", [])
+    expires     = d.get("expires_days")
+    username    = get_jwt_identity()
+    result = api_key_mgr.create_key(username, name, permissions=permissions,
+                                    expires_days=int(expires) if expires else None)
+    if not result:
+        return err("API key oluşturulamadı", 500)
+    ev.info(f"API key oluşturuldu: {name}", category="auth")
+    return ok(**result)
+
+@app.route("/api/api-keys/<key_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_revoke_api_key(key_id):
+    if not api_key_mgr:
+        return err("API key manager mevcut değil", 503)
+    ok_flag = api_key_mgr.revoke_key(key_id)
+    return ok(revoked=ok_flag) if ok_flag else err("Key bulunamadı", 404)
+
+
+# ── Hosting modül indirme ──────────────────────────────────────────────────────
+@app.route("/api/hosting/download/<module_name>")
+@require_auth
+@require_role("admin", "administrator")
+def api_hosting_download(module_name):
+    import pathlib
+    base = pathlib.Path(__file__).parent.parent.parent / "modules"
+    paths = {
+        "whmcs":  base / "whmcs" / "servers" / "oxware" / "oxware.php",
+        "wisecp": base / "wisecp" / "oxware" / "oxware.php",
+    }
+    path = paths.get(module_name)
+    if not path or not path.exists():
+        return err("Modül bulunamadı", 404)
+    from flask import send_file
+    return send_file(str(path), as_attachment=True,
+                     download_name=f"oxware_{module_name}.php",
+                     mimetype="text/plain")
+
+
+# ── Provisioning API (WiseCP / WHMCS / Billing entegrasyonu) ─────────────────
+# API key auth: X-API-Key header, oxw_xxx prefix, permissions=["provisioning"]
+
+def _require_provision_key():
+    """X-API-Key header ile provisioning yetkisi doğrula. Hata varsa Response döner, None döner ise OK."""
+    raw = request.headers.get("X-API-Key", "")
+    info = api_key_mgr.validate_key(raw) if api_key_mgr else None
+    if not info:
+        return jsonify({"status": "error", "error": "Geçersiz API anahtarı"}), 401
+    perms = info.get("permissions", [])
+    if perms and "provisioning" not in perms and "all" not in perms:
+        return jsonify({"status": "error", "error": "Bu anahtar provisioning yetkisine sahip değil"}), 403
+    return None
+
+
+@app.route("/api/provision/create", methods=["POST"])
+def api_provision_create():
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+
+    d = request.get_json() or {}
+    name        = d.get("name", "").strip()
+    cpu         = int(d.get("cpu", 2))
+    ram_mb      = int(d.get("ram_mb", 2048))
+    disk_gb     = int(d.get("disk_gb", 50))
+    os_template = d.get("os_template", "ubuntu-22.04").strip()
+    network     = d.get("network", "default").strip()
+    auto_start  = bool(d.get("auto_start", True))
+
+    if not name:
+        return err("name zorunludur")
+    if cpu < 1 or cpu > 256:
+        return err("cpu 1-256 arasında olmalı")
+    if ram_mb < 512 or ram_mb > 1048576:
+        return err("ram_mb 512-1048576 arasında olmalı")
+    if disk_gb < 5 or disk_gb > 65536:
+        return err("disk_gb 5-65536 arasında olmalı")
+
+    # Template → ISO/cloud-init eşleşmesi
+    template_map = getattr(config, "PROVISION_TEMPLATES", {})
+    tpl = template_map.get(os_template, {})
+    iso_path   = tpl.get("iso_path")
+    os_variant = tpl.get("os_variant", "generic")
+    cloud_init = tpl.get("cloud_init")
+
+    try:
+        vm = vm_manager.create_vm(
+            name=name,
+            memory_mb=ram_mb,
+            vcpus=cpu,
+            disk_gb=disk_gb,
+            iso_path=iso_path,
+            network=network,
+            os_variant=os_variant,
+            cloud_init=cloud_init,
+        )
+    except Exception as e:
+        log.error("provision/create hatası: %s", e)
+        return err(str(e), 500)
+
+    if auto_start:
+        try:
+            vm_manager.start_vm(vm["id"])
+        except Exception:
+            pass
+
+    ev.info(f"Provisioning: VM oluşturuldu name={name}", category="provision")
+    return ok(vm=vm)
+
+
+@app.route("/api/provision/<vm_id>", methods=["DELETE"])
+def api_provision_terminate(vm_id):
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        vm_manager.stop_vm(vm_id, force=True)
+    except Exception:
+        pass
+    try:
+        result = vm_manager.delete_vm(vm_id, delete_disk=True)
+        ev.info(f"Provisioning: VM silindi id={vm_id}", category="provision")
+        return ok(deleted=True)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/suspend", methods=["POST"])
+def api_provision_suspend(vm_id):
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        vm_manager.stop_vm(vm_id, force=False)
+        ev.info(f"Provisioning: VM askıya alındı id={vm_id}", category="provision")
+        return ok(suspended=True)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/unsuspend", methods=["POST"])
+def api_provision_unsuspend(vm_id):
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        vm_manager.start_vm(vm_id)
+        ev.info(f"Provisioning: VM yeniden başlatıldı id={vm_id}", category="provision")
+        return ok(unsuspended=True)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/status", methods=["GET"])
+def api_provision_status(vm_id):
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if not vm:
+            return err("VM bulunamadı", 404)
+        stats = vm_manager.get_vm_stats(vm_id) or {}
+        ip = (vm.get("networks") or [{}])[0].get("ip", "") if vm.get("networks") else ""
+        return ok(
+            vm_id=vm_id,
+            name=vm.get("name", ""),
+            status=vm.get("status", "unknown"),
+            ip=ip,
+            cpu_percent=stats.get("cpu_percent", 0),
+            mem_percent=stats.get("mem_percent", 0),
+            mem_used_mb=stats.get("memory_used_mb", 0),
+            mem_total_mb=vm.get("memory_mb", 0),
+            disk_used_gb=stats.get("disk_used_gb", 0),
+        )
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/resize", methods=["PUT"])
+def api_provision_resize(vm_id):
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    d = request.get_json() or {}
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if not vm:
+            return err("VM bulunamadı", 404)
+        conn = libvirt.open(config.LIBVIRT_URI)
+        dom  = conn.lookupByUUIDString(vm_id)
+        if "cpu" in d:
+            dom.setVcpusFlags(int(d["cpu"]), libvirt.VIR_DOMAIN_AFFECT_CONFIG)
+        if "ram_mb" in d:
+            kb = int(d["ram_mb"]) * 1024
+            dom.setMemoryFlags(kb, libvirt.VIR_DOMAIN_AFFECT_CONFIG)
+            dom.setMaxMemory(kb)
+        conn.close()
+        ev.info(f"Provisioning: VM yeniden boyutlandırıldı id={vm_id}", category="provision")
+        return ok(resized=True, note="Değişiklikler VM yeniden başlatıldığında aktif olur")
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/templates", methods=["GET"])
+def api_provision_templates():
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    tpls = getattr(config, "PROVISION_TEMPLATES", {})
+    return ok(templates=[
+        {"id": k, "name": v.get("name", k), "os_variant": v.get("os_variant", "generic")}
+        for k, v in tpls.items()
+    ])
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.0 başlatılıyor")
