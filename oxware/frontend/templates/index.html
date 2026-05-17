@@ -345,6 +345,14 @@
     .form-hint{font-size:10px;color:var(--text-dim);margin-top:3px}
     input[type=text],input[type=password],input[type=number],input[type=email],select,textarea{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;outline:none;font-family:inherit}
     input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+    /* ── Resource Sliders ── */
+    .res-slider-wrap{display:flex;flex-direction:column;gap:8px}
+    .res-slider-top{display:flex;align-items:baseline;justify-content:space-between}
+    .res-slider-val{font-size:16px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;line-height:1}
+    .res-slider-sub{font-size:10px;color:var(--text-dim)}
+    input[type=range].res-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;border:none;padding:0;cursor:pointer;background:var(--border2)}
+    input[type=range].res-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    input[type=range].res-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
 
     /* ── Modal ── */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:center;justify-content:center}
@@ -3069,10 +3077,30 @@
       <div class="form-row"><label>VM Adı</label><input id="vm-name" placeholder="ornek-vm"></div>
       <div class="form-grid">
         <div class="form-row"><label>CPU (vCPU)</label><input id="vm-cpu" type="number" value="2" min="1" max="64"></div>
-        <div class="form-row"><label>Bellek (MB)</label><input id="vm-mem" type="number" value="2048" min="256" step="256"></div>
+        <div class="form-row">
+          <label>Bellek (MB)</label>
+          <div class="res-slider-wrap">
+            <div class="res-slider-top">
+              <span class="res-slider-val" id="vm-mem-display">2048 MB</span>
+              <span class="res-slider-sub" id="vm-mem-sub">2 GB</span>
+            </div>
+            <input type="range" class="res-slider" id="vm-mem" min="256" max="65536" step="256" value="2048"
+                   oninput="resSliderMem(this.value)">
+          </div>
+        </div>
       </div>
       <div class="form-grid">
-        <div class="form-row"><label>Disk (GB)</label><input id="vm-disk" type="number" value="20" min="1"></div>
+        <div class="form-row">
+          <label>Disk (GB)</label>
+          <div class="res-slider-wrap">
+            <div class="res-slider-top">
+              <span class="res-slider-val" id="vm-disk-display">20 GB</span>
+              <span class="res-slider-sub" id="vm-disk-sub"></span>
+            </div>
+            <input type="range" class="res-slider" id="vm-disk" min="1" max="2000" step="1" value="20"
+                   oninput="resSliderDisk(this.value)">
+          </div>
+        </div>
         <div class="form-row"><label>Disk Formatı</label>
           <select id="vm-disk-fmt"><option value="qcow2">qcow2 (Önerilen)</option><option value="raw">raw</option></select>
         </div>
@@ -6461,6 +6489,28 @@ async function loadNetworkOptions() {
     document.getElementById("vm-net").innerHTML = `<option value="default">default (NAT)</option>`;
   }
 }
+
+function _resSliderFill(el) {
+  const pct = (el.value - el.min) / (el.max - el.min) * 100;
+  el.style.background = `linear-gradient(to right,var(--accent-lt) ${pct}%,var(--border2) ${pct}%)`;
+}
+function resSliderMem(v) {
+  v = parseInt(v);
+  document.getElementById('vm-mem-display').textContent = v + ' MB';
+  document.getElementById('vm-mem-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' GB' : '';
+  _resSliderFill(document.getElementById('vm-mem'));
+}
+function resSliderDisk(v) {
+  v = parseInt(v);
+  document.getElementById('vm-disk-display').textContent = v + ' GB';
+  document.getElementById('vm-disk-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' TB' : '';
+  _resSliderFill(document.getElementById('vm-disk'));
+}
+// Slider'ları ilk açılışta doldur
+document.addEventListener('DOMContentLoaded', () => {
+  resSliderMem(document.getElementById('vm-mem').value);
+  resSliderDisk(document.getElementById('vm-disk').value);
+});
 
 async function createVM() {
   const name = document.getElementById("vm-name").value.trim();
