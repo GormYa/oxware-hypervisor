@@ -74,6 +74,7 @@ OXware runs as root on a KVM hypervisor host. The attack surface includes:
 | CVE / ID | Severity | Component | Status |
 |----------|----------|-----------|--------|
 | OMERATI-2026-001 | **Critical** (CVSS 9.4) | VNC WebSocket middleware | ✅ Fixed in v2.2.1 |
+| OMERATI-2026-002 | **Critical** (CVSS 9.8) | Password reset API | ✅ Fixed in v2.2.2 |
 
 ---
 
@@ -82,6 +83,7 @@ OXware runs as root on a KVM hypervisor host. The attack surface includes:
 We thank the following researchers for responsible disclosures:
 
 - **OMERATI-2026-001** — Reported by a customer security researcher. VNC WebSocket (`/ws/vnc/<vm_id>`) accepted any valid JWT regardless of user role or VM ownership, allowing any authenticated user to access any VM's console. Fixed by enforcing operator/admin role check in `_vnc_ws_middleware`.
+- **OMERATI-2026-002** — Reported by a customer security researcher. `POST /api/auth/password-reset/request` and `POST /api/auth/password-reset/confirm` required no authentication. When SMTP was not configured, the reset token was returned directly in the HTTP response, allowing unauthenticated remote takeover of the primary admin account. Fixed by removing both endpoints entirely; password reset is performed via SSH using `/etc/oxware/.passwd_reset`.
 
 ---
 

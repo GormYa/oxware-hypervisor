@@ -19,7 +19,6 @@ import json
 import hashlib
 import secrets
 import time
-import struct
 from pathlib import Path
 
 AUTH_FILE        = os.environ.get("OXWARE_AUTH_FILE",  os.environ.get("ADAOS_AUTH_FILE",  "/etc/oxware/.auth"))
@@ -251,70 +250,3 @@ def get_credential_info() -> dict:
         "setup_done": is_setup_done(),
     }
 
-
-# ── Token-based password reset ────────────────────────────────────────────────
-
-_TOKEN_TTL       = 3600   # 1 saat
-_TOKENS_FILE     = "/var/lib/oxware/reset_tokens.json"
-
-
-def _load_tokens() -> dict:
-    """Reset token'larını diskten yükle, süresi dolmuşları temizle."""
-    if not os.path.exists(_TOKENS_FILE):
-        return {}
-    try:
-        with open(_TOKENS_FILE) as _f:
-            tokens = json.load(_f)
-        now = time.time()
-        tokens = {t: v for t, v in tokens.items() if v.get("expires", 0) > now}
-        return tokens
-    except Exception:
-        return {}
-
-
-def _save_tokens(tokens: dict):
-    """Reset token'larını diske kaydet (chmod 600)."""
-    try:
-        os.makedirs(os.path.dirname(_TOKENS_FILE), exist_ok=True)
-        with open(_TOKENS_FILE, "w") as _f:
-            json.dump(tokens, _f)
-        os.chmod(_TOKENS_FILE, 0o600)
-    except Exception:
-        pass
-
-
-def generate_reset_token(username: str) -> str:
-    """Şifre sıfırlama token'ı üretir ve diske kaydeder (restart-safe)."""
-    token  = secrets.token_urlsafe(32)
-    tokens = _load_tokens()
-    tokens[token] = {"username": username, "expires": time.time() + _TOKEN_TTL}
-    _save_tokens(tokens)
-    return token
-
-
-def reset_password_with_token(token: str, new_password: str) -> bool:
-    """
-    Token geçerliyse ve süre dolmamışsa şifreyi sıfırlar.
-    Kullanılan token diskten silinir.
-    """
-    tokens = _load_tokens()
-    entry  = tokens.get(token)
-    if not entry or entry.get("expires", 0) < time.time():
-        tokens.pop(token, None)
-        _save_tokens(tokens)
-        return False
-    data = _load_auth()
-    data["password_hash"] = _hash_password(new_password)
-    data["last_changed"]  = time.time()
-    _save_auth(data)
-    tokens.pop(token, None)
-    _save_tokens(tokens)
-    return True
-
-
-def get_reset_token_username(token: str):
-    """Token için kullanıcı adı döndürür, yoksa None."""
-    entry = _load_tokens().get(token)
-    if not entry or entry["expires"] < time.time():
-        return None
-    return entry["username"]

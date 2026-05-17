@@ -424,7 +424,6 @@ app.wsgi_app = _vnc_ws_middleware
 
 # ── CSRF Token store (stateless double-submit pattern) ────────────────────────
 _csrf_exempt_paths = {"/api/auth/login", "/api/auth/2fa/verify-login",
-                      "/api/auth/password-reset/request", "/api/auth/password-reset/confirm",
                       "/api/setup", "/metrics"}
 
 @app.before_request
@@ -1366,78 +1365,6 @@ def api_change_password():
         return err("Mevcut şifre yanlış", 401)
     ev.info("Şifre değiştirildi", category="auth")
     return ok(message="Şifre değiştirildi")
-
-@app.route("/api/auth/password-reset/request", methods=["POST"])
-def api_password_reset_request():
-    """
-    Şifre sıfırlama token'ı üretir.
-    Eğer SMTP yapılandırılmışsa email gönderir,
-    aksi hâlde token'ı response'da döndürür (admin konsoldan uygular).
-    """
-    data = request.get_json() or {}
-    username = data.get("username", "").strip()
-    if not username:
-        return err("Kullanıcı adı gerekli")
-
-    info = cred_mgr.get_credential_info()
-    if info.get("username", "").lower() != username.lower():
-        # Güvenlik: kullanıcı adı yanlışsa da aynı mesajı ver
-        return ok(message="Sıfırlama token'ı oluşturuldu. Yönetici e-postanızı kontrol edin.")
-
-    token = cred_mgr.generate_reset_token(username)
-    ev.warn(f"Şifre sıfırlama isteği: {username} / {request.remote_addr}", category="auth")
-
-    # SMTP gönderimi (opsiyonel)
-    smtp_host = os.environ.get("OXWARE_SMTP_HOST", "")
-    reset_link = f"#reset-token={token}"
-    if smtp_host:
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            smtp_port = int(os.environ.get("OXWARE_SMTP_PORT", 587))
-            smtp_user = os.environ.get("OXWARE_SMTP_USER", "")
-            smtp_pass = os.environ.get("OXWARE_SMTP_PASS", "")
-            smtp_from = os.environ.get("OXWARE_SMTP_FROM", smtp_user)
-            smtp_to   = data.get("email", smtp_user)
-
-            msg = MIMEText(f"""OXware Hypervisor - Şifre Sıfırlama
-
-Kullanıcı adı: {username}
-Sıfırlama kodu: {token}
-
-Bu kod 1 saat geçerlidir. Eğer bu isteği siz yapmadıysanız dikkate almayın.
-""")
-            msg["Subject"] = "OXware - Şifre Sıfırlama"
-            msg["From"]    = smtp_from
-            msg["To"]      = smtp_to
-
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-                s.starttls()
-                if smtp_user:
-                    s.login(smtp_user, smtp_pass)
-                s.sendmail(smtp_from, [smtp_to], msg.as_string())
-            log.info("Şifre sıfırlama emaili gönderildi: %s → %s", username, smtp_to)
-            return ok(message="Sıfırlama kodu e-postanıza gönderildi.")
-        except Exception as e:
-            log.warning("SMTP hatası: %s — token döndürülüyor", e)
-
-    # SMTP yoksa token'ı HTTP yanıtında gösterme — sadece server loguna yaz
-    log.warning("SMTP yapılandırılmamış. Şifre sıfırlama token server logunda: user=%s token=%s", username, token)
-    return ok(message="SMTP yapılandırılmamış. Sunucu yöneticisiyle iletişime geçin.")
-
-@app.route("/api/auth/password-reset/confirm", methods=["POST"])
-def api_password_reset_confirm():
-    data     = request.get_json() or {}
-    token    = data.get("token", "").strip()
-    new_pass = data.get("new_password", "")
-    if not token:
-        return err("Token gerekli")
-    if len(new_pass) < 8:
-        return err("Yeni şifre en az 8 karakter olmalıdır")
-    if not cred_mgr.reset_password_with_token(token, new_pass):
-        return err("Geçersiz veya süresi dolmuş token", 401)
-    ev.info("Şifre token ile sıfırlandı", category="auth")
-    return ok(message="Şifre başarıyla sıfırlandı. Giriş yapabilirsiniz.")
 
 # ── VM API ────────────────────────────────────────────────────────────────────
 @app.route("/api/vms")
