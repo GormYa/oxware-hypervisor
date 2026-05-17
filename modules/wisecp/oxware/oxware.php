@@ -74,18 +74,29 @@ class Server_oxware
             return ['error' => 'Sunucu adresi tanımlı değil'];
         }
 
+        // SSL: system CA bundle kullan. Self-signed varsa sunucu tarafında gerçek cert ekle.
+        $ca_path = '';
+        foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $f) {
+            if (file_exists($f)) { $ca_path = $f; break; }
+        }
+
         $ch = curl_init($base . '/api' . $endpoint);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_CUSTOMREQUEST  => strtoupper($method),
-            CURLOPT_HTTPHEADER     => [
+        $curl_opts = [
+            CURLOPT_RETURNTRANSFER  => true,
+            CURLOPT_TIMEOUT         => 30,
+            CURLOPT_CONNECTTIMEOUT  => 10,
+            CURLOPT_CUSTOMREQUEST   => strtoupper($method),
+            CURLOPT_HTTPHEADER      => [
                 'Content-Type: application/json',
                 'X-API-Key: ' . $key,
             ],
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-        ]);
+            CURLOPT_SSL_VERIFYPEER  => true,
+            CURLOPT_SSL_VERIFYHOST  => 2,
+        ];
+        if ($ca_path) {
+            $curl_opts[CURLOPT_CAINFO] = $ca_path;
+        }
+        curl_setopt_array($ch, $curl_opts);
 
         if ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
@@ -107,6 +118,15 @@ class Server_oxware
         }
 
         return $data ?? [];
+    }
+
+    // ── UUID doğrulama ────────────────────────────────────────────────────────
+
+    private static function validateVmId($vm_id)
+    {
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $vm_id)) {
+            throw new Exception('Geçersiz VM ID formatı');
+        }
     }
 
     // ── create ────────────────────────────────────────────────────────────────
@@ -157,6 +177,7 @@ class Server_oxware
     {
         $vm_id = $account['username'] ?? '';
         if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        self::validateVmId($vm_id);
 
         $result = self::api($server, 'POST', "/provision/$vm_id/suspend");
         if (!empty($result['error'])) throw new Exception($result['error']);
@@ -169,6 +190,7 @@ class Server_oxware
     {
         $vm_id = $account['username'] ?? '';
         if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        self::validateVmId($vm_id);
 
         $result = self::api($server, 'POST', "/provision/$vm_id/unsuspend");
         if (!empty($result['error'])) throw new Exception($result['error']);
@@ -181,6 +203,7 @@ class Server_oxware
     {
         $vm_id = $account['username'] ?? '';
         if (!$vm_id) return true; // Zaten yok
+        self::validateVmId($vm_id);
 
         $result = self::api($server, 'DELETE', "/provision/$vm_id");
         if (!empty($result['error'])) throw new Exception($result['error']);
@@ -193,6 +216,7 @@ class Server_oxware
     {
         $vm_id = $account['username'] ?? '';
         if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        self::validateVmId($vm_id);
 
         $body = [
             'cpu'     => (int)($package['cpu'] ?? 2),

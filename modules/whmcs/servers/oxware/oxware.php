@@ -71,10 +71,27 @@ function oxware_ConfigOptions()
 
 // ── Yardımcı: OXware REST API çağrısı ────────────────────────────────────────
 
+function _oxware_validate_vm_id($vm_id)
+{
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $vm_id)) {
+        throw new Exception('Geçersiz VM ID formatı');
+    }
+}
+
 function _oxware_api($params, $method, $endpoint, $body = null)
 {
     $base = rtrim($params['serverhostname'], '/');
     $key  = trim($params['serveraccesshash']);
+
+    // SSL: system CA bundle kullan. Self-signed varsa sunucu tarafında gerçek cert ekle.
+    $ca_bundle = $params['configoption5'] ?? '';  // opsiyonel custom CA path
+    $ca_path   = ($ca_bundle && file_exists($ca_bundle))
+        ? $ca_bundle
+        : (file_exists('/etc/ssl/certs/ca-certificates.crt')
+            ? '/etc/ssl/certs/ca-certificates.crt'
+            : (file_exists('/etc/pki/tls/certs/ca-bundle.crt')
+                ? '/etc/pki/tls/certs/ca-bundle.crt'
+                : ''));
 
     $ch = curl_init($base . '/api' . $endpoint);
     $headers = [
@@ -82,14 +99,20 @@ function _oxware_api($params, $method, $endpoint, $body = null)
         'X-API-Key: ' . $key,
     ];
 
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 30,
-        CURLOPT_CUSTOMREQUEST  => strtoupper($method),
-        CURLOPT_HTTPHEADER     => $headers,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-    ]);
+    $curl_opts = [
+        CURLOPT_RETURNTRANSFER  => true,
+        CURLOPT_TIMEOUT         => 30,
+        CURLOPT_CONNECTTIMEOUT  => 10,
+        CURLOPT_CUSTOMREQUEST   => strtoupper($method),
+        CURLOPT_HTTPHEADER      => $headers,
+        CURLOPT_SSL_VERIFYPEER  => true,
+        CURLOPT_SSL_VERIFYHOST  => 2,
+    ];
+    if ($ca_path) {
+        $curl_opts[CURLOPT_CAINFO] = $ca_path;
+    }
+
+    curl_setopt_array($ch, $curl_opts);
 
     if ($body !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
@@ -174,6 +197,7 @@ function oxware_SuspendAccount($params)
 {
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadı';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
 
     $result = _oxware_api($params, 'POST', "/provision/$vm_id/suspend");
     return !empty($result['error']) ? 'error: ' . $result['error'] : 'success';
@@ -185,6 +209,7 @@ function oxware_UnsuspendAccount($params)
 {
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadı';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
 
     $result = _oxware_api($params, 'POST', "/provision/$vm_id/unsuspend");
     return !empty($result['error']) ? 'error: ' . $result['error'] : 'success';
@@ -196,6 +221,7 @@ function oxware_TerminateAccount($params)
 {
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'success'; // Zaten silinmiş
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
 
     $result = _oxware_api($params, 'DELETE', "/provision/$vm_id");
     return !empty($result['error']) ? 'error: ' . $result['error'] : 'success';
@@ -207,6 +233,7 @@ function oxware_ChangePackage($params)
 {
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadı';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
 
     $cfg  = $params['configoptions'];
     $body = [

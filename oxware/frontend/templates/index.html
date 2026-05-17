@@ -2983,9 +2983,9 @@
                 <div style="margin-bottom:4px;color:var(--text-dim)">Kurulum yolu:</div>
                 <code style="font-size:11px;background:#0d1117;padding:4px 8px;border-radius:4px;display:block">modules/server/oxware/oxware.php</code>
               </div>
-              <a href="/api/hosting/download/wisecp" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px">
+              <button class="btn-primary" onclick="downloadModule('wisecp')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:12px;border:none;cursor:pointer">
                 <i class="fa-solid fa-download"></i> WiseCP Modülünü İndir
-              </a>
+              </button>
             </div>
 
             <!-- WHMCS -->
@@ -3001,9 +3001,9 @@
                 <div style="margin-bottom:4px;color:var(--text-dim)">Kurulum yolu:</div>
                 <code style="font-size:11px;background:#0d1117;padding:4px 8px;border-radius:4px;display:block">modules/servers/oxware/oxware.php</code>
               </div>
-              <a href="/api/hosting/download/whmcs" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;padding:8px 14px;border-radius:6px;font-size:12px">
+              <button class="btn-primary" onclick="downloadModule('whmcs')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:12px;border:none;cursor:pointer">
                 <i class="fa-solid fa-download"></i> WHMCS Modülünü İndir
-              </a>
+              </button>
             </div>
           </div>
 
@@ -7865,6 +7865,26 @@ function loadHostingPage() {
   const role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "").toLowerCase();
   const sec = document.getElementById("hosting-admin-section");
   if (sec) sec.style.display = (role === "administrator" || role === "admin") ? "block" : "none";
+}
+
+async function downloadModule(name) {
+  const token = TOKEN();
+  if (!token) { showToast('Oturum açık değil', 'error'); return; }
+  try {
+    const res = await fetch(`/api/hosting/download/${name}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) { showToast('İndirme başarısız: ' + res.status, 'error'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `oxware_${name}.php`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    showToast('İndirme hatası: ' + e, 'error');
+  }
 }
 
 async function hostingCreateKey() {
