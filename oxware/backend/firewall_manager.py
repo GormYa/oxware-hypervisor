@@ -182,12 +182,28 @@ def list_chains():
         return chains
 
 
+SSH_PROTECTED_PORTS = {22, 2222}  # Bu portları drop/reject eden kural engellenir
+
 def add_rule(table, chain, protocol=None, src_ip=None, dst_ip=None,
              dst_port=None, action="accept", comment=""):
     """
     nftables'a kural ekler.
     Örnek: add_rule("inet filter", "input", protocol="tcp", dst_port=80, action="accept")
     """
+    # SSH koruma: drop/reject + SSH portu kombinasyonunu engelle
+    if action in ("drop", "reject") and dst_port is not None:
+        try:
+            if int(dst_port) in SSH_PROTECTED_PORTS:
+                log.warning("SSH portu %s için %s kuralı engellendi!", dst_port, action)
+                return {
+                    "success": False,
+                    "error": f"Port {dst_port} (SSH) için '{action}' kuralı oluşturulamaz — "
+                             "SSH erişimini kesmemek için bu kural engellendi.",
+                    "ssh_protected": True,
+                }
+        except (ValueError, TypeError):
+            pass
+
     with _lock:
         parts = ["nft", "add", "rule"] + table.split() + [chain]
 

@@ -94,6 +94,7 @@ pool_mgr        = _safe_import("resource_pool_manager")
 hotplug_mgr     = _safe_import("hotplug_manager")
 stor_mig        = _safe_import("storage_migration")
 net_qos         = _safe_import("network_qos")
+ssh_watchdog    = _safe_import("ssh_watchdog")
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "templates")
@@ -6347,6 +6348,30 @@ def api_vm_export(vm_id):
     except Exception as e:
         return err(e, 500)
 
+# ── SSH Watchdog ──────────────────────────────────────────────────────────────
+
+@app.route("/api/ssh/status", methods=["GET"])
+@require_auth
+def api_ssh_status():
+    if not ssh_watchdog:
+        return ok({"available": False, "error": "ssh_watchdog modülü yüklenemedi"})
+    return ok({"available": True, **ssh_watchdog.get_status()})
+
+
+@app.route("/api/ssh/restart", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ssh_restart():
+    if not ssh_watchdog:
+        return err("ssh_watchdog modülü yüklenemedi")
+    import subprocess as _sp
+    r = _sp.run(["systemctl", "restart", "sshd"], capture_output=True, text=True, timeout=30)
+    success = r.returncode == 0
+    if success:
+        ev.warning("SSH servisi manuel olarak yeniden başlatıldı.", category="system")
+    return ok({"success": success, "stderr": r.stderr.strip() if not success else None})
+
+
 # ── OpenAPI / Swagger Docs ────────────────────────────────────────────────────
 @app.route("/api/docs", methods=["GET"])
 @app.route("/api/swagger", methods=["GET"])
@@ -7198,6 +7223,9 @@ def api_vm_nic_qos_clear(vm_name, iface):
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.0 başlatılıyor")
+    if ssh_watchdog:
+        ssh_watchdog.start()
+        log.info("SSH watchdog başlatıldı.")
     log.info("Dinleniyor: %s:%s (SSL: %s)", config.HOST, config.PORT, config.SSL_ENABLED)
 
     use_ssl = (
