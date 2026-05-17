@@ -404,10 +404,12 @@
     /* Card */
     .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px 16px}
     .card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent-lt);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-    .app-install-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
-    .app-install-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px 10px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;text-align:center;min-height:86px;justify-content:center;box-sizing:border-box;overflow:hidden}
-    .app-install-card:hover{border-color:var(--accent);background:var(--surface3);box-shadow:0 2px 10px rgba(56,189,248,.12)}
-    .app-install-card.selected{border-color:var(--accent-lt);background:rgba(56,189,248,.1);box-shadow:0 0 0 1px rgba(56,189,248,.25)}
+    .app-chip-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+    .app-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;font-size:11px;font-weight:600;color:var(--text);transition:border-color .15s,background .15s;white-space:nowrap;user-select:none}
+    .app-chip:hover{border-color:var(--accent);background:var(--surface3)}
+    .app-chip.selected{border-color:var(--accent-lt);background:rgba(61,130,240,.18);color:var(--accent-lt)}
+    .app-chip input{display:none}
+    .app-cat-label{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.8px;margin:10px 0 5px;display:flex;align-items:center;gap:5px}
     .app-install-icon{font-size:24px;line-height:1;margin-bottom:2px;flex-shrink:0}
     .app-install-name{font-size:11px;font-weight:700;color:var(--text);line-height:1.2;word-break:break-word}
     .app-install-desc{font-size:9.5px;color:var(--text-muted);line-height:1.3;margin-top:1px;word-break:break-word}
@@ -3166,127 +3168,41 @@
     </div>
       <!-- App Install -->
       <details id="app-install-section" style="margin-top:8px">
-        <summary style="font-size:11px;font-weight:700;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:6px 0">📦 Uygulama Kurulumu (Opsiyonel)</summary>
-        <div style="margin-top:10px;max-height:340px;overflow-y:auto;padding-right:4px">
-          <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px 0">VM oluşturulduktan sonra otomatik kurulacak uygulama seçin. Cloud-Init ile Linux VM'lere uygulanır.</p>
-          <div class="app-section-label">
-            <i class="fa-solid fa-cube" style="color:#38bdf8"></i>Uygulamalar
+        <summary style="font-size:11px;font-weight:700;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:6px 0">📦 Uygulama Kurulumu <span style="font-weight:400;color:var(--text-dim)">(Opsiyonel)</span></summary>
+        <div style="margin-top:8px">
+          <div class="app-cat-label"><span style="color:#38bdf8">●</span> Uygulamalar</div>
+          <div class="app-chip-row">
+            <label class="app-chip" data-app="portainer" title="Docker konteyner yönetimi"><input type="radio" name="app_install" value="portainer">🐳 Portainer CE</label>
+            <label class="app-chip" data-app="nextcloud" title="Sürücü/Ofis/Takvim/Kişiler"><input type="radio" name="app_install" value="nextcloud">☁️ Nextcloud</label>
+            <label class="app-chip" data-app="vaultwarden" title="Bitwarden uyumlu şifre yöneticisi"><input type="radio" name="app_install" value="vaultwarden">🔐 Vaultwarden</label>
+            <label class="app-chip" data-app="n8n" title="400+ uygulama otomasyonu"><input type="radio" name="app_install" value="n8n">⚡ n8n</label>
           </div>
-          <div class="app-install-grid">
-            <label class="app-install-card" data-app="portainer">
-              <input type="radio" name="app_install" value="portainer" style="display:none">
-              <div class="app-install-icon">🐳</div>
-              <div class="app-install-name">Portainer CE</div>
-              <div class="app-install-desc">Docker konteyner yönetimi</div>
-            </label>
-            <label class="app-install-card" data-app="nextcloud">
-              <input type="radio" name="app_install" value="nextcloud" style="display:none">
-              <div class="app-install-icon">☁️</div>
-              <div class="app-install-name">Nextcloud</div>
-              <div class="app-install-desc">Sürücü/Ofis/Takvim/Kişiler</div>
-            </label>
-            <label class="app-install-card" data-app="vaultwarden">
-              <input type="radio" name="app_install" value="vaultwarden" style="display:none">
-              <div class="app-install-icon">🔐</div>
-              <div class="app-install-name">Vaultwarden</div>
-              <div class="app-install-desc">Bitwarden uyumlu şifre yöneticisi</div>
-            </label>
-            <label class="app-install-card" data-app="n8n">
-              <input type="radio" name="app_install" value="n8n" style="display:none">
-              <div class="app-install-icon">⚡</div>
-              <div class="app-install-name">n8n</div>
-              <div class="app-install-desc">400+ uygulama otomasyon</div>
-            </label>
+          <div class="app-cat-label"><span style="color:#a78bfa">●</span> Geliştirici</div>
+          <div class="app-chip-row">
+            <label class="app-chip" data-app="coolify" title="Self-hosted PaaS — Heroku alternatifi"><input type="radio" name="app_install" value="coolify">🚀 Coolify</label>
+            <label class="app-chip" data-app="docker-portainer" title="Docker Engine + Portainer web UI"><input type="radio" name="app_install" value="docker-portainer">🐋 Docker + Portainer</label>
+            <label class="app-chip" data-app="gitea" title="Hafif self-hosted Git servisi"><input type="radio" name="app_install" value="gitea">🦊 Gitea</label>
           </div>
-          <div class="app-section-label">
-            <i class="fa-solid fa-code" style="color:#a78bfa"></i>Geliştirici Araçları
+          <div class="app-cat-label"><span style="color:#22c55e">●</span> Hosting</div>
+          <div class="app-chip-row">
+            <label class="app-chip" data-app="cyberpanel" title="OpenLiteSpeed, mail, DNS, FTP"><input type="radio" name="app_install" value="cyberpanel">⚙️ CyberPanel</label>
+            <label class="app-chip" data-app="nginx-proxy-manager" title="Reverse proxy, Let's Encrypt SSL"><input type="radio" name="app_install" value="nginx-proxy-manager">🔄 Nginx Proxy Mgr</label>
+            <label class="app-chip" data-app="plesk" title="Web hosting kontrol paneli"><input type="radio" name="app_install" value="plesk">🖥️ Plesk</label>
           </div>
-          <div class="app-install-grid">
-            <label class="app-install-card" data-app="coolify">
-              <input type="radio" name="app_install" value="coolify" style="display:none">
-              <div class="app-install-icon">🚀</div>
-              <div class="app-install-name">Coolify</div>
-              <div class="app-install-desc">Self-hosted PaaS — Heroku alternatifi</div>
-            </label>
-            <label class="app-install-card" data-app="docker-portainer">
-              <input type="radio" name="app_install" value="docker-portainer" style="display:none">
-              <div class="app-install-icon">🐋</div>
-              <div class="app-install-name">Docker + Portainer</div>
-              <div class="app-install-desc">Docker Engine + Portainer web UI</div>
-            </label>
-            <label class="app-install-card" data-app="gitea">
-              <input type="radio" name="app_install" value="gitea" style="display:none">
-              <div class="app-install-icon">🦊</div>
-              <div class="app-install-name">Gitea</div>
-              <div class="app-install-desc">Hafif self-hosted Git servisi</div>
-            </label>
+          <div class="app-cat-label"><span style="color:#f59e0b">●</span> İzleme & Depolama</div>
+          <div class="app-chip-row">
+            <label class="app-chip" data-app="grafana" title="Analytics & dashboard"><input type="radio" name="app_install" value="grafana">📊 Grafana</label>
+            <label class="app-chip" data-app="uptime-kuma" title="HTTP/TCP/Ping izleme"><input type="radio" name="app_install" value="uptime-kuma">📡 Uptime Kuma</label>
+            <label class="app-chip" data-app="minio" title="S3 uyumlu nesne depolama"><input type="radio" name="app_install" value="minio">🪣 MinIO</label>
           </div>
-          <div class="app-section-label">
-            <i class="fa-solid fa-server" style="color:#22c55e"></i>Hosting Panelleri
+          <div class="app-cat-label"><span style="color:#ef4444">●</span> VPN & Ağ</div>
+          <div class="app-chip-row">
+            <label class="app-chip" data-app="pihole" title="Ağ geneli reklam engelleyici"><input type="radio" name="app_install" value="pihole">⬛ Pi-hole</label>
+            <label class="app-chip" data-app="wireguard" title="Modern, hızlı VPN, web UI :51821"><input type="radio" name="app_install" value="wireguard">🔒 WireGuard VPN</label>
           </div>
-          <div class="app-install-grid">
-            <label class="app-install-card" data-app="cyberpanel">
-              <input type="radio" name="app_install" value="cyberpanel" style="display:none">
-              <div class="app-install-icon">⚙️</div>
-              <div class="app-install-name">CyberPanel</div>
-              <div class="app-install-desc">OpenLiteSpeed, mail, DNS, FTP</div>
-            </label>
-            <label class="app-install-card" data-app="nginx-proxy-manager">
-              <input type="radio" name="app_install" value="nginx-proxy-manager" style="display:none">
-              <div class="app-install-icon">🔄</div>
-              <div class="app-install-name">Nginx Proxy Manager</div>
-              <div class="app-install-desc">Reverse proxy, Let's Encrypt SSL</div>
-            </label>
-            <label class="app-install-card" data-app="plesk">
-              <input type="radio" name="app_install" value="plesk" style="display:none">
-              <div class="app-install-icon">🖥️</div>
-              <div class="app-install-name">Plesk</div>
-              <div class="app-install-desc">Web hosting kontrol paneli</div>
-            </label>
-          </div>
-          <div class="app-section-label">
-            <i class="fa-solid fa-chart-area" style="color:#f59e0b"></i>İzleme & Depolama
-          </div>
-          <div class="app-install-grid">
-            <label class="app-install-card" data-app="grafana">
-              <input type="radio" name="app_install" value="grafana" style="display:none">
-              <div class="app-install-icon">📊</div>
-              <div class="app-install-name">Grafana</div>
-              <div class="app-install-desc">Analytics & dashboard</div>
-            </label>
-            <label class="app-install-card" data-app="uptime-kuma">
-              <input type="radio" name="app_install" value="uptime-kuma" style="display:none">
-              <div class="app-install-icon">📡</div>
-              <div class="app-install-name">Uptime Kuma</div>
-              <div class="app-install-desc">HTTP/TCP/Ping izleme</div>
-            </label>
-            <label class="app-install-card" data-app="minio">
-              <input type="radio" name="app_install" value="minio" style="display:none">
-              <div class="app-install-icon">🪣</div>
-              <div class="app-install-name">MinIO</div>
-              <div class="app-install-desc">S3 uyumlu nesne depolama</div>
-            </label>
-          </div>
-          <div class="app-section-label">
-            <i class="fa-solid fa-shield" style="color:#ef4444"></i>VPN & Ağ
-          </div>
-          <div class="app-install-grid">
-            <label class="app-install-card" data-app="pihole">
-              <input type="radio" name="app_install" value="pihole" style="display:none">
-              <div class="app-install-icon">⬛</div>
-              <div class="app-install-name">Pi-hole</div>
-              <div class="app-install-desc">Ağ geneli reklam engelleyici</div>
-            </label>
-            <label class="app-install-card" data-app="wireguard">
-              <input type="radio" name="app_install" value="wireguard" style="display:none">
-              <div class="app-install-icon">🔒</div>
-              <div class="app-install-name">WireGuard VPN</div>
-              <div class="app-install-desc">Modern, hızlı VPN, web UI :51821</div>
-            </label>
-          </div>
-          <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">
-            Seçili uygulama: <span id="selected-app-name" style="color:var(--accent-lt);font-weight:600">Yok</span>
-            <button onclick="clearAppInstall()" style="margin-left:8px;background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0">✕ Temizle</button>
+          <div style="margin-top:6px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
+            Seçili: <span id="selected-app-name" style="color:var(--accent-lt);font-weight:600">Yok</span>
+            <button onclick="clearAppInstall()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
           </div>
         </div>
       </details>
@@ -10235,21 +10151,20 @@ window.addEventListener("DOMContentLoaded", () => {
   // Task log every 15s
   setInterval(loadTaskLog, 15000);
 
-  // ── App install card selection highlight ──
-  document.querySelectorAll('.app-install-card').forEach(card => {
-    card.addEventListener('click', function() {
-      document.querySelectorAll('.app-install-card').forEach(c => c.classList.remove('selected'));
+  // ── App install chip selection ──
+  document.querySelectorAll('.app-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.app-chip').forEach(c => c.classList.remove('selected'));
       this.classList.add('selected');
-      const appName = this.querySelector('.app-install-name')?.textContent || '';
       const el = document.getElementById('selected-app-name');
-      if (el) el.textContent = appName;
+      if (el) el.textContent = this.textContent.trim();
     });
   });
 });
 
 function clearAppInstall() {
   document.querySelectorAll('input[name="app_install"]').forEach(r => r.checked = false);
-  document.querySelectorAll('.app-install-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.app-chip').forEach(c => c.classList.remove('selected'));
   const el = document.getElementById('selected-app-name');
   if (el) el.textContent = 'Yok';
 }
