@@ -6233,7 +6233,7 @@ async function loadNodeSummary() {
       const dPct = parseInt(rootDisk.percent) || 0;
       document.getElementById("ns-disk-bar").style.width = dPct + "%";
       document.getElementById("ns-disk-val").textContent  = rootDisk.used  || `${dPct}%`;
-      document.getElementById("ns-disk-free").textContent = rootDisk.free  || "—";
+      document.getElementById("ns-disk-free").textContent = rootDisk.avail || rootDisk.free || "—";
       document.getElementById("ns-disk-cap").textContent  = rootDisk.size  || "—";
     }
 
