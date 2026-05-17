@@ -56,6 +56,10 @@ def get_system_stats():
 
     load_avg = os.getloadavg()
 
+    _disk_path = getattr(config, "DISK_DIR", "/var/lib/oxware/disks")
+    _disk_root = _disk_path if os.path.exists(_disk_path) else "/"
+    _disk_usage = psutil.disk_usage(_disk_root)
+
     return {
         "cpu": {
             "percent": cpu_percent,
@@ -79,6 +83,12 @@ def get_system_stats():
             "total_mb": swap.total // 1024**2,
             "used_mb": swap.used // 1024**2,
             "percent": swap.percent,
+        },
+        "disk_capacity": {
+            "total_gb": _disk_usage.total // 1024**3,
+            "used_gb":  _disk_usage.used  // 1024**3,
+            "free_gb":  _disk_usage.free  // 1024**3,
+            "percent":  _disk_usage.percent,
         },
         "disk_io": {
             "read_mb": disk_io.read_bytes // 1024**2 if disk_io else 0,

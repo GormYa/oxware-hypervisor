@@ -351,8 +351,8 @@
     .res-slider-val{font-size:16px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;line-height:1}
     .res-slider-sub{font-size:10px;color:var(--text-dim)}
     input[type=range].res-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;border:none;padding:0;cursor:pointer;background:var(--border2)}
-    input[type=range].res-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
-    input[type=range].res-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    input[type=range].res-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    input[type=range].res-slider::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
 
     /* ── Modal ── */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:center;justify-content:center}
@@ -3974,7 +3974,24 @@ window.addEventListener("click", e => {
   if (e.target.classList.contains("modal-overlay")) e.target.classList.remove("open");
 });
 
-function openCreateVMModal() { loadISOOptions(); loadIpPoolOptions(); loadNetworkOptions(); openModal("modal-create-vm"); }
+async function openCreateVMModal() {
+  loadISOOptions(); loadIpPoolOptions(); loadNetworkOptions();
+  openModal("modal-create-vm");
+  // Sunucu kapasitesine göre slider max değerlerini ayarla
+  try {
+    const d = await api('/system/stats');
+    const stats = d.stats || d;
+    const ramMaxMb   = stats.memory?.total_mb   || 65536;
+    const diskMaxGb  = stats.disk_capacity?.total_gb || 2000;
+    const memSlider  = document.getElementById('vm-mem');
+    const diskSlider = document.getElementById('vm-disk');
+    memSlider.max  = ramMaxMb;
+    diskSlider.max = Math.max(diskMaxGb, parseInt(diskSlider.value));
+    // Mevcut değerleri tekrar render et (fill bar güncelle)
+    resSliderMem(memSlider.value);
+    resSliderDisk(diskSlider.value);
+  } catch {}
+}
 function openCreateNetworkModal() { openModal("modal-create-net"); netModeChanged('nat'); }
 function netModeChanged(mode) {
   const bridgeRow = document.getElementById('net-bridge-row');
