@@ -2138,4 +2138,105 @@ Global arama VM adı, sekme adı ve menü öğelerini tarar; sonuca tıklayarak 
 
 ---
 
+## 49. Hosting Eklentileri (WiseCP & WHMCS)
+
+OXware'i hosting fatura panelinize bağlayarak VM oluşturma, askıya alma ve silme işlemlerini otomatikleştirin.
+
+### Genel Bakış
+
+| Özellik | Detay |
+|---------|-------|
+| Desteklenen paneller | WiseCP, WHMCS |
+| Kimlik doğrulama | `X-API-Key` başlığı — `oxw_` önekli API anahtarı |
+| Protokol | REST JSON (HTTPS zorunlu) |
+| SSL doğrulama | `CURLOPT_SSL_VERIFYPEER true`, sistem CA bundle |
+
+### API Anahtarı Oluşturma
+
+Panel üzerinden: **Hosting Eklentileri** sekmesi → "API Anahtarı Oluştur".
+
+```bash
+# REST ile
+POST /api/api-keys
+Authorization: Bearer <jwt>
+{
+  "name": "wisecp-prod",
+  "permissions": ["provisioning"],
+  "expires_days": 365
+}
+```
+
+Yanıt: `{ "key": "oxw_..." }` — anahtarı not edin, tekrar görüntülenemez.
+
+### WiseCP Modülü
+
+```
+Konum: modules/server/oxware/oxware.php
+```
+
+**Kurulum:**
+1. `modules/server/oxware/` klasörünü WiseCP sunucusuna kopyala.
+2. WiseCP Admin → Sunucular → Yeni Sunucu → Tip: **OXware**.
+3. `ip_address` / `hostname`: `https://oxware.example.com`
+4. `password` / `api_key`: `oxw_...`
+
+**Paket ayarları:** `cpu`, `ram_mb`, `disk_gb`, `os_template`, `network`
+
+### WHMCS Modülü
+
+```
+Konum: modules/servers/oxware/oxware.php
+```
+
+**Kurulum:**
+1. `modules/servers/oxware/` klasörünü WHMCS sunucusuna kopyala.
+2. WHMCS Admin → Kurulum → Sunucular → Yeni Sunucu → Tip: **OXware**.
+3. Hostname: `https://oxware.example.com`
+4. Access Hash: `oxw_...`
+
+**Yapılandırılabilir seçenekler:** `CPU (vCPU)`, `RAM (MB)`, `Disk (GB)`, `OS Template`, `Network`
+
+### Provisioning API Referansı
+
+```bash
+# VM oluştur
+POST /api/provision/create
+X-API-Key: oxw_...
+{
+  "name": "vm-1234-example",
+  "cpu": 2,
+  "ram_mb": 2048,
+  "disk_gb": 50,
+  "os_template": "ubuntu-22.04",
+  "network": "default",
+  "auto_start": true
+}
+
+# VM sil
+DELETE /api/provision/<vm_id>
+
+# VM askıya al / kaldır
+POST /api/provision/<vm_id>/suspend
+POST /api/provision/<vm_id>/unsuspend
+
+# VM durumu
+GET /api/provision/<vm_id>/status
+
+# Kaynak değiştir (resize)
+PUT /api/provision/<vm_id>/resize
+{ "cpu": 4, "ram_mb": 4096, "disk_gb": 100 }
+
+# Mevcut template'ler
+GET /api/provision/templates
+```
+
+### Güvenlik Notları
+
+- `vm_id` her zaman UUID formatında doğrulanır — path traversal koruması.
+- SSL peer/host doğrulama zorunlu; self-signed sertifika için sunucuya gerçek CA ekle.
+- API anahtarı yalnızca `provisioning` yetkisiyle kısıtlanmış — JWT admin yetkisi vermiyor.
+- Modül indir: Panel → Hosting Eklentileri → "WiseCP/WHMCS Modülünü İndir" (JWT gerekli).
+
+---
+
 *OXware Hypervisor — Açık kaynak, üretim kalitesinde KVM tabanlı sanallaştırma platformu.*
