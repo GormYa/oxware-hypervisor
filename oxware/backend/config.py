@@ -9,7 +9,7 @@ _defaults = {
     "ssl": "true",
     "ssl_cert": "/etc/oxware/ssl/oxware.crt",
     "ssl_key": "/etc/oxware/ssl/oxware.key",
-    "secret_key": "oxware-change-me-in-production",
+    "secret_key": "",
     "data_dir": "/var/lib/oxware",
     "iso_dir": "/var/lib/oxware/isos",
     "disk_dir": "/var/lib/oxware/disks",
@@ -50,7 +50,25 @@ PORT          = int(get("server", "port"))
 SSL_ENABLED   = get("server", "ssl", "true").lower() == "true"
 SSL_CERT      = get("server", "ssl_cert")
 SSL_KEY       = get("server", "ssl_key")
-SECRET_KEY    = get("server", "secret_key")
+
+# JWT secret key — auto-generate and persist if not set or default
+_SECRET_KEY_FILE = "/etc/oxware/jwt_secret.key"
+_raw_secret = get("server", "secret_key") or ""
+if not _raw_secret or _raw_secret in ("oxware-change-me-in-production", ""):
+    if os.path.exists(_SECRET_KEY_FILE):
+        with open(_SECRET_KEY_FILE) as _f:
+            _raw_secret = _f.read().strip()
+    if not _raw_secret:
+        import secrets as _sec
+        _raw_secret = _sec.token_hex(64)
+        try:
+            os.makedirs("/etc/oxware", exist_ok=True)
+            with open(_SECRET_KEY_FILE, "w") as _f:
+                _f.write(_raw_secret)
+            os.chmod(_SECRET_KEY_FILE, 0o600)
+        except OSError:
+            pass  # /etc/oxware not writable yet (dev mode) — key ephemeral
+SECRET_KEY = _raw_secret
 
 DATA_DIR      = get("storage", "data_dir")
 ISO_DIR       = get("storage", "iso_dir")

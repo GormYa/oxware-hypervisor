@@ -346,8 +346,6 @@ def _flush_dnsmasq_lease(mac: str):
             _log.warning("Lease silinemedi %s: %s", lf, e)
     # dnsmasq'a HUP gönder — lease dosyasını yeniden yüklesin
     try:
-        subprocess.run(["kill", "-HUP", "$(pgrep dnsmasq)"],
-                       shell=True, capture_output=True, timeout=5)
         subprocess.run(["pkill", "-HUP", "dnsmasq"],
                        capture_output=True, timeout=5)
     except Exception:

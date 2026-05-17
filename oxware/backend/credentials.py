@@ -168,6 +168,20 @@ def apply_reset_if_exists():
         return False
 
     try:
+        # Güvenlik: dosya world/group-readable ise reddet
+        import stat as _stat
+        _st = os.stat(RESET_FILE)
+        if _st.st_mode & (_stat.S_IRWXG | _stat.S_IRWXO):
+            print(f"[credentials] RESET_FILE group/world-readable — güvenlik riski, işlem reddedildi: {RESET_FILE}")
+            try:
+                os.chmod(RESET_FILE, 0o600)
+            except OSError:
+                pass
+            return False
+    except OSError:
+        return False
+
+    try:
         content = Path(RESET_FILE).read_text().strip()
         params = {}
         for line in content.splitlines():

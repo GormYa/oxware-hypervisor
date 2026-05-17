@@ -899,6 +899,7 @@ def _fetch_cves(keyword: str, product_id: str, limit: int = 20, years_back: int 
 
 @app.route("/api/cve/debug")
 @require_auth
+@require_role("admin", "administrator")
 def api_cve_debug():
     """Test connectivity to each CVE source. Returns reachability status."""
     import json as _json
@@ -918,6 +919,7 @@ def api_cve_debug():
     return ok(connectivity=results)
 
 @app.route("/api/cve/products")
+@require_auth
 def api_cve_products():
     return ok(products=CVE_PRODUCTS)
 
@@ -1046,6 +1048,7 @@ _ISO_SEARCH_PATHS = [
 ]
 
 @app.route("/download/iso")
+@require_auth
 def download_iso():
     import glob as _glob
     # Dynamic search — any OXware ISO
@@ -1058,6 +1061,7 @@ def download_iso():
                      mimetype="application/x-iso9660-image")
 
 @app.route("/api/iso/info")
+@require_auth
 def api_iso_info():
     candidates = _iso_find()
     if not candidates:
@@ -1417,8 +1421,9 @@ Bu kod 1 saat geçerlidir. Eğer bu isteği siz yapmadıysanız dikkate almayın
         except Exception as e:
             log.warning("SMTP hatası: %s — token döndürülüyor", e)
 
-    # SMTP yoksa token'ı döndür (admin konsolda görünür)
-    return ok(message="SMTP yapılandırılmamış. Token aşağıdadır.", token=token, dev_mode=True)
+    # SMTP yoksa token'ı HTTP yanıtında gösterme — sadece server loguna yaz
+    log.warning("SMTP yapılandırılmamış. Şifre sıfırlama token server logunda: user=%s token=%s", username, token)
+    return ok(message="SMTP yapılandırılmamış. Sunucu yöneticisiyle iletişime geçin.")
 
 @app.route("/api/auth/password-reset/confirm", methods=["POST"])
 def api_password_reset_confirm():
