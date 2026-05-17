@@ -6376,28 +6376,294 @@ def api_ssh_restart():
 @app.route("/api/docs", methods=["GET"])
 @app.route("/api/swagger", methods=["GET"])
 def api_swagger_ui():
-    html = """<!DOCTYPE html>
-<html>
+    html = r"""<!DOCTYPE html>
+<html lang="tr">
 <head>
-  <title>OXware API Docs</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OXware API Docs</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+header{background:#161b22;border-bottom:1px solid #30363d;padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}
+header h1{font-size:18px;font-weight:700;color:#58a6ff}
+header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;border-radius:10px;border:1px solid #1f6feb}
+#search{margin-left:auto;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:6px 12px;font-size:13px;width:240px;outline:none}
+#search:focus{border-color:#58a6ff}
+#search::placeholder{color:#8b949e}
+.sidebar{position:fixed;top:57px;left:0;bottom:0;width:220px;background:#161b22;border-right:1px solid #30363d;overflow-y:auto;padding:12px 0}
+.tag-group{padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8b949e;margin-top:8px}
+.sidebar-item{display:flex;align-items:center;gap:8px;padding:5px 16px;font-size:12px;cursor:pointer;color:#8b949e;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-item:hover,.sidebar-item.active{background:#21262d;color:#e6edf3}
+.sidebar-item .method-badge{flex-shrink:0;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;min-width:34px;text-align:center}
+.main{margin-left:220px;padding:24px;max-width:960px}
+.endpoint{border:1px solid #30363d;border-radius:8px;margin-bottom:10px;overflow:hidden;background:#161b22}
+.ep-header{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;user-select:none;transition:background .1s}
+.ep-header:hover{background:#21262d}
+.ep-header .path{font-family:'SFMono-Regular',Consolas,monospace;font-size:13px;font-weight:600;flex:1}
+.ep-header .summary{font-size:12px;color:#8b949e;margin-left:8px}
+.ep-header .chevron{color:#8b949e;transition:transform .2s;font-size:12px}
+.ep-header.open .chevron{transform:rotate(90deg)}
+.ep-body{display:none;padding:16px;border-top:1px solid #30363d;background:#0d1117}
+.ep-body.open{display:block}
+.ep-section{margin-bottom:12px;font-size:12px}
+.ep-section label{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8b949e;display:block;margin-bottom:6px}
+.param-row{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid #21262d}
+.param-name{font-family:monospace;font-size:12px;color:#79c0ff;min-width:120px}
+.param-in{font-size:10px;background:#21262d;padding:1px 6px;border-radius:3px;color:#8b949e}
+.param-req{font-size:10px;color:#f85149}
+.param-desc{color:#8b949e;font-size:12px}
+.try-section{margin-top:12px;background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
+.try-header{padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8b949e;background:#21262d;display:flex;align-items:center;gap:8px}
+.try-body{padding:12px}
+.try-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap}
+.try-row label{font-size:11px;color:#8b949e;min-width:80px}
+.try-row input,.try-row textarea,.try-row select{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6edf3;padding:5px 8px;font-size:12px;font-family:monospace;outline:none;min-width:0}
+.try-row input:focus,.try-row textarea:focus{border-color:#58a6ff}
+.try-row textarea{resize:vertical;min-height:60px}
+.btn-try{background:#238636;color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-try:hover{background:#2ea043}
+.response-box{margin-top:10px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 12px;font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow-y:auto;color:#e6edf3}
+.response-box.ok{border-color:#238636}
+.response-box.err{border-color:#f85149;color:#ffa198}
+.GET{background:#1a7f37;color:#fff}
+.POST{background:#1f6feb;color:#fff}
+.PUT{background:#7d4e00;color:#fff}
+.PATCH{background:#5a3285;color:#fff}
+.DELETE{background:#6e1c1c;color:#fff}
+.badge-auth{font-size:10px;background:#6e1c1c33;color:#f85149;padding:2px 7px;border-radius:4px;border:1px solid #6e1c1c}
+#no-results{display:none;text-align:center;padding:40px;color:#8b949e}
+</style>
 </head>
 <body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+<header>
+  <h1>⚡ OXware API</h1>
+  <span id="ver-badge">v2.3</span>
+  <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
+  <input id="search" type="search" placeholder="Endpoint ara...">
+</header>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main">
+  <div id="no-results">Eşleşen endpoint bulunamadı.</div>
+  <div id="endpoints"></div>
+</main>
 <script>
-SwaggerUIBundle({
-  url: '/api/openapi.json',
-  dom_id: '#swagger-ui',
-  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-  layout: "BaseLayout"
-})
+const TOKEN_KEY = 'oxware_token';
+
+async function loadSpec() {
+  try {
+    const r = await fetch('/api/openapi.json', {
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem(TOKEN_KEY) || '') }
+    });
+    if (!r.ok) {
+      // Not logged in — show token input
+      renderTokenPrompt();
+      return;
+    }
+    const spec = await r.json();
+    render(spec);
+  } catch(e) {
+    document.getElementById('endpoints').innerHTML =
+      '<p style="color:#f85149;padding:20px">Spec yüklenemedi: ' + e.message + '</p>';
+  }
+}
+
+function renderTokenPrompt() {
+  document.getElementById('endpoints').innerHTML = `
+    <div style="max-width:400px;margin:60px auto;text-align:center">
+      <div style="font-size:40px;margin-bottom:16px">🔐</div>
+      <p style="color:#8b949e;margin-bottom:16px;font-size:14px">API dökümantasyonunu görüntülemek için JWT token girin.</p>
+      <input id="token-inp" type="text" placeholder="JWT token..." style="width:100%;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#e6edf3;padding:10px;font-size:13px;outline:none;margin-bottom:10px">
+      <button onclick="setToken()" style="background:#238636;color:#fff;border:none;border-radius:6px;padding:9px 24px;font-size:13px;cursor:pointer;width:100%">Giriş</button>
+    </div>`;
+}
+
+function setToken() {
+  const t = document.getElementById('token-inp').value.trim();
+  if (t) { localStorage.setItem(TOKEN_KEY, t); loadSpec(); }
+}
+
+const METHOD_ORDER = ['GET','POST','PUT','PATCH','DELETE'];
+
+function methodColor(m) {
+  return m.toUpperCase();
+}
+
+function render(spec) {
+  const paths = spec.paths || {};
+  const info  = spec.info  || {};
+  document.getElementById('ver-badge').textContent = 'v' + (info.version || '?');
+
+  // Group by tags
+  const groups = {};
+  const items  = [];
+
+  Object.entries(paths).forEach(([path, methods]) => {
+    METHOD_ORDER.forEach(m => {
+      const op = methods[m.toLowerCase()];
+      if (!op) return;
+      const tag = (op.tags && op.tags[0]) || 'General';
+      if (!groups[tag]) groups[tag] = [];
+      const item = { path, method: m, op, tag };
+      groups[tag].push(item);
+      items.push(item);
+    });
+  });
+
+  document.getElementById('ep-count').textContent = items.length + ' endpoint';
+
+  // Sidebar
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = Object.entries(groups).map(([tag, eps]) => `
+    <div class="tag-group">${esc(tag)}</div>
+    ${eps.map(e => `
+      <a class="sidebar-item" href="#ep-${esc(e.method+e.path.replace(/[^a-z0-9]/gi,'_'))}" onclick="openEp(this)">
+        <span class="method-badge ${e.method}">${e.method}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${esc(e.path)}</span>
+      </a>`).join('')}
+  `).join('');
+
+  // Endpoints
+  const container = document.getElementById('endpoints');
+  container.innerHTML = Object.entries(groups).map(([tag, eps]) => `
+    <h2 style="font-size:13px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #30363d">${esc(tag)}</h2>
+    ${eps.map(e => renderEndpoint(e)).join('')}
+  `).join('');
+
+  // Search
+  document.getElementById('search').addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    let visible = 0;
+    document.querySelectorAll('.endpoint').forEach(el => {
+      const match = el.dataset.path.includes(q) || el.dataset.summary.includes(q) || el.dataset.tag.includes(q);
+      el.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    document.getElementById('no-results').style.display = visible ? 'none' : 'block';
+  });
+}
+
+function renderEndpoint(e) {
+  const op = e.op;
+  const id = 'ep-' + (e.method + e.path).replace(/[^a-z0-9]/gi, '_');
+  const params = op.parameters || [];
+  const hasBody = ['POST','PUT','PATCH'].includes(e.method);
+  const security = op.security !== undefined ? op.security : true;
+  const needsAuth = security !== false && !(Array.isArray(security) && security.length === 0);
+
+  return `<div class="endpoint" id="${id}" data-path="${esc(e.path.toLowerCase())}" data-summary="${esc((op.summary||'').toLowerCase())}" data-tag="${esc(e.tag.toLowerCase())}">
+  <div class="ep-header" onclick="toggleEp(this)">
+    <span class="method-badge ${e.method}" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;min-width:52px;text-align:center">${e.method}</span>
+    <span class="path">${esc(e.path)}</span>
+    ${needsAuth ? '<span class="badge-auth">🔒 Auth</span>' : ''}
+    <span class="summary">${esc(op.summary || '')}</span>
+    <span class="chevron">▶</span>
+  </div>
+  <div class="ep-body">
+    ${op.description ? `<p style="font-size:13px;color:#8b949e;margin-bottom:12px">${esc(op.description)}</p>` : ''}
+    ${params.length ? `<div class="ep-section">
+      <label>Parametreler</label>
+      ${params.map(p => `<div class="param-row">
+        <span class="param-name">${esc(p.name)}</span>
+        <span class="param-in">${p.in}</span>
+        ${p.required ? '<span class="param-req">*zorunlu</span>' : ''}
+        <span class="param-desc">${esc(p.description || (p.schema && p.schema.type) || '')}</span>
+      </div>`).join('')}
+    </div>` : ''}
+    <div class="try-section">
+      <div class="try-header">▶ Dene <span style="font-weight:400;color:#58a6ff;font-size:10px">(Token otomatik eklenir)</span></div>
+      <div class="try-body">
+        ${params.filter(p => p.in === 'path').map(p => `
+          <div class="try-row">
+            <label>{${esc(p.name)}}</label>
+            <input class="try-path-param" data-name="${esc(p.name)}" placeholder="${esc(p.name)}">
+          </div>`).join('')}
+        ${params.filter(p => p.in === 'query').map(p => `
+          <div class="try-row">
+            <label>${esc(p.name)}</label>
+            <input class="try-query-param" data-name="${esc(p.name)}" placeholder="${esc(p.name)}">
+          </div>`).join('')}
+        ${hasBody ? `<div class="try-row">
+          <label>Body (JSON)</label>
+          <textarea class="try-body-inp" placeholder='{"key": "value"}'></textarea>
+        </div>` : ''}
+        <button class="btn-try" onclick="tryRequest(this,'${e.method}','${esc(e.path)}')">Gönder</button>
+        <div class="response-box" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function toggleEp(hdr) {
+  hdr.classList.toggle('open');
+  hdr.nextElementSibling.classList.toggle('open');
+}
+
+function openEp(a) {
+  const target = document.querySelector(a.getAttribute('href'));
+  if (!target) return;
+  const hdr = target.querySelector('.ep-header');
+  if (!hdr.classList.contains('open')) {
+    hdr.classList.add('open');
+    hdr.nextElementSibling.classList.add('open');
+  }
+  setTimeout(() => target.scrollIntoView({behavior:'smooth', block:'start'}), 50);
+}
+
+async function tryRequest(btn, method, pathTemplate) {
+  const wrap = btn.closest('.try-body');
+  const respBox = wrap.querySelector('.response-box');
+  respBox.style.display = 'block';
+  respBox.className = 'response-box';
+  respBox.textContent = 'Yükleniyor...';
+
+  let url = '/api' + pathTemplate;
+  wrap.querySelectorAll('.try-path-param').forEach(inp => {
+    url = url.replace('{' + inp.dataset.name + '}', encodeURIComponent(inp.value || inp.dataset.name));
+  });
+
+  const queryParts = [];
+  wrap.querySelectorAll('.try-query-param').forEach(inp => {
+    if (inp.value) queryParts.push(encodeURIComponent(inp.dataset.name) + '=' + encodeURIComponent(inp.value));
+  });
+  if (queryParts.length) url += '?' + queryParts.join('&');
+
+  const opts = {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + (localStorage.getItem(TOKEN_KEY) || ''),
+      'Content-Type': 'application/json',
+    }
+  };
+  const bodyInp = wrap.querySelector('.try-body-inp');
+  if (bodyInp && bodyInp.value.trim()) {
+    try { opts.body = bodyInp.value.trim(); JSON.parse(opts.body); }
+    catch(e) { respBox.className = 'response-box err'; respBox.textContent = 'JSON hatalı: ' + e.message; return; }
+  }
+
+  try {
+    const r = await fetch(url, opts);
+    const text = await r.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch(_) {}
+    respBox.className = 'response-box' + (r.ok ? ' ok' : ' err');
+    respBox.textContent = 'HTTP ' + r.status + '\n\n' + pretty;
+  } catch(e) {
+    respBox.className = 'response-box err';
+    respBox.textContent = 'Bağlantı hatası: ' + e.message;
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadSpec();
 </script>
 </body>
 </html>"""
-    return html, 200, {"Content-Type": "text/html"}
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/api/openapi.json", methods=["GET"])
 @require_auth
