@@ -3421,55 +3421,64 @@ _vnc_sessions   = {}   # sid    → tcp_socket
 
 @sock.on("shell_open")
 def ws_shell_open(data=None):
-    # WebSocket event'inde HTTP header yok — token data payload'dan alınır
+    # sid'i en başta yakala — context emit() yerine sock.emit(to=sid) kullan
+    # (context emit() bazı exception path'lerinde iletilemiyor)
+    sid = request.sid
+    log.info("shell_open alındı: sid=%s", sid)
+
+    def _shell_emit(text):
+        sock.emit("shell_output", {"data": text}, to=sid, namespace="/")
+
+    # ── Token doğrulama ──────────────────────────────────────────────────────
     try:
         from flask_jwt_extended import decode_token
         token = (data or {}).get("token", "")
         if not token:
-            emit("shell_output", {"data": "\r\n[Hata: token gönderilmedi]\r\n"})
+            _shell_emit("\r\n[Hata: token gönderilmedi]\r\n")
             return
         decoded = decode_token(token)
         identity = decoded.get("sub") or decoded.get("identity", "")
         if not identity:
-            emit("shell_output", {"data": "\r\n[Hata: geçersiz token kimliği]\r\n"})
+            _shell_emit("\r\n[Hata: geçersiz token kimliği]\r\n")
             return
-        log.info("Shell açıldı: %s", identity)
+        log.info("Shell yetkisi tamam: %s sid=%s", identity, sid)
     except Exception as e:
         log.error("Shell token hatası: %s", e)
-        emit("shell_output", {"data": f"\r\n[Yetkilendirme hatası: {e}]\r\n"})
+        _shell_emit(f"\r\n[Yetkilendirme hatası: {e}]\r\n")
         return
 
-    session_id = request.sid
-
+    # ── PTY + Bash ──────────────────────────────────────────────────────────
     try:
-        import pty, fcntl, struct, termios, eventlet
+        import pty, fcntl, termios, eventlet
 
         master_fd, slave_fd = pty.openpty()
+
+        # bash -i: interactive mode zorla (PTY stdin olsa bile bazı env'lerde gerekli)
         proc = subprocess.Popen(
-            ["/bin/bash", "--norc", "--noprofile"],
+            ["/bin/bash", "-i", "--norc", "--noprofile"],
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
             close_fds=True, preexec_fn=os.setsid,
             env={**os.environ, "TERM": "xterm-256color", "PS1": r"\u@oxware:\w\$ "},
         )
         os.close(slave_fd)
-        _shell_sessions[session_id] = {"proc": proc, "master_fd": master_fd}
+        _shell_sessions[sid] = {"proc": proc, "master_fd": master_fd}
 
-        # Non-blocking yaparak eventlet ile uyumlu hale getir
         fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
         fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
         def _read_loop():
+            import eventlet as _ev
             while True:
                 try:
                     out = os.read(master_fd, 4096)
                     if out:
                         sock.emit("shell_output",
                                   {"data": out.decode("utf-8", errors="replace")},
-                                  to=session_id, namespace="/")
+                                  to=sid, namespace="/")
                     else:
                         break
                 except BlockingIOError:
-                    eventlet.sleep(0.05)
+                    _ev.sleep(0.05)
                     continue
                 except OSError:
                     break
@@ -3477,14 +3486,15 @@ def ws_shell_open(data=None):
                     log.error("_read_loop hatası: %s", _ex)
                     break
             sock.emit("shell_output", {"data": "\r\n[Oturum kapatıldı]\r\n"},
-                      to=session_id, namespace="/")
+                      to=sid, namespace="/")
 
         eventlet.spawn(_read_loop)
-        emit("shell_output", {"data": "\r\nOXware Host Shell — güvenli terminal\r\n"})
+        _shell_emit("\r\nOXware Host Shell — güvenli terminal\r\n")
+        log.info("Shell başlatıldı: sid=%s pid=%d", sid, proc.pid)
 
     except Exception as e:
         log.error("Shell açma hatası: %s", e)
-        emit("shell_output", {"data": f"\r\n[Shell açılamadı: {e}]\r\n"})
+        _shell_emit(f"\r\n[Shell açılamadı: {e}]\r\n")
 
 
 @sock.on("shell_input")
