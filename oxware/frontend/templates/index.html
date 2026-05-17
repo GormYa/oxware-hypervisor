@@ -351,8 +351,11 @@
     .res-slider-val{font-size:16px;font-weight:700;color:var(--accent-lt);font-variant-numeric:tabular-nums;line-height:1}
     .res-slider-sub{font-size:10px;color:var(--text-dim)}
     input[type=range].res-slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;border:none;padding:0;cursor:pointer;background:var(--border2)}
-    input[type=range].res-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
-    input[type=range].res-slider::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    input[type=range].res-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    input[type=range].res-slider::-moz-range-thumb{width:8px;height:8px;border-radius:50%;background:var(--accent-lt);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--accent)}
+    .res-slider-input{width:72px;padding:3px 6px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--accent-lt);font-size:13px;font-weight:700;outline:none;font-family:inherit;text-align:right}
+    .res-slider-input:focus{border-color:var(--accent)}
+    .res-slider-unit{font-size:11px;color:var(--text-muted);margin-left:2px}
 
     /* ── Modal ── */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:center;justify-content:center}
@@ -3083,7 +3086,11 @@
           <label>Bellek (MB)</label>
           <div class="res-slider-wrap">
             <div class="res-slider-top">
-              <span class="res-slider-val" id="vm-mem-display">2048 MB</span>
+              <div style="display:flex;align-items:baseline;gap:4px">
+                <input class="res-slider-input" id="vm-mem-input" type="number" min="256" max="65536" step="256" value="2048"
+                       oninput="resSliderMemInput(this.value)" onblur="resSliderMemInput(this.value,true)">
+                <span class="res-slider-unit">MB</span>
+              </div>
               <span class="res-slider-sub" id="vm-mem-sub">2 GB</span>
             </div>
             <input type="range" class="res-slider" id="vm-mem" min="256" max="65536" step="256" value="2048"
@@ -3096,7 +3103,11 @@
           <label>Disk (GB)</label>
           <div class="res-slider-wrap">
             <div class="res-slider-top">
-              <span class="res-slider-val" id="vm-disk-display">20 GB</span>
+              <div style="display:flex;align-items:baseline;gap:4px">
+                <input class="res-slider-input" id="vm-disk-input" type="number" min="1" max="2000" step="1" value="20"
+                       oninput="resSliderDiskInput(this.value)" onblur="resSliderDiskInput(this.value,true)">
+                <span class="res-slider-unit">GB</span>
+              </div>
               <span class="res-slider-sub" id="vm-disk-sub"></span>
             </div>
             <input type="range" class="res-slider" id="vm-disk" min="1" max="2000" step="1" value="20"
@@ -6428,18 +6439,28 @@ function _resSliderFill(el) {
   el.style.background = `linear-gradient(to right,var(--accent-lt) ${pct}%,var(--border2) ${pct}%)`;
 }
 function resSliderMem(v) {
-  v = parseInt(v);
-  document.getElementById('vm-mem-display').textContent = v + ' MB';
+  v = Math.max(256, Math.min(parseInt(v) || 256, parseInt(document.getElementById('vm-mem').max)));
+  document.getElementById('vm-mem').value = v;
+  document.getElementById('vm-mem-input').value = v;
   document.getElementById('vm-mem-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' GB' : '';
   _resSliderFill(document.getElementById('vm-mem'));
 }
+function resSliderMemInput(v, clamp) {
+  v = parseInt(v) || 256;
+  if (clamp) v = Math.round(v / 256) * 256;
+  resSliderMem(v);
+}
 function resSliderDisk(v) {
-  v = parseInt(v);
-  document.getElementById('vm-disk-display').textContent = v + ' GB';
+  v = Math.max(1, Math.min(parseInt(v) || 1, parseInt(document.getElementById('vm-disk').max)));
+  document.getElementById('vm-disk').value = v;
+  document.getElementById('vm-disk-input').value = v;
   document.getElementById('vm-disk-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' TB' : '';
   _resSliderFill(document.getElementById('vm-disk'));
 }
-// Slider'ları ilk açılışta doldur
+function resSliderDiskInput(v, clamp) {
+  v = parseInt(v) || 1;
+  resSliderDisk(v);
+}
 document.addEventListener('DOMContentLoaded', () => {
   resSliderMem(document.getElementById('vm-mem').value);
   resSliderDisk(document.getElementById('vm-disk').value);
