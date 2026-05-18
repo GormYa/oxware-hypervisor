@@ -548,6 +548,31 @@ def require_role(*allowed_roles):
     return decorator
 
 
+def _vmuser_check(vm_id):
+    """
+    vm-user rolü için: JWT'den kullanıcıyı al, sadece atanmış VM'e erişime izin ver.
+    Başka rol içinse None döner (check skip).
+    Returns: None (pass) or Flask error response (block).
+    """
+    try:
+        verify_jwt_in_request()
+        username = get_jwt_identity()
+        _primary = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+        if username == _primary:
+            return None  # admin — pass
+        role = (cred_mgr.get_role(username) if hasattr(cred_mgr, "get_role")
+                else user_manager.get_user_role(username)) or "viewer"
+        if role != "vm-user":
+            return None  # not vm-user — existing require_role handles it
+        allowed = set(user_manager.get_user_vms(username))
+        if vm_id not in allowed:
+            log.warning("vm-user %s tried to access unassigned vm %s", username, vm_id)
+            return err("Bu VM size atanmamış", 403)
+    except Exception:
+        pass
+    return None
+
+
 # noVNC session token store — CVE-2022-35508 mitigation
 # Short-lived tokens prevent unauthenticated direct WebSocket access
 import secrets as _secrets
@@ -1670,8 +1695,10 @@ def api_delete_vm(vm_id):
 
 @app.route("/api/vms/<vm_id>/start", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator", "operator", "vm-user")
 def api_start_vm(vm_id):
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     try:
         _vm_name_start = ""
         try:
@@ -1718,8 +1745,10 @@ def api_start_vm(vm_id):
 
 @app.route("/api/vms/<vm_id>/stop", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator", "operator", "vm-user")
 def api_stop_vm(vm_id):
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     force = request.args.get("force", "false").lower() == "true"
     try:
         _vm_name_stop = ""
@@ -1744,8 +1773,10 @@ def api_stop_vm(vm_id):
 
 @app.route("/api/vms/<vm_id>/reboot", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator", "operator", "vm-user")
 def api_reboot_vm(vm_id):
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     force = request.args.get("force", "false").lower() == "true"
     try:
         return ok(**vm_manager.reboot_vm(vm_id, force=force))
@@ -1754,8 +1785,10 @@ def api_reboot_vm(vm_id):
 
 @app.route("/api/vms/<vm_id>/pause", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator", "operator", "vm-user")
 def api_pause_vm(vm_id):
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     try:
         return ok(**vm_manager.pause_vm(vm_id))
     except Exception as e:
@@ -1763,8 +1796,10 @@ def api_pause_vm(vm_id):
 
 @app.route("/api/vms/<vm_id>/resume", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator", "operator", "vm-user")
 def api_resume_vm(vm_id):
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     try:
         return ok(**vm_manager.resume_vm(vm_id))
     except Exception as e:
@@ -2222,6 +2257,7 @@ def api_vm_console(vm_id):
 
 @app.route("/api/vms/<vm_id>/console/start", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator", "operator", "vm-user", "viewer")
 def api_start_console(vm_id):
     """
     Flask VNC proxy (/ws/vnc/<vm_id>) tüm WebSocket→VNC köprüsünü kendi yapıyor.
@@ -2229,6 +2265,8 @@ def api_start_console(vm_id):
     RFB handshake'i tamamlayamıyor.
     Eski websockify varsa öldür, sadece VNC portunu dön.
     """
+    _chk = _vmuser_check(vm_id)
+    if _chk: return _chk
     try:
         # ── VNC port: query libvirt XML (stored vnc_port may be absent/stale) ──
         import libvirt as _lv_cs
