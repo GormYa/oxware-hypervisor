@@ -656,6 +656,16 @@
     #mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:340}
     #mob-overlay.visible{display:block}
 
+    /* Mobile logout button — topbar right */
+    #mob-logout-btn{display:none;align-items:center;gap:6px;height:100%;padding:0 13px;background:none;border:none;border-left:1px solid var(--border);color:var(--text-muted);font-size:13px;cursor:pointer;flex-shrink:0;transition:background .12s,color .12s}
+    #mob-logout-btn:hover{background:rgba(248,81,73,.1);color:#f85149}
+    #mob-logout-btn i{font-size:15px}
+
+    /* Mobile nav drawer logout footer */
+    .mob-nav-logout{display:none;align-items:center;gap:9px;padding:11px 16px;margin:8px 8px 0;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);font-size:13px;cursor:pointer;transition:background .12s,color .12s}
+    .mob-nav-logout:hover{background:rgba(248,81,73,.1);color:#f85149;border-color:rgba(248,81,73,.3)}
+    .mob-nav-logout i{font-size:14px}
+
     /* ── 900px: nav panel drawer, topbar kompakt ── */
     @media (max-width:900px){
       #mob-menu-btn{display:flex}
@@ -705,6 +715,10 @@
       .tb-actions .tb-action:not([id="createVmBtn"]){padding:0 8px!important}
       .tb-actions .tb-action span[data-i18n]{display:none!important}
       #oxy-btn>span:last-of-type{display:none}
+      /* logout: tb-user gizle, mob-logout-btn göster */
+      .tb-user{display:none!important}
+      #mob-logout-btn{display:flex!important}
+      .mob-nav-logout{display:flex!important}
       /* app-install grid */
       .app-install-grid{grid-template-columns:repeat(2,1fr)!important}
     }
@@ -876,6 +890,12 @@
         <div class="tb-realm" id="tbRealm">administrator</div>
       </div>
     </div>
+
+    <!-- Mobile-only logout button — visible only on ≤900px -->
+    <button id="mob-logout-btn" onclick="logout()" title="Çıkış Yap">
+      <i class="fa-solid fa-right-from-bracket"></i>
+      <span>Çıkış</span>
+    </button>
   </header>
 
   <!-- ────────── MIDDLE: 3-column ────────── -->
@@ -5772,6 +5792,7 @@ function buildContextNav(type) {
     </div>
     <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
   </div>`;
+    html += `<div class="mob-nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap</div>`;
     nav.innerHTML = html;
     return;
   }
@@ -5910,6 +5931,7 @@ function buildContextNav(type) {
     `;
   }
 
+  html += `<div class="mob-nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap</div>`;
   nav.innerHTML = html;
 }
 
