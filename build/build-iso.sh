@@ -329,11 +329,33 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
 fi
 BASHPROF
 
+# 2b. /etc/profile.d fallback — hem root hem "user" için çalışır
+# live-config "user" autologin'i kazanırsa bu devreye girer
+cat > "$SQUASHFS_ROOT/etc/profile.d/oxware-installer.sh" << 'PROFILED'
+# OXware Installer: tty1'de otomatik X başlat (root veya user)
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+        exec startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1
+    else
+        exec sudo -n startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1
+    fi
+fi
+PROFILED
+chmod +x "$SQUASHFS_ROOT/etc/profile.d/oxware-installer.sh"
+
+# sudoers: "user" da startx çalıştırabilsin (live-config fallback için)
+echo "user ALL=(root) NOPASSWD: /usr/bin/startx" \
+    > "$SQUASHFS_ROOT/etc/sudoers.d/oxware-user"
+chmod 440 "$SQUASHFS_ROOT/etc/sudoers.d/oxware-user"
+
 # 3. oxware-start.sh: X oturumu başlat
 cat > "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh" << 'STARTSH'
 #!/bin/bash
 # OXware X Installer Session — Network config then Calamares
-# Proxmox VE ile aynı mantık: sadece installer, masaüstü yok
+LOG=/tmp/oxware-start.log
+exec >> "$LOG" 2>&1
+echo "=== OXware start: $(date) uid=$(id -u) ==="
+
 export DISPLAY=:0
 export HOME=/root
 export XDG_RUNTIME_DIR=/tmp/xdg-oxware
@@ -342,23 +364,36 @@ export FONTCONFIG_PATH=/etc/fonts
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
-# Koyu lacivert arka plan
-xsetroot -solid '#080f1e' 2>/dev/null || true
+# Lacivert arka plan (#0d2340 = açıkça siyahtan farklı)
+xsetroot -solid '#0d2340' 2>/dev/null || true
 xsetroot -cursor_name left_ptr 2>/dev/null || true
 xrandr --auto 2>/dev/null || true
+echo "X11 hazır"
 
-# Font cache (Ubuntu font için)
+# Font cache
 fc-cache -f 2>/dev/null || true
 
 # ── 1. Ağ yapılandırması (Proxmox tarzı — Calamares öncesi) ──────────────────
 if [ -f /opt/oxware-installer/netcfg-gui.py ]; then
-    python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log || true
-    # Arka planı yenile (netcfg-gui penceresi kapandıktan sonra)
-    xsetroot -solid '#080f1e' 2>/dev/null || true
+    echo "netcfg-gui başlıyor..."
+    python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log || \
+        echo "netcfg-gui çıktı: $?"
+    xsetroot -solid '#0d2340' 2>/dev/null || true
+    echo "netcfg-gui tamamlandı"
 fi
 
 # ── 2. Calamares fullscreen kurulum ──────────────────────────────────────────
-exec /usr/bin/calamares -D 6
+echo "Calamares başlıyor..."
+/usr/bin/calamares -D 6 2>/tmp/calamares.log
+echo "Calamares çıktı: $?"
+
+# Calamares kapanırsa hata göster
+xterm -fa 'Ubuntu Mono:size=13' -bg '#0d2340' -fg '#c5d8f0' \
+    -title 'OXware Debug' \
+    -e "echo '=== Calamares Log ==='; tail -50 /tmp/calamares.log; \
+        echo; echo '=== Start Log ==='; cat $LOG; \
+        echo; echo 'Çıkmak için Enter basın'; read" \
+    2>/dev/null || true
 STARTSH
 chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh"
 
@@ -413,17 +448,17 @@ terminal_output gfxterm
 background_color 10,23,40
 
 menuentry "OXware Hypervisor ${OXWARE_VERSION} — Install" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components quiet splash vga=791 loglevel=0 ---
+    linux   ${VMLINUZ_PATH} boot=live components quiet splash vga=791 loglevel=0 live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 
 menuentry "OXware Hypervisor ${OXWARE_VERSION} — Install (nomodeset)" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components quiet nomodeset vga=normal loglevel=0 ---
+    linux   ${VMLINUZ_PATH} boot=live components quiet nomodeset vga=normal loglevel=0 live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 
 menuentry "OXware Installer — Debug (verbose)" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components ---
+    linux   ${VMLINUZ_PATH} boot=live components live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 GRUBEOF
