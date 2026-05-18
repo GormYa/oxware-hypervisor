@@ -156,10 +156,11 @@ apt-get install -y -qq --no-install-recommends \
 
 # ── Calamares — tam bağımlılıklarıyla kur (--no-install-recommends YASAK) ─────
 echo "[*] Calamares kuruluyor..."
-apt-get install -y -t bookworm-backports calamares calamares-data || \
-apt-get install -y calamares calamares-data || \
+# calamares-data yalnızca Ubuntu/Kubuntu'da vardır — Debian'da yok, sadece calamares kur
+apt-get install -y -t bookworm-backports calamares || \
+apt-get install -y calamares || \
 { echo "[WARN] Calamares backports/stable başarısız, minimal deneniyor..."; \
-  apt-get install -y --no-install-recommends calamares calamares-data || true; }
+  apt-get install -y --no-install-recommends calamares || true; }
 
 # Calamares ek bağımlılıkları (kpmcore + Python partition)
 apt-get install -y -qq --no-install-recommends \
