@@ -17,6 +17,9 @@ OXware is an open-source KVM/QEMU hypervisor management platform built on Ubuntu
 - VM scheduling (start/stop at specific times), auto-start on host boot
 - VM tagging, grouping, notes, and credentials vault
 - OS image templates for rapid deployment
+- **Import from ESXi / Proxmox / VirtualBox** — upload `.ova`, `.vmdk`, `.ovf`, `.qcow2`; auto-converted via `qemu-img`
+- **KVM → KVM live migration** (zero-downtime between two OXware nodes via `virsh migrate --live`)
+- **OVA export** — download any VM as a portable `.tar.gz` archive
 
 **Console**
 - VNC console via embedded noVNC in a dedicated browser window
@@ -126,6 +129,59 @@ Browser
         ├── nftables       (per-VM firewall)
         └── Nginx          (TLS termination, reverse proxy)
 ```
+
+---
+
+## ESXi / OVA Import & Migration
+
+OXware can import VMs from any hypervisor that exports to standard formats, and supports zero-downtime live migration between OXware nodes.
+
+### Import from ESXi / Proxmox / VirtualBox
+
+| Format | Source | Method |
+|---|---|---|
+| `.ova` | VMware ESXi, VirtualBox, Proxmox | Upload via **OVA Import** button in dashboard |
+| `.vmdk` | VMware ESXi / Workstation | Upload or SCP + manual convert |
+| `.ovf` + `.vmdk` | VMware ESXi | Bundle as `.tar` then upload |
+| `.qcow2` / `.raw` | Any KVM host | Direct import, no conversion |
+
+**Via Web UI:** Dashboard → **↑ OVA Import** → select file → done.  
+OXware extracts the archive, runs `qemu-img convert -O qcow2`, defines the VM in libvirt, and adds it to the dashboard automatically.
+
+**Via SCP (faster for large disks):**
+```bash
+# Copy VMDK directly to OXware host
+scp root@esxi:/vmfs/volumes/datastore/myvm.vmdk /var/lib/oxware/imports/
+
+# Convert to qcow2
+qemu-img convert -p -O qcow2 /var/lib/oxware/imports/myvm.vmdk \
+    /var/lib/libvirt/images/myvm.qcow2
+```
+
+> **Downtime note:** Cross-hypervisor import (ESXi → OXware) always requires the VM to be powered off during export. Downtime = export + transfer + convert time (minutes to hours depending on disk size).
+
+### KVM → KVM Live Migration (zero downtime)
+
+Between two OXware nodes on the same network:
+
+```bash
+POST /api/vms/migrate
+{
+  "vm_id": "myvm",
+  "target_host": "192.168.1.20",
+  "protocol": "qemu+ssh"
+}
+```
+
+Uses `virsh migrate --live --persistent`. The VM keeps running; typical downtime < 1 second at final memory sync.
+
+### Export from OXware
+
+```bash
+POST /api/vms/{vm_id}/export
+```
+
+Downloads the VM as a `.tar.gz` (qcow2 disk + libvirt XML). Use for node-to-node moves or offline backups.
 
 ---
 
