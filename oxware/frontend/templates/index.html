@@ -3428,6 +3428,26 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
+<!-- ── Global Confirm Modal ── -->
+<div id="modal-confirm" class="modal-overlay" style="display:none;z-index:9999"
+     onclick="if(event.target===this)_confirmResolve(false)">
+  <div class="modal" style="max-width:420px;padding:0;overflow:hidden">
+    <div id="modal-confirm-header" style="padding:18px 20px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="modal-confirm-icon" style="font-size:22px">⚠️</span>
+        <span id="modal-confirm-title" style="font-weight:700;font-size:15px;color:var(--text)">Emin misiniz?</span>
+      </div>
+    </div>
+    <div style="padding:16px 20px">
+      <p id="modal-confirm-msg" style="font-size:13px;color:var(--text-muted);line-height:1.55;margin:0"></p>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface2)">
+      <button class="btn" onclick="_confirmResolve(false)" style="min-width:80px">İptal</button>
+      <button id="modal-confirm-ok" onclick="_confirmResolve(true)" style="min-width:100px;padding:6px 16px;border-radius:6px;border:none;font-size:13px;font-weight:600;cursor:pointer">Onayla</button>
+    </div>
+  </div>
+</div>
+
 <!-- ────────── MODALS ────────── -->
 
 <!-- Create VM -->
@@ -4271,6 +4291,28 @@ function escHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ══ Custom Confirm Modal ══
+   Usage: if (!await showConfirm('Mesaj', 'Başlık', true)) return;
+   danger=true → kırmızı confirm butonu
+*/
+let _confirmResolve = () => {};
+function showConfirm(message, title = 'Emin misiniz?', danger = false) {
+  return new Promise(resolve => {
+    _confirmResolve = (val) => {
+      document.getElementById('modal-confirm').style.display = 'none';
+      resolve(val);
+    };
+    document.getElementById('modal-confirm-title').textContent = title;
+    document.getElementById('modal-confirm-msg').textContent   = message;
+    document.getElementById('modal-confirm-icon').textContent  = danger ? '🗑️' : '⚠️';
+    const okBtn = document.getElementById('modal-confirm-ok');
+    okBtn.textContent = danger ? 'Evet, Sil' : 'Onayla';
+    okBtn.style.background = danger ? 'var(--red-lt)' : 'var(--accent)';
+    okBtn.style.color = '#fff';
+    document.getElementById('modal-confirm').style.display = 'flex';
+  });
+}
+
 /** Minimal Markdown → HTML (XSS-safe: HTML escape önce yapılır) */
 function mdToHtml(raw) {
   if (raw == null) return "";
@@ -4347,8 +4389,8 @@ function stateBadge(state) {
 }
 
 /* ══ Logout ══ */
-function logout() {
-  if (!confirm("Çıkış yapmak istiyor musunuz?")) return;
+async function logout() {
+  if (!await showConfirm('Oturumunuz kapatılacak.', 'Çıkış Yap')) return;
   _clearSession();
 }
 
@@ -5455,7 +5497,7 @@ async function validateLicense() {
 }
 
 async function deactivateLicense() {
-  if (!confirm('Lisansı deaktive etmek istediğinize emin misiniz?')) return;
+  if (!await showConfirm('Lisans deaktive edilecek. Bu işlem sonrası yeniden aktivasyon gerekir.', 'Lisans Deaktive', true)) return;
   try {
     const r = await fetch('/api/license/deactivate', {
       method: 'POST',
@@ -6060,7 +6102,7 @@ async function ipamConfirmCreatePool() {
 }
 
 async function ipamDeletePool(name) {
-  if (!confirm(`"${name}" havuzunu silmek istiyor musunuz?\nİçindeki atamalar temizlenmez.`)) return;
+  if (!await showConfirm(`"${name}" IP havuzu silinecek. İçindeki atamalar temizlenmez.`, 'Havuz Sil', true)) return;
   const d = await _api(`/api/ipam/pools/${encodeURIComponent(name)}`, 'DELETE');
   if (d && !d.error) { toast(`Havuz silindi: ${name}`, 'success'); loadIpamPage(); }
 }
@@ -6073,7 +6115,7 @@ async function ipamToggleLock(mac) {
 
 async function ipamRelease(mac) {
   if (!mac) return;
-  if (!confirm(`${mac} adresli atamayı silmek istiyor musunuz?`)) return;
+  if (!await showConfirm(`${mac} adresli IPAM ataması silinecek.`, 'Atama Sil', true)) return;
   await _api(`/api/ipam/leases/${encodeURIComponent(mac)}`, 'DELETE');
   loadIpamLeases();
 }
@@ -6895,7 +6937,7 @@ async function openAddFwRule() {
 }
 
 async function deleteFwRule(vmId, idx) {
-  if (!confirm("Bu kural silinsin mi?")) return;
+  if (!await showConfirm('Bu firewall kuralı silinecek.', 'Kural Sil', true)) return;
   try {
     await api(`/vms/${vmId}/firewall`, { method:"DELETE", body:{ index:idx }});
     toast("Kural silindi", "success");
@@ -7013,7 +7055,7 @@ async function hwApplyNestedVirt(enabled) {
 
 async function hwDetachDisk(targetDev) {
   if (!_hwVmId) return;
-  if (!confirm(`"${targetDev}" diski çıkarılacak. Devam?`)) return;
+  if (!await showConfirm(`"${targetDev}" diski VM'den çıkarılacak. VM verilerini kaybetmemek için önce snapshot alın.`, 'Disk Çıkar', true)) return;
   try {
     await api(`/vms/${_hwVmId}/hardware/disk/${targetDev}`, { method:'DELETE' });
     toast(`Disk ${targetDev} çıkarıldı`, 'success');
@@ -7024,7 +7066,7 @@ async function hwDetachDisk(targetDev) {
 
 async function hwEjectCdrom(targetDev) {
   if (!_hwVmId) return;
-  if (!confirm(`ISO çıkarılacak (${targetDev}). VM çalışıyorsa live eject yapılır. Devam?`)) return;
+  if (!await showConfirm(`ISO çıkarılacak (${targetDev}). VM çalışıyorsa live eject yapılır.`, 'ISO Çıkar')) return;
   try {
     await api(`/vms/${_hwVmId}/cdrom`, {
       method: 'PUT',
@@ -7037,7 +7079,7 @@ async function hwEjectCdrom(targetDev) {
 
 async function hwDetachNic(mac) {
   if (!_hwVmId) return;
-  if (!confirm(`MAC ${mac} NIC çıkarılacak. Devam?`)) return;
+  if (!await showConfirm(`MAC ${mac} ağ arayüzü VM'den çıkarılacak.`, 'NIC Çıkar', true)) return;
   try {
     await api(`/vms/${_hwVmId}/hardware/nic/${mac}`, { method:'DELETE' });
     toast('NIC çıkarıldı', 'success');
@@ -7134,7 +7176,7 @@ function clearVmSelection() {
 
 async function batchVmAction(action) {
   if (!_selectedVMs.size) return;
-  if (!confirm(`${_selectedVMs.size} VM üzerinde "${action}" uygulanacak. Devam?`)) return;
+  if (!await showConfirm(`${_selectedVMs.size} VM üzerinde "${action}" işlemi uygulanacak.`, 'Toplu İşlem')) return;
   const vm_ids = [..._selectedVMs];
   try {
     // Yeni bulk endpoint kullan
@@ -7151,7 +7193,7 @@ async function batchVmAction(action) {
 
 async function batchVmDelete() {
   if (!_selectedVMs.size) return;
-  if (!confirm(`${_selectedVMs.size} VM silinecek. Bu işlem geri alınamaz!`)) return;
+  if (!await showConfirm(`${_selectedVMs.size} VM ve diskleri kalıcı olarak silinecek. Bu işlem geri alınamaz!`, `${_selectedVMs.size} VM Sil`, true)) return;
   const promises = [..._selectedVMs].map(id => api(`/vms/${id}`, {method:'DELETE'}).catch(e => e));
   await Promise.all(promises);
   toast(`${_selectedVMs.size} VM silindi`, 'success');
@@ -7375,7 +7417,7 @@ async function doCdromEject() {
 
 /* ══════════════════ OVA Export ══════════════════ */
 async function exportVM(vmId, vmName) {
-  if (!confirm(`"${vmName}" OVA formatında dışa aktarılacak. Disk boyutuna göre uzun sürebilir. Devam?`)) return;
+  if (!await showConfirm(`"${vmName}" OVA formatında dışa aktarılacak. Disk boyutuna göre uzun sürebilir.`, 'OVA Export')) return;
   const taskId = 'export-' + Date.now();
   addTaskToPanel(taskId, `OVA Export: ${vmName}`, 'running');
   try {
@@ -7737,7 +7779,7 @@ async function loadTrendAnalysis(periods=['7d','30d']) {
 }
 
 async function deleteVM(id, name) {
-  if (!confirm(`"${name}" VM'i ve diskleri silinsin mi?`)) return;
+  if (!await showConfirm(`"${name}" adlı VM ve tüm diskleri kalıcı olarak silinecek. Bu işlem geri alınamaz!`, 'VM Sil', true)) return;
   const taskId = 'vm-del-' + Date.now();
   addTaskToPanel(taskId, `Siliniyor: ${name}`, 'running');
   switchTaskTab('tasks');
@@ -7765,7 +7807,7 @@ async function vmAction(id, action) {
 }
 
 async function vmForceStop(id) {
-  if (!confirm("VM zorla durdurulsun mu? Kaydedilmemiş veriler kaybolabilir.")) return;
+  if (!await showConfirm('VM zorla kapatılacak. Kaydedilmemiş tüm veriler kaybolabilir!', 'Zorla Durdur', true)) return;
   const _vmLabel = currentVmName || id.slice(0,8);
   const taskId = 'vm-force-' + Date.now();
   addTaskToPanel(taskId, `Zorla Durdur: ${_vmLabel}`, 'running');
@@ -8177,7 +8219,7 @@ async function createNetwork() {
 }
 
 async function deleteNetwork(uuid, name) {
-  if (!confirm(`"${name}" ağı silinsin mi?`)) return;
+  if (!await showConfirm(`"${name}" ağı kalıcı olarak silinecek.`, 'Ağ Sil', true)) return;
   try { await api(`/networks/${uuid}`, { method: "DELETE" }); toast("Ağ silindi", "success"); loadNetworks(); }
   catch (e) { toast(e.message, "error"); }
 }
@@ -8416,7 +8458,7 @@ async function createPool() {
 }
 
 async function deletePool(uuid, name) {
-  if (!confirm(`"${name}" havuzu silinsin mi?`)) return;
+  if (!await showConfirm(`"${name}" depolama havuzu silinecek.`, 'Havuz Sil', true)) return;
   try { await api(`/storage/pools/${uuid}`, { method: "DELETE" }); toast("Silindi", "success"); loadStorage(); }
   catch (e) { toast(e.message, "error"); }
 }
@@ -8435,7 +8477,7 @@ async function uploadISO(input) {
 }
 
 async function deleteISO(name) {
-  if (!confirm(`"${name}" silinsin mi?`)) return;
+  if (!await showConfirm(`"${name}" ISO dosyası kalıcı olarak silinecek.`, 'ISO Sil', true)) return;
   try { await api(`/storage/isos/${encodeURIComponent(name)}`, { method: "DELETE" }); toast("Silindi", "success"); loadStorage(); }
   catch (e) { toast(e.message, "error"); }
 }
@@ -8563,7 +8605,7 @@ async function createUser() {
 }
 
 async function deleteUser(username) {
-  if (!confirm(`"${username}" silinsin mi?`)) return;
+  if (!await showConfirm(`"${username}" kullanıcısı kalıcı olarak silinecek.`, 'Kullanıcı Sil', true)) return;
   try { await api(`/users/${username}`, { method: "DELETE" }); toast("Silindi", "success"); loadUsers(); }
   catch (e) { toast(e.message, "error"); }
 }
@@ -8627,7 +8669,7 @@ async function openUserVmAssignModal(username) {
   if (!chosenVm) return toast("VM bulunamadı", "error");
 
   if (assigned.has(chosenVm.id)) {
-    if (!confirm(`"${chosenVm.name}" → "${username}" ataması KALDIRILSIN mi?`)) return;
+    if (!await showConfirm(`"${chosenVm.name}" → "${username}" ataması kaldırılacak.`, 'Atama Kaldır', true)) return;
     await api(`/vms/${chosenVm.id}/assign/${username}`, { method:"DELETE" });
     toast("Atama kaldırıldı", "success");
   } else {
@@ -8675,7 +8717,7 @@ async function doAssignVm() {
 }
 
 async function doUnassignVm(username) {
-  if (!confirm(`"${username}" ataması kaldırılsın mı?`)) return;
+  if (!await showConfirm(`"${username}" VM ataması kaldırılacak.`, 'Atama Kaldır', true)) return;
   try {
     await api(`/vms/${_assignVmId}/assign/${username}`, { method:"DELETE" });
     toast("Atama kaldırıldı", "success");
@@ -8914,7 +8956,7 @@ async function createSnapshot() {
 }
 
 async function revertSnapshot(vmId, name) {
-  if (!confirm(`"${name}"'e geri dönülsün mü?`)) return;
+  if (!await showConfirm(`VM "${name}" snapshot'ına döndürülecek. Mevcut durum kaybolur!`, 'Snapshot Geri Yükle', true)) return;
   const _vmLabel = currentVmName || vmId.slice(0,8);
   const taskId = 'revert-' + Date.now();
   addTaskToPanel(taskId, `Snapshot Geri Yükle: ${_vmLabel} → ${name}`, 'running');
@@ -8928,7 +8970,7 @@ async function revertSnapshot(vmId, name) {
 }
 
 async function deleteSnapshot(vmId, name) {
-  if (!confirm(`"${name}" silinsin mi?`)) return;
+  if (!await showConfirm(`"${name}" snapshot'ı kalıcı olarak silinecek.`, 'Snapshot Sil', true)) return;
   const _vmLabel = currentVmName || vmId.slice(0,8);
   const taskId = 'snapdel-' + Date.now();
   addTaskToPanel(taskId, `Snapshot Sil: ${_vmLabel} → ${name}`, 'running');
@@ -9131,7 +9173,7 @@ async function addAIAgent() {
 }
 
 async function deleteAIAgent(id) {
-  if (!confirm(`"${id}" silinsin mi?`)) return;
+  if (!await showConfirm(`"${id}" AI ajanı silinecek.`, 'Ajan Sil', true)) return;
   try { await api(`/ai/agents/${id}`, { method: "DELETE" }); toast("Silindi", "success"); loadAIAgents(); }
   catch (e) { toast(e.message, "error"); }
 }
@@ -9334,8 +9376,8 @@ async function sendOxyMessage() {
   }
 }
 
-function clearOxyHistory() {
-  if (!confirm('OXY sohbet geçmişi silinsin mi?')) return;
+async function clearOxyHistory() {
+  if (!await showConfirm('OXY sohbet geçmişi kalıcı olarak silinecek.', 'Geçmişi Sil', true)) return;
   localStorage.removeItem(OXY_STORE);
   renderOxyMessages();
   toast('Geçmiş temizlendi', 'info');
@@ -9441,7 +9483,7 @@ async function checkUpdates() {
 }
 
 async function applyUpdate() {
-  if (!confirm("Güncelleme uygulanacak ve servis yeniden başlayacak. Devam?")) return;
+  if (!await showConfirm('Güncelleme uygulanacak ve servis yeniden başlatılacak. Bağlantı kısa süre kopabilir.', 'Güncellemeyi Uygula')) return;
   const btn = document.getElementById("btn-apply-update");
   btn.disabled = true; btn.textContent = "⏳ Uygulanıyor...";
   try {
@@ -9522,27 +9564,26 @@ function refreshCurrentTab() {
 
 /* ══════════════════ Confirm shutdown / reboot ══════════════════ */
 
-function confirmShutdown(action) {
+async function confirmShutdown(action) {
   if (!currentVmId) { toast("Önce VM seçin", "error"); return; }
   if (action === "reboot") {
-    if (!confirm("VM yeniden başlatılsın mı?")) return;
+    if (!await showConfirm(`"${currentVmName || currentVmId.slice(0,8)}" yeniden başlatılacak.`, 'Yeniden Başlat')) return;
     vmAction(currentVmId, "reboot");
   } else {
-    // Graceful stop kaldırıldı — force stop kullan
     vmForceStop(currentVmId);
   }
 }
 
 /* ══════════════════ Host Power Control ══════════════════ */
 
-function confirmHostAction(action) {
+async function confirmHostAction(action) {
   const _role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "administrator").toLowerCase();
   const _isAdmin = _role === "administrator" || _role === "admin";
   if (!_isAdmin) { toast("Yetki gerekli: admin (mevcut rol: " + _role + ")", "error"); return; }
   const msg = action === 'reboot'
-    ? 'Host sunucu yeniden başlatılsın mı? Tüm VM bağlantıları kesilecek.'
-    : 'Host sunucu kapatılsın mı? Tüm VM\'ler durdurulacak.';
-  if (!confirm(msg)) return;
+    ? 'Host sunucu yeniden başlatılacak. Tüm VM bağlantıları kesilecek.'
+    : 'Host sunucu kapatılacak. Tüm VM\'ler durdurulacak.';
+  if (!await showConfirm(msg, action === 'reboot' ? 'Host Yeniden Başlat' : 'Host Kapat', true)) return;
   fetch(`/api/system/${action}`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${TOKEN()}`, 'Content-Type': 'application/json' }
@@ -9775,7 +9816,7 @@ async function saveAutoSnapConfig() {
   } catch(e) { showToast('Kayıt hatası: ' + e, 'error'); }
 }
 async function runAutoSnapshotNow() {
-  if (!confirm('Tüm VM\'lerin snapshot\'ı şimdi alınacak. Devam edilsin mi?')) return;
+  if (!await showConfirm('Tüm VM\'lerin snapshot\'ı şimdi alınacak.', 'Snapshot Al')) return;
   try {
     await api('/auto-snapshot/run', {method:'POST'});
     showToast('Auto-snapshot başlatıldı (arkaplanda çalışıyor)', 'success');
@@ -9861,7 +9902,7 @@ function _renderSecurityAudit(data) {
 }
 
 async function applySecFix(checkId) {
-  if (!confirm(`"${checkId}" için otomatik düzeltme uygulanacak. Devam edilsin mi?`)) return;
+  if (!await showConfirm(`"${checkId}" için otomatik güvenlik düzeltmesi uygulanacak.`, 'Otomatik Düzelt')) return;
   const msg = document.getElementById('sec-msg');
   msg.style.display = 'block';
   msg.style.color = 'var(--text-muted)';
@@ -10026,7 +10067,7 @@ async function loadSessions() {
 }
 
 async function revokeSession(sessionId) {
-  if (!confirm('Bu oturumu iptal etmek istiyor musunuz?')) return;
+  if (!await showConfirm('Bu oturum iptal edilecek, kullanıcı çıkış yapacak.', 'Oturumu İptal Et', true)) return;
   try {
     await api(`/sessions/${sessionId}`, {method:'DELETE'});
     toast('Oturum iptal edildi', 'success');
@@ -10116,7 +10157,7 @@ async function loadVmSchedules() {
 }
 
 async function deleteVmSchedule(id) {
-  if (!confirm('Zamanlamayı sil?')) return;
+  if (!await showConfirm('Bu VM zamanlaması silinecek.', 'Zamanlamayı Sil', true)) return;
   await api(`/vm-schedules/${id}`, {method:'DELETE'});
   toast('Zamanlama silindi', 'success');
   loadVmSchedules();
@@ -10306,7 +10347,7 @@ async function triggerBackup(id) {
 }
 
 async function deleteBackupSchedule(id) {
-  if (!confirm('Zamanlamayı sil?')) return;
+  if (!await showConfirm('Bu yedekleme zamanlaması silinecek.', 'Zamanlamayı Sil', true)) return;
   await _api(`/api/backup/schedules/${id}`, 'DELETE');
   loadBackupSchedules();
 }
@@ -10364,7 +10405,7 @@ async function createBackupDisk() {
 }
 
 async function deleteBackupDisk(diskId) {
-  if (!confirm('Bu yedekleme diski ve dosyası kalıcı olarak silinecek. Devam edilsin mi?')) return;
+  if (!await showConfirm('Bu yedekleme diski ve dosyası kalıcı olarak silinecek.', 'Yedeği Sil', true)) return;
   const d = await _api(`/api/backup/disks/${diskId}`, 'DELETE');
   if (!d) { toast('Sunucu yanıt vermedi', 'error'); return; }
   if (d.error) { toast(`Hata: ${d.error}`, 'error'); return; }
@@ -10411,7 +10452,7 @@ async function addFirewallRule() {
 }
 
 async function deleteFirewallRule(handle, chain) {
-  if (!confirm('Kuralı sil?')) return;
+  if (!await showConfirm('Bu firewall kuralı silinecek.', 'Kural Sil', true)) return;
   await _api(`/api/firewall/rules/${handle}`, 'DELETE', {chain, table: 'inet filter'});
   loadFirewallRules();
 }
@@ -10460,7 +10501,7 @@ async function addVpnPeer() {
 }
 
 async function deleteVpnPeer(name) {
-  if (!confirm(`${name} peer'ını sil?`)) return;
+  if (!await showConfirm(`"${name}" VPN peer'ı silinecek.`, 'Peer Sil', true)) return;
   await _api(`/api/vpn/peers/${name}`, 'DELETE');
   loadVpnPeers();
 }
@@ -10540,7 +10581,7 @@ async function createNginxSite() {
 
 async function enableNginxSite(name) { await _api(`/api/nginx/sites/${name}/enable`, 'POST'); loadNginxSites(); }
 async function disableNginxSite(name) { await _api(`/api/nginx/sites/${name}/disable`, 'POST'); loadNginxSites(); }
-async function deleteNginxSite(name) { if (!confirm('Sil?')) return; await _api(`/api/nginx/sites/${name}`, 'DELETE'); loadNginxSites(); }
+async function deleteNginxSite(name) { if (!await showConfirm(`"${name}" nginx site silinecek.`, 'Site Sil', true)) return; await _api(`/api/nginx/sites/${name}`, 'DELETE'); loadNginxSites(); }
 
 async function loadHaproxyStatus() {
   const d = await _api('/api/haproxy/status');
@@ -10946,7 +10987,7 @@ async function confirm2faSetup(btn) {
 }
 
 async function disable2fa() {
-  if (!confirm('2FA devre dışı bırakılsın mı?')) return;
+  if (!await showConfirm('2FA devre dışı bırakılacak. Hesabınızın güvenliği azalır.', '2FA Devre Dışı', true)) return;
   await _api('/api/auth/2fa/disable', 'DELETE');
   toast('2FA devre dışı', 'success');
   load2faStatus();
@@ -11000,7 +11041,7 @@ async function createApiKey() {
 }
 
 async function revokeApiKey(id) {
-  if (!confirm('Anahtarı iptal et?')) return;
+  if (!await showConfirm('Bu API anahtarı iptal edilecek ve artık çalışmayacak.', 'Anahtarı İptal Et', true)) return;
   await _api(`/api/apikeys/${id}/revoke`, 'POST');
   loadApiKeys();
 }
@@ -11073,7 +11114,7 @@ async function testWebhook(id) {
 }
 
 async function deleteWebhook(id) {
-  if (!confirm('Sil?')) return;
+  if (!await showConfirm('Bu webhook silinecek.', 'Webhook Sil', true)) return;
   await _api(`/api/webhooks/${id}`, 'DELETE');
   loadWebhooks();
 }
@@ -11167,7 +11208,7 @@ async function saveHook() {
 }
 
 async function deleteHook(event, name) {
-  if (!confirm(`"${name}" hookunu sil?`)) return;
+  if (!await showConfirm(`"${name}" hook'u silinecek.`, 'Hook Sil', true)) return;
   const d = await _api(`/api/hooks/${encodeURIComponent(event)}/${encodeURIComponent(name)}`, 'DELETE');
   if (d.status === 'ok') { toast('Hook silindi', 'success'); loadHooks(); }
   else toast(d.error || 'Hata', 'error');
@@ -11251,7 +11292,7 @@ async function createVlan() {
 }
 
 async function deleteVlan(id) {
-  if (!confirm('Sil?')) return;
+  if (!await showConfirm('Bu VLAN silinecek.', 'VLAN Sil', true)) return;
   await _api(`/api/vlan/${id}`, 'DELETE');
   loadVlans();
 }
@@ -11339,7 +11380,7 @@ async function loadScalerPolicies() {
 }
 
 async function deleteScalerPolicy(id) {
-  if (!confirm('Sil?')) return;
+  if (!await showConfirm('Bu otomatik ölçeklendirme politikası silinecek.', 'Politika Sil', true)) return;
   await _api(`/api/autoscaler/policies/${id}`, 'DELETE');
   loadScalerPolicies();
 }
@@ -11559,7 +11600,7 @@ async function doCpuPin() {
   } catch(e) { toast('Hata: ' + e.message, 'error'); }
 }
 async function doCpuPinClear() {
-  if (!confirm('Tüm CPU pin\'leri kaldırılsın mı?')) return;
+  if (!await showConfirm('Tüm CPU pinleri kaldırılacak.', 'CPU Pin Temizle', true)) return;
   try {
     await _api(`/api/vms/${_cpupinVmId}/cpu-pinning`, 'DELETE');
     toast('Tüm pin\'ler kaldırıldı', 'success');
@@ -11569,7 +11610,7 @@ async function doCpuPinClear() {
 
 // ── Wake-on-LAN ─────────────────────────────────────────────────────────────
 async function sendWoL(vmId, vmName) {
-  if (!confirm(`"${vmName}" için Wake-on-LAN magic packet gönderilsin mi?`)) return;
+  if (!await showConfirm(`"${vmName}" için Wake-on-LAN magic packet gönderilecek.`, 'Wake-on-LAN')) return;
   const taskId = 'wol-' + Date.now();
   addTaskToPanel(taskId, `Wake-on-LAN: ${vmName}`, 'running');
   switchTaskTab('tasks');
@@ -11584,8 +11625,8 @@ async function sendWoL(vmId, vmName) {
 async function toggleMaintenance(vmId, vmName) {
   const meta = _vmMetaCache[vmId] || {};
   const current = !!meta.maintenance;
-  const action = current ? 'kapatılsın' : 'açılsın';
-  if (!confirm(`"${vmName}" için bakım modu ${action} mı?`)) return;
+  const action = current ? 'kapatılacak' : 'açılacak';
+  if (!await showConfirm(`"${vmName}" için bakım modu ${action}.`, 'Bakım Modu')) return;
   const taskId = 'maint-' + Date.now();
   addTaskToPanel(taskId, `Bakım Modu ${!current ? 'Açılıyor' : 'Kapatılıyor'}: ${vmName}`, 'running');
   switchTaskTab('tasks');
@@ -11740,7 +11781,7 @@ async function saveVmFwRules() {
   } catch(e) { completeTaskPanel(taskId, 'error'); toast('Kayıt hatası: ' + e.message, 'error'); }
 }
 async function clearVmFwRules() {
-  if (!confirm('Tüm VM firewall kuralları silinsin mi?')) return;
+  if (!await showConfirm('Tüm VM firewall kuralları silinecek.', 'Firewall Temizle', true)) return;
   try {
     await _api(`/api/vms/${_vmfwVmId}/firewall`, 'DELETE');
     _vmfwRules = [];
@@ -12193,7 +12234,7 @@ async function saveNote(vm_id) {
 }
 
 async function deleteNote(vm_id) {
-  if (!confirm('Notu silmek istiyor musunuz?')) return;
+  if (!await showConfirm('VM notu silinecek.', 'Notu Sil', true)) return;
   await _api(`/api/vms/${vm_id}/metadata`, 'POST', {notes: ''});
   if (typeof toast === 'function') toast('Not silindi', 'success');
 }
@@ -12278,7 +12319,7 @@ async function toggleVaultPassword(el, vm_id, type) {
 }
 
 async function deleteVaultEntry(vm_id, type) {
-  if (!confirm('Bu kimlik bilgisini silmek istiyor musunuz?')) return;
+  if (!await showConfirm('Bu kimlik bilgisi kalıcı olarak silinecek.', 'Kimlik Bilgisi Sil', true)) return;
   try {
     await _api(`/api/vault/${encodeURIComponent(vm_id)}/${encodeURIComponent(type)}`, 'DELETE');
     if (typeof toast === 'function') toast('Silindi', 'success');
@@ -12432,8 +12473,8 @@ function saveAlertRule() {
   _api('/api/alerts/rules', 'POST', rule).catch(() => {});
 }
 
-function deleteAlertRule(index) {
-  if (!confirm('Bu kuralı silmek istiyor musunuz?')) return;
+async function deleteAlertRule(index) {
+  if (!await showConfirm('Bu uyarı kuralı silinecek.', 'Kural Sil', true)) return;
   const id = _alertRules[index]?.id;
   _alertRules.splice(index, 1);
   localStorage.setItem('ox-alert-rules', JSON.stringify(_alertRules));
@@ -12698,7 +12739,7 @@ function openCreatePoolModal() {
 }
 
 async function deletePool(id) {
-  if (!confirm('Bu havuzu silmek istiyor musunuz?')) return;
+  if (!await showConfirm('Bu kaynak havuzu silinecek.', 'Havuz Sil', true)) return;
   try { await api(`/pools/${id}`,{method:'DELETE'}); toast('Havuz silindi','success'); loadResourcePools(); }
   catch(e) { toast('Hata: '+e.message,'error'); }
 }
