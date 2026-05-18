@@ -117,11 +117,16 @@ grep -E "vmx|svm" /proc/cpuinfo | head -1
 
 ---
 
-## 3. Ubuntu Sunucu Hazırlığı
+## 3. Sunucu Hazırlığı
 
-OXware'i mevcut bir Ubuntu 22.04 LTS sunucusuna kurmak istiyorsanız bu adımı izleyin.
+OXware'i iki farklı şekilde kurabilirsiniz:
 
-### Temiz Ubuntu 22.04 LTS kurulumu
+| Yöntem | Açıklama | Önerilen |
+|--------|----------|----------|
+| **OXware ISO** (Bölüm 4) | Debian 12 tabanlı, grafik installer | ✅ Yeni kurulumlar |
+| **install.sh** (Bölüm 5) | Mevcut Ubuntu 22.04/24.04 üzerine | Mevcut sunucular |
+
+### Mevcut Ubuntu 22.04 LTS sunucusu için hazırlık
 
 1. [ubuntu.com/download/server](https://ubuntu.com/download/server) adresinden Ubuntu Server 22.04.4 LTS ISO indirin.
 2. [Rufus](https://rufus.ie/) (Windows) veya `dd` (Linux) ile USB belleğe yazın:
@@ -165,89 +170,65 @@ FallbackNTP=ntp.ubuntu.com
 
 ---
 
-## 4. OXware ISO ile Kurulum (build-iso.sh)
+## 4. OXware ISO ile Kurulum
 
-`build-iso.sh` — Ubuntu Server 22.04 tabanlı, OXware gömülü, tam otomatik kurulum ISO'su oluşturur.
+`build-iso.sh` — **Debian 12** tabanlı, **Calamares** grafik installer içeren bootable ISO oluşturur.  
+Proxmox VE ile aynı yaklaşım: masaüstü yok, display manager yok — açılışta direkt kurulum ekranı.
 
-### Ne yapar?
+### Boot Akışı
 
-| Adım | İşlem |
-|------|-------|
-| 1 | Ubuntu Server 22.04.4 ISO'yu indirir (`/tmp`'ye önbelleğe alır) |
-| 2 | ISO içeriğini geçici dizine ayıklar |
-| 3 | OXware kaynak dosyalarını ISO'ya gömer (`/oxware/`) |
-| 4 | **cloud-init / autoinstall** yapılandırması oluşturur — dil, klavye, disk, kullanıcı, SSH, paket listesi |
-| 5 | Kurulum sonrası komutlar: venv, pip, SSL sertifikası, systemd servisi, UFW |
-| 6 | BIOS sanallaştırma kontrol scripti ekler (`check-virt.sh`) |
-| 7 | GRUB (UEFI) ve isolinux (BIOS) boot menülerini yapılandırır |
-| 8 | `xorriso` ile ISO oluşturur, `isohybrid` ile USB-bootable yapar |
-| 9 | SHA256 checksum dosyası üretir |
+```
+GRUB → live-boot → getty autologin root → startx
+  → Ağ Yapılandırması (DHCP / Statik IP, Hostname)
+  → Calamares fullscreen (OXware branding, Türkçe)
+        ├── Dil & Klavye
+        ├── Disk Seçimi (tüm diski sil)
+        ├── Kullanıcı & Parola
+        ├── Özet → Onayla
+        └── Kurulum (~10-15 dk) → Yeniden Başlat
+```
 
-Çıktı: `OXware-Hypervisor-2.0.0-amd64.iso` — USB'ye yazıp sunucuya takarsanız **~15 dakikada** kurulum tamamlanır, OXware çalışır hâlde gelir.
-
-### ISO oluşturma (Linux — Ubuntu 22.04)
+### ISO Oluşturma
 
 ```bash
-# Gereksinimler
-sudo apt update && sudo apt install -y xorriso squashfs-tools syslinux-utils genisoimage p7zip-full wget
-
-# OXware repo klasörüne geçin
-cd /path/to/OXware
-
-# Script root yetkisiyle çalışır
-sudo bash build-iso.sh
+# OXware sunucusunda (Debian/Ubuntu 22.04+, root gerekli)
+sudo oxupdate                     # repoyu güncelle
+sudo bash build/build-iso.sh      # ISO derle (~30-45 dk)
 ```
 
-Script tamamlandığında:
+Çıktı:
 ```
-╔══════════════════════════════════════════════════════════════╗
-║           OXware Hypervisor ISO Hazır!                       ║
-║  Dosya  : OXware-Hypervisor-2.0.0-amd64.iso                 ║
-║  Boyut  : ~1.3 GB                                            ║
-╚══════════════════════════════════════════════════════════════╝
+OXware-Hypervisor-<versiyon>-amd64.iso        (~1.2 GB)
+OXware-Hypervisor-<versiyon>-amd64.iso.sha256
 ```
 
-### Windows'ta ISO oluşturabilir miyim?
+### ISO'yu USB'ye Yazma
 
-`build-iso.sh` doğrudan Windows'ta çalışmaz — `xorriso`, `genisoimage`, `squashfs-tools` gibi Linux araçlarına ihtiyaç duyar. Ancak şu yöntemlerle Windows'ta da yapılabilir:
-
-| Yöntem | Kurulum | Zorluk |
-|--------|---------|--------|
-| **WSL2 (önerilen)** | Microsoft Store → Ubuntu 22.04 → `sudo bash build-iso.sh` | Kolay |
-| **VirtualBox / VMware** | Ubuntu 22.04 VM kur, repo'yu paylaşımlı klasörle aktar | Orta |
-| **Docker (Linux container)** | `docker run --privileged -v $(pwd):/oxware ubuntu:22.04 bash build-iso.sh` | Orta |
-
-**WSL2 kurulumu (hızlı başlangıç):**
-```powershell
-# PowerShell (yönetici)
-wsl --install -d Ubuntu-22.04
-```
+**Linux:**
 ```bash
-# WSL Ubuntu terminalinde
-cd /mnt/c/Users/<kullanici>/Desktop/ada/proje/AdaOS
-sudo bash build-iso.sh
+sudo dd if=OXware-Hypervisor-*.iso of=/dev/sdX bs=4M status=progress && sync
 ```
 
-> **Not:** WSL2'de `xorriso` bazı durumlarda kısıtlıdır. Çalışmazsa VirtualBox VM tercih edin.
+**Windows:** [Rufus](https://rufus.ie) ile — Partition scheme: GPT (UEFI) veya MBR (BIOS)
 
-### ISO'yu USB'ye yazma
+### Kurulum Adımları
 
-```bash
-# Linux / WSL2
-sudo dd if=OXware-Hypervisor-2.0.0-amd64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+1. Sunucuyu USB/ISO'dan önyükleyin
+2. **Ağ Yapılandırması** ekranında:
+   - Ağ arayüzünü seçin
+   - DHCP veya Statik IP seçin
+   - Hostname belirleyin (örn. `oxware-node`)
+   - Statik IP seçildiyse: IP, Ağ Maskesi, Ağ Geçidi, DNS girin
+   - **Devam →** butonuna tıklayın
+3. Dil: **Türkçe** (varsayılan, değiştirilebilir)
+4. Klavye: **tr** (varsayılan)
+5. Diski seçin — **tüm disk silinir**, dikkatli olun
+6. Kullanıcı adı ve parola girin
+7. Özet ekranını onaylayın → kurulum başlar (~10-15 dk)
+8. Yeniden başlatma sonrası: `https://<sunucu-ip>:8006`
 
-# Windows — Rufus ile (grafik arayüz):
-# Device: USB bellek
-# Boot selection: OXware-Hypervisor-2.0.0-amd64.iso
-# Partition scheme: GPT (UEFI) veya MBR (BIOS)
-```
-
-### Önyükleme
-
-1. Sunucuyu USB'den başlatın.
-2. GRUB menüsünde **"OXware Hypervisor — Otomatik Kur"** seçeneğini seçin.
-3. Kurulum tamamen otomatik (~10-20 dakika). Dokunmanız gerekmez.
-4. Sistem yeniden başladığında `https://<IP>:8006` üzerinden erişilebilir.
+> **Not:** ISO'yu sadece OXware'in kurulu olduğu Debian/Ubuntu sunucusunda oluşturabilirsiniz.  
+> Windows için WSL2 veya VirtualBox Ubuntu VM kullanın.
 
 ---
 

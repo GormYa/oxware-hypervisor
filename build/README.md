@@ -1,140 +1,148 @@
 # OXware Hypervisor — ISO Builder
 
-Builds a bootable ISO with the **Calamares graphical installer** (Qt5/OXware branded) and the **OXware Hypervisor** stack pre-installed in the squashfs live environment.
+Bootable installer ISO oluşturur. Base: **Debian 12 Live Standard**.  
+Boot flow (Proxmox VE ile aynı mantık): desktop yok, DM yok — direkt installer.
+
+```
+GRUB → live-boot → getty autologin root → startx
+  → netcfg-gui.py  (Proxmox tarzı ağ yapılandırması)
+  → Calamares fullscreen (OXware branding, Türkçe)
+```
 
 ---
 
-## Requirements
+## Gereksinimler
 
-| Requirement         | Value                        |
-|---------------------|------------------------------|
-| Host OS             | Ubuntu 22.04+ or Debian 12   |
-| Free disk space     | ≥ 15 GB                      |
-| RAM                 | ≥ 4 GB recommended           |
-| Privileges          | `root` / `sudo`              |
-| Network             | Required (packages downloaded during build) |
+| Gereksinim    | Değer                                         |
+|---------------|-----------------------------------------------|
+| Host OS       | Debian 12 veya Ubuntu 22.04+                  |
+| Disk          | ≥ 15 GB boş alan                              |
+| RAM           | ≥ 4 GB önerilen                               |
+| Yetki         | `root` / `sudo`                               |
+| Ağ            | Gerekli (chroot paketleri indirilir)          |
 
 ---
 
-## Build
+## Çalıştırma
 
 ```bash
 sudo bash build/build-iso.sh
 ```
 
-The script:
-1. Downloads Ubuntu 22.04 Server ISO (cached at `/tmp/`)
-2. Extracts and patches the squashfs (disables Subiquity / cloud-init / console-conf)
-3. Installs Calamares + X11 + Qt5 in squashfs via chroot
-4. Copies OXware branding, Calamares configs, and headless installer
-5. Repacks squashfs and generates a bootable hybrid ISO
-
-Output:
+Çıktı:
 ```
-OXware-Hypervisor-<version>-amd64.iso   (~1.5 GB)
-OXware-Hypervisor-<version>-amd64.iso.sha256
+OXware-Hypervisor-<versiyon>-amd64.iso        (~1.2 GB)
+OXware-Hypervisor-<versiyon>-amd64.iso.sha256
 ```
 
 ---
 
-## Write to USB / Disk
+## USB / Disk Yazma
 
 **Linux:**
 ```bash
 sudo dd if=OXware-Hypervisor-*.iso of=/dev/sdX bs=4M status=progress && sync
 ```
 
-**Windows:** Use [Rufus](https://rufus.ie) or [Ventoy](https://ventoy.net).
+**Windows:** [Rufus](https://rufus.ie) veya [Ventoy](https://ventoy.net)
 
 ---
 
-## Boot & Install
+## Kurulum Adımları
 
-1. Boot the server from USB/ISO.
-2. OXware graphical installer (Calamares) launches automatically.
-3. Follow the wizard:
-   - **Locale & Keyboard** — Turkish default, changeable
-   - **Disk** — Erase full disk (required)
-   - **User** — Admin username & password
-   - **Summary** — Review and confirm
-4. Installation runs headlessly in the background (~5-15 min).
-5. After reboot, the OXware web UI is available at `https://<server-ip>:8006`.
+ISO önyüklendiğinde:
 
----
-
-## Automated Build via GitHub Actions
-
-Push a git tag to trigger a full build and attach the ISO to a GitHub Release:
-
-```bash
-git tag v2.0.1 && git push origin v2.0.1
-```
-
-The workflow (`.github/workflows/build-iso.yml`) runs on `ubuntu-22.04`, builds the ISO, and uploads it as a release asset.
-
-For manual builds without a tag (`workflow_dispatch`), the ISO is uploaded as a workflow artifact.
+1. **GRUB menüsü** — "Install" seç (5 saniye bekleme)
+2. **Ağ Yapılandırması** — Interface, DHCP/Statik, Hostname, IP/GW/DNS
+3. **Dil & Klavye** — Varsayılan: Türkçe / tr
+4. **Disk Seçimi** — Tüm diski sil modu (erase)
+5. **Kullanıcı** — Kullanıcı adı ve parola
+6. **Özet** — Onayla ve kur
+7. Kurulum biter, yeniden başlar
+8. Web arayüzü: `https://<sunucu-ip>:8006`
 
 ---
 
-## Directory Layout
+## Dizin Yapısı
 
 ```
 build/
-├── build-iso.sh                   # Main build script — run this as root
-├── VERSION                        # Auto-incremented patch version
+├── build-iso.sh                    # Ana build scripti — root olarak çalıştır
+├── VERSION                         # Otomatik artırılan patch versiyonu
 │
-├── calamares/                     # Calamares graphical installer config
-│   ├── settings.conf              # Installer sequence & branding ref
-│   ├── oxware-xorg.conf           # Minimal Xorg config (modesetting)
+├── calamares/                      # Calamares grafik installer config
+│   ├── settings.conf               # Installer sırası ve branding referansı
 │   ├── branding/
 │   │   └── oxware/
-│   │       ├── branding.desc      # Colors, product name, logo refs
-│   │       └── show.qml           # QML slideshow (4 slides, Türkçe)
+│   │       ├── branding.desc       # Renkler, ürün adı, logo, URL'ler
+│   │       └── show.qml            # QML slideshow (4 slayt, Ubuntu font)
 │   └── modules/
 │       ├── welcome.conf
-│       ├── locale.conf            # tr_TR.UTF-8 default
+│       ├── locale.conf             # tr_TR.UTF-8 varsayılan
 │       ├── keyboard.conf
-│       ├── partition.conf         # Erase-disk mode only
+│       ├── partition.conf          # Erase-disk modu
 │       ├── users.conf
 │       ├── summary.conf
 │       ├── finished.conf
 │       └── oxware_install/
-│           ├── module.desc        # Calamares Python job declaration
-│           └── main.py            # Reads globalStorage → JSON → install.py --headless
+│           ├── module.desc         # Calamares Python job tanımı
+│           └── main.py             # globalStorage → /tmp/oxware-netcfg.json
+│                                   # + install.py --headless çağrısı
 │
-├── installer/
-│   ├── install.py                 # Headless installer backend (called by Calamares job)
-│   └── oxware-start.sh            # xinit launcher: starts X11 → Calamares on tty1
-│
-├── tui-installer/
-│   └── installer.py               # Legacy curses TUI (not used — kept for reference)
-│
-├── rootfs/
-│   └── etc/
-│       ├── motd                   # Live-boot welcome message
-│       └── systemd/system/
-│           ├── oxware-installer.service   # Launches oxware-start.sh on tty1
-│           └── oxware.service             # OXware backend on installed system
-│
-└── grub/
-    └── grub.cfg                   # GRUB boot menu template
+└── installer/
+    ├── install.py                  # Headless kurulum backend (Calamares job çağırır)
+    └── netcfg-gui.py               # Proxmox tarzı ağ config GUI (Calamares öncesi)
 ```
 
 ---
 
-## Installer Architecture
+## Installer Mimarisi
 
 ```
 Boot ISO
-  └── systemd: oxware-installer.service
-        └── /opt/oxware-installer/oxware-start.sh
-              └── xinit /usr/bin/calamares -- :0 vt1
-                    └── Calamares (Qt5, OXware branding)
-                          ├── Show: welcome / locale / keyboard / partition / users / summary
-                          ├── Exec: oxware_install (Python job)
-                          │         └── install.py --headless /tmp/oxware-install-config.json
-                          │               └── debootstrap + KVM/libvirt + GRUB + OXware service
-                          └── Show: finished → reboot
+  └── getty@tty1 autologin root
+        └── /root/.bash_profile  →  startx oxware-start.sh
+              │
+              ├── netcfg-gui.py          ← Ağ config (DHCP/Statik, hostname)
+              │     └── /tmp/oxware-netcfg.json
+              │
+              └── /usr/bin/calamares (fullscreen, OXware branding)
+                    ├── Show: welcome / locale / keyboard / partition / users / summary
+                    ├── Exec: oxware_install (Python job)
+                    │         ├── /tmp/oxware-netcfg.json  ← ağ ayarları
+                    │         └── install.py --headless    ← debootstrap + KVM + GRUB
+                    └── Show: finished → reboot
 ```
 
-The `tui-installer/` directory is **not used** in the current build. Only `installer/install.py` is embedded in the ISO (called headlessly by the Calamares job module).
+---
+
+## Hata Ayıklama
+
+Kurulum sorununda ISO içinden:
+
+```bash
+# Calamares log
+cat /tmp/calamares.log
+
+# Ağ config GUI log
+cat /tmp/netcfg-gui.log
+
+# Başlatma log
+cat /tmp/oxware-start.log
+
+# Calamares manuel başlat
+DISPLAY=:0 calamares -D 6
+```
+
+---
+
+## ISO Rebuild
+
+Değişiklik sonrası ISO yeniden oluşturmak için:
+
+```bash
+sudo oxupdate                   # sunucudaki repoyu güncelle
+sudo bash build/build-iso.sh    # ISO yeniden derle
+```
+
+Önceki ISO'lar otomatik silinir, sadece son versiyon kalır.
