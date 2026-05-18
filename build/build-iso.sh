@@ -447,7 +447,16 @@ if command -v xsetroot &>/dev/null; then
     xsetroot -cursor_name left_ptr 2>/dev/null || true
 fi
 
-# ── Calamares fullscreen kurulum (ağ yapılandırması Calamares içinde) ─────────
+# ── Otomatik DHCP (live sistem için, arka planda) ────────────────────────────
+_IFACE=$(ip -o link show 2>/dev/null \
+    | awk -F': ' '$2 !~ /^(lo|vir|docker|br[0-9]|veth|dummy)/ {print $2; exit}')
+if [ -n "$_IFACE" ]; then
+    echo "Auto-DHCP: $_IFACE"
+    (dhclient "$_IFACE" 2>/tmp/dhclient.log || \
+     dhcpcd -n "$_IFACE" 2>/tmp/dhcpcd.log) &
+fi
+
+# ── Calamares fullscreen kurulum ──────────────────────────────────────────────
 echo "Calamares başlıyor..."
 /usr/bin/calamares -D 6 > /tmp/calamares.log 2>&1
 _EXIT=$?
