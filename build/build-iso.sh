@@ -78,21 +78,43 @@ log "Disk: $(df -h "$PWD" | awk 'NR==2{print $4}') boş"
 
 # ── Debian 12 Live ISO ────────────────────────────────────────────────────────
 step "Debian 12 Live Standard ISO"
-if [ -f "$ISO_CACHE" ] && [ "$(stat -c%s "$ISO_CACHE")" -gt 500000000 ]; then
+
+# 1. Exact cache path exists and is large enough
+if [ -f "$ISO_CACHE" ] && [ "$(stat -c%s "$ISO_CACHE" 2>/dev/null || echo 0)" -gt 500000000 ]; then
     log "Cache'de mevcut: $ISO_CACHE ($(du -sh "$ISO_CACHE" | cut -f1))"
 else
-    log "İndiriliyor... (${#DEBIAN_LIVE_MIRRORS[@]} mirror denenecek)"
-    _dl_ok=false
-    for _mirror in "${DEBIAN_LIVE_MIRRORS[@]}"; do
-        log "Mirror: $_mirror"
-        if wget -q --show-progress --tries=3 --timeout=30 -c -O "$ISO_CACHE" "$_mirror" 2>/dev/null; then
-            _dl_ok=true
+    # 2. Scan /tmp for any Debian Live ISO already downloaded (any version/name)
+    _found_iso=""
+    while IFS= read -r -d '' _f; do
+        _sz="$(stat -c%s "$_f" 2>/dev/null || echo 0)"
+        if [ "$_sz" -gt 500000000 ]; then
+            _found_iso="$_f"
             break
         fi
-        warn "Mirror başarısız: $_mirror"
-    done
-    if ! $_dl_ok; then
-        err "Tüm mirrorlar başarısız. Manuel indirme:\n  wget -O $ISO_CACHE $DEBIAN_LIVE_URL"
+    done < <(find /tmp -maxdepth 2 -name "debian-live-*.iso" -print0 2>/dev/null)
+
+    if [ -n "$_found_iso" ]; then
+        log "Mevcut Debian ISO bulundu: $_found_iso ($(du -sh "$_found_iso" | cut -f1))"
+        if [ "$_found_iso" != "$ISO_CACHE" ]; then
+            log "ISO_CACHE'e bağlanıyor: $ISO_CACHE"
+            ln -sf "$_found_iso" "$ISO_CACHE" 2>/dev/null \
+                || cp "$_found_iso" "$ISO_CACHE"
+        fi
+    else
+        # 3. Nothing cached — download from mirrors
+        log "İndiriliyor... (${#DEBIAN_LIVE_MIRRORS[@]} mirror denenecek)"
+        _dl_ok=false
+        for _mirror in "${DEBIAN_LIVE_MIRRORS[@]}"; do
+            log "Mirror: $_mirror"
+            if wget -q --show-progress --tries=3 --timeout=60 -c -O "$ISO_CACHE" "$_mirror" 2>/dev/null; then
+                _dl_ok=true
+                break
+            fi
+            warn "Mirror başarısız: $_mirror"
+        done
+        if ! $_dl_ok; then
+            err "Tüm mirrorlar başarısız. Manuel indirme:\n  wget -O $ISO_CACHE $DEBIAN_LIVE_URL"
+        fi
     fi
 fi
 
