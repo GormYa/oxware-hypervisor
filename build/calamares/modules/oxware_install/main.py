@@ -12,8 +12,9 @@ import tempfile
 import libcalamares
 
 
-CONFIG_PATH = "/tmp/oxware-install-config.json"
-INSTALLER   = "/opt/oxware-installer/install.py"
+CONFIG_PATH  = "/tmp/oxware-install-config.json"
+INSTALLER    = "/opt/oxware-installer/install.py"
+NETCFG_PATH  = "/tmp/oxware-netcfg.json"
 
 
 def pretty_name():
@@ -85,6 +86,20 @@ def _build_config():
     }
 
 
+def _read_netcfg():
+    """netcfg-gui.py tarafından kayıt edilen ağ yapılandırmasını oku."""
+    if not os.path.exists(NETCFG_PATH):
+        return {}
+    try:
+        with open(NETCFG_PATH) as f:
+            data = json.load(f)
+        libcalamares.utils.debug(f"oxware_install: netcfg = {json.dumps(data)}")
+        return data
+    except Exception as e:
+        libcalamares.utils.debug(f"oxware_install: netcfg okuma hatası: {e}")
+        return {}
+
+
 def run():
     libcalamares.utils.debug("oxware_install: başlıyor")
 
@@ -95,6 +110,21 @@ def run():
         )
 
     cfg = _build_config()
+
+    # netcfg-gui.py değerlerini Calamares globalStorage üzerine yaz
+    net = _read_netcfg()
+    if net:
+        # Hostname: netcfg-gui öncelikli (daha erken ve açık biçimde girildi)
+        if net.get("hostname"):
+            cfg["hostname"] = net["hostname"]
+        # Ağ modu
+        mode = net.get("mode", "dhcp")
+        cfg["net_mode"] = mode
+        if mode == "static":
+            cfg["net_ip"]   = net.get("ip",      "")
+            cfg["net_mask"] = net.get("netmask",  "255.255.255.0")
+            cfg["net_gw"]   = net.get("gateway",  "")
+            cfg["net_dns"]  = net.get("dns1",     "8.8.8.8")
 
     if not cfg["disk"]:
         return (

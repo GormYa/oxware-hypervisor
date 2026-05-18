@@ -1,0 +1,394 @@
+#!/usr/bin/env python3
+"""
+OXware Hypervisor — Network Configuration GUI
+Proxmox VE tarzı pre-install ağ yapılandırması.
+Calamares başlamadan önce çalışır, config → /tmp/oxware-netcfg.json
+"""
+import tkinter as tk
+import json, re, subprocess, os, sys
+
+OUT = "/tmp/oxware-netcfg.json"
+
+# ── Renk paleti (Proxmox tarzı koyu lacivert) ─────────────────────────────────
+BG      = "#0a1628"
+SIDEBAR = "#060e1c"
+CARD    = "#0d1f3a"
+INPUT   = "#0b1930"
+BTN     = "#1565c0"
+BTNH    = "#1976d2"
+FG      = "#ffffff"
+FGL     = "#c5d8f0"
+FGM     = "#5a89a8"
+FGD     = "#2a4460"
+ACT     = "#4a9eff"
+ERR     = "#ef5350"
+BDR     = "#18304f"
+STEP_A  = "#1565c0"
+STEP_I  = "#0f2038"
+
+
+# ── Ağ yardımcıları ───────────────────────────────────────────────────────────
+
+def _ifaces():
+    EXCLUDE = re.compile(r"^(lo|vir|docker|br[0-9]|veth|dummy|vbox|vmnet)")
+    try:
+        out = subprocess.check_output(
+            ["ip", "-o", "link", "show"], text=True, stderr=subprocess.DEVNULL)
+        lst = []
+        for ln in out.splitlines():
+            m = re.match(r"\d+: ([^:@\s]+)", ln)
+            if m:
+                n = m.group(1).strip()
+                if not EXCLUDE.match(n):
+                    lst.append(n)
+        return lst or ["eth0"]
+    except Exception:
+        return ["eth0"]
+
+
+def _iface_info(iface):
+    info = {"ip": "", "mask": "255.255.255.0", "gw": "", "dns": "8.8.8.8"}
+    try:
+        r = subprocess.check_output(
+            ["ip", "-o", "-4", "addr", "show", iface],
+            text=True, stderr=subprocess.DEVNULL)
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/(\d+)", r)
+        if m:
+            info["ip"] = m.group(1)
+            pfx = int(m.group(2))
+            n = (0xFFFFFFFF << (32 - pfx)) & 0xFFFFFFFF
+            info["mask"] = ".".join(str((n >> s) & 0xFF) for s in [24, 16, 8, 0])
+    except Exception:
+        pass
+    try:
+        r = subprocess.check_output(
+            ["ip", "-4", "route", "show", "default"],
+            text=True, stderr=subprocess.DEVNULL)
+        m = re.search(r"default via (\d+\.\d+\.\d+\.\d+)", r)
+        if m:
+            info["gw"] = m.group(1)
+    except Exception:
+        pass
+    try:
+        with open("/etc/resolv.conf") as f:
+            for ln in f:
+                if ln.startswith("nameserver"):
+                    info["dns"] = ln.split()[1]
+                    break
+    except Exception:
+        pass
+    return info
+
+
+def _hostname():
+    try:
+        h = open("/etc/hostname").read().strip()
+        return h if h else "oxware-node"
+    except Exception:
+        return "oxware-node"
+
+
+# ── Ana uygulama ──────────────────────────────────────────────────────────────
+
+class App:
+    FONT_UI    = "Ubuntu"
+    FONT_MONO  = "Ubuntu Mono"
+    FONT_FALL  = "sans-serif"
+
+    def __init__(self):
+        self.r = tk.Tk()
+        self.r.title("OXware Hypervisor — Ağ Yapılandırması")
+        self.r.configure(bg=BG)
+        self.r.attributes("-fullscreen", True)
+        # ESC devre dışı — kullanıcı geri dönemez
+        self.r.bind("<Escape>", lambda e: None)
+        self.r.bind("<Return>", lambda e: self._go())
+
+        self.ifaces  = _ifaces()
+        self.v_iface = tk.StringVar(value=self.ifaces[0])
+        self.v_dhcp  = tk.BooleanVar(value=True)
+        self.v_host  = tk.StringVar(value=_hostname())
+        self.v_ip    = tk.StringVar()
+        self.v_mask  = tk.StringVar(value="255.255.255.0")
+        self.v_gw    = tk.StringVar()
+        self.v_dns1  = tk.StringVar(value="8.8.8.8")
+        self.v_dns2  = tk.StringVar(value="8.8.4.4")
+        self.v_err   = tk.StringVar()
+        self.v_stat  = tk.StringVar(value="")
+
+        self._build()
+        self._refresh_iface()
+
+    # ── Widget yardımcıları ───────────────────────────────────────────────────
+
+    def _font(self, sz=11, bold=False, mono=False):
+        fam = self.FONT_MONO if mono else self.FONT_UI
+        w   = "bold" if bold else "normal"
+        return (fam, sz, w)
+
+    def _lbl(self, p, text, fg=FGL, sz=11, bold=False, **kw):
+        return tk.Label(p, text=text, bg=p.cget("bg"), fg=fg,
+                        font=self._font(sz, bold), **kw)
+
+    def _entry(self, p, var, mono=False, width=30):
+        e = tk.Entry(
+            p, textvariable=var,
+            bg=INPUT, fg=FG, insertbackground=FG,
+            relief="flat",
+            font=self._font(12, mono=mono),
+            highlightbackground=BDR, highlightcolor=ACT,
+            highlightthickness=1, width=width,
+            disabledbackground=CARD, disabledforeground=FGD,
+        )
+        return e
+
+    def _divider(self, p):
+        tk.Frame(p, bg=BDR, height=1).pack(fill="x", pady=(0, 16))
+
+    def _section_lbl(self, p, text):
+        tk.Label(p, text=text, bg=p.cget("bg"), fg=FGD,
+                 font=self._font(9, bold=True),
+                 anchor="w").pack(anchor="w", pady=(0, 8))
+
+    # ── UI kurulum ────────────────────────────────────────────────────────────
+
+    def _build(self):
+        root = self.r
+
+        # ── Sol sidebar ───────────────────────────────────────────────────────
+        sb = tk.Frame(root, bg=SIDEBAR, width=270)
+        sb.pack(side="left", fill="y")
+        sb.pack_propagate(False)
+
+        tk.Frame(sb, bg=SIDEBAR, height=52).pack()
+
+        # Logo
+        logo_f = tk.Frame(sb, bg=SIDEBAR)
+        logo_f.pack(padx=32)
+        try:
+            raw = tk.PhotoImage(
+                file="/usr/share/calamares/branding/oxware/oxware_logo.png")
+            # Ölçek — dosya büyüklüğüne göre 2 ya da 3 ile böl
+            img = raw.subsample(3, 3)
+            lbl = tk.Label(logo_f, image=img, bg=SIDEBAR, cursor="")
+            lbl.image = img          # GC koruması
+            lbl.pack()
+        except Exception:
+            # Logo yoksa metin fallback
+            tk.Label(logo_f, text="OXware", bg=SIDEBAR, fg=FG,
+                     font=self._font(28, bold=True)).pack()
+
+        self._lbl(sb, "Hypervisor",        fg=FGM, sz=13).pack(pady=(6, 0))
+        self._lbl(sb, "2.0",               fg=FGD, sz=10).pack(pady=(1, 0))
+        self._lbl(sb, "oxware.io",         fg=FGD, sz=9 ).pack(pady=(0, 32))
+
+        tk.Frame(sb, bg=BDR, height=1).pack(fill="x", padx=28, pady=(0, 20))
+
+        # Adım göstergesi
+        STEPS = [
+            ("1", "Ağ Yapılandırması",  True ),
+            ("2", "Dil & Klavye",       False),
+            ("3", "Disk Seçimi",        False),
+            ("4", "Kullanıcı Ayarları", False),
+            ("5", "Kurulum",            False),
+        ]
+        for num, label, active in STEPS:
+            row = tk.Frame(sb, bg=SIDEBAR)
+            row.pack(fill="x", padx=28, pady=4)
+
+            nbg = STEP_A if active else STEP_I
+            nfg = FG     if active else FGD
+            tk.Label(row, text=num, bg=nbg, fg=nfg,
+                     font=self._font(10, bold=True),
+                     width=2, padx=5, pady=3).pack(side="left", padx=(0, 14))
+            tk.Label(row, text=label,
+                     bg=SIDEBAR,
+                     fg=FG if active else FGM,
+                     font=self._font(11, bold=active),
+                     anchor="w").pack(side="left")
+
+        tk.Frame(sb, bg=SIDEBAR).pack(expand=True)
+        self._lbl(sb, "© 2025 OXware", fg=FGD, sz=9).pack(pady=18)
+
+        # ── Sağ içerik ────────────────────────────────────────────────────────
+        main = tk.Frame(root, bg=BG)
+        main.pack(side="left", fill="both", expand=True)
+
+        # Ortalanmış kapsayıcı
+        wrap = tk.Frame(main, bg=BG)
+        wrap.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Sayfa başlığı
+        self._lbl(wrap, "Ağ Yapılandırması",
+                  fg=FG, sz=22, bold=True).pack(anchor="w")
+        self._lbl(wrap, "Kurulum için ağ bağlantısını yapılandırın.",
+                  fg=FGM, sz=12).pack(anchor="w", pady=(4, 22))
+
+        # ── Kart ─────────────────────────────────────────────────────────────
+        card = tk.Frame(wrap, bg=CARD, padx=34, pady=26,
+                        highlightbackground=BDR, highlightthickness=1)
+        card.pack(fill="x")
+
+        # — Ağ arayüzü seçimi —
+        self._section_lbl(card, "AĞ ARAYÜZÜ")
+        iface_row = tk.Frame(card, bg=CARD)
+        iface_row.pack(fill="x", pady=(0, 16))
+        for iface in self.ifaces:
+            tk.Radiobutton(
+                iface_row, text=iface,
+                variable=self.v_iface, value=iface,
+                bg=CARD, fg=FGL, selectcolor=INPUT,
+                activebackground=CARD, activeforeground=FG,
+                font=self._font(12, mono=True),
+                command=self._refresh_iface,
+            ).pack(side="left", padx=(0, 24))
+
+        self._divider(card)
+
+        # — Yapılandırma türü —
+        self._section_lbl(card, "YAPILANDIRMA TÜRÜ")
+        mode_row = tk.Frame(card, bg=CARD)
+        mode_row.pack(fill="x", pady=(0, 16))
+        for val, lbl_text in [(True, "DHCP  (Otomatik)"), (False, "Statik IP")]:
+            tk.Radiobutton(
+                mode_row, text=lbl_text,
+                variable=self.v_dhcp, value=val,
+                bg=CARD, fg=FGL, selectcolor=INPUT,
+                activebackground=CARD, activeforeground=FG,
+                font=self._font(12),
+                command=self._refresh_mode,
+            ).pack(side="left", padx=(0, 36))
+
+        self._divider(card)
+
+        # — Form alanları —
+        self._section_lbl(card, "AYARLAR")
+        ff = tk.Frame(card, bg=CARD)
+        ff.pack(fill="x")
+
+        def frow(label, var, mono=False):
+            r = tk.Frame(ff, bg=CARD)
+            r.pack(fill="x", pady=(0, 10))
+            tk.Label(r, text=label, bg=CARD, fg=FGL,
+                     font=self._font(12),
+                     width=17, anchor="w").pack(side="left")
+            e = self._entry(r, var, mono=mono)
+            e.pack(side="left", fill="x", expand=True, ipady=8, padx=(2, 0))
+            return e
+
+        self.e_host = frow("Hostname",   self.v_host)
+        self.e_ip   = frow("IP Adresi",  self.v_ip,   mono=True)
+        self.e_mask = frow("Ağ Maskesi", self.v_mask, mono=True)
+        self.e_gw   = frow("Ağ Geçidi", self.v_gw,   mono=True)
+        self.e_dns1 = frow("DNS 1",      self.v_dns1, mono=True)
+        self.e_dns2 = frow("DNS 2",      self.v_dns2, mono=True)
+
+        # Durum satırı
+        tk.Label(card, textvariable=self.v_stat,
+                 bg=CARD, fg=ACT, font=self._font(11),
+                 anchor="w").pack(anchor="w", pady=(10, 0))
+
+        # ── Buton satırı ──────────────────────────────────────────────────────
+        btn_row = tk.Frame(wrap, bg=BG)
+        btn_row.pack(fill="x", pady=(18, 0))
+
+        tk.Label(btn_row, textvariable=self.v_err,
+                 bg=BG, fg=ERR, font=self._font(11)).pack(side="left")
+
+        btn = tk.Button(
+            btn_row, text="   Devam  →   ",
+            bg=BTN, fg=FG, relief="flat",
+            font=self._font(13, bold=True),
+            activebackground=BTNH, activeforeground=FG,
+            padx=22, pady=11, cursor="hand2",
+            command=self._go,
+        )
+        btn.pack(side="right")
+        btn.bind("<Enter>", lambda e: btn.config(bg=BTNH))
+        btn.bind("<Leave>", lambda e: btn.config(bg=BTN))
+
+        self._refresh_mode()
+
+    # ── Olay işleyiciler ─────────────────────────────────────────────────────
+
+    def _refresh_iface(self, *_):
+        iface = self.v_iface.get()
+        info  = _iface_info(iface)
+        if info["ip"]:
+            self.v_stat.set(f"  {iface}:  {info['ip']}  (aktif)")
+        else:
+            self.v_stat.set(f"  {iface}:  IP atanmamış")
+        # Static modda mevcut değerleri prefill
+        if not self.v_dhcp.get() and info["ip"]:
+            self.v_ip.set(info["ip"])
+            self.v_mask.set(info["mask"])
+            self.v_gw.set(info["gw"])
+            self.v_dns1.set(info["dns"])
+
+    def _refresh_mode(self, *_):
+        static = not self.v_dhcp.get()
+        for e in (self.e_ip, self.e_mask, self.e_gw, self.e_dns1, self.e_dns2):
+            e.config(state="normal" if static else "disabled")
+        if static:
+            self._refresh_iface()
+
+    # ── Doğrulama ─────────────────────────────────────────────────────────────
+
+    def _valid(self):
+        IP_RE = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
+        def ok_ip(s):
+            m = IP_RE.match(s.strip())
+            return bool(m) and all(0 <= int(g) <= 255 for g in m.groups())
+
+        h = self.v_host.get().strip()
+        if not h or not re.match(
+                r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$",
+                h):
+            self.v_err.set("❌  Geçersiz hostname — harf, rakam ve tire kullanın")
+            return False
+
+        if not self.v_dhcp.get():
+            for var, name in [
+                (self.v_ip,   "IP adresi"),
+                (self.v_mask, "ağ maskesi"),
+            ]:
+                if not ok_ip(var.get()):
+                    self.v_err.set(f"❌  Geçersiz {name}")
+                    return False
+            gw = self.v_gw.get().strip()
+            if gw and not ok_ip(gw):
+                self.v_err.set("❌  Geçersiz ağ geçidi")
+                return False
+
+        self.v_err.set("")
+        return True
+
+    # ── Devam ─────────────────────────────────────────────────────────────────
+
+    def _go(self):
+        if not self._valid():
+            return
+        cfg = {
+            "interface": self.v_iface.get(),
+            "mode":     "dhcp" if self.v_dhcp.get() else "static",
+            "hostname":  self.v_host.get().strip(),
+            "ip":        self.v_ip.get().strip()   if not self.v_dhcp.get() else "",
+            "netmask":   self.v_mask.get().strip()  if not self.v_dhcp.get() else "",
+            "gateway":   self.v_gw.get().strip()    if not self.v_dhcp.get() else "",
+            "dns1":      self.v_dns1.get().strip()  if not self.v_dhcp.get() else "8.8.8.8",
+            "dns2":      self.v_dns2.get().strip()  if not self.v_dhcp.get() else "8.8.4.4",
+        }
+        try:
+            with open(OUT, "w") as f:
+                json.dump(cfg, f, indent=2)
+        except Exception as e:
+            self.v_err.set(f"❌  Kayıt hatası: {e}")
+            return
+        self.r.destroy()
+
+    def run(self):
+        self.r.mainloop()
+
+
+if __name__ == "__main__":
+    App().run()
