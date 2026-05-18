@@ -478,7 +478,8 @@ echo "Calamares başlıyor..."
 _EXIT=$?
 echo "Calamares çıktı: $_EXIT"
 
-if [ "$_EXIT" -eq 0 ]; then
+# install.py başarıyla bitti mi? Marker dosyasına bak (Calamares exit=0 güvenilmez)
+if [ -f /tmp/oxware-install-success ]; then
     # ── Kurulum başarılı — Ağ Yapılandırması ─────────────────────────────────
     echo "Ağ yapılandırması başlıyor..."
     xsetroot -solid '#0d2340' 2>/dev/null || true
@@ -504,6 +505,8 @@ else
         -title 'OXware — Hata Ayıklama' \
         -e "bash -c \"echo '=== Calamares Log (son 60 satır) ==='; \
             tail -60 /tmp/calamares.log 2>/dev/null || echo 'log yok'; \
+            echo; echo '=== Install Log ==='; \
+            tail -100 /tmp/install.log 2>/dev/null || echo 'install log yok'; \
             echo; echo '=== Başlatma Log ==='; cat $LOG 2>/dev/null; \
             echo; echo 'Çıkmak için Enter'; read\"" \
         2>/dev/null || true

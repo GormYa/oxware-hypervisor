@@ -114,11 +114,28 @@ def run(cmd, check=True, capture=False, input_text=None):
     return subprocess.run(cmd, **kwargs)
 
 def run_chroot(cmd, check=True):
-    # Use list args — no shell, no repr() injection risk
-    return subprocess.run(
+    """Run command inside chroot, logging all output to /tmp/install.log."""
+    result = subprocess.run(
         ["chroot", TARGET_MOUNT, "/bin/bash", "-c", cmd],
-        check=check
+        check=False, capture_output=True, text=True
     )
+    try:
+        with open("/tmp/install.log", "a") as _lf:
+            _lf.write(f"\n$ chroot: {cmd[:200]}\n")
+            if result.stdout:
+                _lf.write(result.stdout[-4000:])
+            if result.stderr:
+                _lf.write("[stderr] " + result.stderr[-4000:])
+            _lf.write(f"[exit {result.returncode}]\n")
+    except OSError:
+        pass
+    if check and result.returncode != 0:
+        tail = (result.stderr or result.stdout or "")[-500:]
+        raise subprocess.CalledProcessError(
+            result.returncode, f"chroot: {cmd[:200]}",
+            output=result.stdout, stderr=result.stderr
+        )
+    return result
 
 # ── drawing primitives ─────────────────────────────────────────────────────────
 
@@ -902,17 +919,45 @@ def do_install(progress_cb):
 
     progress_cb(48, "Installing system packages …")
     run_chroot("apt-get update -qq")
+
+    # ── Core required packages ────────────────────────────────────────────────
     run_chroot(
         "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "
-        "linux-image-generic linux-headers-generic "
-        "grub-pc grub-efi-amd64 grub-common shim-signed "
-        "python3 python3-pip python3-flask python3-flask-socketio "
-        "qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virtinst "
+        "linux-image-generic "
+        "python3 python3-pip "
+        "qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils "
         "nginx parted dosfstools e2fsprogs "
         "curl wget git systemd openssh-server "
         "iproute2 iputils-ping net-tools sudo "
-        "netplan.io cloud-utils"
+        "netplan.io"
     )
+
+    # ── GRUB: try EFI first, fall back to legacy ──────────────────────────────
+    _grub_efi = run_chroot(
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "
+        "grub-efi-amd64 grub-efi-amd64-bin grub-common",
+        check=False
+    )
+    if _grub_efi.returncode != 0:
+        run_chroot(
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "
+            "grub-pc grub-common",
+            check=False
+        )
+
+    # ── Optional packages (failures non-fatal) ────────────────────────────────
+    for _opkg in [
+        "linux-headers-generic",
+        "shim-signed",
+        "grub-pc-bin",
+        "virtinst",
+        "cloud-utils",
+        "python3-flask python3-flask-socketio",
+    ]:
+        run_chroot(
+            f"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {_opkg}",
+            check=False
+        )
 
     progress_cb(65, "Installing Python dependencies …")
     # requirements.txt repoyla gelir — önce oradan kur
@@ -1616,6 +1661,7 @@ def _headless_main(config_file: str):
 
     try:
         do_install(progress_cb)
+        Path("/tmp/oxware-install-success").write_text("ok\n")
         print(_json.dumps({'pct': 100, 'msg': 'Kurulum tamamlandı!', 'done': True}), flush=True)
     except Exception as e:
         print(_json.dumps({'error': str(e), 'done': True}), flush=True)
