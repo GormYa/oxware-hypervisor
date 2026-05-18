@@ -793,11 +793,12 @@ def get_vm_stats(vm_id):
 
         return {
             "state": STATE_MAP.get(info[0], "unknown"),
-            "cpu_time_ns": stats.get("cpu_time", 0),
-            "memory_kb": info[1],
-            "vcpus": info[3],
-            "disk_stats": disk_stats,
-            "net_stats": net_stats,
+            "cpu_time_ns":    stats.get("cpu_time", 0),
+            "memory_kb":      info[2],          # current balloon memory
+            "max_memory_kb":  info[1],          # max memory configured
+            "vcpus":          info[3],
+            "disk_stats":     disk_stats,
+            "net_stats":      net_stats,
         }
     finally:
         conn.close()

@@ -1740,6 +1740,73 @@ def api_vm_stats(vm_id):
     except Exception as e:
         return err(e, 500)
 
+@app.route("/api/vms/<vm_id>/perf")
+@require_auth
+def api_vm_perf(vm_id):
+    """
+    Live performance metrics: two samples 600ms apart → deltas → percentages.
+    Returns: cpu_percent, ram_percent, ram_used_mb, ram_total_mb,
+             disk_read_mbs, disk_write_mbs, net_rx_mbs, net_tx_mbs
+    """
+    import time as _t
+    try:
+        s1 = vm_manager.get_vm_stats(vm_id)
+        if s1.get("state") == "stopped":
+            return ok(state="stopped", cpu_percent=0, ram_percent=0,
+                      ram_used_mb=0, ram_total_mb=0,
+                      disk_read_mbs=0, disk_write_mbs=0,
+                      net_rx_mbs=0, net_tx_mbs=0)
+        t1 = _t.monotonic()
+        _t.sleep(0.6)
+        s2 = vm_manager.get_vm_stats(vm_id)
+        t2 = _t.monotonic()
+        elapsed = (t2 - t1) or 0.6
+
+        vcpus     = max(s1.get("vcpus", 1), 1)
+        cpu_delta = s2.get("cpu_time_ns", 0) - s1.get("cpu_time_ns", 0)
+        cpu_pct   = min(100.0, max(0.0,
+                        (cpu_delta / (elapsed * 1e9 * vcpus)) * 100))
+
+        mem_kb    = s2.get("memory_kb", 0)
+        max_kb    = s2.get("max_memory_kb", 0) or mem_kb or 1
+        ram_pct   = min(100.0, (mem_kb / max_kb) * 100) if max_kb else 0
+        ram_used  = mem_kb / 1024
+        ram_total = max_kb / 1024
+
+        # Disk deltas
+        d1s = s1.get("disk_stats", {})
+        d2s = s2.get("disk_stats", {})
+        drb = sum((d2s.get(k, {}).get("read_bytes", 0)  - d1s.get(k, {}).get("read_bytes", 0))
+                  for k in d2s)
+        dwb = sum((d2s.get(k, {}).get("write_bytes", 0) - d1s.get(k, {}).get("write_bytes", 0))
+                  for k in d2s)
+        disk_r = max(0.0, drb / elapsed / 1_048_576)
+        disk_w = max(0.0, dwb / elapsed / 1_048_576)
+
+        # Net deltas
+        n1s = s1.get("net_stats", {})
+        n2s = s2.get("net_stats", {})
+        rxb = sum((n2s.get(k, {}).get("rx_bytes", 0) - n1s.get(k, {}).get("rx_bytes", 0))
+                  for k in n2s)
+        txb = sum((n2s.get(k, {}).get("tx_bytes", 0) - n1s.get(k, {}).get("tx_bytes", 0))
+                  for k in n2s)
+        net_rx = max(0.0, rxb / elapsed / 1_048_576)
+        net_tx = max(0.0, txb / elapsed / 1_048_576)
+
+        return ok(
+            state       = s2.get("state", "running"),
+            cpu_percent = round(cpu_pct, 2),
+            ram_percent = round(ram_pct, 2),
+            ram_used_mb = round(ram_used, 1),
+            ram_total_mb= round(ram_total, 1),
+            disk_read_mbs  = round(disk_r, 3),
+            disk_write_mbs = round(disk_w, 3),
+            net_rx_mbs  = round(net_rx, 3),
+            net_tx_mbs  = round(net_tx, 3),
+        )
+    except Exception as e:
+        return err(e, 500)
+
 @app.route("/api/vms/<vm_id>/clone", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")

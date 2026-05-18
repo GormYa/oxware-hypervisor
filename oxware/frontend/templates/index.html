@@ -6265,6 +6265,8 @@ function _currentRole() {
 }
 
 function navigate(page) {
+  // Stop live metrics poll when leaving vm-detail
+  if (page !== "vm-detail") _stopPerfPoll();
   // vm-user: block all restricted pages
   if (_currentRole() === "vm-user" && !_VM_USER_ALLOWED_PAGES.has(page)) {
     toast("Bu sayfaya erişim izniniz yok", "error");
@@ -6748,25 +6750,54 @@ function vdTab(name) {
   if (name === 'snap'    && currentVmId) _loadVdSnapshots(currentVmId);
 }
 
-// ── Metrics Overview (non-blocking) ──────────────────────────────────────────
+// ── Live Metrics Polling ──────────────────────────────────────────────────────
+let _perfPollTimer = null;
+
+function _stopPerfPoll() {
+  if (_perfPollTimer) { clearInterval(_perfPollTimer); _perfPollTimer = null; }
+}
+
 async function _loadVdMetricsOverview(vmId) {
+  _stopPerfPoll();
+  await _fetchAndRenderPerf(vmId);
+  // Poll every 4 seconds (each call takes ~0.6 s server-side)
+  _perfPollTimer = setInterval(() => _fetchAndRenderPerf(vmId), 4000);
+}
+
+async function _fetchAndRenderPerf(vmId) {
   try {
-    const d = await api(`/vms/${vmId}/stats`);
-    const cpuPct  = d.cpu_percent      || 0;
-    const ramPct  = d.memory_percent   || 0;
-    const dioPct  = Math.min(100, (d.disk_read_mb_s || 0) / 0.5);   // 50 MB/s = 100%
-    const netPct  = Math.min(100, (d.net_rx_mb_s   || 0) / 1.0);   // 100 MB/s = 100%
-    _el("ov-cpu-bar").style.width  = cpuPct + "%";
-    _el("ov-cpu-pct").textContent  = cpuPct.toFixed(1) + "%";
-    _el("ov-ram-bar").style.width  = ramPct + "%";
-    _el("ov-ram-pct").textContent  = ramPct.toFixed(1) + "%";
-    _el("ov-dio-bar").style.width  = dioPct + "%";
-    _el("ov-dio-pct").textContent  = (d.disk_read_mb_s || 0).toFixed(1) + " MB/s";
-    _el("ov-net-bar").style.width  = netPct + "%";
-    _el("ov-net-pct").textContent  = (d.net_rx_mb_s || 0).toFixed(2) + " MB/s";
-    // Update cpu-pct-line in header
-    _el("vd-cpu-pct-line").textContent = cpuPct > 0 ? cpuPct.toFixed(1) + "% kullanımda" : "çekirdek";
-  } catch (_) {}
+    const d = await api(`/vms/${vmId}/perf`);
+    if (d.state === "stopped") {
+      ["ov-cpu-bar","ov-ram-bar","ov-dio-bar","ov-net-bar"].forEach(id => { const e = _el(id); if(e) e.style.width="0%"; });
+      if(_el("ov-cpu-pct")) _el("ov-cpu-pct").textContent = "VM kapalı";
+      if(_el("ov-ram-pct")) _el("ov-ram-pct").textContent = "—";
+      if(_el("ov-dio-pct")) _el("ov-dio-pct").textContent = "—";
+      if(_el("ov-net-pct")) _el("ov-net-pct").textContent = "—";
+      return;
+    }
+    const cpu  = d.cpu_percent  || 0;
+    const ram  = d.ram_percent  || 0;
+    const dior = d.disk_read_mbs  || 0;
+    const diow = d.disk_write_mbs || 0;
+    const netR = d.net_rx_mbs  || 0;
+    const netT = d.net_tx_mbs  || 0;
+    // Disk bar: 100 MB/s = 100%, Net bar: 100 MB/s = 100%
+    const dioPct = Math.min(100, (dior + diow) / 100 * 100);
+    const netPct = Math.min(100, (netR + netT) / 100 * 100);
+
+    const set = (id, w, txt) => {
+      const b = _el(id+"-bar"), t = _el(id+"-pct");
+      if (b) b.style.width = w + "%";
+      if (t) t.textContent = txt;
+    };
+    set("ov-cpu", cpu,    cpu.toFixed(1) + "%");
+    set("ov-ram", ram,    `${ram.toFixed(1)}% (${d.ram_used_mb||0} / ${d.ram_total_mb||0} MB)`);
+    set("ov-dio", dioPct, `R: ${dior.toFixed(2)} W: ${diow.toFixed(2)} MB/s`);
+    set("ov-net", netPct, `↓ ${netR.toFixed(2)} ↑ ${netT.toFixed(2)} MB/s`);
+
+    if (_el("vd-cpu-pct-line"))
+      _el("vd-cpu-pct-line").textContent = cpu > 0 ? cpu.toFixed(1) + "% kullanımda" : "çekirdek";
+  } catch (_e) {}
 }
 
 function _el(id) { return document.getElementById(id); }
@@ -6775,32 +6806,41 @@ function _el(id) { return document.getElementById(id); }
 async function refreshVdMetrics() {
   const vmId = currentVmId;
   if (!vmId) return;
-  document.getElementById("vd-metrics-wrap").innerHTML =
-    `<div class="empty-state"><div class="spinner-sm"></div><p>Metrikler yükleniyor...</p></div>`;
+  const wrap = document.getElementById("vd-metrics-wrap");
+  wrap.innerHTML = `<div class="empty-state"><div class="spinner-sm"></div><p>Metrikler ölçülüyor... (~0.6 sn)</p></div>`;
   try {
-    const d = await api(`/vms/${vmId}/stats`);
-    const m = await api(`/metrics/vm/${vmId}`).catch(() => ({}));
+    const d = await api(`/vms/${vmId}/perf`);
+    if (d.state === "stopped") {
+      wrap.innerHTML = `<div class="empty-state"><p>VM çalışmıyor — metrik yok</p></div>`;
+      return;
+    }
     const rows = [
-      ["CPU Kullanımı",       (d.cpu_percent      || 0).toFixed(2) + " %"],
-      ["Bellek Kullanımı",    (d.memory_percent    || 0).toFixed(2) + " % (" + (d.memory_used_mb||0) + " MB / " + (d.memory_mb||0) + " MB)"],
-      ["Disk Okuma",          (d.disk_read_mb_s    || 0).toFixed(2) + " MB/s"],
-      ["Disk Yazma",          (d.disk_write_mb_s   || 0).toFixed(2) + " MB/s"],
-      ["Ağ RX",               (d.net_rx_mb_s       || 0).toFixed(3) + " MB/s"],
-      ["Ağ TX",               (d.net_tx_mb_s       || 0).toFixed(3) + " MB/s"],
-      ["Çalışma Süresi",      d.uptime || "—"],
-      ["VCPU Sayısı",         d.vcpus  || "—"],
+      ["CPU Kullanımı",    (d.cpu_percent||0).toFixed(2) + " %",        d.cpu_percent||0, "var(--accent)"],
+      ["RAM Kullanımı",    `${(d.ram_percent||0).toFixed(1)}%  (${d.ram_used_mb||0} / ${d.ram_total_mb||0} MB)`, d.ram_percent||0, "#22c55e"],
+      ["Disk Okuma",       (d.disk_read_mbs||0).toFixed(3)  + " MB/s",  Math.min(100,(d.disk_read_mbs||0)/10*100),  "#f59e0b"],
+      ["Disk Yazma",       (d.disk_write_mbs||0).toFixed(3) + " MB/s",  Math.min(100,(d.disk_write_mbs||0)/10*100), "#f97316"],
+      ["Ağ RX",            (d.net_rx_mbs||0).toFixed(3)  + " MB/s",     Math.min(100,(d.net_rx_mbs||0)/10*100),    "#a855f7"],
+      ["Ağ TX",            (d.net_tx_mbs||0).toFixed(3)  + " MB/s",     Math.min(100,(d.net_tx_mbs||0)/10*100),    "#3b82f6"],
     ];
-    document.getElementById("vd-metrics-wrap").innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${rows.map(([k,v]) => `
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 16px">
-            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">${k}</div>
-            <div style="font-size:15px;font-weight:600">${v}</div>
+    wrap.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        ${rows.map(([k,v,pct,col]) => `
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px 16px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">${k}</div>
+              <div style="font-size:14px;font-weight:700">${v}</div>
+            </div>
+            <div style="background:var(--surface3);border-radius:3px;height:5px">
+              <div style="width:${pct.toFixed(1)}%;background:${col};height:100%;border-radius:3px;transition:.5s"></div>
+            </div>
           </div>`).join("")}
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--text-muted);text-align:right">
+        Son güncelleme: ${new Date().toLocaleTimeString("tr-TR")}
+        &nbsp;·&nbsp; <a style="color:var(--accent-lt);cursor:pointer" onclick="refreshVdMetrics()">↻ Yenile</a>
       </div>`;
   } catch (e) {
-    document.getElementById("vd-metrics-wrap").innerHTML =
-      `<div class="empty-state"><p>Metrikler alınamadı: ${e.message}</p></div>`;
+    wrap.innerHTML = `<div class="empty-state"><p>Metrikler alınamadı: ${escHtml(e.message)}</p></div>`;
   }
 }
 
