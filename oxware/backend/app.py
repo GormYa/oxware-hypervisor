@@ -6940,6 +6940,13 @@ def api_vm_spice(vm_id):
 
 # ── OVA / OVF Import ──────────────────────────────────────────────────────────
 _IMPORT_DIR = _pathlib.Path("/var/lib/oxware/imports")
+_import_jobs: dict = {}          # job_id → job dict
+_import_jobs_lock = threading.Lock()
+
+def _import_job_update(job_id: str, **kw):
+    with _import_jobs_lock:
+        if job_id in _import_jobs:
+            _import_jobs[job_id].update(kw)
 
 @app.route("/api/import/ova", methods=["POST"])
 @require_auth
@@ -6961,8 +6968,24 @@ def api_import_ova():
     save_path = _IMPORT_DIR / fname
     f.save(str(save_path))
 
+    import uuid as _uuid
+    job_id = _uuid.uuid4().hex[:8]
+    with _import_jobs_lock:
+        _import_jobs[job_id] = {
+            "id": job_id,
+            "filename": fname,
+            "vm_name": "",
+            "status": "running",
+            "step": "Dosya kaydedildi",
+            "percent": 5,
+            "started": time.time(),
+            "finished": None,
+            "message": "",
+        }
+
     def _do_import():
         try:
+            _import_job_update(job_id, step="Arşiv açılıyor", percent=10)
             import tarfile as _tar
             extract_dir = _IMPORT_DIR / (fname + "_extracted")
             extract_dir.mkdir(exist_ok=True)
@@ -6972,6 +6995,8 @@ def api_import_ova():
             else:
                 import shutil as _sh
                 _sh.copy(str(save_path), str(extract_dir / fname))
+
+            _import_job_update(job_id, step="Disk aranıyor", percent=18)
             ovf_file = None
             disk_files = []
             for fp in extract_dir.iterdir():
@@ -6980,8 +7005,11 @@ def api_import_ova():
                 elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw", ".vhd", ".vhdx", ".nvr", ".nvrx"):
                     disk_files.append(fp)
             if not disk_files:
+                _import_job_update(job_id, status="error", step="Hata: disk bulunamadı",
+                                   percent=0, message="Disk dosyası bulunamadı", finished=time.time())
                 ev.warning(f"OVA import: disk dosyası bulunamadı — {fname}", category="vm")
                 return
+
             _vm_strip_exts = (".tar.gz", ".ova", ".ovf", ".tar", ".vmdk", ".qcow2",
                               ".raw", ".img", ".vhd", ".vhdx", ".nvr", ".nvrx")
             vm_name = fname
@@ -6990,8 +7018,13 @@ def api_import_ova():
                     vm_name = vm_name[:-len(_ext)]
                     break
             vm_name = vm_name.replace(" ", "_").replace(".", "_") or "imported-vm"
+            _import_job_update(job_id, vm_name=vm_name,
+                               step=f"Disk bulundu: {disk_files[0].name}", percent=22)
+
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
             src_disk = disk_files[0]
+            src_size = max(src_disk.stat().st_size, 1)
+
             # Detect source format so qemu-img doesn't have to guess (important for vmdk/vhd)
             _fmt_map = {".vmdk": "vmdk", ".vhd": "vpc", ".vhdx": "vhdx",
                         ".qcow2": "qcow2", ".raw": "raw", ".img": "raw",
@@ -7001,10 +7034,27 @@ def api_import_ova():
             if _src_fmt:
                 _conv_cmd += ["-f", _src_fmt]
             _conv_cmd += [str(src_disk), str(disk_path)]
-            r_conv = subprocess.run(_conv_cmd, capture_output=True, text=True)
-            if r_conv.returncode != 0:
-                ev.warning(f"OVA import disk convert hatası: {r_conv.stderr}", category="vm")
+
+            _import_job_update(job_id, step="Disk dönüştürülüyor", percent=25)
+            proc = subprocess.Popen(_conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            while proc.poll() is None:
+                time.sleep(1.5)
+                try:
+                    out_sz = disk_path.stat().st_size if disk_path.exists() else 0
+                    # qcow2 allocates lazily → use 2× multiplier to compensate compression ratio
+                    pct = min(89, 25 + int(64 * out_sz * 2 / src_size))
+                    _import_job_update(job_id, step="Disk dönüştürülüyor", percent=pct)
+                except Exception:
+                    pass
+            proc.wait()
+            if proc.returncode != 0:
+                _import_job_update(job_id, status="error",
+                                   step="Hata: disk dönüştürme başarısız",
+                                   percent=0, message="qemu-img dönüştürme hatası", finished=time.time())
+                ev.warning(f"OVA import disk convert hatası (rc={proc.returncode})", category="vm")
                 return
+
+            _import_job_update(job_id, step="libvirt'e kaydediliyor", percent=92)
             xml = f"""<domain type='kvm'>
   <name>{vm_name}</name>
   <memory unit='MiB'>2048</memory>
@@ -7032,24 +7082,32 @@ def api_import_ova():
             r_def = subprocess.run(["virsh", "define", xml_path], capture_output=True, text=True)
             os.unlink(xml_path)
             if r_def.returncode == 0:
+                _import_job_update(job_id, status="done", step="Tamamlandı",
+                                   percent=100, finished=time.time())
                 ev.info(f"OVA import tamamlandı: {vm_name}", category="vm")
             else:
+                _import_job_update(job_id, status="error",
+                                   step="Hata: virsh define başarısız",
+                                   percent=92, message=r_def.stderr.strip()[:200], finished=time.time())
                 ev.warning(f"OVA import virsh define hatası: {r_def.stderr}", category="vm")
         except Exception as ex:
+            _import_job_update(job_id, status="error", step="Hata",
+                               message=str(ex)[:200], finished=time.time())
             ev.warning(f"OVA import hatası: {ex}", category="vm")
 
     t = threading.Thread(target=_do_import, daemon=True)
     t.start()
-    return jsonify({"ok": True, "message": f"Import başlatıldı: {fname}", "filename": fname})
+    return jsonify({"ok": True, "message": f"Import başlatıldı: {fname}",
+                    "filename": fname, "job_id": job_id})
 
 @app.route("/api/import/status", methods=["GET"])
 @require_auth
 def api_import_status():
-    """Import edilen dosyaları listele."""
-    if not _IMPORT_DIR.exists():
-        return jsonify({"imports": []})
-    files = [{"name": p.name, "size": p.stat().st_size} for p in _IMPORT_DIR.iterdir() if p.is_file()]
-    return jsonify({"imports": files})
+    """Import işlerinin durumunu döner."""
+    with _import_jobs_lock:
+        jobs = list(_import_jobs.values())
+    jobs.sort(key=lambda j: j.get("started", 0), reverse=True)
+    return jsonify({"imports": jobs[:30]})
 
 # ── MAC Address Yönetimi ──────────────────────────────────────────────────────
 import random as _random

@@ -11656,7 +11656,7 @@ async function doImportOva() {
   if (!tok) { toast('Oturumunuz sona ermiş, tekrar giriş yapın', 'error'); return; }
   const file = fileInput.files[0];
   const sizeMB = (file.size / 1048576).toFixed(1);
-  statusEl.textContent = `⏳ Yükleniyor... (${sizeMB} MB)`;
+  statusEl.innerHTML = `<span style="color:var(--text-muted)">⏳ Yükleniyor... (${sizeMB} MB)</span>`;
   const fd = new FormData();
   fd.append('file', file);
   try {
@@ -11669,12 +11669,70 @@ async function doImportOva() {
     const d = await resp.json().catch(() => ({}));
     if (resp.status === 401) { _forceLogout(); return; }
     if (!resp.ok) throw new Error(d.error || resp.statusText);
-    statusEl.innerHTML = `<span style="color:#34d399">✅ ${escHtml(d.message)}</span>`;
     toast('Import başlatıldı — arka planda devam ediyor', 'success');
-    setTimeout(() => { document.getElementById('modal-ova-import').style.display='none'; loadVMs(); }, 3000);
+    // Add to task panel immediately
+    const taskId = 'import-' + Date.now();
+    addTaskToPanel(taskId, `VM Import: ${escHtml(file.name)} (${sizeMB} MB)`, 'running');
+    // Switch to tasks tab so user sees it
+    switchTaskTab('tasks');
+    // Start polling job progress
+    _pollImportJob(d.job_id, taskId, statusEl, file.name);
   } catch(e) {
     statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${escHtml(e.message)}</span>`;
     toast(e.message, 'error');
+  }
+}
+
+async function _pollImportJob(jobId, taskId, statusEl, filename) {
+  let done = false;
+  let attempts = 0;
+  const maxAttempts = 600; // 20 min max
+  while (!done && attempts < maxAttempts) {
+    await new Promise(r => setTimeout(r, 2000));
+    attempts++;
+    try {
+      const d = await api('/import/status');
+      const jobs = d.imports || [];
+      // Match by job_id if available, fallback to filename
+      const job = jobs.find(j => j.id === jobId) || jobs.find(j => j.filename === filename);
+      if (!job) continue;
+
+      const pct = job.percent || 0;
+      const step = job.step || '';
+      const vmName = job.vm_name ? ` → ${escHtml(job.vm_name)}` : '';
+
+      // Update task panel percent column
+      const pctEl = document.getElementById('task-pct-' + taskId);
+      if (pctEl) pctEl.textContent = ` — ${escHtml(step)} (${pct}%)`;
+
+      // Update modal status if still visible
+      if (statusEl) {
+        if (job.status === 'running') {
+          statusEl.innerHTML = `
+            <div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">⏳ ${escHtml(step)}${vmName} <strong>${pct}%</strong></div>
+            <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width .6s ease"></div>
+            </div>`;
+        } else if (job.status === 'done') {
+          statusEl.innerHTML = `<span style="color:#34d399">✅ Tamamlandı${vmName}</span>`;
+        } else if (job.status === 'error') {
+          const msg = job.message ? `: ${escHtml(job.message)}` : '';
+          statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${escHtml(step)}${msg}</span>`;
+        }
+      }
+
+      if (job.status === 'done') {
+        completeTaskPanel(taskId, 'success');
+        done = true;
+        loadVMs();
+        setTimeout(() => { document.getElementById('modal-ova-import').style.display='none'; }, 2000);
+      } else if (job.status === 'error') {
+        completeTaskPanel(taskId, 'error');
+        done = true;
+      }
+    } catch(e) {
+      // Network hiccup — keep polling
+    }
   }
 }
 
