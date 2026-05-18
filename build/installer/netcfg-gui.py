@@ -116,8 +116,7 @@ class App:
         self.v_err   = tk.StringVar()
         self.v_stat  = tk.StringVar(value="")
 
-        self._build()
-        self._refresh_iface()
+        self._build_welcome()
 
     # ── Widget yardımcıları ───────────────────────────────────────────────────
 
@@ -150,6 +149,61 @@ class App:
                  font=self._font(9, bold=True),
                  anchor="w").pack(anchor="w", pady=(0, 8))
 
+    # ── Karşılama ekranı ─────────────────────────────────────────────────────
+
+    def _build_welcome(self):
+        self._wf = tk.Frame(self.r, bg=BG)
+        self._wf.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        c = tk.Frame(self._wf, bg=BG)
+        c.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Logo
+        try:
+            raw = tk.PhotoImage(
+                file="/usr/share/calamares/branding/oxware/oxware_logo.png")
+            img = raw.subsample(2, 2)
+            lbl = tk.Label(c, image=img, bg=BG)
+            lbl.image = img
+            lbl.pack(pady=(0, 18))
+        except Exception:
+            tk.Label(c, text="OXware", bg=BG, fg=FG,
+                     font=self._font(42, bold=True)).pack(pady=(0, 18))
+
+        tk.Label(c, text="OXware Hypervisor",
+                 bg=BG, fg=FG,
+                 font=self._font(34, bold=True)).pack()
+        tk.Label(c, text="v2.0  —  Kurulum Sihirbazı",
+                 bg=BG, fg=FGM,
+                 font=self._font(15)).pack(pady=(6, 0))
+
+        tk.Frame(c, bg=BTN, height=2, width=80).pack(pady=22)
+
+        tk.Label(c, text="Sunucunuzu yapılandırmak için aşağıdaki adımları tamamlayın.",
+                 bg=BG, fg=FGL,
+                 font=self._font(12)).pack(pady=(0, 32))
+
+        btn = tk.Button(
+            c, text="   Kuruluma Başla  →   ",
+            bg=BTN, fg=FG, relief="flat",
+            font=self._font(14, bold=True),
+            activebackground=BTNH, activeforeground=FG,
+            padx=28, pady=13, cursor="hand2",
+            command=self._start_install,
+        )
+        btn.pack()
+        btn.bind("<Enter>", lambda e: btn.config(bg=BTNH))
+        btn.bind("<Leave>", lambda e: btn.config(bg=BTN))
+
+        self.r.bind("<Return>", lambda e: self._start_install())
+
+    def _start_install(self):
+        self.r.unbind("<Return>")
+        self._wf.destroy()
+        self._build()
+        self._refresh_iface()
+        self.r.bind("<Return>", lambda e: self._go())
+
     # ── UI kurulum ────────────────────────────────────────────────────────────
 
     def _build(self):
@@ -180,7 +234,7 @@ class App:
 
         self._lbl(sb, "Hypervisor",        fg=FGM, sz=13).pack(pady=(6, 0))
         self._lbl(sb, "2.0",               fg=FGD, sz=10).pack(pady=(1, 0))
-        self._lbl(sb, "oxware.io",         fg=FGD, sz=9 ).pack(pady=(0, 32))
+        self._lbl(sb, "oxware.top",        fg=FGD, sz=9 ).pack(pady=(0, 32))
 
         tk.Frame(sb, bg=BDR, height=1).pack(fill="x", padx=28, pady=(0, 20))
 
@@ -208,7 +262,7 @@ class App:
                      anchor="w").pack(side="left")
 
         tk.Frame(sb, bg=SIDEBAR).pack(expand=True)
-        self._lbl(sb, "© 2025 OXware", fg=FGD, sz=9).pack(pady=18)
+        self._lbl(sb, "© 2026 OXware", fg=FGD, sz=9).pack(pady=18)
 
         # ── Sağ içerik ────────────────────────────────────────────────────────
         main = tk.Frame(root, bg=BG)
