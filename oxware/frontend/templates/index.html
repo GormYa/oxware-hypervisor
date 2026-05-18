@@ -6842,11 +6842,15 @@ async function vdCreateSnapshot() {
   const name = prompt("Snapshot adı:", `snap-${Date.now()}`);
   if (!name) return;
   const desc = prompt("Açıklama (opsiyonel):", "") || "";
+  const taskId = 'snap-' + Date.now();
+  addTaskToPanel(taskId, `Snapshot Al: ${currentVmName || currentVmId?.slice(0,8)} → ${name}`, 'running');
+  switchTaskTab('tasks');
   try {
     await api(`/vms/${currentVmId}/snapshots`, { method:"POST", body:{ name, description:desc }});
+    completeTaskPanel(taskId, 'success');
     toast("Snapshot alındı", "success");
     _loadVdSnapshots(currentVmId);
-  } catch(e) { toast("Snapshot hatası: " + e.message, "error"); }
+  } catch(e) { completeTaskPanel(taskId, 'error'); toast("Snapshot hatası: " + e.message, "error"); }
 }
 
 // ── Firewall (VM Detail) ──────────────────────────────────────────────────────
@@ -7407,6 +7411,11 @@ async function doResizeDisk() {
   btn.disabled = true;
   btn.textContent = 'Genişletiliyor...';
 
+  const _resizeLabel = currentVmName || _diskResizeVmId.slice(0,8);
+  const taskId = 'resize-' + Date.now();
+  addTaskToPanel(taskId, `Disk Genişlet: ${_resizeLabel} → ${newSize} GB`, 'running');
+  switchTaskTab('tasks');
+
   try {
     const d = await api(`/vms/${_diskResizeVmId}/disk/resize`, {
       method: 'POST',
@@ -7414,10 +7423,10 @@ async function doResizeDisk() {
     });
     if (d.error) throw new Error(d.error);
 
+    completeTaskPanel(taskId, 'success');
     toast(`Disk ${d.old_size_gb}GB → ${d.new_size_gb}GB genişletildi`, 'success');
     btn.style.display = 'none';
 
-    // VM içi adımları göster
     const steps = d.guest_steps || {};
     document.getElementById('disk-steps-ext4').textContent =
       (steps.linux_ext4 || []).join('\n');
@@ -7427,6 +7436,7 @@ async function doResizeDisk() {
       (steps.windows || []).join('\n');
     document.getElementById('disk-resize-steps').style.display = 'block';
   } catch(e) {
+    completeTaskPanel(taskId, 'error');
     toast('Hata: ' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = 'Genişlet';
@@ -7614,15 +7624,25 @@ async function openLiveMigrate(vmId, vmName) {
 }
 
 async function doLiveMigration() {
-  const vmId  = document.getElementById('migrate-vm-select').value;
+  const vmId   = document.getElementById('migrate-vm-select').value;
+  const vmName = document.getElementById('migrate-vm-select').selectedOptions[0]?.text || vmId.slice(0,8);
   const target = document.getElementById('migrate-target').value.trim();
   const proto  = document.getElementById('migrate-protocol').value;
   if (!vmId || !target) return toast('VM ve hedef host zorunlu', 'error');
+  const taskId = 'migrate-' + Date.now();
+  addTaskToPanel(taskId, `Canlı Geçiş: ${vmName} → ${target}`, 'running');
+  switchTaskTab('tasks');
+  closeModal('modal-live-migrate');
   try {
     const r = await _api('/api/vms/migrate', 'POST', {vm_id: vmId, target_host: target, protocol: proto});
-    toast(r.status === 'ok' ? 'Canlı geçiş başlatıldı!' : (r.error || 'Hata'), r.status === 'ok' ? 'success' : 'error');
-    closeModal('modal-live-migrate');
-  } catch(e) { toast(e.message, 'error'); }
+    if (r.status === 'ok') {
+      completeTaskPanel(taskId, 'success');
+      toast('Canlı geçiş başlatıldı!', 'success');
+    } else {
+      completeTaskPanel(taskId, 'error');
+      toast(r.error || 'Hata', 'error');
+    }
+  } catch(e) { completeTaskPanel(taskId, 'error'); toast(e.message, 'error'); }
 }
 
 /* ══════════ Backup Schedule ══════════ */
@@ -7718,36 +7738,51 @@ async function loadTrendAnalysis(periods=['7d','30d']) {
 
 async function deleteVM(id, name) {
   if (!confirm(`"${name}" VM'i ve diskleri silinsin mi?`)) return;
+  const taskId = 'vm-del-' + Date.now();
+  addTaskToPanel(taskId, `Siliniyor: ${name}`, 'running');
+  switchTaskTab('tasks');
   try {
     await api(`/vms/${id}`, { method: "DELETE" });
+    completeTaskPanel(taskId, 'success');
     toast(`"${name}" silindi`, "success");
-    loadVMs();
-    refreshTreeVMs();
+    loadVMs(); refreshTreeVMs();
     if (currentVmId === id) { selectTreeItem("node"); }
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 async function vmAction(id, action) {
+  const _labels = { start: "Başlatılıyor", stop: "Durduruluyor", reboot: "Yeniden Başlatılıyor", pause: "Duraklatılıyor", resume: "Devam Ediliyor" };
+  const _vmLabel = currentVmName || id.slice(0,8);
+  const taskId = 'vm-' + action + '-' + Date.now();
+  addTaskToPanel(taskId, `${_labels[action] || action}: ${_vmLabel}`, 'running');
+  switchTaskTab('tasks');
   try {
     await api(`/vms/${id}/${action}`, { method: "POST" });
-    const labels = { start: "Başlatılıyor", stop: "Durduruluyor (graceful)", reboot: "Yeniden başlatılıyor" };
-    toast(labels[action] || `İşlem: ${action}`, "success");
-    // stop/reboot daha uzun sürebilir
+    completeTaskPanel(taskId, 'success');
     const delay = (action === "stop" || action === "reboot") ? 2500 : 800;
     setTimeout(() => { loadVMs(); refreshTreeVMs(); if (currentVmId === id) loadVMDetail(id); }, delay);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 async function vmForceStop(id) {
   if (!confirm("VM zorla durdurulsun mu? Kaydedilmemiş veriler kaybolabilir.")) return;
+  const _vmLabel = currentVmName || id.slice(0,8);
+  const taskId = 'vm-force-' + Date.now();
+  addTaskToPanel(taskId, `Zorla Durdur: ${_vmLabel}`, 'running');
+  switchTaskTab('tasks');
   try {
     await api(`/vms/${id}/stop?force=true`, { method: "POST" });
+    completeTaskPanel(taskId, 'success');
     toast("VM zorla durduruldu", "success");
     setTimeout(() => { loadVMs(); refreshTreeVMs(); if (currentVmId === id) loadVMDetail(id); }, 1000);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 async function vmEnableSsh(id) {
+  const _vmLabel = currentVmName || id.slice(0,8);
+  const taskId = 'ssh-' + Date.now();
+  addTaskToPanel(taskId, `SSH Etkinleştir: ${_vmLabel}`, 'running');
+  switchTaskTab('tasks');
   toast("SSH etkinleştiriliyor (QEMU Guest Agent)...", "info");
   try {
     const d = await api(`/vms/${id}/enable-ssh`, { method: "POST" });
@@ -7772,27 +7807,37 @@ async function vmEnableSsh(id) {
         </div>`;
         document.body.appendChild(overlay);
         overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+        completeTaskPanel(taskId, 'error');
       } else {
+        completeTaskPanel(taskId, 'error');
         toast("SSH etkinleştirilemedi: " + escHtml(d.error || 'Bilinmeyen hata'), "error");
       }
     } else {
+      completeTaskPanel(taskId, 'success');
       toast(d.message || "SSH etkinleştirildi ✓", "success");
     }
   } catch (e) {
+    completeTaskPanel(taskId, 'error');
     toast("SSH etkinleştirilemedi: " + escHtml(e.message || String(e)), "error");
   }
 }
 
 async function vmNatSync(id) {
-  toast("NAT sync başlatılıyor...", "info");
+  const _vmLabel = currentVmName || id.slice(0,8);
+  const taskId = 'natsync-' + Date.now();
+  addTaskToPanel(taskId, `NAT Sync: ${_vmLabel}`, 'running');
+  switchTaskTab('tasks');
   try {
     const d = await api(`/vms/${id}/nat-sync`, { method: "POST" });
     if (d.success) {
+      completeTaskPanel(taskId, 'success');
       toast(`NAT sync tamam ✓ — ${d.internal_ip} → ${d.public_ip}`, "success");
     } else {
+      completeTaskPanel(taskId, 'error');
       toast("NAT sync: " + escHtml(d.error || "VM henüz IP almamış"), "warn");
     }
   } catch (e) {
+    completeTaskPanel(taskId, 'error');
     toast("NAT sync hatası: " + escHtml(e.message || String(e)), "error");
   }
 }
@@ -8853,26 +8898,47 @@ async function createSnapshot() {
   const name = document.getElementById("new-snap-name").value.trim();
   const desc = document.getElementById("new-snap-desc").value.trim();
   if (!name || !_currentSnapVm) return toast("Ad gerekli", "error");
+  const _vmLabel = currentVmName || _currentSnapVm.slice(0,8);
+  const taskId = 'snap-' + Date.now();
+  addTaskToPanel(taskId, `Snapshot Al: ${_vmLabel} → ${name}`, 'running');
+  switchTaskTab('tasks');
+  closeModal("modal-create-snap");
   try {
     await api(`/vms/${_currentSnapVm}/snapshots`, { method: "POST", body: { name, description: desc } });
+    completeTaskPanel(taskId, 'success');
     toast("Snapshot alındı", "success");
-    closeModal("modal-create-snap");
     document.getElementById("new-snap-name").value = "";
     document.getElementById("new-snap-desc").value = "";
     loadSnapshotsForVM(_currentSnapVm);
-  } catch (e) { toast(e.message, "error"); }
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 async function revertSnapshot(vmId, name) {
   if (!confirm(`"${name}"'e geri dönülsün mü?`)) return;
-  try { await api(`/vms/${vmId}/snapshots/${name}/revert`, { method: "POST" }); toast("Geri yüklendi", "success"); loadSnapshotsForVM(vmId); }
-  catch (e) { toast(e.message, "error"); }
+  const _vmLabel = currentVmName || vmId.slice(0,8);
+  const taskId = 'revert-' + Date.now();
+  addTaskToPanel(taskId, `Snapshot Geri Yükle: ${_vmLabel} → ${name}`, 'running');
+  switchTaskTab('tasks');
+  try {
+    await api(`/vms/${vmId}/snapshots/${name}/revert`, { method: "POST" });
+    completeTaskPanel(taskId, 'success');
+    toast("Geri yüklendi", "success");
+    loadSnapshotsForVM(vmId);
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 async function deleteSnapshot(vmId, name) {
   if (!confirm(`"${name}" silinsin mi?`)) return;
-  try { await api(`/vms/${vmId}/snapshots/${name}`, { method: "DELETE" }); toast("Silindi", "success"); loadSnapshotsForVM(vmId); }
-  catch (e) { toast(e.message, "error"); }
+  const _vmLabel = currentVmName || vmId.slice(0,8);
+  const taskId = 'snapdel-' + Date.now();
+  addTaskToPanel(taskId, `Snapshot Sil: ${_vmLabel} → ${name}`, 'running');
+  switchTaskTab('tasks');
+  try {
+    await api(`/vms/${vmId}/snapshots/${name}`, { method: "DELETE" });
+    completeTaskPanel(taskId, 'success');
+    toast("Silindi", "success");
+    loadSnapshotsForVM(vmId);
+  } catch (e) { completeTaskPanel(taskId, 'error'); toast(e.message, "error"); }
 }
 
 /* ══════════════════ Settings ══════════════════ */
@@ -11504,10 +11570,14 @@ async function doCpuPinClear() {
 // ── Wake-on-LAN ─────────────────────────────────────────────────────────────
 async function sendWoL(vmId, vmName) {
   if (!confirm(`"${vmName}" için Wake-on-LAN magic packet gönderilsin mi?`)) return;
+  const taskId = 'wol-' + Date.now();
+  addTaskToPanel(taskId, `Wake-on-LAN: ${vmName}`, 'running');
+  switchTaskTab('tasks');
   try {
     const d = await _api(`/api/vms/${vmId}/wol`, 'POST');
+    completeTaskPanel(taskId, 'success');
     toast(`WoL gönderildi → ${d.mac}`, 'success');
-  } catch(e) { toast('WoL hatası: ' + e.message, 'error'); }
+  } catch(e) { completeTaskPanel(taskId, 'error'); toast('WoL hatası: ' + e.message, 'error'); }
 }
 
 // ── Maintenance Mode ─────────────────────────────────────────────────────────
@@ -11516,12 +11586,16 @@ async function toggleMaintenance(vmId, vmName) {
   const current = !!meta.maintenance;
   const action = current ? 'kapatılsın' : 'açılsın';
   if (!confirm(`"${vmName}" için bakım modu ${action} mı?`)) return;
+  const taskId = 'maint-' + Date.now();
+  addTaskToPanel(taskId, `Bakım Modu ${!current ? 'Açılıyor' : 'Kapatılıyor'}: ${vmName}`, 'running');
+  switchTaskTab('tasks');
   try {
     await _api(`/api/vms/${vmId}/maintenance`, 'POST', { enabled: !current });
+    completeTaskPanel(taskId, 'success');
     toast(`Bakım modu ${!current ? 'açıldı' : 'kapatıldı'}`, 'success');
     await loadAllVmMetadata();
     loadVMs();
-  } catch(e) { toast('Hata: ' + e.message, 'error'); }
+  } catch(e) { completeTaskPanel(taskId, 'error'); toast('Hata: ' + e.message, 'error'); }
 }
 
 // ── PCI Passthrough ─────────────────────────────────────────────────────────
@@ -11655,10 +11729,15 @@ function removeVmFwRule(idx) {
   renderVmFwRules();
 }
 async function saveVmFwRules() {
+  const _vmLabel = document.getElementById('vmfw-vmname')?.textContent || currentVmName || _vmfwVmId?.slice(0,8) || '?';
+  const taskId = 'fw-' + Date.now();
+  addTaskToPanel(taskId, `Firewall Kaydet: ${_vmLabel} (${_vmfwRules.length} kural)`, 'running');
+  switchTaskTab('tasks');
   try {
     await _api(`/api/vms/${_vmfwVmId}/firewall`, 'POST', { rules: _vmfwRules });
+    completeTaskPanel(taskId, 'success');
     toast('Firewall kuralları kaydedildi ve uygulandı', 'success');
-  } catch(e) { toast('Kayıt hatası: ' + e.message, 'error'); }
+  } catch(e) { completeTaskPanel(taskId, 'error'); toast('Kayıt hatası: ' + e.message, 'error'); }
 }
 async function clearVmFwRules() {
   if (!confirm('Tüm VM firewall kuralları silinsin mi?')) return;
