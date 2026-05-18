@@ -191,9 +191,12 @@ apt-get install -y -qq --no-install-recommends \
     dbus \
     dbus-x11 \
     libdbus-1-3 \
+    policykit-1 \
     xserver-xorg-video-qxl \
     xserver-xorg-video-vmware \
     spice-vdagent \
+    libqt5network5 \
+    libqt5svg5 \
     2>/dev/null || true
 fc-cache -f 2>/dev/null || true
 
