@@ -11706,39 +11706,63 @@ function openImportOvaModal() {
   document.getElementById('ova-file-input').value = '';
   document.getElementById('modal-ova-import').style.display = 'flex';
 }
-async function doImportOva() {
+function doImportOva() {
   const fileInput = document.getElementById('ova-file-input');
-  const statusEl = document.getElementById('ova-import-status');
+  const statusEl  = document.getElementById('ova-import-status');
   if (!fileInput.files.length) { toast('Dosya seçin', 'error'); return; }
   const tok = TOKEN();
   if (!tok) { toast('Oturumunuz sona ermiş, tekrar giriş yapın', 'error'); return; }
-  const file = fileInput.files[0];
+  const file   = fileInput.files[0];
   const sizeMB = (file.size / 1048576).toFixed(1);
-  statusEl.innerHTML = `<span style="color:var(--text-muted)">⏳ Yükleniyor... (${sizeMB} MB)</span>`;
+
+  // ── Add task row & switch tab BEFORE upload starts ──────────────────────
+  const taskId = 'import-' + Date.now();
+  addTaskToPanel(taskId, `VM Import: ${escHtml(file.name)} (${sizeMB} MB)`, 'running');
+  switchTaskTab('tasks');
+
+  // ── Use XHR so we get upload progress events ─────────────────────────────
   const fd = new FormData();
   fd.append('file', file);
-  try {
-    // NOTE: do NOT set Content-Type — browser sets multipart/form-data + boundary automatically
-    const resp = await fetch('/api/import/ova', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + tok },
-      body: fd
-    });
-    const d = await resp.json().catch(() => ({}));
-    if (resp.status === 401) { _forceLogout(); return; }
-    if (!resp.ok) throw new Error(d.error || resp.statusText);
-    toast('Import başlatıldı — arka planda devam ediyor', 'success');
-    // Add to task panel immediately
-    const taskId = 'import-' + Date.now();
-    addTaskToPanel(taskId, `VM Import: ${escHtml(file.name)} (${sizeMB} MB)`, 'running');
-    // Switch to tasks tab so user sees it
-    switchTaskTab('tasks');
-    // Start polling job progress
+  const xhr = new XMLHttpRequest();
+
+  xhr.upload.addEventListener('progress', e => {
+    if (!e.lengthComputable) return;
+    const pct = Math.round(e.loaded / e.total * 100);
+    const pctEl = document.getElementById('task-pct-' + taskId);
+    if (pctEl) pctEl.textContent = ` — Dosya yükleniyor (${pct}%)`;
+    statusEl.innerHTML = `
+      <div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">⬆ Sunucuya yükleniyor <strong>${pct}%</strong></div>
+      <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width .3s"></div>
+      </div>`;
+  });
+
+  xhr.addEventListener('load', () => {
+    let d = {};
+    try { d = JSON.parse(xhr.responseText); } catch(e) {}
+    if (xhr.status === 401) { _forceLogout(); return; }
+    if (xhr.status >= 400) {
+      const msg = d.error || `HTTP ${xhr.status}`;
+      statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${escHtml(msg)}</span>`;
+      completeTaskPanel(taskId, 'error');
+      toast(msg, 'error');
+      return;
+    }
+    toast('Dosya yüklendi — import arka planda başladı', 'success');
+    const pctEl = document.getElementById('task-pct-' + taskId);
+    if (pctEl) pctEl.textContent = ' — Arşiv açılıyor (10%)';
     _pollImportJob(d.job_id, taskId, statusEl, file.name);
-  } catch(e) {
-    statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${escHtml(e.message)}</span>`;
-    toast(e.message, 'error');
-  }
+  });
+
+  xhr.addEventListener('error', () => {
+    statusEl.innerHTML = `<span style="color:#f43f5e">❌ Ağ hatası</span>`;
+    completeTaskPanel(taskId, 'error');
+    toast('Yükleme başarısız: ağ hatası', 'error');
+  });
+
+  xhr.open('POST', '/api/import/ova');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + tok);
+  xhr.send(fd);
 }
 
 async function _pollImportJob(jobId, taskId, statusEl, filename) {
