@@ -1,6 +1,5 @@
 # OXware Hypervisor
 
-[![Build](https://github.com/ShinnAsukha/oxware-hypervisor/actions/workflows/build.yml/badge.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-2.3-green.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 
