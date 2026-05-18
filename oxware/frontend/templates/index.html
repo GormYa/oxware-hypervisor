@@ -3374,29 +3374,52 @@
   <div id="taskbar">
     <div id="taskbar-resize-handle" title="Yüksekliği ayarla"></div>
     <div class="tb-tabs">
-      <div class="tb-tab active" data-ttab="tasks" onclick="switchTaskTab('tasks')">Tasks</div>
-      <div class="tb-tab" data-ttab="events" onclick="switchTaskTab('events')">Event Log</div>
+      <div class="tb-tab active" data-ttab="tasks" onclick="switchTaskTab('tasks')">⚙ Tasks</div>
+      <div class="tb-tab" data-ttab="events" onclick="switchTaskTab('events')">📋 Event Log</div>
       <div class="spacer" style="flex:1"></div>
       <div style="display:flex;align-items:center;padding:0 12px">
-        <button class="btn sm" onclick="loadTaskLog()" style="font-size:10px">↻</button>
+        <button class="btn sm" onclick="refreshCurrentTab()" style="font-size:10px">↻</button>
       </div>
     </div>
     <div class="tb-tab-content">
-      <table class="task-table">
-        <thead>
-          <tr>
-            <th>Start Time</th>
-            <th>End Time</th>
-            <th>Node</th>
-            <th>User</th>
-            <th>Description</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="tasklog-tbody">
-          <tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text-muted)">Yükleniyor...</td></tr>
-        </tbody>
-      </table>
+
+      <!-- ── Tasks Pane (user-initiated jobs: import, clone, export, ISO upload) ── -->
+      <div id="tb-pane-tasks">
+        <table class="task-table">
+          <thead>
+            <tr>
+              <th>Başlangıç</th>
+              <th>Bitiş</th>
+              <th>Node</th>
+              <th>Kullanıcı</th>
+              <th>Açıklama</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody id="tasklog-tbody">
+            <tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text-muted)">Henüz görev yok</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Event Log Pane (system events from /api/events) ── -->
+      <div id="tb-pane-events" style="display:none">
+        <table class="task-table">
+          <thead>
+            <tr>
+              <th>Zaman</th>
+              <th>Seviye</th>
+              <th>Kategori</th>
+              <th>Kullanıcı</th>
+              <th>Mesaj</th>
+            </tr>
+          </thead>
+          <tbody id="eventlog-tbody">
+            <tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-muted)">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 
@@ -6573,23 +6596,42 @@ async function loadVMDetail(vmId) {
     document.getElementById("vd-state-sub").textContent = v.state || "—";
 
     // ── Action buttons ────────────────────────────────────────────────────────
+    const _vid = v.id;
+    const _vnm = escHtml(v.name);
     let actHtml = "";
+
+    // State-dependent primary controls
     if (v.state !== "running") {
-      actHtml += `<button class="vd-btn success" onclick="vmAction('${v.id}','start')">▶ Başlat</button>`;
+      actHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','start')">▶ Başlat</button>`;
     } else {
-      actHtml += `<button class="vd-btn primary" onclick="openConsole('${v.id}')">▣ Konsol</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmAction('${v.id}','reboot')">↺ Yeniden Başlat</button>`;
-      actHtml += `<button class="vd-btn warning" onclick="vmAction('${v.id}','pause')">⏸ Duraklat</button>`;
-      actHtml += `<button class="vd-btn danger" onclick="vmForceStop('${v.id}')">⏻ Zorla Durdur</button>`;
+      actHtml += `<button class="vd-btn danger" onclick="vmForceStop('${_vid}')">⏻ Durdur</button>`;
+      actHtml += `<button class="vd-btn primary" onclick="openConsole('${_vid}')">▣ Konsol</button>`;
+      actHtml += `<button class="vd-btn" onclick="vmAction('${_vid}','reboot')">↺ Yeniden Başlat</button>`;
+      actHtml += `<button class="vd-btn warning" onclick="vmAction('${_vid}','pause')">⏸ Duraklat</button>`;
     }
     if (v.state === "paused") {
-      actHtml += `<button class="vd-btn success" onclick="vmAction('${v.id}','resume')">▶ Devam Et</button>`;
+      actHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','resume')">▶ Devam Et</button>`;
     }
+
+    // Admin/operator full action set
     if (_currentRole() !== "vm-user") {
-      actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${v.id}')" title="SSH servisi etkinleştir">🔑 SSH</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmNatSync('${v.id}')" title="NAT/DNAT güncelle">🔄 NAT Sync</button>`;
-      actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${v.id}','${escHtml(v.name)}')">👤 Atama</button>`;
-      actHtml += `<button class="vd-btn danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')">✕ Sil</button>`;
+      actHtml += `<button class="vd-btn" onclick="openLiveMigrate('${_vid}','${_vnm}')" title="Canlı Geçiş" style="color:#f97316">🚀 Migrate</button>`;
+      actHtml += `<button class="vd-btn" onclick="cloneVM('${_vid}','${_vnm}')" title="Klonla" style="color:var(--accent-lt)">⧉ Klonla</button>`;
+      actHtml += `<button class="vd-btn" onclick="openDiskResize('${_vid}','${_vnm}')" title="Disk Genişlet" style="color:#f59e0b">⊞ Disk</button>`;
+      actHtml += `<button class="vd-btn" onclick="openVmMetaModal('${_vid}','${_vnm}')" title="Not & Etiket" style="color:#a78bfa">📝 Not</button>`;
+      actHtml += `<button class="vd-btn" onclick="openCdromModal('${_vid}','${_vnm}')" title="CD-ROM">💿 CD-ROM</button>`;
+      actHtml += `<button class="vd-btn" onclick="exportVM('${_vid}','${_vnm}')" title="OVA Export" style="color:#34d399">⬇ Export</button>`;
+      actHtml += `<button class="vd-btn" onclick="sendWoL('${_vid}','${_vnm}')" title="Wake-on-LAN" style="color:#60a5fa">⚡ WoL</button>`;
+      actHtml += `<button class="vd-btn" onclick="openPciModal('${_vid}','${_vnm}')" title="PCI/USB Passthrough" style="color:#f97316">🔌 PCI</button>`;
+      actHtml += `<button class="vd-btn" onclick="openCpuPinModal('${_vid}','${_vnm}')" title="CPU Pinning" style="color:#e879f9">📌 CPU Pin</button>`;
+      actHtml += `<button class="vd-btn" onclick="openMacModal('${_vid}','${_vnm}')" title="MAC Adresi" style="color:#38bdf8">🔗 MAC</button>`;
+      actHtml += `<button class="vd-btn" onclick="openVmFirewallModal('${_vid}','${_vnm}')" title="VM Firewall" style="color:#f43f5e">🛡 Firewall</button>`;
+      actHtml += `<button class="vd-btn" onclick="toggleMaintenance('${_vid}','${_vnm}')" title="Bakım Modu" style="color:#fbbf24">🔧 Bakım</button>`;
+      actHtml += `<button class="vd-btn" onclick="openSpiceInfo('${_vid}','${_vnm}')" title="SPICE Konsol" style="color:#34d399">📺 SPICE</button>`;
+      actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${_vid}')" title="SSH">🔑 SSH</button>`;
+      actHtml += `<button class="vd-btn" onclick="vmNatSync('${_vid}')" title="NAT Sync">🔄 NAT</button>`;
+      actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${_vid}','${_vnm}')">👤 Atama</button>`;
+      actHtml += `<button class="vd-btn danger" onclick="deleteVM('${_vid}','${_vnm}')">✕ Sil</button>`;
     }
     document.getElementById("vd-actions").innerHTML = actHtml;
 
@@ -9363,37 +9405,53 @@ async function loadUpdateHistory() {
   } catch {}
 }
 
-/* ══════════════════ Task Log ══════════════════ */
+/* ══════════════════ Task Panel & Event Log ══════════════════ */
 
-async function loadTaskLog() {
+// Tasks pane: populated by addTaskToPanel() — no server fetch needed
+// Event Log pane: fetches /api/events
+
+async function loadEventLog() {
+  const tbody = document.getElementById("eventlog-tbody");
+  if (!tbody) return;
   try {
-    const data = await api("/events?limit=50");
+    const data = await api("/events?limit=100");
     const events = data.events || [];
-    const tbody = document.getElementById("tasklog-tbody");
-    if (!events.length) { tbody.innerHTML = `<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text-muted)">Olay yok</td></tr>`; return; }
-    const hostname = document.getElementById("tree-node-name").textContent || "oxware";
+    const hostname = document.getElementById("tree-node-name")?.textContent || "oxware";
+    if (!events.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-muted)">Olay yok</td></tr>`;
+      return;
+    }
     tbody.innerHTML = events.map(e => {
-      const cls = e.level === "ERROR" || e.level === "CRITICAL" ? "err" : e.level === "WARNING" ? "running" : "ok";
-      const status = e.level === "ERROR" || e.level === "CRITICAL" ? "FAILED" : "OK";
-      const icon = e.level === "ERROR" || e.level === "CRITICAL" ? "✗" : e.level === "WARNING" ? "⚠" : "✓";
+      const lvl = e.level || "INFO";
+      const cls = (lvl === "ERROR" || lvl === "CRITICAL") ? "err" : lvl === "WARNING" ? "running" : "ok";
+      const icon = (lvl === "ERROR" || lvl === "CRITICAL") ? "✗" : lvl === "WARNING" ? "⚠" : "✓";
+      const cat = e.category || "system";
+      const ts = e.timestamp ? new Date(e.timestamp * 1000).toLocaleString("tr-TR") : "—";
       return `<tr>
-        <td>${e.timestamp ? new Date(e.timestamp * 1000).toLocaleString("tr-TR") : "—"}</td>
-        <td>${e.timestamp ? new Date(e.timestamp * 1000).toLocaleString("tr-TR") : "—"}</td>
-        <td>${escHtml(hostname)}</td>
-        <td>${escHtml(e.user || "system")}</td>
-        <td>${escHtml(e.message || "")}</td>
-        <td><span class="task-status ${cls}">${icon} ${status}</span></td>
+        <td style="white-space:nowrap">${ts}</td>
+        <td><span class="task-status ${cls}">${icon} ${escHtml(lvl)}</span></td>
+        <td style="color:var(--text-muted)">${escHtml(cat)}</td>
+        <td style="color:var(--text-muted)">${escHtml(e.user || "system")}</td>
+        <td style="white-space:normal;max-width:400px">${escHtml(e.message || "")}</td>
       </tr>`;
     }).join("");
   } catch (e) {
-    document.getElementById("tasklog-tbody").innerHTML = `<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--text-muted)">Yüklenemedi</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-muted)">Yüklenemedi</td></tr>`;
   }
 }
 
 function switchTaskTab(tab) {
   document.querySelectorAll(".tb-tab[data-ttab]").forEach(t => t.classList.remove("active"));
-  document.querySelector(`[data-ttab="${tab}"]`).classList.add("active");
-  loadTaskLog();
+  document.querySelector(`[data-ttab="${tab}"]`)?.classList.add("active");
+  document.getElementById("tb-pane-tasks").style.display  = tab === "tasks"  ? "" : "none";
+  document.getElementById("tb-pane-events").style.display = tab === "events" ? "" : "none";
+  if (tab === "events") loadEventLog();
+}
+
+function refreshCurrentTab() {
+  const active = document.querySelector(".tb-tab.active[data-ttab]");
+  if (active?.dataset.ttab === "events") loadEventLog();
+  // tasks tab is local state — nothing to refresh from server
 }
 
 /* ══════════════════ Confirm shutdown / reboot ══════════════════ */
@@ -11353,7 +11411,7 @@ window.addEventListener("DOMContentLoaded", () => {
   selectTreeItem("node");
   loadNodeSummary();
   refreshTreeVMs();
-  loadTaskLog();
+  loadEventLog();
   checkLicenseStatus();
 
   // Skip all polling when tab is hidden (saves server load on background tabs)
@@ -11367,11 +11425,11 @@ window.addEventListener("DOMContentLoaded", () => {
     if (currentPage === "topology") loadTopology();
   }, 8000);
 
-  // Task log every 20s
+  // Event log every 30s (background fetch, ready for when user opens Events tab)
   setInterval(() => {
     if (document.visibilityState === 'hidden') return;
-    loadTaskLog();
-  }, 20000);
+    loadEventLog();
+  }, 30000);
 
   // ── App install chip selection ──
   document.querySelectorAll('.app-chip').forEach(chip => {
