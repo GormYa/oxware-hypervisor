@@ -223,6 +223,10 @@ fi
 echo "[OK] Chroot tamamlandı"
 CHROOT
 
+# Bind mount'ları burda kaldır — mksquashfs /proc okumadan önce
+for mp in dev/pts dev sys proc run; do
+    umount "$SQUASHFS_ROOT/$mp" 2>/dev/null || true
+done
 log "Chroot paketler OK"
 
 # ── OXware Calamares Config ───────────────────────────────────────────────────
