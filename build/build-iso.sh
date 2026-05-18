@@ -27,8 +27,16 @@ echo "$OXWARE_VERSION" > "$VERSION_FILE"
 # ── Paths ─────────────────────────────────────────────────────────────────────
 # Debian 12 Live Standard — masaüstü yok, sadece temel sistem
 # "standard" variant ~700MB, bizim ihtiyacımıza tam uygun
-DEBIAN_LIVE_URL="https://ftp.halifax.rwth-aachen.de/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
-DEBIAN_LIVE_FALLBACK="https://mirror.init7.net/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
+DEBIAN_VER="12.11.0"   # Update this when Debian releases a new point version
+_ISO_FILE="debian-live-${DEBIAN_VER}-amd64-standard.iso"
+DEBIAN_LIVE_URL="https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+DEBIAN_LIVE_MIRRORS=(
+    "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+    "https://mirrors.kernel.org/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+    "https://mirror.csclub.uwaterloo.ca/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+    "https://ftp.halifax.rwth-aachen.de/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+    "https://mirror.init7.net/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
+)
 ISO_CACHE="/tmp/debian-12-live-standard-amd64.iso"
 WORK_DIR="/tmp/oxware-iso-build"
 SQUASHFS_ROOT="$WORK_DIR/squashfs-root"
@@ -73,12 +81,19 @@ step "Debian 12 Live Standard ISO"
 if [ -f "$ISO_CACHE" ] && [ "$(stat -c%s "$ISO_CACHE")" -gt 500000000 ]; then
     log "Cache'de mevcut: $ISO_CACHE ($(du -sh "$ISO_CACHE" | cut -f1))"
 else
-    log "İndiriliyor: $DEBIAN_LIVE_URL"
-    wget -q --show-progress -c -O "$ISO_CACHE" "$DEBIAN_LIVE_URL" 2>/dev/null || {
-        warn "Ana mirror başarısız, fallback deneniyor..."
-        wget -q --show-progress -c -O "$ISO_CACHE" "$DEBIAN_LIVE_FALLBACK" \
-            || err "İndirme başarısız. Manuel:\n  wget -O $ISO_CACHE $DEBIAN_LIVE_URL"
-    }
+    log "İndiriliyor... (${#DEBIAN_LIVE_MIRRORS[@]} mirror denenecek)"
+    _dl_ok=false
+    for _mirror in "${DEBIAN_LIVE_MIRRORS[@]}"; do
+        log "Mirror: $_mirror"
+        if wget -q --show-progress --tries=3 --timeout=30 -c -O "$ISO_CACHE" "$_mirror" 2>/dev/null; then
+            _dl_ok=true
+            break
+        fi
+        warn "Mirror başarısız: $_mirror"
+    done
+    if ! $_dl_ok; then
+        err "Tüm mirrorlar başarısız. Manuel indirme:\n  wget -O $ISO_CACHE $DEBIAN_LIVE_URL"
+    fi
 fi
 
 # ── ISO Ayıkla ────────────────────────────────────────────────────────────────

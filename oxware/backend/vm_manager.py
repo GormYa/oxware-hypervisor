@@ -129,6 +129,19 @@ def _connect():
     return libvirt.open(LIBVIRT_URI)
 
 
+# ── list_vms() short-TTL cache (3 s) ─────────────────────────────────────────
+# Dashboard polls every 8 s; avoid a full libvirt scan + XMLDesc on every tick.
+_LIST_CACHE = {"data": None, "ts": 0.0}
+_LIST_CACHE_TTL = 3.0
+_LIST_CACHE_LOCK = threading.Lock()
+
+
+def _invalidate_list_cache():
+    """Call after any mutation (create/delete/start/stop) to bust the cache."""
+    with _LIST_CACHE_LOCK:
+        _LIST_CACHE["data"] = None
+
+
 def _load_vnc_registry():
     if os.path.exists(_VNC_REGISTRY_FILE):
         with open(_VNC_REGISTRY_FILE) as f:
@@ -258,33 +271,41 @@ def _parse_vnc_port(xml_str):
 
 
 def list_vms():
+    now = time.monotonic()
+    with _LIST_CACHE_LOCK:
+        if _LIST_CACHE["data"] is not None and (now - _LIST_CACHE["ts"]) < _LIST_CACHE_TTL:
+            return list(_LIST_CACHE["data"])   # return a shallow copy
+
     conn = _connect()
     vms = []
     try:
         for dom in conn.listAllDomains():
-            stats = _get_domain_stats(dom)
+            stats   = _get_domain_stats(dom)
             xml_str = dom.XMLDesc()
-            disks = _parse_disk_info(xml_str)
-            nets = _parse_net_info(xml_str)
+            disks   = _parse_disk_info(xml_str)
+            nets    = _parse_net_info(xml_str)
             vnc_port = _parse_vnc_port(xml_str)
-
-            info = dom.info()
+            info    = dom.info()
             vms.append({
-                "id": dom.UUIDString(),
-                "name": dom.name(),
-                "state": stats["state"],
-                "vcpus": info[3],
-                "memory_mb": info[1] // 1024,
+                "id":            dom.UUIDString(),
+                "name":          dom.name(),
+                "state":         stats["state"],
+                "vcpus":         info[3],
+                "memory_mb":     info[1] // 1024,
                 "memory_max_mb": info[1] // 1024,
-                "cpu_time": stats["cpu_time"],
-                "disks": disks,
-                "networks": nets,
-                "vnc_port": vnc_port,
-                "autostart": bool(dom.autostart()),
+                "cpu_time":      stats["cpu_time"],
+                "disks":         disks,
+                "networks":      nets,
+                "vnc_port":      vnc_port,
+                "autostart":     bool(dom.autostart()),
             })
     finally:
         conn.close()
-    return vms
+
+    with _LIST_CACHE_LOCK:
+        _LIST_CACHE["data"] = vms
+        _LIST_CACHE["ts"]   = time.monotonic()
+    return list(vms)
 
 
 def get_vm(vm_id):
@@ -657,6 +678,7 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
             _install_monitors[vm_uuid] = t
             t.start()
 
+        _invalidate_list_cache()
         return {"id": vm_uuid, "name": name, "vnc_port": vnc_port, "mac": vm_mac}
     finally:
         conn.close()
@@ -669,6 +691,7 @@ def start_vm(vm_id):
         if dom.isActive():
             return {"status": "already_running"}
         dom.create()
+        _invalidate_list_cache()
         return {"status": "started"}
     finally:
         conn.close()
@@ -682,8 +705,10 @@ def stop_vm(vm_id, force=False):
             return {"status": "already_stopped"}
         if force:
             dom.destroy()
+            _invalidate_list_cache()
             return {"status": "forced_stop"}
         dom.shutdown()
+        _invalidate_list_cache()
         return {"status": "shutting_down"}
     finally:
         conn.close()
@@ -699,6 +724,7 @@ def reboot_vm(vm_id, force=False):
             dom.reset(0)
         else:
             dom.reboot(0)
+        _invalidate_list_cache()
         return {"status": "rebooting"}
     finally:
         conn.close()
@@ -709,6 +735,7 @@ def pause_vm(vm_id):
     try:
         dom = conn.lookupByUUIDString(vm_id)
         dom.suspend()
+        _invalidate_list_cache()
         return {"status": "paused"}
     finally:
         conn.close()
@@ -719,6 +746,7 @@ def resume_vm(vm_id):
     try:
         dom = conn.lookupByUUIDString(vm_id)
         dom.resume()
+        _invalidate_list_cache()
         return {"status": "resumed"}
     finally:
         conn.close()
@@ -750,7 +778,7 @@ def delete_vm(vm_id, delete_disk=True):
         reg = _load_vnc_registry()
         reg.pop(vm_id, None)
         _save_vnc_registry(reg)
-
+        _invalidate_list_cache()
         return {"status": "deleted"}
     finally:
         conn.close()
@@ -763,42 +791,55 @@ def get_vm_stats(vm_id):
         if not dom.isActive():
             return {"state": "stopped"}
 
-        info = dom.info()
-        stats = dom.getCPUStats(True)[0]
+        info      = dom.info()
+        cpu_stats = dom.getCPUStats(True)[0]
 
-        # Disk I/O
-        disk_stats = {}
+        # Parse XML once for both disk device names and net interface names
         xml_str = dom.XMLDesc()
-        for disk in _parse_disk_info(xml_str):
-            dev = disk.get("device", "vda")
-            try:
-                rd, wr = dom.blockStats(dev)[:2], dom.blockStats(dev)[2:4]
-                disk_stats[dev] = {"read_bytes": rd[0], "write_bytes": wr[0]}
-            except Exception:
-                pass
+        try:
+            _root = ET.fromstring(xml_str)
+        except Exception:
+            _root = None
 
-        # Ağ istatistikleri
+        # Disk I/O — single blockStats call per device
+        disk_stats = {}
+        if _root is not None:
+            for disk_el in _root.findall(".//disk[@type='file'][@device='disk']"):
+                tgt = disk_el.find("target")
+                if tgt is not None:
+                    dev = tgt.get("dev", "")
+                    if dev:
+                        try:
+                            bs = dom.blockStats(dev)  # single call: [rd_req, rd_bytes, wr_req, wr_bytes, ...]
+                            disk_stats[dev] = {"read_bytes": bs[1], "write_bytes": bs[3]}
+                        except Exception:
+                            pass
+
+        # Net stats
         net_stats = {}
-        for iface in _parse_net_info(xml_str):
-            dev = iface.get("device", "")
-            if dev:
-                try:
-                    ns = dom.interfaceStats(dev)
-                    net_stats[dev] = {
-                        "rx_bytes": ns[0], "tx_bytes": ns[4],
-                        "rx_packets": ns[1], "tx_packets": ns[5],
-                    }
-                except Exception:
-                    pass
+        if _root is not None:
+            for iface_el in _root.findall(".//interface"):
+                tgt = iface_el.find("target")
+                if tgt is not None:
+                    dev = tgt.get("dev", "")
+                    if dev:
+                        try:
+                            ns = dom.interfaceStats(dev)
+                            net_stats[dev] = {
+                                "rx_bytes":   ns[0], "tx_bytes":   ns[4],
+                                "rx_packets": ns[1], "tx_packets": ns[5],
+                            }
+                        except Exception:
+                            pass
 
         return {
-            "state": STATE_MAP.get(info[0], "unknown"),
-            "cpu_time_ns":    stats.get("cpu_time", 0),
-            "memory_kb":      info[2],          # current balloon memory
-            "max_memory_kb":  info[1],          # max memory configured
-            "vcpus":          info[3],
-            "disk_stats":     disk_stats,
-            "net_stats":      net_stats,
+            "state":         STATE_MAP.get(info[0], "unknown"),
+            "cpu_time_ns":   cpu_stats.get("cpu_time", 0),
+            "memory_kb":     info[2],   # current balloon memory
+            "max_memory_kb": info[1],   # max memory configured
+            "vcpus":         info[3],
+            "disk_stats":    disk_stats,
+            "net_stats":     net_stats,
         }
     finally:
         conn.close()

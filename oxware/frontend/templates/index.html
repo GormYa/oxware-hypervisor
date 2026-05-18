@@ -509,44 +509,6 @@
     .ctx-item.active{background:rgba(42,109,217,.12);color:var(--accent-lt)}
     .ctx-item i.fa-fw{width:16px;flex-shrink:0;text-align:center}
 
-    /* ── CVE Tracker ── */
-    .cve-tag{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--border2);background:var(--surface2);color:var(--text-muted);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
-    .cve-tag:hover,.cve-tag.active{background:rgba(249,115,22,.15);border-color:rgba(249,115,22,.4);color:#f97316}
-    .cve-sev-btn{padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid var(--border2);background:var(--surface2);color:var(--text-muted);cursor:pointer;transition:all .15s}
-    .cve-sev-btn.active{background:rgba(249,115,22,.15);border-color:#f97316;color:#f97316}
-    .cve-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:8px;transition:border-color .15s}
-    .cve-card:hover{border-color:#484f58}
-    .cve-card-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
-    .cve-id{font-family:monospace;font-size:13px;font-weight:700;color:var(--accent-lt)}
-    .cve-id a{color:inherit;text-decoration:none}
-    .cve-id a:hover{text-decoration:underline}
-    .cve-score{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
-    .cve-score.CRITICAL{background:rgba(239,68,68,.18);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
-    .cve-score.HIGH{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)}
-    .cve-score.MEDIUM{background:rgba(234,179,8,.12);color:#eab308;border:1px solid rgba(234,179,8,.3)}
-    .cve-score.LOW{background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
-    .cve-score.UNKNOWN{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}
-    .cve-product-tag{padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(42,109,217,.12);color:var(--accent-lt);border:1px solid rgba(42,109,217,.2)}
-    .cve-date{font-size:11px;color:var(--text-dim)}
-    .cve-card-head .cve-copy-btn{margin-left:auto}
-    .cve-desc{font-size:12px;color:var(--text-muted);line-height:1.6}
-    .cve-refs{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
-    .cve-ref{font-size:10px;color:var(--accent-lt);text-decoration:none}
-    .cve-ref:hover{text-decoration:underline}
-    /* OXware Stack filter button — cyan accent */
-    .cve-tag.oxware-stack-tag{border-color:rgba(0,200,255,.35);color:var(--cyan)}
-    .cve-tag.oxware-stack-tag:hover,.cve-tag.oxware-stack-tag.active{background:rgba(0,200,255,.15);border-color:var(--cyan);color:var(--cyan)}
-    .oxware-badge{background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px}
-    /* Stack product tags — subtle cyan dot */
-    .cve-tag.stack-product{border-color:rgba(0,200,255,.2)}
-    /* CVE card highlighted when affects OXware */
-    .cve-card-oxware{border-color:rgba(0,200,255,.3)!important;background:rgba(0,200,255,.03)}
-    .cve-card-oxware:hover{border-color:rgba(0,200,255,.55)!important}
-    /* OXware badge on individual CVE cards */
-    .cve-oxware-badge{padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(0,200,255,.12);color:var(--cyan);border:1px solid rgba(0,200,255,.3);white-space:nowrap}
-    .cve-copy-btn{margin-left:auto;background:none;border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);cursor:pointer;padding:2px 7px;font-size:11px;transition:all .15s;flex-shrink:0}
-    .cve-copy-btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,255,.08)}
-
     /* page scroll fix */
     .page{flex:1;overflow-y:auto;padding:16px;display:none}
     .page.active{display:block}
@@ -3003,53 +2965,6 @@
 
         </div>
 
-        <!-- ─────── tab-cve ─────── -->
-        <div class="page" id="page-tab-cve">
-          <div class="section-header" style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
-            <h2><i class="fa-solid fa-bug" style="margin-right:8px;color:#f97316"></i>CVE Güvenlik Açıkları</h2>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button onclick="cveRefresh()" class="btn btn-sm btn-secondary" id="cve-refresh-btn">
-                <i class="fa-solid fa-rotate"></i> Yenile
-              </button>
-              <span id="cve-last-update" style="font-size:11px;color:var(--text-dim)"></span>
-            </div>
-          </div>
-
-          <!-- Ürün filtreleme etiketleri -->
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="cve-tag-bar">
-            <button class="cve-tag active" data-product="all" onclick="cveSetFilter('all')">
-              <i class="fa-solid fa-globe"></i> Tümü
-            </button>
-          </div>
-
-          <!-- Severity + Zaman filtresi -->
-          <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:11px;color:var(--text-dim)">Seviye:</span>
-              <button class="cve-sev-btn active" data-sev="ALL"  onclick="cveSevFilter('ALL')">Tümü</button>
-              <button class="cve-sev-btn" data-sev="CRITICAL" onclick="cveSevFilter('CRITICAL')">🔴 Critical</button>
-              <button class="cve-sev-btn" data-sev="HIGH"     onclick="cveSevFilter('HIGH')">🟠 High</button>
-              <button class="cve-sev-btn" data-sev="MEDIUM"   onclick="cveSevFilter('MEDIUM')">🟡 Medium</button>
-              <button class="cve-sev-btn" data-sev="LOW"      onclick="cveSevFilter('LOW')">🟢 Low</button>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:11px;color:var(--text-dim)">Dönem:</span>
-              <button class="cve-sev-btn active" data-year="1" id="cve-year-default" onclick="cveYearFilter(1)">Son 1 yıl</button>
-              <button class="cve-sev-btn" data-year="3"  onclick="cveYearFilter(3)">Son 3 yıl</button>
-              <button class="cve-sev-btn" data-year="5"  onclick="cveYearFilter(5)">Son 5 yıl</button>
-              <button class="cve-sev-btn" data-year="0"  onclick="cveYearFilter(0)">Tümü</button>
-            </div>
-          </div>
-
-          <!-- CVE Listesi -->
-          <div id="cve-list-wrap">
-            <div style="text-align:center;padding:40px;color:var(--text-dim)">
-              <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px"></i><br>
-              CVE verileri yükleniyor…
-            </div>
-          </div>
-        </div>
-
         <!-- ─────── tab-integrations ─────── -->
         <div class="page" id="page-tab-integrations">
           <div class="section-header"><h2><i class="fa-solid fa-plug"></i> Entegrasyonlar</h2></div>
@@ -4840,8 +4755,6 @@ const PAGE_STRINGS = {
     'Boot ISO · ~1.5 GB (ağ kurulumu)':'Boot ISO · ~1.5 GB (network install)',
     'Bu VM\'e özgü iptables kuralları. FORWARD zinciri üzerinden uygulanır.':'VM-specific iptables rules. Applied via FORWARD chain.',
     'CPU Grafiği':'CPU Graph',
-    'CVE Güvenlik Açıkları':'CVE Vulnerabilities',
-    'CVE verileri yükleniyor…':'Loading CVE data...',
     'Canlı Disk Taşıma':'Live Disk Migration',
     'DHCP static entry eklenecek libvirt ağı. Terminalde:':'Libvirt network for DHCP static entry. In terminal:',
     'DNS Nameserver Ayarları':'DNS Nameserver Settings',
@@ -5884,9 +5797,6 @@ function buildContextNav(type) {
     </div>
     <div class="ctx-item" data-page="tab-security" onclick="navigate('tab-security');closeMobileNav()">
       <i class="fa-solid fa-user-shield fa-fw"></i>${t('security')}
-    </div>
-    <div class="ctx-item" data-page="tab-cve" onclick="navigate('tab-cve');closeMobileNav()">
-      <i class="fa-solid fa-bug fa-fw"></i>CVE Tracker
     </div>
     <div class="ctx-item" data-page="tab-integrations" onclick="navigate('tab-integrations');closeMobileNav()">
       <i class="fa-solid fa-plug fa-fw"></i>${t('integrations')}
@@ -10166,7 +10076,6 @@ async function loadTabData(tabId) {
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); loadScalerPolicies(); loadQuotas(); loadVmSchedules(); loadResourcePools(); _initSmigVmSel(); break;
-    case 'tab-cve':          cveInit(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
   }
 }
@@ -11450,15 +11359,22 @@ window.addEventListener("DOMContentLoaded", () => {
   loadTaskLog();
   checkLicenseStatus();
 
+  // Skip all polling when tab is hidden (saves server load on background tabs)
+  let _treeRefreshCounter = 0;
   statsInterval = setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
     if (currentPage === "summary") loadNodeSummary();
     if (currentPage === "vm-detail" && currentVmId) loadVMDetail(currentVmId);
-    refreshTreeVMs();
+    // Tree refresh every 2nd tick (16 s) — list_vms is cached 3 s anyway
+    if (++_treeRefreshCounter % 2 === 0) refreshTreeVMs();
     if (currentPage === "topology") loadTopology();
   }, 8000);
 
-  // Task log every 15s
-  setInterval(loadTaskLog, 15000);
+  // Task log every 20s
+  setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    loadTaskLog();
+  }, 20000);
 
   // ── App install chip selection ──
   document.querySelectorAll('.app-chip').forEach(chip => {
@@ -11812,205 +11728,6 @@ async function doChangeMac() {
   } catch(e) { toast('Hata: ' + e.message, 'error'); }
 }
 
-/* ══════════════════ CVE TRACKER ══════════════════ */
-let _cveData        = {};    // { productId: [cve,...] }
-let _cveProducts    = {};    // { productId: {label,keyword,in_oxware_stack} }
-let _cveFilter      = 'all'; // active product filter: 'all' | 'oxware' | productId
-let _cveSev         = 'ALL'; // severity filter
-let _cveYear        = 1;     // years_back filter (0=all, 1/3/5=last N years)
-let _cveLoaded      = false;
-let _cveOxwareStack = [];    // product IDs in OXware's runtime stack
-let _cveOxwareCount = 0;     // total CVEs flagged as affects_oxware
-
-async function cveInit() {
-  if (_cveLoaded) { cveRender(); return; }
-  await cveLoad();
-}
-
-async function cveLoad(force = false) {
-  const wrap = document.getElementById('cve-list-wrap');
-  wrap.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px"></i><br><br>NVD veritabanından CVE\'ler alınıyor… <span style="font-size:12px;opacity:.6">(bu işlem ~30 sn sürebilir)</span></div>';
-  const btn = document.getElementById('cve-refresh-btn');
-  if (btn) btn.disabled = true;
-  try {
-    const params = new URLSearchParams();
-    if (force) params.set('force', '1');
-    if (_cveYear > 0) params.set('years_back', _cveYear);
-    params.set('oxware_only', '1');   // sadece OXware stack ürünleri
-    const url = `/api/cve/search${params.toString() ? '?' + params.toString() : ''}`;
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN()}` } });
-    const d = await r.json();
-    // d.ok may be true even with partial errors — always use what we got
-    _cveData        = d.results || {};
-    _cveProducts    = d.products || {};
-    _cveOxwareStack = d.oxware_stack || [];
-    _cveOxwareCount = d.oxware_count || 0;
-    _cveLoaded      = true;
-    cveRenderTags();
-    cveRender();
-    const lastUpd = document.getElementById('cve-last-update');
-    if (lastUpd) lastUpd.textContent = 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
-    // Show non-blocking warning if some products failed
-    if (d.fetch_errors && d.fetch_errors.length) {
-      const warn = document.createElement('div');
-      warn.style.cssText = 'background:var(--yellow,.8);color:#000;padding:8px 14px;border-radius:6px;margin-bottom:12px;font-size:13px';
-      warn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Bazı ürünler alınamadı (NVD oran limiti). Önbellekteki veriler gösteriliyor. <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;float:right">✕</button>`;
-      wrap.prepend(warn);
-    }
-    if (d.warning) {
-      wrap.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">
-        <i class="fa-solid fa-triangle-exclamation" style="font-size:24px;color:var(--yellow)"></i><br><br>
-        ${d.warning}<br>
-        <button onclick="cveLoad(true)" class="btn btn-sm btn-secondary" style="margin-top:12px">Tekrar Dene</button>
-      </div>`;
-    }
-  } catch(e) {
-    wrap.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">
-      <i class="fa-solid fa-circle-exclamation" style="font-size:24px"></i><br><br>
-      CVE verileri alınamadı: ${e.message}<br>
-      <small style="opacity:.7">NVD API geçici erişilemez olabilir. Birkaç dakika sonra tekrar deneyin.</small><br>
-      <button onclick="cveLoad(true)" class="btn btn-sm btn-secondary" style="margin-top:12px">Tekrar Dene</button>
-    </div>`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-async function cveRefresh() { await cveLoad(true); }
-
-function cveYearFilter(years) {
-  _cveYear   = years;
-  _cveLoaded = false; // force reload with new date range
-  document.querySelectorAll('[data-year]').forEach(b =>
-    b.classList.toggle('active', parseInt(b.dataset.year) === years));
-  cveLoad(true);
-}
-
-function cveRenderTags() {
-  const bar = document.getElementById('cve-tag-bar');
-  // "OXware Stack" special filter — shows only CVEs flagged affects_oxware=true
-  const oxActive = _cveFilter === 'oxware' ? 'active' : '';
-  let html = `<button class="cve-tag ${_cveFilter==='all'?'active':''}" data-product="all" onclick="cveSetFilter('all')">
-    <i class="fa-solid fa-globe"></i> Tümü
-  </button>`;
-  html += `<button class="cve-tag oxware-stack-tag ${oxActive}" data-product="oxware" onclick="cveSetFilter('oxware')"
-    title="OXware'de doğrudan çalışan bileşenleri etkileyen güvenlik açıkları (Linux Kernel, KVM/QEMU, libvirt, Nginx, OpenSSH, OpenSSL, Python/Flask)">
-    <i class="fa-solid fa-shield-halved"></i> ⚡ OXware Stack
-    ${_cveOxwareCount > 0 ? `<span class="oxware-badge">${_cveOxwareCount}</span>` : ''}
-  </button>`;
-  for (const [pid, pinfo] of Object.entries(_cveProducts)) {
-    const cnt = (_cveData[pid] || []).length;
-    const active = _cveFilter === pid ? 'active' : '';
-    const isStack = (pinfo.in_oxware_stack || _cveOxwareStack.includes(pid));
-    html += `<button class="cve-tag ${active}${isStack ? ' stack-product' : ''}" data-product="${pid}" onclick="cveSetFilter('${pid}')"
-      ${isStack ? 'title="OXware Stack bileşeni"' : ''}>
-      ${isStack ? '<i class="fa-solid fa-shield-halved" style="color:var(--cyan);font-size:10px;margin-right:3px"></i>' : ''}${pinfo.label} <span style="opacity:.6">(${cnt})</span>
-    </button>`;
-  }
-  bar.innerHTML = html;
-}
-
-function cveSetFilter(pid) {
-  _cveFilter = pid;
-  document.querySelectorAll('.cve-tag').forEach(b => b.classList.toggle('active', b.dataset.product === pid));
-  cveRender();
-}
-
-function cveSevFilter(sev) {
-  _cveSev = sev;
-  document.querySelectorAll('.cve-sev-btn').forEach(b => b.classList.toggle('active', b.dataset.sev === sev));
-  cveRender();
-}
-
-function cveRender() {
-  const wrap = document.getElementById('cve-list-wrap');
-
-  // Collect items based on filter
-  let items = [];
-  if (_cveFilter === 'oxware') {
-    // Special: show only CVEs flagged affects_oxware=true across ALL products
-    for (const [pid, cves] of Object.entries(_cveData)) {
-      const pinfo = _cveProducts[pid] || {};
-      for (const cve of cves) {
-        if (cve.affects_oxware) {
-          items.push({ ...cve, _pid: pid, _plabel: pinfo.label || pid });
-        }
-      }
-    }
-  } else {
-    const products = _cveFilter === 'all' ? Object.keys(_cveData) : [_cveFilter];
-    for (const pid of products) {
-      const pinfo = _cveProducts[pid] || {};
-      for (const cve of (_cveData[pid] || [])) {
-        items.push({ ...cve, _pid: pid, _plabel: pinfo.label || pid });
-      }
-    }
-  }
-
-  // Severity filtresi
-  if (_cveSev !== 'ALL') {
-    items = items.filter(c => c.severity === _cveSev);
-  }
-
-  // Score'a göre sırala (yüksekten düşüğe); affects_oxware önce gelsin
-  items.sort((a, b) => {
-    if (a.affects_oxware !== b.affects_oxware) return a.affects_oxware ? -1 : 1;
-    return (b.score || 0) - (a.score || 0);
-  });
-
-  if (!items.length) {
-    const emptyMsg = _cveFilter === 'oxware'
-      ? 'OXware Stack\'i etkileyen CVE bulunamadı. (Veriler yüklenince güncellenir)'
-      : 'Bu filtreye uygun CVE bulunamadı.';
-    wrap.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-dim)">${emptyMsg}</div>`;
-    return;
-  }
-
-  const SEV_ICON = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢', UNKNOWN: '⚪' };
-  let html = '';
-
-  // Show info banner when in OXware filter mode
-  if (_cveFilter === 'oxware') {
-    html += `<div style="background:rgba(0,200,255,.08);border:1px solid var(--cyan);border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:13px;color:var(--cyan)">
-      <i class="fa-solid fa-shield-halved"></i>
-      <strong>OXware Stack Güvenlik Açıkları</strong> — Linux Kernel, KVM/QEMU, libvirt, Nginx, OpenSSH, OpenSSL ve Python/Flask bileşenlerini doğrudan etkileyen CVE'ler.
-      Toplam <strong>${items.length}</strong> zafiyet tespit edildi.
-    </div>`;
-  }
-
-  for (const c of items) {
-    const icon = SEV_ICON[c.severity] || '⚪';
-    const scoreStr = c.score != null ? `${icon} ${c.score}` : icon;
-    const refs = (c.refs || []).slice(0, 2).map(u => {
-      try { return `<a class="cve-ref" href="${u}" target="_blank" rel="noopener">${new URL(u).hostname}</a>`; }
-      catch { return ''; }
-    }).join('');
-    // OXware-affecting badge
-    const oxBadge = c.affects_oxware
-      ? `<span class="cve-oxware-badge" title="OXware'i etkileyebilir"><i class="fa-solid fa-shield-halved"></i> OXware</span>`
-      : '';
-    // Copy button — only on OXware-affecting cards (or always show)
-    const copyBtn = `<button class="cve-copy-btn" onclick="cveCopyCard(this,${JSON.stringify(c.id)},${JSON.stringify(c.severity)},${JSON.stringify(c.score)},${JSON.stringify(c._plabel)},${JSON.stringify(c.description||'')},${JSON.stringify((c.refs||[]).join(', '))})" title="Kopyala">
-      <i class="fa-solid fa-copy"></i>
-    </button>`;
-    html += `
-    <div class="cve-card${c.affects_oxware ? ' cve-card-oxware' : ''}">
-      <div class="cve-card-head">
-        <span class="cve-id">
-          <a href="https://nvd.nist.gov/vuln/detail/${c.id}" target="_blank" rel="noopener">${c.id}</a>
-        </span>
-        <span class="cve-score ${c.severity}">${scoreStr} ${c.severity}</span>
-        <span class="cve-product-tag">${c._plabel}</span>
-        ${oxBadge}
-        <span class="cve-date">${c.published}</span>
-        ${copyBtn}
-      </div>
-      <div class="cve-desc">${c.description || '–'}</div>
-      ${refs ? `<div class="cve-refs">${refs}</div>` : ''}
-    </div>`;
-  }
-  wrap.innerHTML = html;
-}
 
 /* ══════════════════════════════════════════════════════════════════
    FEATURE ADDITIONS: Global Search Overlay, Keyboard Shortcuts,
@@ -12104,7 +11821,7 @@ async function runGlobalSearch(query) {
       {icon:'🌐',title:'Ağ Yönetimi',page:'networks'},{icon:'💾',title:'Depolama',page:'storage'},
       {icon:'📈',title:'İzleme',page:'tab-monitoring'},{icon:'🔐',title:'Güvenlik',page:'tab-security'},
       {icon:'🤖',title:'AI Ajanlar',page:'tab-ai'},{icon:'🔗',title:'Entegrasyonlar',page:'tab-integrations'},
-      {icon:'🖥️',title:'Hosting Eklentileri',page:'tab-hosting'},{icon:'⚙️',title:'Ayarlar',page:'tab-settings'},{icon:'🐛',title:'CVE',page:'tab-cve'},
+      {icon:'🖥️',title:'Hosting Eklentileri',page:'tab-hosting'},{icon:'⚙️',title:'Ayarlar',page:'tab-settings'},
     ];
     const pageMatches = PAGES.filter(p => p.title.toLowerCase().includes(lower));
     if (pageMatches.length) {
@@ -12863,40 +12580,6 @@ async function _initSmigVmSel() {
 // load resource pools and init smig when tab-settings opens
 const _origLoadSettings = typeof loadSettings === 'function' ? loadSettings : null;
 
-function cveCopyCard(btn, id, severity, score, product, desc, refs) {
-  const nvdUrl = `https://nvd.nist.gov/vuln/detail/${id}`;
-  const text = [
-    `CVE ID   : ${id}`,
-    `Ürün     : ${product}`,
-    `Severity : ${severity}${score != null ? ` (CVSS ${score})` : ''}`,
-    `Açıklama : ${desc}`,
-    `NVD Link : ${nvdUrl}`,
-    refs ? `Kaynaklar: ${refs}` : '',
-  ].filter(Boolean).join('\n');
-
-  navigator.clipboard.writeText(text).then(() => {
-    const icon = btn.querySelector('i');
-    icon.className = 'fa-solid fa-check';
-    btn.style.color = '#22c55e';
-    setTimeout(() => {
-      icon.className = 'fa-solid fa-copy';
-      btn.style.color = '';
-    }, 1800);
-  }).catch(() => {
-    // Fallback for HTTP (no clipboard API)
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;opacity:0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    const icon = btn.querySelector('i');
-    icon.className = 'fa-solid fa-check';
-    btn.style.color = '#22c55e';
-    setTimeout(() => { icon.className = 'fa-solid fa-copy'; btn.style.color = ''; }, 1800);
-  });
-}
 
 </script>
 

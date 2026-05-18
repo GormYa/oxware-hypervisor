@@ -39,6 +39,10 @@ import config
 import credentials as cred_mgr
 import user_manager
 import vm_manager
+
+# ── Rolling perf-sample cache (avoids 600 ms blocking sleep in /perf endpoint) ─
+_perf_cache: dict = {}           # vm_id → {"ts": float, "stats": dict}
+_perf_cache_lock = threading.Lock()
 import network_manager
 import storage_manager
 import system_monitor
@@ -602,477 +606,6 @@ def index():
 @app.route("/docs")
 def docs_page():
     return render_template("docs.html")
-
-# ── CVE Tracker ───────────────────────────────────────────────────────────────
-import urllib.request
-import urllib.parse
-
-# Takip edilen ürünler: id → {label, keyword, in_oxware_stack}
-# in_oxware_stack=True → OXware'de doğrudan çalışıyor (Ubuntu 22.04 + KVM tabanlı)
-CVE_PRODUCTS = {
-    "linux":     {"label": "Linux Kernel", "keyword": "linux kernel",    "in_oxware_stack": True},
-    "kvm":       {"label": "KVM/QEMU",     "keyword": "qemu kvm",        "in_oxware_stack": True},
-    "libvirt":   {"label": "libvirt",      "keyword": "libvirt",         "in_oxware_stack": True},
-    "nginx":     {"label": "Nginx",        "keyword": "nginx",           "in_oxware_stack": True},
-    "openssh":   {"label": "OpenSSH",      "keyword": "openssh",         "in_oxware_stack": True},
-    "openssl":   {"label": "OpenSSL",      "keyword": "openssl",         "in_oxware_stack": True},
-    "python":    {"label": "Python/Flask", "keyword": "python flask",    "in_oxware_stack": True},
-    "vmware":    {"label": "VMware",       "keyword": "vmware",          "in_oxware_stack": False},
-    "proxmox":   {"label": "Proxmox",      "keyword": "proxmox",         "in_oxware_stack": False},
-    "cpanel":    {"label": "cPanel",       "keyword": "cpanel",          "in_oxware_stack": False},
-    "plesk":     {"label": "Plesk",        "keyword": "plesk",           "in_oxware_stack": False},
-    "docker":    {"label": "Docker",       "keyword": "docker",          "in_oxware_stack": False},
-    "wordpress": {"label": "WordPress",    "keyword": "wordpress",       "in_oxware_stack": False},
-}
-
-# Keywords in CVE descriptions that indicate OXware relevance even outside stack products
-_OXWARE_DESC_KEYWORDS = [
-    "qemu", "kvm", "libvirt", "nginx", "openssl", "openssh",
-    "python", "flask", "jwt", "socket.io", "socketio",
-    "ubuntu", "debian", "linux kernel", "privilege escalation",
-    "remote code execution", "rce", "authentication bypass",
-    "container escape", "hypervisor", "virtual machine",
-]
-
-_OXWARE_STACK_PRODUCT_IDS = {pid for pid, p in CVE_PRODUCTS.items() if p.get("in_oxware_stack")}
-
-# Ubuntu 22.04 (Jammy) software versions — CVEs affecting OLDER versions are not relevant.
-# Anything patched before these versions is already fixed on a standard jammy install.
-_OXWARE_MIN_VERSIONS = {
-    # published year cutoff per product (CVEs before this year very unlikely to affect Ubuntu 22.04)
-    "linux":   2021,   # kernel 5.15+
-    "kvm":     2021,   # QEMU 6.2+
-    "libvirt": 2021,   # libvirt 8.0+
-    "nginx":   2018,   # nginx 1.18+
-    "openssh": 2020,   # OpenSSH 8.9+
-    "openssl": 2020,   # OpenSSL 3.0+
-    "python":  2020,   # Python 3.10+, Flask 2+
-}
-
-def _mark_affects_oxware(cve_item: dict, product_id: str) -> dict:
-    """Add affects_oxware=True if this CVE is relevant to OXware's runtime stack.
-
-    Rules:
-    1. Must be published on or after the min-year for that product (old patched versions filtered out)
-    2. Product in OXware stack AND severity MEDIUM/HIGH/CRITICAL
-    3. OR: description mentions stack components AND severity HIGH/CRITICAL
-    """
-    severity = cve_item.get("severity", "UNKNOWN")
-    desc_lower = cve_item.get("description", "").lower()
-    published = cve_item.get("published", "")
-
-    # Extract publish year (format: YYYY-MM-DD)
-    try:
-        pub_year = int(published[:4])
-    except (ValueError, TypeError):
-        pub_year = 0
-
-    # Version cutoff: skip very old CVEs that don't affect current Ubuntu 22.04 packages
-    min_year = _OXWARE_MIN_VERSIONS.get(product_id, 2020)
-    if pub_year > 0 and pub_year < min_year:
-        cve_item["affects_oxware"] = False
-        cve_item["filtered_old_version"] = True
-        return cve_item
-
-    # Product is part of OXware stack AND severity is MEDIUM/HIGH/CRITICAL
-    if product_id in _OXWARE_STACK_PRODUCT_IDS and severity in ("MEDIUM", "HIGH", "CRITICAL"):
-        cve_item["affects_oxware"] = True
-        return cve_item
-
-    # Description mentions OXware stack components AND severity HIGH/CRITICAL
-    if any(kw in desc_lower for kw in _OXWARE_DESC_KEYWORDS) and severity in ("HIGH", "CRITICAL"):
-        cve_item["affects_oxware"] = True
-        return cve_item
-
-    cve_item["affects_oxware"] = False
-    return cve_item
-
-_CVE_CACHE: dict = {}   # cache_key → {data, fetched_at}
-_CVE_TTL = 1800         # 30 dk cache
-
-# CIRCL vendor/product mapping for fallback API
-_CIRCL_MAPPING = {
-    "linux":   ("linux", "linux_kernel"),
-    "kvm":     ("qemu", "qemu"),
-    "libvirt": ("redhat", "libvirt"),
-    "nginx":   ("nginx", "nginx"),
-    "openssh": ("openbsd", "openssh"),
-    "openssl": ("openssl", "openssl"),
-    "python":  ("python", "python"),
-    "vmware":  ("vmware", "esx"),
-    "proxmox": ("proxmox", "virtual_environment"),
-    "docker":  ("docker", "docker"),
-}
-
-def _ssl_ctx():
-    import ssl as _ssl
-    ctx = _ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = _ssl.CERT_NONE
-    return ctx
-
-def _http_get(url: str, headers: dict = None, timeout: int = 20) -> bytes:
-    """Simple GET with SSL bypass."""
-    req = urllib.request.Request(url, headers=headers or {
-        "User-Agent": "OXware-CVE-Tracker/1.0",
-        "Accept": "application/json",
-    })
-    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx()) as r:
-        return r.read()
-
-def _score_to_severity(score) -> str:
-    if score is None: return "UNKNOWN"
-    s = float(score)
-    if s >= 9.0: return "CRITICAL"
-    if s >= 7.0: return "HIGH"
-    if s >= 4.0: return "MEDIUM"
-    return "LOW"
-
-def _fetch_from_nvd(keyword: str, limit: int, years_back: int) -> list:
-    """Try NVD API v2. Raises on failure."""
-    import json as _json
-    from datetime import datetime, timezone, timedelta
-    # NVD date format: yyyy-MM-ddTHH:mm:ss.sss (no timezone suffix — NVD assumes UTC)
-    now = datetime.now(timezone.utc)
-    params: dict = {
-        "keywordSearch": keyword,
-        "resultsPerPage": limit,
-        "startIndex": 0,
-    }
-    if years_back > 0:
-        params["pubStartDate"] = (now - timedelta(days=365 * years_back)).strftime("%Y-%m-%dT00:00:00.000")
-        params["pubEndDate"]   = now.strftime("%Y-%m-%dT23:59:59.999")
-    url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?{urllib.parse.urlencode(params)}"
-    headers = {"User-Agent": "OXware-CVE-Tracker/1.0", "Accept": "application/json"}
-    nvd_key = os.environ.get("NVD_API_KEY", "")
-    if nvd_key:
-        headers["apiKey"] = nvd_key
-    raw = _json.loads(_http_get(url, headers=headers, timeout=25))
-    items = []
-    for vuln in raw.get("vulnerabilities", []):
-        cve  = vuln.get("cve", {})
-        cid  = cve.get("id", "")
-        desc = next((d["value"] for d in cve.get("descriptions", []) if d.get("lang") == "en"), "")
-        metrics = cve.get("metrics", {})
-        score, severity = None, "UNKNOWN"
-        for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
-            if key in metrics and metrics[key]:
-                m  = metrics[key][0]
-                cd = m.get("cvssData", {})
-                score    = cd.get("baseScore")
-                severity = cd.get("baseSeverity") or m.get("baseSeverity", "UNKNOWN")
-                break
-        items.append({
-            "id": cid, "description": desc[:300],
-            "score": score, "severity": severity.upper(),
-            "published": cve.get("published", "")[:10],
-            "refs": [r.get("url","") for r in cve.get("references", [])[:3]],
-            "source": "nvd",
-        })
-    return items
-
-def _fetch_from_circl(product_id: str, years_back: int) -> list:
-    """CIRCL CVE Search API (cve.circl.lu) — EU-hosted, no auth needed. Raises on failure."""
-    import json as _json
-    from datetime import datetime, timezone, timedelta
-    mapping = _CIRCL_MAPPING.get(product_id)
-    if not mapping:
-        raise ValueError(f"No CIRCL mapping for {product_id}")
-    vendor, product = mapping
-    url = f"https://cve.circl.lu/api/search/{vendor}/{product}"
-    raw = _json.loads(_http_get(url, timeout=20))
-    # CIRCL returns list directly
-    vulns = raw if isinstance(raw, list) else raw.get("results", [])
-    cutoff_year = (datetime.now(timezone.utc).year - years_back) if years_back > 0 else 0
-    items = []
-    for v in vulns[:30]:
-        cid  = v.get("id", "") or v.get("cve_id", "")
-        desc = v.get("summary", "") or v.get("description", "")
-        pub  = (v.get("Published") or v.get("published", ""))[:10]
-        # Year filter
-        try:
-            if cutoff_year and int(pub[:4]) < cutoff_year:
-                continue
-        except (ValueError, TypeError):
-            pass
-        score = v.get("cvss3") or v.get("cvss")
-        if isinstance(score, dict):
-            score = score.get("score") or score.get("baseScore")
-        try:
-            score = float(score) if score is not None else None
-        except (ValueError, TypeError):
-            score = None
-        severity = v.get("severity", "") or _score_to_severity(score)
-        refs = v.get("references", [])
-        if isinstance(refs, str):
-            refs = [refs]
-        items.append({
-            "id": cid, "description": str(desc)[:300],
-            "score": score, "severity": severity.upper(),
-            "published": pub,
-            "refs": refs[:3],
-            "source": "circl",
-        })
-    return items
-
-# GitHub Advisory only works reliably for package-manager ecosystems.
-# Infrastructure C libs (linux, kvm, libvirt, nginx, openssh, openssl) are NOT
-# in pip/npm/cargo — GitHub Advisory keyword search returns completely unrelated
-# advisories for those. Skip GitHub Advisory for these products.
-_GH_SKIP_PRODUCTS = {"linux", "kvm", "libvirt", "nginx", "openssh", "openssl"}
-
-# GitHub ecosystem + exact package name per product (strict match, not keyword)
-_GH_PACKAGES = {
-    "python":    [("pip", "flask"), ("pip", "werkzeug"), ("pip", "jinja2"),
-                  ("pip", "cryptography"), ("pip", "urllib3"), ("pip", "requests")],
-    "docker":    [("go", "github.com/docker/docker")],
-    "wordpress": [("composer", "wordpress/wordpress")],
-    "vmware":    [],   # no package manager — skip
-    "proxmox":   [],   # no package manager — skip
-    "cpanel":    [],   # no package manager — skip
-    "plesk":     [],   # no package manager — skip
-}
-
-def _fetch_from_github(product_id: str, keyword: str, years_back: int) -> list:
-    """GitHub Advisory Database API — ONLY for package-manager-based products.
-    Uses /advisories?ecosystem=X&package=Y (strict match) instead of keyword search
-    to avoid returning completely unrelated advisories.
-    Raises ValueError for infrastructure products (use CIRCL/NVD instead).
-    """
-    import json as _json
-    from datetime import datetime, timezone, timedelta
-
-    if product_id in _GH_SKIP_PRODUCTS:
-        raise ValueError(f"{product_id} is infrastructure — GitHub Advisory not applicable")
-
-    packages = _GH_PACKAGES.get(product_id, [])
-    if not packages:
-        raise ValueError(f"No GitHub package mapping for {product_id}")
-
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=365 * years_back)).strftime("%Y-%m-%dT00:00:00Z") if years_back > 0 else None
-    gh_token = os.environ.get("GITHUB_TOKEN", "")
-    headers = {
-        "User-Agent": "OXware-CVE-Tracker/1.0",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    if gh_token:
-        headers["Authorization"] = f"Bearer {gh_token}"
-
-    all_items = []
-    seen_ids = set()
-    for eco, pkg in packages:
-        params = {"per_page": 20, "type": "reviewed", "ecosystem": eco, "package": pkg}
-        if cutoff:
-            params["published"] = f">={cutoff}"
-        url = "https://api.github.com/advisories?" + urllib.parse.urlencode(params)
-        try:
-            raw = _json.loads(_http_get(url, headers=headers, timeout=20))
-        except Exception:
-            continue
-        for adv in raw:
-            cid = adv.get("cve_id") or ""
-            if not cid or cid in seen_ids:
-                continue
-            seen_ids.add(cid)
-            desc  = adv.get("description", "") or adv.get("summary", "")
-            pub   = (adv.get("published_at") or "")[:10]
-            score = None
-            severity = (adv.get("severity") or "UNKNOWN").upper()
-            cvss = adv.get("cvss", {}) or {}
-            if isinstance(cvss, dict):
-                score = cvss.get("score")
-            if score is None:
-                score = adv.get("cvss_score")
-            try:
-                score = float(score) if score is not None else None
-            except (ValueError, TypeError):
-                score = None
-            if severity == "UNKNOWN" and score is not None:
-                severity = _score_to_severity(score)
-            refs = [adv.get("html_url", "")] if adv.get("html_url") else []
-            all_items.append({
-                "id": cid, "description": str(desc)[:300],
-                "score": score, "severity": severity,
-                "published": pub, "refs": refs[:3],
-                "source": "github",
-            })
-    if not all_items:
-        raise ValueError(f"No GitHub advisories found for {product_id}")
-    return all_items
-
-def _fetch_cves(keyword: str, product_id: str, limit: int = 20, years_back: int = 3) -> tuple:
-    """Fetch CVEs: NVD → CIRCL → GitHub Advisory. Returns (items, error_str|None)."""
-    errors = {}
-    # 1. NVD
-    try:
-        items = _fetch_from_nvd(keyword, limit, years_back)
-        log.debug("CVE NVD OK: %s (%d)", keyword, len(items))
-        return [_mark_affects_oxware({**i, "product_id": product_id}, product_id) for i in items], None
-    except Exception as e:
-        errors["nvd"] = str(e)
-        log.warning("NVD hata (%s): %s", keyword, e)
-    # 2. CIRCL
-    try:
-        items = _fetch_from_circl(product_id, years_back)
-        log.debug("CVE CIRCL OK: %s (%d)", product_id, len(items))
-        return [_mark_affects_oxware({**i, "product_id": product_id}, product_id) for i in items], None
-    except Exception as e:
-        errors["circl"] = str(e)
-        log.warning("CIRCL hata (%s): %s", product_id, e)
-    # 3. GitHub Advisory
-    try:
-        items = _fetch_from_github(product_id, keyword, years_back)
-        log.debug("CVE GitHub OK: %s (%d)", product_id, len(items))
-        return [_mark_affects_oxware({**i, "product_id": product_id}, product_id) for i in items], None
-    except Exception as e:
-        errors["github"] = str(e)
-        log.warning("GitHub Advisory hata (%s): %s", product_id, e)
-    err_summary = " | ".join(f"{k}: {v[:80]}" for k, v in errors.items())
-    return [], err_summary
-
-@app.route("/api/cve/debug")
-@require_auth
-@require_role("admin", "administrator")
-def api_cve_debug():
-    """Test connectivity to each CVE source. Returns reachability status."""
-    import json as _json
-    results = {}
-    tests = [
-        ("nvd",    "https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch=nginx&resultsPerPage=1"),
-        ("circl",  "https://cve.circl.lu/api/last/1"),
-        ("github", "https://api.github.com/advisories?per_page=1&type=reviewed"),
-    ]
-    for name, url in tests:
-        try:
-            data = _http_get(url, timeout=10)
-            parsed = _json.loads(data)
-            results[name] = {"ok": True, "bytes": len(data), "sample": str(parsed)[:80]}
-        except Exception as e:
-            results[name] = {"ok": False, "error": str(e)[:200]}
-    return ok(connectivity=results)
-
-@app.route("/api/cve/products")
-@require_auth
-def api_cve_products():
-    return ok(products=CVE_PRODUCTS)
-
-@app.route("/api/cve/search")
-@require_auth
-def api_cve_search():
-    product_id = request.args.get("product", "").lower()
-    force      = request.args.get("force", "0") == "1"
-    oxware_only = request.args.get("oxware_only", "1") == "1"   # default: sadece OXware stack
-    try:
-        years_back = int(request.args.get("years_back", "1"))   # default: son 1 yıl
-        years_back = max(0, min(years_back, 10))
-    except ValueError:
-        years_back = 1
-
-    if product_id and product_id not in CVE_PRODUCTS:
-        return err(f"Bilinmeyen ürün: {product_id}", 400)
-
-    if product_id:
-        targets = {product_id: CVE_PRODUCTS[product_id]}
-    elif oxware_only:
-        # Sadece OXware runtime stack ürünleri (6 adet, 13 değil)
-        targets = {pid: p for pid, p in CVE_PRODUCTS.items() if p.get("in_oxware_stack")}
-    else:
-        targets = CVE_PRODUCTS
-
-    results = {}
-    fetch_errors = []
-    stale_pids   = []
-
-    # Önce cache'e bak — hepsi tazeyse anında dön
-    for pid, pinfo in targets.items():
-        cache_key = f"{pid}:{years_back}"
-        cached = _CVE_CACHE.get(cache_key)
-        if not force and cached and (time.time() - cached["fetched_at"]) < _CVE_TTL:
-            results[pid] = cached["data"]
-        else:
-            stale_pids.append(pid)
-            # Stale cache varsa göster, arka planda güncellenir
-            if cached and not force:
-                results[pid] = cached["data"]
-
-    if stale_pids:
-        # Paralel fetch — ThreadPoolExecutor, NVD rate limit: max 3 eş zamanlı
-        import concurrent.futures as _cf
-        has_api_key = bool(os.environ.get("NVD_API_KEY", ""))
-        max_workers = 3 if has_api_key else 2   # NVD: 5 req/30s without key
-
-        def _fetch_one(pid):
-            pinfo = CVE_PRODUCTS[pid]
-            cves, err_ = _fetch_cves(pinfo["keyword"], product_id=pid, years_back=years_back)
-            return pid, cves, err_
-
-        with _cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures = {ex.submit(_fetch_one, pid): pid for pid in stale_pids}
-            for fut in _cf.as_completed(futures, timeout=60):
-                try:
-                    pid, cves, fetch_err = fut.result(timeout=60)
-                    cache_key = f"{pid}:{years_back}"
-                    cached = _CVE_CACHE.get(cache_key)
-                    if fetch_err:
-                        fetch_errors.append(f"{CVE_PRODUCTS[pid]['label']}: {fetch_err}")
-                        if cached:
-                            cves = cached["data"]   # stale on error
-                    _CVE_CACHE[cache_key] = {"data": cves, "fetched_at": time.time()}
-                    results[pid] = cves
-                except Exception as _fe:
-                    pid = futures[fut]
-                    fetch_errors.append(f"{CVE_PRODUCTS[pid]['label']}: timeout/error")
-
-    # Global deduplication: same CVE ID must not appear under multiple products.
-    # Priority: OXware-stack products first, then alphabetical. Keep first seen.
-    _PRIORITY_ORDER = ["linux", "kvm", "libvirt", "nginx", "openssh", "openssl",
-                       "python", "docker", "wordpress", "vmware", "proxmox", "cpanel", "plesk"]
-    seen_cve_ids: set = set()
-    for pid in _PRIORITY_ORDER:
-        if pid not in results:
-            continue
-        deduped = []
-        for c in results[pid]:
-            cid = c.get("id") or c.get("cve_id") or ""
-            if cid and cid in seen_cve_ids:
-                continue
-            if cid:
-                seen_cve_ids.add(cid)
-            deduped.append(c)
-        results[pid] = deduped
-    # Also dedup any products not in priority list
-    for pid in results:
-        if pid in _PRIORITY_ORDER:
-            continue
-        deduped = []
-        for c in results[pid]:
-            cid = c.get("id") or c.get("cve_id") or ""
-            if cid and cid in seen_cve_ids:
-                continue
-            if cid:
-                seen_cve_ids.add(cid)
-            deduped.append(c)
-        results[pid] = deduped
-
-    # Count OXware-affecting CVEs across all products
-    oxware_count = sum(
-        1 for pid_cves in results.values()
-        for c in pid_cves if c.get("affects_oxware")
-    )
-
-    # Always return 200 — frontend shows warning banner if fetch_errors present.
-    if fetch_errors and not any(results.values()):
-        return ok(results=results, products=CVE_PRODUCTS,
-                  oxware_stack=list(_OXWARE_STACK_PRODUCT_IDS),
-                  oxware_count=oxware_count,
-                  fetch_errors=fetch_errors,
-                  warning="NVD API geçici olarak erişilemiyor. Lütfen daha sonra tekrar deneyin.")
-
-    return ok(results=results, products=CVE_PRODUCTS,
-              oxware_stack=list(_OXWARE_STACK_PRODUCT_IDS),
-              oxware_count=oxware_count,
-              fetch_errors=fetch_errors if fetch_errors else None)
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
@@ -1817,65 +1350,71 @@ def api_vm_stats(vm_id):
 @require_auth
 def api_vm_perf(vm_id):
     """
-    Live performance metrics: two samples 600ms apart → deltas → percentages.
-    Returns: cpu_percent, ram_percent, ram_used_mb, ram_total_mb,
-             disk_read_mbs, disk_write_mbs, net_rx_mbs, net_tx_mbs
+    Live performance metrics via rolling sample cache — no blocking sleep.
+    First call returns RAM instantly (CPU/IO = 0); subsequent calls diff
+    against the previous sample using the real elapsed time.
     """
-    import time as _t
     try:
-        s1 = vm_manager.get_vm_stats(vm_id)
-        if s1.get("state") == "stopped":
+        s2 = vm_manager.get_vm_stats(vm_id)
+        if s2.get("state") == "stopped":
+            with _perf_cache_lock:
+                _perf_cache.pop(vm_id, None)
             return ok(state="stopped", cpu_percent=0, ram_percent=0,
                       ram_used_mb=0, ram_total_mb=0,
                       disk_read_mbs=0, disk_write_mbs=0,
                       net_rx_mbs=0, net_tx_mbs=0)
-        t1 = _t.monotonic()
-        _t.sleep(0.6)
-        s2 = vm_manager.get_vm_stats(vm_id)
-        t2 = _t.monotonic()
-        elapsed = (t2 - t1) or 0.6
 
-        vcpus     = max(s1.get("vcpus", 1), 1)
+        t2 = time.monotonic()
+        with _perf_cache_lock:
+            prev = _perf_cache.get(vm_id)
+            _perf_cache[vm_id] = {"ts": t2, "stats": s2}
+
+        mem_kb  = s2.get("memory_kb", 0)
+        max_kb  = s2.get("max_memory_kb", 0) or mem_kb or 1
+        ram_pct = min(100.0, (mem_kb / max_kb) * 100) if max_kb else 0
+
+        # No previous sample or sample too stale → return RAM, zeroes for deltas
+        if not prev or (t2 - prev["ts"]) > 15.0:
+            return ok(state=s2.get("state", "running"),
+                      cpu_percent=0.0,
+                      ram_percent=round(ram_pct, 2),
+                      ram_used_mb=round(mem_kb / 1024, 1),
+                      ram_total_mb=round(max_kb / 1024, 1),
+                      disk_read_mbs=0.0, disk_write_mbs=0.0,
+                      net_rx_mbs=0.0, net_tx_mbs=0.0)
+
+        s1      = prev["stats"]
+        elapsed = max(t2 - prev["ts"], 0.1)
+
+        vcpus     = max(s2.get("vcpus", 1), 1)
         cpu_delta = s2.get("cpu_time_ns", 0) - s1.get("cpu_time_ns", 0)
         cpu_pct   = min(100.0, max(0.0,
                         (cpu_delta / (elapsed * 1e9 * vcpus)) * 100))
 
-        mem_kb    = s2.get("memory_kb", 0)
-        max_kb    = s2.get("max_memory_kb", 0) or mem_kb or 1
-        ram_pct   = min(100.0, (mem_kb / max_kb) * 100) if max_kb else 0
-        ram_used  = mem_kb / 1024
-        ram_total = max_kb / 1024
-
-        # Disk deltas
-        d1s = s1.get("disk_stats", {})
-        d2s = s2.get("disk_stats", {})
-        drb = sum((d2s.get(k, {}).get("read_bytes", 0)  - d1s.get(k, {}).get("read_bytes", 0))
-                  for k in d2s)
-        dwb = sum((d2s.get(k, {}).get("write_bytes", 0) - d1s.get(k, {}).get("write_bytes", 0))
-                  for k in d2s)
+        d1s   = s1.get("disk_stats", {})
+        d2s   = s2.get("disk_stats", {})
+        drb   = sum((d2s.get(k, {}).get("read_bytes",  0) - d1s.get(k, {}).get("read_bytes",  0)) for k in d2s)
+        dwb   = sum((d2s.get(k, {}).get("write_bytes", 0) - d1s.get(k, {}).get("write_bytes", 0)) for k in d2s)
         disk_r = max(0.0, drb / elapsed / 1_048_576)
         disk_w = max(0.0, dwb / elapsed / 1_048_576)
 
-        # Net deltas
-        n1s = s1.get("net_stats", {})
-        n2s = s2.get("net_stats", {})
-        rxb = sum((n2s.get(k, {}).get("rx_bytes", 0) - n1s.get(k, {}).get("rx_bytes", 0))
-                  for k in n2s)
-        txb = sum((n2s.get(k, {}).get("tx_bytes", 0) - n1s.get(k, {}).get("tx_bytes", 0))
-                  for k in n2s)
+        n1s   = s1.get("net_stats", {})
+        n2s   = s2.get("net_stats", {})
+        rxb   = sum((n2s.get(k, {}).get("rx_bytes", 0) - n1s.get(k, {}).get("rx_bytes", 0)) for k in n2s)
+        txb   = sum((n2s.get(k, {}).get("tx_bytes", 0) - n1s.get(k, {}).get("tx_bytes", 0)) for k in n2s)
         net_rx = max(0.0, rxb / elapsed / 1_048_576)
         net_tx = max(0.0, txb / elapsed / 1_048_576)
 
         return ok(
-            state       = s2.get("state", "running"),
-            cpu_percent = round(cpu_pct, 2),
-            ram_percent = round(ram_pct, 2),
-            ram_used_mb = round(ram_used, 1),
-            ram_total_mb= round(ram_total, 1),
+            state          = s2.get("state", "running"),
+            cpu_percent    = round(cpu_pct, 2),
+            ram_percent    = round(ram_pct, 2),
+            ram_used_mb    = round(mem_kb / 1024, 1),
+            ram_total_mb   = round(max_kb / 1024, 1),
             disk_read_mbs  = round(disk_r, 3),
             disk_write_mbs = round(disk_w, 3),
-            net_rx_mbs  = round(net_rx, 3),
-            net_tx_mbs  = round(net_tx, 3),
+            net_rx_mbs     = round(net_rx, 3),
+            net_tx_mbs     = round(net_tx, 3),
         )
     except Exception as e:
         return err(e, 500)
@@ -8028,12 +7567,60 @@ def api_provision_templates():
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+def _ensure_ssl_cert(cert_path: str, key_path: str) -> bool:
+    """
+    Auto-generate a self-signed TLS certificate if cert/key don't exist.
+    Uses OpenSSL via subprocess. Returns True if cert is ready (existing or newly generated).
+    """
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return True
+    try:
+        os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+        import socket as _sock_mod
+        hostname = _sock_mod.gethostname() or "oxware-hypervisor"
+        subj = (
+            f"/C=TR/ST=OXware/L=OXware/O=OXware Hypervisor"
+            f"/CN={hostname}"
+        )
+        result = subprocess.run(
+            [
+                "openssl", "req", "-x509",
+                "-newkey", "rsa:4096",
+                "-keyout", key_path,
+                "-out",    cert_path,
+                "-days",   "3650",
+                "-nodes",
+                "-subj",   subj,
+            ],
+            capture_output=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            os.chmod(key_path,  0o600)
+            os.chmod(cert_path, 0o644)
+            log.info("SSL sertifikası otomatik oluşturuldu: %s", cert_path)
+            return True
+        else:
+            log.error("SSL sertifikası oluşturulamadı: %s", result.stderr.decode())
+            return False
+    except FileNotFoundError:
+        log.error("openssl bulunamadı — SSL devre dışı kalacak")
+        return False
+    except Exception as _ssl_e:
+        log.error("SSL sertifikası oluşturma hatası: %s", _ssl_e)
+        return False
+
+
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.0 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
     log.info("Dinleniyor: %s:%s (SSL: %s)", config.HOST, config.PORT, config.SSL_ENABLED)
+
+    # Auto-generate self-signed cert if SSL is enabled but files are missing
+    if config.SSL_ENABLED:
+        _ensure_ssl_cert(config.SSL_CERT, config.SSL_KEY)
 
     use_ssl = (
         config.SSL_ENABLED

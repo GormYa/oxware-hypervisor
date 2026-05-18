@@ -347,7 +347,7 @@
     <a href="#hosting"><i class="fas fa-cloud"></i> Hosting Integration</a>
 
     <div class="sidebar-section">Reference</div>
-    <a href="#api"><i class="fas fa-code"></i> API Reference</a>
+    <a href="#api"><i class="fas fa-flask"></i> API Reference &amp; Explorer</a>
     <a href="#config"><i class="fas fa-gear"></i> Configuration</a>
     <a href="#troubleshooting"><i class="fas fa-wrench"></i> Troubleshooting</a>
   </aside>
@@ -858,6 +858,27 @@ curl -X POST https://localhost:8006/api/import/ova \
     <!-- API -->
     <section id="api">
       <h2>API Reference</h2>
+      <p>OXware ships a built-in <strong>interactive API explorer</strong> at <code>/api/docs</code>. Open it in your browser to browse every endpoint, see required parameters, and fire live requests against your running instance — no external tools needed.</p>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin:16px 0;display:flex;align-items:center;gap:14px">
+        <i class="fas fa-flask" style="font-size:22px;color:var(--accent);flex-shrink:0"></i>
+        <div>
+          <div style="font-weight:600;margin-bottom:4px">Interactive API Explorer</div>
+          <div style="color:var(--text-muted);font-size:13px">Navigate to <code>https://&lt;your-host&gt;:8006/api/docs</code> — authenticate once, then try any endpoint live. Shows request schemas, example payloads, and response formats for all 23+ endpoints.</div>
+        </div>
+      </div>
+
+      <h3>How the API works</h3>
+      <p>Login via <code>POST /api/auth/login</code> to get a JWT token. Pass it as a Bearer header on every subsequent call, or rely on the session cookie set by the dashboard.</p>
+      <pre><code># 1. Get token
+curl -k -X POST https://host:8006/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"yourpass"}'
+
+# 2. Use token
+curl -k https://host:8006/api/vms \
+  -H "Authorization: Bearer &lt;token&gt;"</code></pre>
+
       <p>All API requests require a JWT Bearer token in the <code>Authorization</code> header, or a valid session cookie.</p>
       <pre><code>Authorization: Bearer &lt;token&gt;</code></pre>
 
