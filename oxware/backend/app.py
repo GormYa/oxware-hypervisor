@@ -6943,8 +6943,9 @@ _IMPORT_DIR = _pathlib.Path("/var/lib/oxware/imports")
 
 @app.route("/api/import/ova", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator", "operator")
 def api_import_ova():
-    """OVA/OVF dosyasından VM içe aktar."""
+    """OVA/OVF/VMDK/VHD dosyasından VM içe aktar. admin ve operator rolü gerekli."""
     if "file" not in request.files:
         return jsonify({"error": "file alanı gerekli"}), 400
     f = request.files["file"]

@@ -11652,23 +11652,29 @@ async function doImportOva() {
   const fileInput = document.getElementById('ova-file-input');
   const statusEl = document.getElementById('ova-import-status');
   if (!fileInput.files.length) { toast('Dosya seçin', 'error'); return; }
+  const tok = TOKEN();
+  if (!tok) { toast('Oturumunuz sona ermiş, tekrar giriş yapın', 'error'); return; }
   const file = fileInput.files[0];
-  statusEl.textContent = '⏳ Yükleniyor...';
+  const sizeMB = (file.size / 1048576).toFixed(1);
+  statusEl.textContent = `⏳ Yükleniyor... (${sizeMB} MB)`;
   const fd = new FormData();
   fd.append('file', file);
   try {
+    // NOTE: do NOT set Content-Type — browser sets multipart/form-data + boundary automatically
     const resp = await fetch('/api/import/ova', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+      headers: { 'Authorization': 'Bearer ' + tok },
       body: fd
     });
-    const d = await resp.json();
+    const d = await resp.json().catch(() => ({}));
+    if (resp.status === 401) { _forceLogout(); return; }
     if (!resp.ok) throw new Error(d.error || resp.statusText);
     statusEl.innerHTML = `<span style="color:#34d399">✅ ${escHtml(d.message)}</span>`;
-    toast('OVA import başlatıldı', 'success');
-    setTimeout(() => { document.getElementById('modal-ova-import').style.display='none'; loadVMs(); }, 2000);
+    toast('Import başlatıldı — arka planda devam ediyor', 'success');
+    setTimeout(() => { document.getElementById('modal-ova-import').style.display='none'; loadVMs(); }, 3000);
   } catch(e) {
-    statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${e.message}</span>`;
+    statusEl.innerHTML = `<span style="color:#f43f5e">❌ ${escHtml(e.message)}</span>`;
+    toast(e.message, 'error');
   }
 }
 
