@@ -709,6 +709,6 @@ Bug reports and feature requests → [GitHub Issues](https://github.com/ShinnAsu
 
 ## License
 
-[MIT License](LICENSE) — © 2024–2026 Ada Gürsoy / ShinnAsukha
+[MIT License](LICENSE) — © 2026 Ada Gürsoy
 
 Free to use, modify, and distribute. Commercial use permitted. Attribution appreciated.
