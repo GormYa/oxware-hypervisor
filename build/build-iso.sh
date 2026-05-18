@@ -27,8 +27,8 @@ echo "$OXWARE_VERSION" > "$VERSION_FILE"
 # ── Paths ─────────────────────────────────────────────────────────────────────
 # Debian 12 Live Standard — masaüstü yok, sadece temel sistem
 # "standard" variant ~700MB, bizim ihtiyacımıza tam uygun
-DEBIAN_LIVE_URL="https://cdimage.debian.org/cdimage/archive/12.10.0-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
-DEBIAN_LIVE_FALLBACK="https://ftp.halifax.rwth-aachen.de/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
+DEBIAN_LIVE_URL="https://ftp.halifax.rwth-aachen.de/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
+DEBIAN_LIVE_FALLBACK="https://mirror.init7.net/debian-cd/current-live/amd64/iso-hybrid/debian-live-12.10.0-amd64-standard.iso"
 ISO_CACHE="/tmp/debian-12-live-standard-amd64.iso"
 WORK_DIR="/tmp/oxware-iso-build"
 SQUASHFS_ROOT="$WORK_DIR/squashfs-root"
