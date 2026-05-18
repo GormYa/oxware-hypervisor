@@ -1174,20 +1174,36 @@ def clone_vm(vm_id, new_name):
     if not src_disk:
         raise ValueError("Kaynak VM diski bulunamadı")
 
-    new_disk = os.path.join(config.DISK_DIR, f"{new_name}.qcow2")
-    subprocess.run(
-        ["qemu-img", "create", "-f", "qcow2", "-b", src_disk, "-F", "qcow2", new_disk],
-        check=True, capture_output=True
-    )
-
     conn = _connect()
     try:
+        # ── Unique name: if 'new_name' already taken, append -2, -3, … ──────
+        import uuid as _uuid
+
+        def _name_exists(conn, name):
+            try:
+                conn.lookupByName(name)
+                return True
+            except Exception:
+                return False
+
+        final_name = new_name
+        if _name_exists(conn, new_name):
+            counter = 2
+            while _name_exists(conn, f"{new_name}-{counter}"):
+                counter += 1
+            final_name = f"{new_name}-{counter}"
+
+        new_disk = os.path.join(config.DISK_DIR, f"{final_name}.qcow2")
+        subprocess.run(
+            ["qemu-img", "create", "-f", "qcow2", "-b", src_disk, "-F", "qcow2", new_disk],
+            check=True, capture_output=True
+        )
+
         dom = conn.lookupByUUIDString(vm_id)
         xml_str = dom.XMLDesc()
         root = ET.fromstring(xml_str)
 
-        root.find("name").text = new_name
-        import uuid as _uuid
+        root.find("name").text = final_name
         root.find("uuid").text = str(_uuid.uuid4())
 
         for source_el in root.findall(".//disk[@device='disk']/source"):
@@ -1204,6 +1220,6 @@ def clone_vm(vm_id, new_name):
         reg[new_dom.UUIDString()] = vnc_port
         _save_vnc_registry(reg)
 
-        return {"id": new_dom.UUIDString(), "name": new_name, "cloned_from": vm_id}
+        return {"id": new_dom.UUIDString(), "name": final_name, "cloned_from": vm_id}
     finally:
         conn.close()
