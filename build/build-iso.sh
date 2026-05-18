@@ -217,7 +217,11 @@ if ! command -v calamares &>/dev/null; then
 fi
 _CALA=$(command -v calamares 2>/dev/null || echo "")
 echo "[INFO] calamares: ${_CALA:-BULUNAMADI}"
-[ -z "$_CALA" ] && echo "[ERROR] Calamares kurulum BAŞARISIZ" && exit 1
+if [ -z "$_CALA" ]; then
+    echo "[ERROR] Calamares kurulum BAŞARISIZ"
+    exit 1
+fi
+echo "[OK] Chroot tamamlandı"
 CHROOT
 
 _umount_all
