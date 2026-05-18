@@ -1244,8 +1244,16 @@ def api_login():
             )
         except Exception:
             pass
-    ev.info(f"Giriş başarılı: {username}", category="auth")
-    return ok(token=token, username=username)
+    # Resolve role for frontend
+    try:
+        _primary = cred_mgr.get_username()
+        _role = "administrator" if username == _primary else (
+            _ldap_role or user_manager.get_user_role(username)
+        )
+    except Exception:
+        _role = "administrator"
+    ev.info(f"Giriş başarılı: {username} ({_role})", category="auth")
+    return ok(token=token, username=username, role=_role)
 
 @app.route("/api/auth/2fa/verify-login", methods=["POST"])
 def api_2fa_verify_login():
@@ -1283,8 +1291,13 @@ def api_2fa_verify_login():
             )
         except Exception:
             pass
-    ev.info(f"2FA giriş başarılı: {username} / {request.remote_addr}", category="auth")
-    return ok(token=token, username=username)
+    try:
+        _2fa_role = "administrator" if username == cred_mgr.get_username() \
+            else user_manager.get_user_role(username)
+    except Exception:
+        _2fa_role = "administrator"
+    ev.info(f"2FA giriş başarılı: {username} ({_2fa_role}) / {request.remote_addr}", category="auth")
+    return ok(token=token, username=username, role=_2fa_role)
 
 @app.route("/api/auth/2fa/status", methods=["GET"])
 @require_auth

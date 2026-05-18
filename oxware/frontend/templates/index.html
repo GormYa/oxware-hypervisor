@@ -1553,14 +1553,16 @@
         <!-- ─────── VMs List Page ─────── -->
         <div class="page" id="page-vms">
           <div class="section-header">
-            <h2>Sanal Makineler</h2>
+            <h2 id="vms-page-title">Sanal Makineler</h2>
             <div class="spacer"></div>
-            <button class="btn" onclick="exportPDF('vms')" title="PDF olarak indir">📄 PDF</button>
             <button class="btn" onclick="loadVMs()">↻ Yenile</button>
-            <button class="btn" onclick="openModal('modal-vm-template')">📋 Şablonlar</button>
-            <button class="btn primary" onclick="openCreateVMModal()">+ Yeni VM</button>
-            <button class="btn" onclick="openAiVmModal()" style="color:var(--accent-lt)" title="AI ile VM oluştur">🤖 AI ile Oluştur</button>
-            <button class="btn" onclick="openImportOvaModal()" style="color:#34d399">⬆ OVA Import</button>
+            <span id="vms-admin-btns">
+              <button class="btn" onclick="exportPDF('vms')" title="PDF olarak indir">📄 PDF</button>
+              <button class="btn" onclick="openModal('modal-vm-template')">📋 Şablonlar</button>
+              <button class="btn primary" onclick="openCreateVMModal()">+ Yeni VM</button>
+              <button class="btn" onclick="openAiVmModal()" style="color:var(--accent-lt)" title="AI ile VM oluştur">🤖 AI ile Oluştur</button>
+              <button class="btn" onclick="openImportOvaModal()" style="color:#34d399">⬆ OVA Import</button>
+            </span>
             <input id="vmTagFilter" type="text" placeholder="🏷 Etiket filtrele..." style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);font-size:13px;min-width:160px" oninput="filterVmsByTag(this.value)">
           </div>
 
@@ -5740,10 +5742,35 @@ function buildContextNav(type) {
   const nav = document.getElementById("nav-panel");
   // Role-based access control
   const role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "administrator").toLowerCase();
-  const isAdmin = role === "administrator" || role === "admin";
+  const isAdmin    = role === "administrator" || role === "admin";
   const isOperator = role === "operator" || isAdmin;
-  // viewer = minimum access
+  const isVmUser   = role === "vm-user";
   let html = "";
+
+  // vm-user: sadece Özet + atanan VM'ler
+  if (isVmUser) {
+    html = `
+  <div class="ctx-section-header" onclick="toggleNavSection(this)">
+    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+  </div>
+  <div class="ctx-section-body">
+    <div class="ctx-item active" data-page="summary" onclick="navigate('summary');closeMobileNav()">
+      <i class="fa-solid fa-gauge-high fa-fw"></i>${t('summary')}
+    </div>
+  </div>
+  <div class="ctx-section-header" onclick="toggleNavSection(this)">
+    <span>Sanal Makineler</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+  </div>
+  <div class="ctx-section-body">
+    <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
+      <i class="fa-solid fa-server fa-fw"></i>VM'lerim
+      <span class="vm-expand-btn" onclick="toggleVmSubList(event)">▸</span>
+    </div>
+    <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
+  </div>`;
+    nav.innerHTML = html;
+    return;
+  }
 
   if (type === "node") {
     html = `
@@ -6226,7 +6253,19 @@ async function ipamConfirmVMAssign() {
 }
 
 /* ══ Navigate ══ */
+// Pages vm-user is allowed to see
+const _VM_USER_ALLOWED_PAGES = new Set(["summary", "vms", "vm-detail"]);
+
+function _currentRole() {
+  return (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "administrator").toLowerCase();
+}
+
 function navigate(page) {
+  // vm-user: block all restricted pages
+  if (_currentRole() === "vm-user" && !_VM_USER_ALLOWED_PAGES.has(page)) {
+    toast("Bu sayfaya erişim izniniz yok", "error");
+    page = "summary";
+  }
   currentPage = page;
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   const pageEl = document.getElementById("page-" + page);
@@ -6610,10 +6649,12 @@ async function loadVMDetail(vmId) {
     if (v.state === "paused") {
       actHtml += `<button class="vd-btn success" onclick="vmAction('${v.id}','resume')">▶ Devam Et</button>`;
     }
-    actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${v.id}')" title="SSH servisi etkinleştir">🔑 SSH</button>`;
-    actHtml += `<button class="vd-btn" onclick="vmNatSync('${v.id}')" title="NAT/DNAT güncelle">🔄 NAT Sync</button>`;
-    actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${v.id}','${escHtml(v.name)}')">👤 Atama</button>`;
-    actHtml += `<button class="vd-btn danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')">✕ Sil</button>`;
+    if (_currentRole() !== "vm-user") {
+      actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${v.id}')" title="SSH servisi etkinleştir">🔑 SSH</button>`;
+      actHtml += `<button class="vd-btn" onclick="vmNatSync('${v.id}')" title="NAT/DNAT güncelle">🔄 NAT Sync</button>`;
+      actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${v.id}','${escHtml(v.name)}')">👤 Atama</button>`;
+      actHtml += `<button class="vd-btn danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')">✕ Sil</button>`;
+    }
     document.getElementById("vd-actions").innerHTML = actHtml;
 
     // ── Overview panel ────────────────────────────────────────────────────────
@@ -6663,12 +6704,19 @@ async function loadVMDetail(vmId) {
     document.getElementById("con-vnc-port").textContent = v.vnc_port || "—";
     document.getElementById("con-state").textContent = v.state || "—";
 
+    // Hide restricted tabs + actions for vm-user
+    const isVmUser = _currentRole() === "vm-user";
+    const hwTab    = document.getElementById("vd-tab-hw");
+    const fwTab    = document.getElementById("vd-tab-fw");
+    if (hwTab) hwTab.style.display = isVmUser ? "none" : "";
+    if (fwTab) fwTab.style.display = isVmUser ? "none" : "";
+
     // Autostart in hardware tab
     const autostartCb = document.getElementById("hw-autostart");
     if (autostartCb) autostartCb.checked = !!v.autostart;
 
-    // Load hardware tuning panel
-    loadHardwareConfig(vmId);
+    // Load hardware tuning panel (only for non-vm-user)
+    if (!isVmUser) loadHardwareConfig(vmId);
 
     // Load snapshots (lazy if tab active)
     _loadVdSnapshots(vmId);
@@ -7094,20 +7142,54 @@ async function batchVmDelete() {
 let _vmMetaCache = {}; // { vm_id: {notes, tags, locked} }
 
 async function loadVMs() {
+  const isVmUser = _currentRole() === "vm-user";
+
+  // Adjust page header for vm-user
+  const adminBtns = document.getElementById("vms-admin-btns");
+  if (adminBtns) adminBtns.style.display = isVmUser ? "none" : "";
+  const batchBar = document.getElementById("vm-batch-bar");
+  if (batchBar) batchBar.style.display = isVmUser ? "none" : "";
+  const titleEl = document.getElementById("vms-page-title");
+  if (titleEl) titleEl.textContent = isVmUser ? "VM'lerim" : "Sanal Makineler";
+
   try {
     const data = await api("/vms");
     const vms = data.vms || [];
-    _gsCacheVMs = vms; // update search cache
+    _gsCacheVMs = vms;
     const tbody = document.getElementById("vm-tbody");
     if (!vms.length) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">🖥️</div><h3>Sanal makine yok</h3><p>"+ Yeni VM" ile oluşturun</p></div></td></tr>`;
+      const emptyMsg = isVmUser
+        ? '<h3>Size atanmış VM yok</h3><p>Yöneticinizden VM ataması isteyin.</p>'
+        : '<h3>Sanal makine yok</h3><p>"+ Yeni VM" ile oluşturun</p>';
+      tbody.innerHTML = `<tr><td colspan="${isVmUser?6:8}"><div class="empty-state"><div class="icon">🖥️</div>${emptyMsg}</div></td></tr>`;
       clearVmSelection();
       return;
     }
     tbody.innerHTML = vms.map(v => {
       const disks = v.disks?.map(d => d.device).join(", ") || "—";
-      const nets = v.networks?.map(n => n.network || n.type).join(", ") || "—";
+      const nets  = v.networks?.map(n => n.network || n.type).join(", ") || "—";
       const checked = _selectedVMs.has(v.id) ? 'checked' : '';
+
+      // vm-user: minimal row (no checkboxes, no heavy action buttons)
+      if (isVmUser) {
+        return `<tr data-vmid="${v.id}">
+          <td><a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted)">${v.id.slice(0,8)}</small></td>
+          <td>${stateBadge(v.state)}</td>
+          <td>${v.vcpus} vCPU</td>
+          <td>${(v.memory_mb||0).toLocaleString()} MB</td>
+          <td style="font-size:11px">${escHtml(nets)}</td>
+          <td>
+            <div class="action-btns">
+              ${v.state !== "running"
+                ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat">▶ Başlat</button>`
+                : `<button class="btn sm primary" onclick="openConsole('${v.id}')" title="Konsol">▣ Konsol</button>
+                   <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat">↺</button>`}
+            </div>
+          </td>
+        </tr>`;
+      }
+
+      // Full admin/operator row
       return `<tr data-vmid="${v.id}">
         <td style="width:32px"><input type="checkbox" class="vm-checkbox" data-vmid="${v.id}" ${checked} onchange="toggleVmSelection('${v.id}',this.checked)"></td>
         <td><a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted)">${v.id.slice(0, 8)}</small></td>
@@ -7142,7 +7224,7 @@ async function loadVMs() {
       </tr>`;
     }).join("");
     updateBatchBar();
-    loadAllVmMetadata();
+    if (!isVmUser) loadAllVmMetadata();
   } catch (e) { toast("VM listesi alınamadı: " + e.message, "error"); }
 }
 
