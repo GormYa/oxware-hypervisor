@@ -118,7 +118,8 @@ def security_headers_middleware(app):
     def add_headers(response):
         # /console/ ve /novnc/ sayfaları iframe embed gerektiriyor — frame kısıtlaması uygulanmaz
         path = request.path
-        is_console_path = path.startswith("/console/") or path.startswith("/novnc/")
+        is_console_path = (path.startswith("/console/") or path.startswith("/novnc/")
+                          or path.startswith("/vnc_console/"))
 
         response.headers["X-Content-Type-Options"]    = "nosniff"
         response.headers["X-Frame-Options"]           = "SAMEORIGIN" if is_console_path else "DENY"

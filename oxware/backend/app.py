@@ -11,10 +11,20 @@ import time
 import json
 import hmac
 import logging
+import mimetypes
 import subprocess
 import threading
 import ipaddress
 from datetime import timedelta
+
+# Ensure .js files are served with correct MIME type even on minimal systems
+# (without this, X-Content-Type-Options: nosniff causes browsers to reject
+# ES module dynamic imports when the system mime.types file is missing/incomplete)
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
+mimetypes.add_type("text/css",               ".css")
+mimetypes.add_type("image/svg+xml",          ".svg")
+mimetypes.add_type("application/wasm",       ".wasm")
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -1125,16 +1135,44 @@ def serve_novnc(filename="vnc.html"):
     novnc_dir = config.NOVNC_DIR
     if not os.path.isdir(novnc_dir):
         # Fallback: yaygın kurulum yerleri
-        for d in ["/usr/share/novnc", "/opt/novnc", "/usr/share/novnc/app"]:
+        for d in ["/usr/share/novnc", "/opt/novnc", "/usr/share/novnc/app",
+                  "/usr/share/novnc/utils", "/opt/novnc/utils"]:
             if os.path.isdir(d):
                 novnc_dir = d
                 break
         else:
             return "noVNC bulunamadı. Lütfen sunucuya novnc kurun.", 404
-    resp = send_from_directory(novnc_dir, filename)
+
+    # Path traversal guard + early 404
+    _real_dir = os.path.realpath(novnc_dir)
+    _real_abs = os.path.realpath(os.path.join(novnc_dir, filename))
+    if not _real_abs.startswith(_real_dir + os.sep) and _real_abs != _real_dir:
+        return "Forbidden", 403
+    if not os.path.isfile(_real_abs):
+        return f"noVNC dosyası bulunamadı: {filename}", 404
+
+    # Explicit MIME types — critical for ES module dynamic imports under nosniff
+    _ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    _mime = {
+        "js":   "application/javascript; charset=utf-8",
+        "mjs":  "application/javascript; charset=utf-8",
+        "css":  "text/css; charset=utf-8",
+        "html": "text/html; charset=utf-8",
+        "svg":  "image/svg+xml",
+        "png":  "image/png",
+        "ico":  "image/x-icon",
+        "wasm": "application/wasm",
+        "woff": "font/woff",
+        "woff2":"font/woff2",
+        "map":  "application/json",
+    }.get(_ext)
+
+    resp = send_from_directory(novnc_dir, filename, mimetype=_mime)
     # iframe içinde gösterim için X-Frame-Options kaldır
     resp.headers.pop("X-Frame-Options", None)
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # Cache noVNC static assets (they don't change between requests)
+    resp.headers["Cache-Control"] = "public, max-age=3600"
     return resp
 
 # ── İlk Kurulum ───────────────────────────────────────────────────────────────
