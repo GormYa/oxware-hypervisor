@@ -1080,8 +1080,16 @@ def _iso_find():
     for p in _ISO_SEARCH_PATHS:
         if os.path.isfile(p):
             found.append(p)
-    # Also glob common build output dirs
-    for pattern in ["/opt/oxware/*.iso", "/root/*.iso", "/tmp/oxware*/*.iso"]:
+    # Glob common build output dirs + OXware ISO library + repo root
+    _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    for pattern in [
+        "/opt/oxware/*.iso",
+        "/root/*.iso",
+        "/tmp/oxware*/*.iso",
+        "/var/lib/oxware/isos/*.iso",
+        os.path.join(_repo_root, "*.iso"),
+        os.path.join(_repo_root, "OXware-Hypervisor-*.iso"),
+    ]:
         found.extend(_glob.glob(pattern))
     # Deduplicate, sort by mtime newest first
     seen = set()

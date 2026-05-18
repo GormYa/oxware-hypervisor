@@ -629,13 +629,12 @@ echo -e "${CYAN}╠════════════════════�
 echo -e "${CYAN}║${NC}  USB: sudo dd if=$(basename "$OUTPUT_ISO") of=/dev/sdX bs=4M${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
 
-# OXware ISO kütüphanesine kopyala
+# OXware ISO kütüphanesine kopyala (her zaman oluştur)
 OXWARE_ISO_DIR="/var/lib/oxware/isos"
-[ -d "$OXWARE_ISO_DIR" ] && {
-    cp -f "$OUTPUT_ISO" "$OXWARE_ISO_DIR/"
-    cp -f "${OUTPUT_ISO}.sha256" "$OXWARE_ISO_DIR/" 2>/dev/null || true
-    log "ISO kütüphanesine kopyalandı: $OXWARE_ISO_DIR"
-}
+mkdir -p "$OXWARE_ISO_DIR"
+cp -f "$OUTPUT_ISO" "$OXWARE_ISO_DIR/"
+cp -f "${OUTPUT_ISO}.sha256" "$OXWARE_ISO_DIR/" 2>/dev/null || true
+log "ISO kütüphanesine kopyalandı: $OXWARE_ISO_DIR"
 
 # ── GitHub Release ─────────────────────────────────────────────────────────────
 step "GitHub Release"
