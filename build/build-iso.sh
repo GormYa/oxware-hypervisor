@@ -317,11 +317,17 @@ mkdir -p "$SQUASHFS_ROOT/opt/oxware-installer"
 cp "$SCRIPT_DIR/installer/install.py" "$SQUASHFS_ROOT/opt/oxware-installer/"
 chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/install.py"
 
-# Ağ yapılandırma GUI (netcfg-gui.py — Calamares öncesi çalışır)
+# Ağ yapılandırma GUI (Calamares sonrası çalışır)
 [ -f "$SCRIPT_DIR/installer/netcfg-gui.py" ] && {
     cp "$SCRIPT_DIR/installer/netcfg-gui.py" "$SQUASHFS_ROOT/opt/oxware-installer/"
     chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/netcfg-gui.py"
     log "netcfg-gui.py kopyalandı"
+}
+# Ağ config uygulayıcı (kurulumdan sonra kurulu sisteme yazar)
+[ -f "$SCRIPT_DIR/installer/apply-netcfg.py" ] && {
+    cp "$SCRIPT_DIR/installer/apply-netcfg.py" "$SQUASHFS_ROOT/opt/oxware-installer/"
+    chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/apply-netcfg.py"
+    log "apply-netcfg.py kopyalandı"
 }
 
 # debootstrap
@@ -470,14 +476,36 @@ echo "Calamares başlıyor..."
 _EXIT=$?
 echo "Calamares çıktı: $_EXIT"
 
-# Calamares kapanırsa xterm ile hata göster
-xterm -bg '#0d2340' -fg '#c5d8f0' -fs 12 \
-    -title 'OXware — Hata Ayıklama' \
-    -e "bash -c \"echo '=== Calamares Log (son 60 satır) ==='; \
-        tail -60 /tmp/calamares.log 2>/dev/null || echo 'log yok'; \
-        echo; echo '=== Başlatma Log ==='; cat $LOG 2>/dev/null; \
-        echo; echo 'Çıkmak için Enter'; read\"" \
-    2>/dev/null || true
+if [ "$_EXIT" -eq 0 ]; then
+    # ── Kurulum başarılı — Ağ Yapılandırması ─────────────────────────────────
+    echo "Ağ yapılandırması başlıyor..."
+    xsetroot -solid '#0d2340' 2>/dev/null || true
+    timeout 180 python3 /opt/oxware-installer/netcfg-gui.py \
+        2>/tmp/netcfg-gui.log || true
+
+    # netcfg-gui çıktıktan sonra kurulu sisteme ağ config yaz
+    if [ -f /tmp/oxnetwork.json ] || [ -f /tmp/oxware-netcfg.json ]; then
+        _CFGFILE=/tmp/oxnetwork.json
+        [ -f /tmp/oxware-netcfg.json ] && _CFGFILE=/tmp/oxware-netcfg.json
+        echo "Ağ config kurulu sisteme uygulanıyor: $_CFGFILE"
+        python3 /opt/oxware-installer/apply-netcfg.py "$_CFGFILE" \
+            2>/tmp/apply-netcfg.log || true
+    fi
+
+    # Reboot
+    echo "Sistem yeniden başlatılıyor..."
+    sleep 3
+    reboot
+else
+    # ── Kurulum başarısız — debug ekranı ─────────────────────────────────────
+    xterm -bg '#0d2340' -fg '#c5d8f0' -fs 12 \
+        -title 'OXware — Hata Ayıklama' \
+        -e "bash -c \"echo '=== Calamares Log (son 60 satır) ==='; \
+            tail -60 /tmp/calamares.log 2>/dev/null || echo 'log yok'; \
+            echo; echo '=== Başlatma Log ==='; cat $LOG 2>/dev/null; \
+            echo; echo 'Çıkmak için Enter'; read\"" \
+        2>/dev/null || true
+fi
 STARTSH
 chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh"
 
