@@ -12,10 +12,10 @@ strings:
     versionedName:    "OXware Hypervisor 2.0"
     shortVersionedName: "OXware 2.0"
     bootloaderEntryName: "OXware"
-    productUrl:       "https://oxware.io"
-    supportUrl:       "https://oxware.io/support"
-    knownIssuesUrl:   "https://oxware.io/issues"
-    releaseNotesUrl:  "https://oxware.io/release-notes"
+    productUrl:       "https://oxware.top"
+    supportUrl:       "https://oxware.top/support"
+    knownIssuesUrl:   "https://github.com/ShinnAsukha/oxware-hypervisor/issues"
+    releaseNotesUrl:  "https://github.com/ShinnAsukha/oxware-hypervisor/releases"
 
 images:
     productLogo:      "oxware_logo.png"
@@ -24,6 +24,10 @@ images:
 
 slideshow:               "show.qml"
 slideshowAPI:            2
+
+windowExpanding:         fullscreen
+windowSize:              "1024px,768px"
+windowPlacement:         center
 
 style:
    sidebarBackground:    "#0d2340"
