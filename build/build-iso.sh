@@ -197,6 +197,8 @@ apt-get install -y -qq --no-install-recommends \
     spice-vdagent \
     libqt5network5 \
     libqt5svg5 \
+    xfonts-base \
+    dmz-cursor-theme \
     2>/dev/null || true
 fc-cache -f 2>/dev/null || true
 
@@ -415,10 +417,13 @@ fc-cache -f 2>/dev/null || true
 if command -v openbox &>/dev/null; then
     openbox --sm-disable &
     sleep 0.8
-    # openbox sonrası cursor — WM override'ı önler
-    xsetroot -cursor_name left_ptr 2>/dev/null || true
     echo "openbox başlatıldı"
 fi
+
+# Cursor teması — DMZ-White (dmz-cursor-theme paketi)
+export XCURSOR_THEME=DMZ-White
+export XCURSOR_SIZE=24
+xsetroot -cursor_name left_ptr 2>/dev/null || true
 
 # ── 1. Ağ yapılandırması (Proxmox tarzı — Calamares öncesi) ──────────────────
 if [ -f /opt/oxware-installer/netcfg-gui.py ]; then

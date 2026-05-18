@@ -221,15 +221,13 @@ class App:
         logo_f.pack(padx=32)
         try:
             raw = tk.PhotoImage(
-                file="/usr/share/calamares/branding/oxware/oxware_logo.png")
-            # Ölçek — dosya büyüklüğüne göre 2 ya da 3 ile böl
-            img = raw.subsample(3, 3)
+                file="/usr/share/calamares/branding/oxware/oxware_icon.png")
+            img = raw.subsample(2, 2)
             lbl = tk.Label(logo_f, image=img, bg=SIDEBAR, cursor="")
-            lbl.image = img          # GC koruması
-            lbl.pack()
+            lbl.image = img
+            lbl.pack(anchor="center")
         except Exception:
-            # Logo yoksa metin fallback
-            tk.Label(logo_f, text="OXware", bg=SIDEBAR, fg=FG,
+            tk.Label(logo_f, text="OX", bg=SIDEBAR, fg=FG,
                      font=self._font(28, bold=True)).pack()
 
         self._lbl(sb, "Hypervisor",        fg=FGM, sz=13).pack(pady=(6, 0))
