@@ -296,6 +296,8 @@ cat > "$SQUASHFS_ROOT/etc/X11/xorg.conf.d/10-oxware.conf" << 'XORGCONF'
 Section "Device"
     Identifier "OXware-Display"
     Driver     "modesetting"
+    # SWcursor: X imleci framebuffer'a çizer → VNC/noVNC her zaman görür
+    Option     "SWcursor" "true"
 EndSection
 
 Section "Screen"
