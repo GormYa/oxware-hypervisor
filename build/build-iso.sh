@@ -142,31 +142,17 @@ apt-get install -y -qq --no-install-recommends \
     openbox \
     2>/dev/null || true
 
-# ── Calamares (bookworm-backports'tan daha yeni versiyon al) ──────────────────
-apt-get install -y -qq --no-install-recommends \
-    -t bookworm-backports \
-    calamares \
-    calamares-data \
-    2>/dev/null || \
-apt-get install -y -qq --no-install-recommends \
-    calamares \
-    calamares-data \
-    2>/dev/null || true
+# ── Calamares — tam bağımlılıklarıyla kur (--no-install-recommends YASAK) ─────
+echo "[*] Calamares kuruluyor..."
+apt-get install -y -t bookworm-backports calamares calamares-data || \
+apt-get install -y calamares calamares-data || \
+{ echo "[WARN] Calamares backports/stable başarısız, minimal deneniyor..."; \
+  apt-get install -y --no-install-recommends calamares calamares-data || true; }
 
-# ── Calamares bağımlılıkları ──────────────────────────────────────────────────
+# Calamares ek bağımlılıkları (kpmcore + Python partition)
 apt-get install -y -qq --no-install-recommends \
-    libkpmcore12 libkpmcore-dev kpmcore \
-    python3 python3-yaml python3-parted \
+    python3-yaml python3-parted \
     parted dosfstools e2fsprogs \
-    qml-module-qtquick2 \
-    qml-module-qtquick-controls2 \
-    qml-module-qtquick-layouts \
-    libqt5qml5 libqt5quick5 \
-    2>/dev/null || true
-
-# kpmcore — partition modülü için kritik
-apt-get install -y -qq --no-install-recommends \
-    libkpmcore11 \
     2>/dev/null || true
 
 # ── Disk / ağ araçları (install.py --headless için) ───────────────────────────
