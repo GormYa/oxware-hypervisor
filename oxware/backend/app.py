@@ -7055,24 +7055,42 @@ def api_import_ova():
                 return
 
             _import_job_update(job_id, step="libvirt'e kaydediliyor", percent=92)
+            # q35 machine + sata bus + e1000 NIC = no guest driver needed.
+            # virtio requires guest drivers (missing on imported Windows VMs → recovery screen).
+            # e1000 + sata work out-of-the-box on Windows XP+ and all Linux distros.
             xml = f"""<domain type='kvm'>
   <name>{vm_name}</name>
-  <memory unit='MiB'>2048</memory>
+  <memory unit='MiB'>4096</memory>
   <vcpu>2</vcpu>
-  <os><type arch='x86_64' machine='pc'>hvm</type><boot dev='hd'/></os>
-  <features><acpi/><apic/></features>
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <hyperv>
+      <relaxed state='on'/>
+      <vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+    </hyperv>
+  </features>
+  <cpu mode='host-passthrough' check='none'/>
   <devices>
     <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
+      <driver name='qemu' type='qcow2' cache='none' io='native'/>
       <source file='{disk_path}'/>
-      <target dev='vda' bus='virtio'/>
+      <target dev='sda' bus='sata'/>
     </disk>
+    <controller type='sata' index='0'/>
     <interface type='network'>
       <source network='default'/>
-      <model type='virtio'/>
+      <model type='e1000'/>
     </interface>
+    <input type='tablet' bus='usb'/>
     <graphics type='vnc' port='-1' listen='0.0.0.0'/>
-    <video><model type='vga'/></video>
+    <video><model type='qxl' ram='65536' vram='65536' vgamem='16384'/></video>
+    <memballoon model='none'/>
   </devices>
 </domain>"""
             import tempfile as _tmp3
