@@ -76,14 +76,14 @@
 
     /* ───── TOPBAR ───── */
     #topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0;z-index:200}
-    .tb-logo{width:88px;height:100%;display:flex;align-items:center;justify-content:center;padding:0;border-right:1px solid var(--border);flex-shrink:0}
+    .tb-logo{width:148px;height:100%;display:flex;align-items:center;gap:9px;padding:0 14px;border-right:1px solid var(--border);flex-shrink:0;text-decoration:none}
     #tree-panel{display:none!important}
-    .tb-logo-icon{width:64px;height:64px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .tb-logo-icon img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 0 14px rgba(0,212,255,0.7))}
-    .tb-logo-icon .tb-logo-fb{width:40px;height:40px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
-    .tb-logo-icon .tb-logo-fb svg{width:24px;height:24px;fill:#fff}
-    .tb-logo-text{display:none}
-    .tb-logo-ver{display:none}
+    .tb-logo-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .tb-logo-icon img{width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,212,255,0.55))}
+    .tb-logo-icon .tb-logo-fb{width:34px;height:34px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
+    .tb-logo-icon .tb-logo-fb svg{width:20px;height:20px;fill:#fff}
+    .tb-logo-text{display:block;font-size:15px;font-weight:700;color:var(--fg);letter-spacing:.3px;line-height:1}
+    .tb-logo-ver{display:block;font-size:9px;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-top:2px}
     .tb-spacer{flex:1}
     .tb-stats{height:100%;display:flex;align-items:center;border-left:1px solid var(--border);font-size:11px}
     .tb-stat{display:flex;align-items:center;gap:5px;padding:0 12px;border-right:1px solid var(--border);height:100%;color:var(--text-muted)}
@@ -794,6 +794,10 @@
         <div class="tb-logo-fb" style="display:none;">
           <svg viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18L20 8.5v7l-8 4-8-4v-7l8-4.32zM12 7a5 5 0 100 10A5 5 0 0012 7zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
         </div>
+      </div>
+      <div>
+        <div class="tb-logo-text">OXware</div>
+        <div class="tb-logo-ver">Hypervisor</div>
       </div>
     </div>
 

@@ -899,6 +899,12 @@ def do_install(progress_cb):
             run(f"mount --bind /dev/pts {TARGET_MOUNT}/dev/pts", check=False)
         else:
             run(f"mount -t {fs} {fs} {TARGET_MOUNT}/{fs}", check=False)
+    # /run — grub-probe, update-grub, systemd tools need this
+    Path(f"{TARGET_MOUNT}/run").mkdir(parents=True, exist_ok=True)
+    run(f"mount --bind /run {TARGET_MOUNT}/run", check=False)
+    # /sys/firmware/efi/efivars — EFI grub-install needs it
+    run(f"mount --bind /sys/firmware/efi/efivars "
+        f"{TARGET_MOUNT}/sys/firmware/efi/efivars", check=False)
 
     # Copy resolv.conf so apt/pip can reach internet from chroot
     _resolv = Path(f"{TARGET_MOUNT}/etc/resolv.conf")
@@ -1081,23 +1087,7 @@ def do_install(progress_cb):
         text=True, check=True
     )
 
-    progress_cb(78, "Installing GRUB bootloader …")
-
-    # Force traditional eth0 interface naming (predictable names break netplan match)
-    grub_default_file = Path(f"{TARGET_MOUNT}/etc/default/grub")
-    grub_default_content = (
-        'GRUB_DEFAULT=0\n'
-        'GRUB_TIMEOUT=5\n'
-        'GRUB_DISTRIBUTOR="OXware"\n'
-        'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash=0 loglevel=3 '
-        'net.ifnames=0 biosdevname=0 apparmor=0 plymouth.enable=0"\n'
-        'GRUB_CMDLINE_LINUX=""\n'
-        'GRUB_TERMINAL=console\n'
-    )
-    grub_default_file.parent.mkdir(parents=True, exist_ok=True)
-    grub_default_file.write_text(grub_default_content)
-
-    # Set locale/timezone
+    progress_cb(74, "Klavye ve locale yapılandırılıyor...")
     _locale = getattr(state, 'locale',   'tr_TR.UTF-8')
     _tz     = getattr(state, 'timezone', 'Europe/Istanbul')
     run_chroot(f"locale-gen {_locale}", check=False)
@@ -1107,8 +1097,6 @@ def do_install(progress_cb):
     run_chroot(f"ln -sf /usr/share/zoneinfo/{_tz} /etc/localtime", check=False)
     run_chroot(f"bash -c \"echo '{_tz}' > /etc/timezone\"", check=False)
 
-    # Keyboard layout
-    progress_cb(74, "Klavye düzeni yapılandırılıyor...")
     _kbd_layout  = getattr(state, 'keyboard_layout',  'tr')
     _kbd_variant = getattr(state, 'keyboard_variant', '')
     Path(f"{TARGET_MOUNT}/etc/default/keyboard").write_text(
@@ -1119,7 +1107,48 @@ def do_install(progress_cb):
         f'BACKSPACE="guess"\n'
     )
 
-    run_chroot(f"grub-install --target=i386-pc --recheck {disk}")
+    # ── Write fstab BEFORE grub (update-grub needs correct UUID context) ─────
+    progress_cb(76, "Writing fstab …")
+    efi_uuid_r  = run(f"blkid -s UUID -o value {blk(2)}", capture=True, check=False)
+    root_uuid_r = run(f"blkid -s UUID -o value {blk(3)}", capture=True, check=False)
+    efi_uuid    = efi_uuid_r.stdout.strip()
+    root_uuid   = root_uuid_r.stdout.strip()
+    if not root_uuid:
+        raise RuntimeError(f"Root partition UUID alınamadı ({blk(3)}). blkid çıktısı: {root_uuid_r.stderr}")
+    fstab = (
+        f"UUID={root_uuid} /         ext4 errors=remount-ro 0 1\n"
+        f"UUID={efi_uuid}  /boot/efi vfat umask=0077       0 1\n"
+        f"tmpfs            /tmp      tmpfs defaults,nosuid,nodev 0 0\n"
+    )
+    Path(f"{TARGET_MOUNT}/etc/fstab").write_text(fstab)
+    with open("/tmp/install.log", "a") as _lf:
+        _lf.write(f"[fstab] root_uuid={root_uuid!r} efi_uuid={efi_uuid!r}\n")
+        _lf.write(f"[fstab]\n{fstab}\n")
+
+    # ── Update initramfs BEFORE grub (so grub.cfg references correct initrd) ─
+    progress_cb(77, "Updating initramfs …")
+    # Ensure virtio and scsi modules are in initramfs for QEMU disks
+    Path(f"{TARGET_MOUNT}/etc/initramfs-tools/modules").write_text(
+        "virtio_blk\nvirtio_scsi\nvirtio_pci\nsd_mod\nata_piix\nahci\n"
+    )
+    run_chroot("update-initramfs -u -k all", check=False)
+
+    progress_cb(78, "Installing GRUB bootloader …")
+    grub_default_file = Path(f"{TARGET_MOUNT}/etc/default/grub")
+    grub_default_content = (
+        'GRUB_DEFAULT=0\n'
+        'GRUB_TIMEOUT=5\n'
+        'GRUB_DISTRIBUTOR="OXware"\n'
+        'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash=0 loglevel=3 '
+        'net.ifnames=0 biosdevname=0 apparmor=0 plymouth.enable=0"\n'
+        f'GRUB_CMDLINE_LINUX="root=UUID={root_uuid} ro"\n'
+        'GRUB_TERMINAL=console\n'
+        'GRUB_DISABLE_OS_PROBER=true\n'
+    )
+    grub_default_file.parent.mkdir(parents=True, exist_ok=True)
+    grub_default_file.write_text(grub_default_content)
+
+    run_chroot(f"grub-install --target=i386-pc --recheck {disk}", check=False)
     run_chroot(
         f"grub-install --target=x86_64-efi --efi-directory=/boot/efi "
         f"--bootloader-id=OXware --removable --recheck",
@@ -1314,23 +1343,15 @@ WantedBy=timers.target
         check=False
     )
 
-    # fstab
-    progress_cb(90, "Writing fstab …")
-    efi_uuid_r = run(f"blkid -s UUID -o value {blk(2)}", capture=True, check=False)
-    root_uuid_r = run(f"blkid -s UUID -o value {blk(3)}", capture=True, check=False)
-    efi_uuid  = efi_uuid_r.stdout.strip()
-    root_uuid = root_uuid_r.stdout.strip()
-    fstab = (
-        f"UUID={root_uuid} /         ext4 errors=remount-ro 0 1\n"
-        f"UUID={efi_uuid}  /boot/efi vfat umask=0077       0 1\n"
-    )
-    Path(f"{TARGET_MOUNT}/etc/fstab").write_text(fstab)
+    # fstab already written at progress 76 — skip duplicate
 
     progress_cb(94, "Unmounting filesystems …")
     for mp in [f"{TARGET_MOUNT}/dev/pts",
                f"{TARGET_MOUNT}/dev",
+               f"{TARGET_MOUNT}/sys/firmware/efi/efivars",
                f"{TARGET_MOUNT}/sys",
                f"{TARGET_MOUNT}/proc",
+               f"{TARGET_MOUNT}/run",
                f"{TARGET_MOUNT}/boot/efi",
                TARGET_MOUNT]:
         run(f"umount -lf {mp}", check=False)
