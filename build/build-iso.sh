@@ -192,6 +192,7 @@ apt-get install -y -qq --no-install-recommends \
     dbus-x11 \
     libdbus-1-3 \
     policykit-1 \
+    udisks2 \
     xserver-xorg-video-qxl \
     xserver-xorg-video-vmware \
     spice-vdagent \
@@ -214,7 +215,9 @@ if ! command -v calamares &>/dev/null; then
     echo "[WARN] calamares bulunamadı — alternatif kaynak deneniyor..."
     apt-get install -y -qq calamares 2>/dev/null || true
 fi
-echo "[INFO] calamares: $(command -v calamares || echo 'BULUNAMADI')"
+_CALA=$(command -v calamares 2>/dev/null || echo "")
+echo "[INFO] calamares: ${_CALA:-BULUNAMADI}"
+[ -z "$_CALA" ] && echo "[ERROR] Calamares kurulum BAŞARISIZ" && exit 1
 CHROOT
 
 _umount_all
@@ -383,10 +386,19 @@ xsetroot -cursor_name left_ptr 2>/dev/null || true
 xrandr --auto 2>/dev/null || true
 echo "X11 hazır"
 
-# D-Bus oturumu başlat (Calamares partition backend için zorunlu)
+# D-Bus system + session bus (Calamares partition backend için zorunlu)
+if command -v dbus-daemon &>/dev/null; then
+    dbus-daemon --system 2>/dev/null || true
+    sleep 0.5
+fi
 if command -v dbus-launch &>/dev/null; then
     eval "$(dbus-launch --auto-syntax)" || true
-    echo "D-Bus: $DBUS_SESSION_BUS_ADDRESS"
+    echo "D-Bus session: $DBUS_SESSION_BUS_ADDRESS"
+fi
+# udisks2 — Calamares disk listesi için
+if command -v udisksd &>/dev/null; then
+    udisksd --no-debug 2>/dev/null &
+    sleep 0.5
 fi
 
 # Font cache
@@ -395,7 +407,7 @@ fc-cache -f 2>/dev/null || true
 # ── 1. Ağ yapılandırması (Proxmox tarzı — Calamares öncesi) ──────────────────
 if [ -f /opt/oxware-installer/netcfg-gui.py ]; then
     echo "netcfg-gui başlıyor..."
-    python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log || \
+    timeout 180 python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log || \
         echo "netcfg-gui çıktı: $?"
     xsetroot -solid '#0d2340' 2>/dev/null || true
     echo "netcfg-gui tamamlandı"
