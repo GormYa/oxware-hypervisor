@@ -7632,16 +7632,17 @@ def _ensure_ssl_cert(cert_path: str, key_path: str) -> bool:
         return False
 
 
+# ── Auto SSL cert — runs at import time (works with systemd/gunicorn too) ──────
+if config.SSL_ENABLED:
+    _ensure_ssl_cert(config.SSL_CERT, config.SSL_KEY)
+
+
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.0 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
     log.info("Dinleniyor: %s:%s (SSL: %s)", config.HOST, config.PORT, config.SSL_ENABLED)
-
-    # Auto-generate self-signed cert if SSL is enabled but files are missing
-    if config.SSL_ENABLED:
-        _ensure_ssl_cert(config.SSL_CERT, config.SSL_KEY)
 
     use_ssl = (
         config.SSL_ENABLED
