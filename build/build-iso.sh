@@ -266,11 +266,11 @@ cp "$CALA_SRC/modules/oxware_install/module.desc" \
 cp "$CALA_SRC/modules/oxware_install/main.py" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install/"
 
-# OXware network viewmodule (Calamares içi ağ yapılandırması)
+# OXware network viewmodule (Calamares QML — ağ yapılandırması adımı)
 mkdir -p "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork"
 cp "$CALA_SRC/modules/oxnetwork/module.desc" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
-cp "$CALA_SRC/modules/oxnetwork/main.py" \
+cp "$CALA_SRC/modules/oxnetwork/oxnetwork.qml" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
 
 # OXware branding
@@ -447,13 +447,21 @@ if command -v xsetroot &>/dev/null; then
     xsetroot -cursor_name left_ptr 2>/dev/null || true
 fi
 
-# ── Otomatik DHCP (live sistem için, arka planda) ────────────────────────────
+# ── Otomatik DHCP + ağ bilgisini QML modülü için yaz ─────────────────────────
 _IFACE=$(ip -o link show 2>/dev/null \
     | awk -F': ' '$2 !~ /^(lo|vir|docker|br[0-9]|veth|dummy)/ {print $2; exit}')
 if [ -n "$_IFACE" ]; then
     echo "Auto-DHCP: $_IFACE"
     (dhclient "$_IFACE" 2>/tmp/dhclient.log || \
      dhcpcd -n "$_IFACE" 2>/tmp/dhcpcd.log) &
+    # Interface adını QML modülünün okuyabileceği dosyaya yaz
+    echo "$_IFACE" > /tmp/oxware-iface.txt
+    # Kısa bekle sonra IP bilgisini yaz (DHCP bitince)
+    sleep 2
+    _IP=$(ip -4 -o addr show "$_IFACE" 2>/dev/null \
+        | awk '{split($4,a,"/"); print a[1]; exit}')
+    printf '{"iface":"%s","ip":"%s"}\n' "$_IFACE" "$_IP" \
+        > /tmp/oxware-netinfo.json
 fi
 
 # ── Calamares fullscreen kurulum ──────────────────────────────────────────────

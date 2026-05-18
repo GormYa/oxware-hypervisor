@@ -12,8 +12,9 @@ import tempfile
 import libcalamares
 
 
-CONFIG_PATH = "/tmp/oxware-install-config.json"
-INSTALLER   = "/opt/oxware-installer/install.py"
+CONFIG_PATH  = "/tmp/oxware-install-config.json"
+INSTALLER    = "/opt/oxware-installer/install.py"
+NETCFG_PATH  = "/tmp/oxnetwork.json"   # QML viewmodule tarafından yazılır
 
 
 def pretty_name():
@@ -134,18 +135,39 @@ def _build_config():
     if not hostname:
         hostname = "oxware-node"
 
-    # ── Network (oxnetwork viewmodule → globalStorage) ────────────────────────
-    # oxnetwork.py stores: oxnetwork_hostname, oxnetwork_dhcp, oxnetwork_ip,
-    #                      oxnetwork_gw, oxnetwork_dns1, oxnetwork_dns2
+    # ── Network — QML viewmodule /tmp/oxnetwork.json veya globalStorage ─────
+    net_mode = "dhcp"
+    net_ip   = ""
+    net_gw   = ""
+    net_dns1 = "8.8.8.8"
+    net_dns2 = "8.8.4.4"
+
+    # 1. QML oxnetwork modülünün yazdığı dosyayı oku
+    if os.path.exists(NETCFG_PATH):
+        try:
+            with open(NETCFG_PATH) as _f:
+                _net = json.load(_f)
+            if _net.get("hostname"):
+                hostname = _net["hostname"]
+            net_mode = _net.get("mode", "dhcp")
+            net_ip   = _net.get("ip",      "")
+            net_gw   = _net.get("gateway",  "")
+            net_dns1 = _net.get("dns1",     "8.8.8.8")
+            net_dns2 = _net.get("dns2",     "8.8.4.4")
+            libcalamares.utils.debug(f"oxware_install: netcfg from QML file: {_net}")
+        except Exception as _e:
+            libcalamares.utils.debug(f"oxware_install: netcfg file error: {_e}")
+
+    # 2. globalStorage fallback (Python viewmodule olsaydı buraya yazılırdı)
     ox_host = _gs_get("oxnetwork_hostname", "")
     if ox_host:
         hostname = ox_host
-    ox_dhcp = _gs_get("oxnetwork_dhcp", True)
-    net_mode = "dhcp" if ox_dhcp else "static"
-    net_ip   = _gs_get("oxnetwork_ip",   "")
-    net_gw   = _gs_get("oxnetwork_gw",   "")
-    net_dns1 = _gs_get("oxnetwork_dns1", "8.8.8.8")
-    net_dns2 = _gs_get("oxnetwork_dns2", "8.8.4.4")
+    if _gs_get("oxnetwork_dhcp", None) is not None:
+        net_mode = "dhcp" if _gs_get("oxnetwork_dhcp", True) else "static"
+        net_ip   = _gs_get("oxnetwork_ip",   net_ip)
+        net_gw   = _gs_get("oxnetwork_gw",   net_gw)
+        net_dns1 = _gs_get("oxnetwork_dns1", net_dns1)
+        net_dns2 = _gs_get("oxnetwork_dns2", net_dns2)
 
     cfg = {
         "disk":             disk,
