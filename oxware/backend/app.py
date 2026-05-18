@@ -6221,7 +6221,7 @@ def api_ssh_restart():
     r = _sp.run(["systemctl", "restart", "sshd"], capture_output=True, text=True, timeout=30)
     success = r.returncode == 0
     if success:
-        ev.warning("SSH servisi manuel olarak yeniden başlatıldı.", category="system")
+        ev.warn("SSH servisi manuel olarak yeniden başlatıldı.", category="system")
     return ok({"success": success, "stderr": r.stderr.strip() if not success else None})
 
 
@@ -7007,7 +7007,7 @@ def api_import_ova():
             if not disk_files:
                 _import_job_update(job_id, status="error", step="Hata: disk bulunamadı",
                                    percent=0, message="Disk dosyası bulunamadı", finished=time.time())
-                ev.warning(f"OVA import: disk dosyası bulunamadı — {fname}", category="vm")
+                ev.warn(f"OVA import: disk dosyası bulunamadı — {fname}", category="vm")
                 return
 
             _vm_strip_exts = (".tar.gz", ".ova", ".ovf", ".tar", ".vmdk", ".qcow2",
@@ -7051,7 +7051,7 @@ def api_import_ova():
                 _import_job_update(job_id, status="error",
                                    step="Hata: disk dönüştürme başarısız",
                                    percent=0, message="qemu-img dönüştürme hatası", finished=time.time())
-                ev.warning(f"OVA import disk convert hatası (rc={proc.returncode})", category="vm")
+                ev.warn(f"OVA import disk convert hatası (rc={proc.returncode})", category="vm")
                 return
 
             _import_job_update(job_id, step="libvirt'e kaydediliyor", percent=92)
@@ -7089,11 +7089,11 @@ def api_import_ova():
                 _import_job_update(job_id, status="error",
                                    step="Hata: virsh define başarısız",
                                    percent=92, message=r_def.stderr.strip()[:200], finished=time.time())
-                ev.warning(f"OVA import virsh define hatası: {r_def.stderr}", category="vm")
+                ev.warn(f"OVA import virsh define hatası: {r_def.stderr}", category="vm")
         except Exception as ex:
             _import_job_update(job_id, status="error", step="Hata",
                                message=str(ex)[:200], finished=time.time())
-            ev.warning(f"OVA import hatası: {ex}", category="vm")
+            ev.warn(f"OVA import hatası: {ex}", category="vm")
 
     t = threading.Thread(target=_do_import, daemon=True)
     t.start()
