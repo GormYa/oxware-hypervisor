@@ -374,6 +374,9 @@ LOG=/tmp/oxware-start.log
 exec >> "$LOG" 2>&1
 echo "=== OXware start: $(date) uid=$(id -u) ==="
 
+# PATH — minimal X oturumunda eksik olabilir
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 export DISPLAY=:0
 export HOME=/root
 export XDG_RUNTIME_DIR=/tmp/xdg-oxware
@@ -409,13 +412,20 @@ fi
 # Font cache
 fc-cache -f 2>/dev/null || true
 
+# Minimal window manager — tkinter + Qt pencere render için gerekli
+if command -v openbox &>/dev/null; then
+    openbox --sm-disable &
+    sleep 0.8
+    echo "openbox başlatıldı"
+fi
+
 # ── 1. Ağ yapılandırması (Proxmox tarzı — Calamares öncesi) ──────────────────
 if [ -f /opt/oxware-installer/netcfg-gui.py ]; then
     echo "netcfg-gui başlıyor..."
-    timeout 180 python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log || \
-        echo "netcfg-gui çıktı: $?"
+    timeout 120 python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log
+    _NETCFG_EC=$?
+    echo "netcfg-gui çıktı: $_NETCFG_EC"
     xsetroot -solid '#0d2340' 2>/dev/null || true
-    echo "netcfg-gui tamamlandı"
 fi
 
 # ── 2. Calamares fullscreen kurulum ──────────────────────────────────────────
