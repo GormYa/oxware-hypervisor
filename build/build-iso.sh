@@ -390,7 +390,6 @@ chmod 700 "$XDG_RUNTIME_DIR"
 
 # Lacivert arka plan
 xsetroot -solid '#0d2340' 2>/dev/null || true
-xsetroot -cursor_name left_ptr 2>/dev/null || true
 xrandr --auto 2>/dev/null || true
 echo "X11 hazır"
 
@@ -416,6 +415,8 @@ fc-cache -f 2>/dev/null || true
 if command -v openbox &>/dev/null; then
     openbox --sm-disable &
     sleep 0.8
+    # openbox sonrası cursor — WM override'ı önler
+    xsetroot -cursor_name left_ptr 2>/dev/null || true
     echo "openbox başlatıldı"
 fi
 
