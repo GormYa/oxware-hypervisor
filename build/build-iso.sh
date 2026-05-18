@@ -104,12 +104,21 @@ step "Chroot: Calamares + X11 Kurulum (~10 dk)"
 mkdir -p "$SQUASHFS_ROOT"/{proc,sys,dev,dev/pts,run,tmp}
 cp /etc/resolv.conf "$SQUASHFS_ROOT/etc/resolv.conf" 2>/dev/null || true
 
-_umount_all() {
+_cleanup() {
+    local _ec=$?
+    # Chroot bind mount'ları kaldır (zaten yoksa zararsız)
     for mp in dev/pts dev sys proc run; do
         umount "$SQUASHFS_ROOT/$mp" 2>/dev/null || true
     done
+    # Çalışma dizinini temizle — başarı veya başarısızlık fark etmez
+    if [ -d "$WORK_DIR" ]; then
+        rm -rf "$WORK_DIR" 2>/dev/null || true
+        echo -e "${YELLOW}[CLEAN]${NC}  Çalışma dizini silindi: $WORK_DIR"
+    fi
+    [ "$_ec" -ne 0 ] && \
+        echo -e "${RED}[BUILD FAILED]${NC} Çıkış kodu: $_ec" || true
 }
-trap _umount_all EXIT
+trap _cleanup EXIT
 
 mount --bind /proc    "$SQUASHFS_ROOT/proc"
 mount --bind /sys     "$SQUASHFS_ROOT/sys"
@@ -120,6 +129,9 @@ mount --bind /run     "$SQUASHFS_ROOT/run"
 chroot "$SQUASHFS_ROOT" /bin/bash << 'CHROOT'
 export DEBIAN_FRONTEND=noninteractive
 export LANG=C
+
+# adduser/usbmuxd postinst uyarısını önle
+mkdir -p /var/lib/usbmux
 
 # Debian 12 repo (backports dahil — Calamares yeni versiyonu için)
 cat > /etc/apt/sources.list << 'APT'
@@ -210,8 +222,6 @@ fi
 echo "[OK] Chroot tamamlandı"
 CHROOT
 
-_umount_all
-trap - EXIT
 log "Chroot paketler OK"
 
 # ── OXware Calamares Config ───────────────────────────────────────────────────
@@ -568,7 +578,6 @@ fi
 [ ! -s "$OUTPUT_ISO" ] && err "ISO boş (0 byte)!"
 
 sha256sum "$OUTPUT_ISO" > "${OUTPUT_ISO}.sha256"
-rm -rf "$WORK_DIR"
 
 ISO_SIZE=$(du -sh "$OUTPUT_ISO" | cut -f1)
 echo ""
