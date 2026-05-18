@@ -181,12 +181,19 @@ apt-get install -y -qq --no-install-recommends \
     sudo \
     2>/dev/null || true
 
-# ── GUI / font araçları (netcfg-gui.py için) ──────────────────────────────────
+# ── GUI / font / D-Bus araçları ───────────────────────────────────────────────
 apt-get install -y -qq --no-install-recommends \
     python3-tk \
     fonts-ubuntu \
     fonts-noto-core \
     fontconfig \
+    xterm \
+    dbus \
+    dbus-x11 \
+    libdbus-1-3 \
+    xserver-xorg-video-qxl \
+    xserver-xorg-video-vmware \
+    spice-vdagent \
     2>/dev/null || true
 fc-cache -f 2>/dev/null || true
 
@@ -361,14 +368,23 @@ export HOME=/root
 export XDG_RUNTIME_DIR=/tmp/xdg-oxware
 export LANG=tr_TR.UTF-8
 export FONTCONFIG_PATH=/etc/fonts
+# Qt5 xcb platform — X11 gerekli
+export QT_QPA_PLATFORM=xcb
+export QT_QPA_PLATFORMTHEME=
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
-# Lacivert arka plan (#0d2340 = açıkça siyahtan farklı)
+# Lacivert arka plan
 xsetroot -solid '#0d2340' 2>/dev/null || true
 xsetroot -cursor_name left_ptr 2>/dev/null || true
 xrandr --auto 2>/dev/null || true
 echo "X11 hazır"
+
+# D-Bus oturumu başlat (Calamares partition backend için zorunlu)
+if command -v dbus-launch &>/dev/null; then
+    eval "$(dbus-launch --auto-syntax)" || true
+    echo "D-Bus: $DBUS_SESSION_BUS_ADDRESS"
+fi
 
 # Font cache
 fc-cache -f 2>/dev/null || true
@@ -384,15 +400,17 @@ fi
 
 # ── 2. Calamares fullscreen kurulum ──────────────────────────────────────────
 echo "Calamares başlıyor..."
-/usr/bin/calamares -D 6 2>/tmp/calamares.log
-echo "Calamares çıktı: $?"
+/usr/bin/calamares -D 6 > /tmp/calamares.log 2>&1
+_EXIT=$?
+echo "Calamares çıktı: $_EXIT"
 
-# Calamares kapanırsa hata göster
-xterm -fa 'Ubuntu Mono:size=13' -bg '#0d2340' -fg '#c5d8f0' \
-    -title 'OXware Debug' \
-    -e "echo '=== Calamares Log ==='; tail -50 /tmp/calamares.log; \
-        echo; echo '=== Start Log ==='; cat $LOG; \
-        echo; echo 'Çıkmak için Enter basın'; read" \
+# Calamares kapanırsa xterm ile hata göster
+xterm -bg '#0d2340' -fg '#c5d8f0' -fs 12 \
+    -title 'OXware — Hata Ayıklama' \
+    -e "bash -c \"echo '=== Calamares Log (son 60 satır) ==='; \
+        tail -60 /tmp/calamares.log 2>/dev/null || echo 'log yok'; \
+        echo; echo '=== Başlatma Log ==='; cat $LOG 2>/dev/null; \
+        echo; echo 'Çıkmak için Enter'; read\"" \
     2>/dev/null || true
 STARTSH
 chmod +x "$SQUASHFS_ROOT/opt/oxware-installer/oxware-start.sh"

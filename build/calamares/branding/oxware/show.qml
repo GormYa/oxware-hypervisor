@@ -7,20 +7,17 @@ Presentation {
     id: presentation
     timer.interval: 6000
 
-    // ── Yardımcı bileşen ─────────────────────────────────────────────────────
-    component SlideBase: Rectangle {
-        anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#080f1e" }
-            GradientStop { position: 1.0; color: "#0a1628" }
-        }
-    }
-
     // ── Slayt 1: Karşılama ────────────────────────────────────────────────────
     Slide {
         anchors.fill: parent
 
-        SlideBase {}
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#080f1e" }
+                GradientStop { position: 1.0; color: "#0a1628" }
+            }
+        }
 
         Column {
             anchors.centerIn: parent
@@ -76,7 +73,13 @@ Presentation {
     Slide {
         anchors.fill: parent
 
-        SlideBase {}
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#080f1e" }
+                GradientStop { position: 1.0; color: "#0a1628" }
+            }
+        }
 
         Column {
             anchors.centerIn: parent
@@ -157,7 +160,13 @@ Presentation {
     Slide {
         anchors.fill: parent
 
-        SlideBase {}
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#080f1e" }
+                GradientStop { position: 1.0; color: "#0a1628" }
+            }
+        }
 
         Column {
             anchors.centerIn: parent
@@ -237,7 +246,13 @@ Presentation {
     Slide {
         anchors.fill: parent
 
-        SlideBase {}
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#080f1e" }
+                GradientStop { position: 1.0; color: "#0a1628" }
+            }
+        }
 
         Column {
             anchors.centerIn: parent
