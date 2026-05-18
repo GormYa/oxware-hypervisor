@@ -12,9 +12,8 @@ import tempfile
 import libcalamares
 
 
-CONFIG_PATH  = "/tmp/oxware-install-config.json"
-INSTALLER    = "/opt/oxware-installer/install.py"
-NETCFG_PATH  = "/tmp/oxware-netcfg.json"
+CONFIG_PATH = "/tmp/oxware-install-config.json"
+INSTALLER   = "/opt/oxware-installer/install.py"
 
 
 def pretty_name():
@@ -26,28 +25,94 @@ def _gs_get(key, default=None):
     return val if val is not None else default
 
 
+def _strip_partnum(dev):
+    """'/dev/sda1' → '/dev/sda', '/dev/nvme0n1p2' → '/dev/nvme0n1', else unchanged."""
+    import re
+    if not dev:
+        return dev
+    # NVMe: /dev/nvme0n1p1 → /dev/nvme0n1
+    m = re.match(r"(/dev/nvme\d+n\d+)p\d+", dev)
+    if m:
+        return m.group(1)
+    # SD/VD/HD: /dev/sda1 → /dev/sda
+    m = re.match(r"(/dev/[a-z]+)\d+", dev)
+    if m:
+        return m.group(1)
+    return dev
+
+
+def _detect_disk():
+    """Multi-fallback disk detection from Calamares globalStorage + system."""
+    import re
+
+    # 1. partitions list — try multiple key names per partition object
+    partitions = _gs_get("partitions", [])
+    if partitions and isinstance(partitions, list):
+        for p in partitions:
+            if not isinstance(p, dict):
+                continue
+            for key in ("device", "devicePath", "path", "name"):
+                dev = p.get(key, "")
+                if dev and dev.startswith("/dev/"):
+                    return _strip_partnum(dev)
+
+    # 2. Direct globalStorage keys (Calamares version-dependent)
+    for key in ("installDevice", "selectedDriveName", "targetDevice",
+                "installDisk", "selectedDevice", "device"):
+        val = _gs_get(key, "")
+        if not val:
+            continue
+        val = str(val)
+        # Normalize: some Calamares versions store "sda" instead of "/dev/sda"
+        if not val.startswith("/"):
+            val = f"/dev/{val}"
+        if val.startswith("/dev/"):
+            return _strip_partnum(val)
+
+    # 3. rootMountPoint → findmnt → backing device
+    root_mp = _gs_get("rootMountPoint", "/mnt")
+    try:
+        out = subprocess.check_output(
+            ["findmnt", "-n", "-o", "SOURCE", str(root_mp)],
+            text=True, stderr=subprocess.DEVNULL).strip()
+        if out and out.startswith("/dev/"):
+            return _strip_partnum(out)
+    except Exception:
+        pass
+
+    # 4. First non-removable disk visible to lsblk
+    try:
+        out = subprocess.check_output(
+            ["lsblk", "-d", "-n", "-o", "NAME,TYPE,RM"],
+            text=True, stderr=subprocess.DEVNULL)
+        for ln in out.splitlines():
+            parts = ln.split()
+            if len(parts) >= 3 and parts[1] == "disk" and parts[2] == "0":
+                return f"/dev/{parts[0]}"
+    except Exception:
+        pass
+
+    return ""
+
+
 def _build_config():
     """Extract Calamares globalStorage values into install.py headless config."""
 
-    # ── Disk ──────────────────────────────────────────────────────────────────
-    install_path = _gs_get("rootMountPoint", "/mnt/target")
+    # ── Debug dump ────────────────────────────────────────────────────────────
+    try:
+        # Log all globalStorage keys so we can diagnose issues
+        gs_keys = libcalamares.globalstorage.keys() \
+            if hasattr(libcalamares.globalstorage, "keys") else []
+        libcalamares.utils.debug(
+            f"oxware_install: globalStorage keys = {list(gs_keys)}")
+        for k in gs_keys:
+            v = libcalamares.globalstorage.value(k)
+            libcalamares.utils.debug(f"  gs[{k}] = {v!r}")
+    except Exception as _e:
+        libcalamares.utils.debug(f"oxware_install: gs dump failed: {_e}")
 
-    # Calamares stores chosen device in partitions list or install_path device
-    disk = ""
-    partitions = _gs_get("partitions", [])
-    if partitions:
-        # First partition's device (strip trailing digit)
-        dev = partitions[0].get("device", "")
-        if dev:
-            # /dev/sda1 → /dev/sda
-            import re
-            m = re.match(r"(/dev/[a-z]+)", dev)
-            disk = m.group(1) if m else dev
-    if not disk:
-        # Fallback: globalStorage "selectedDriveName"
-        disk = _gs_get("selectedDriveName", "")
-    if not disk:
-        disk = _gs_get("installDevice", "")
+    # ── Disk ──────────────────────────────────────────────────────────────────
+    disk = _detect_disk()
 
     # ── Locale / timezone ────────────────────────────────────────────────────
     locale_conf = _gs_get("localeConf", {})
@@ -69,12 +134,25 @@ def _build_config():
     if not hostname:
         hostname = "oxware-node"
 
-    return {
+    # ── Network (oxnetwork viewmodule → globalStorage) ────────────────────────
+    # oxnetwork.py stores: oxnetwork_hostname, oxnetwork_dhcp, oxnetwork_ip,
+    #                      oxnetwork_gw, oxnetwork_dns1, oxnetwork_dns2
+    ox_host = _gs_get("oxnetwork_hostname", "")
+    if ox_host:
+        hostname = ox_host
+    ox_dhcp = _gs_get("oxnetwork_dhcp", True)
+    net_mode = "dhcp" if ox_dhcp else "static"
+    net_ip   = _gs_get("oxnetwork_ip",   "")
+    net_gw   = _gs_get("oxnetwork_gw",   "")
+    net_dns1 = _gs_get("oxnetwork_dns1", "8.8.8.8")
+    net_dns2 = _gs_get("oxnetwork_dns2", "8.8.4.4")
+
+    cfg = {
         "disk":             disk,
         "hostname":         hostname,
         "username":         username,
         "password":         password,
-        "net_mode":         "dhcp",
+        "net_mode":         net_mode,
         "keyboard_layout":  kb_layout,
         "keyboard_variant": kb_variant,
         "locale":           locale,
@@ -84,20 +162,12 @@ def _build_config():
         "ssh_root":         False,
         "ssh_passwd_auth":  True,
     }
-
-
-def _read_netcfg():
-    """netcfg-gui.py tarafından kayıt edilen ağ yapılandırmasını oku."""
-    if not os.path.exists(NETCFG_PATH):
-        return {}
-    try:
-        with open(NETCFG_PATH) as f:
-            data = json.load(f)
-        libcalamares.utils.debug(f"oxware_install: netcfg = {json.dumps(data)}")
-        return data
-    except Exception as e:
-        libcalamares.utils.debug(f"oxware_install: netcfg okuma hatası: {e}")
-        return {}
+    if net_mode == "static" and net_ip:
+        cfg["net_ip"]   = net_ip
+        cfg["net_gw"]   = net_gw
+        cfg["net_dns"]  = net_dns1
+        cfg["net_dns2"] = net_dns2
+    return cfg
 
 
 def run():
@@ -110,21 +180,6 @@ def run():
         )
 
     cfg = _build_config()
-
-    # netcfg-gui.py değerlerini Calamares globalStorage üzerine yaz
-    net = _read_netcfg()
-    if net:
-        # Hostname: netcfg-gui öncelikli (daha erken ve açık biçimde girildi)
-        if net.get("hostname"):
-            cfg["hostname"] = net["hostname"]
-        # Ağ modu
-        mode = net.get("mode", "dhcp")
-        cfg["net_mode"] = mode
-        if mode == "static":
-            cfg["net_ip"]   = net.get("ip",      "")
-            cfg["net_mask"] = net.get("netmask",  "255.255.255.0")
-            cfg["net_gw"]   = net.get("gateway",  "")
-            cfg["net_dns"]  = net.get("dns1",     "8.8.8.8")
 
     if not cfg["disk"]:
         return (

@@ -98,7 +98,7 @@ class App:
     def __init__(self):
         self.r = tk.Tk()
         self.r.title("OXware Hypervisor — Ağ Yapılandırması")
-        self.r.configure(bg=BG)
+        self.r.configure(bg=BG, cursor="left_ptr")
         self.r.attributes("-fullscreen", True)
         # ESC devre dışı — kullanıcı geri dönemez
         self.r.bind("<Escape>", lambda e: None)
@@ -158,16 +158,16 @@ class App:
         c = tk.Frame(self._wf, bg=BG)
         c.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Logo
+        # Logo — sadece ikon (metin yok)
         try:
             raw = tk.PhotoImage(
-                file="/usr/share/calamares/branding/oxware/oxware_logo.png")
+                file="/usr/share/calamares/branding/oxware/oxware_icon.png")
             img = raw.subsample(2, 2)
             lbl = tk.Label(c, image=img, bg=BG)
             lbl.image = img
             lbl.pack(pady=(0, 18))
         except Exception:
-            tk.Label(c, text="OXware", bg=BG, fg=FG,
+            tk.Label(c, text="OX", bg=BG, fg=FG,
                      font=self._font(42, bold=True)).pack(pady=(0, 18))
 
         tk.Label(c, text="OXware Hypervisor",

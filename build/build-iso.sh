@@ -49,6 +49,17 @@ apt-get install -y -qq \
     grub-pc-bin grub-efi-amd64-bin mtools \
     debootstrap rsync python3 \
     genisoimage syslinux-utils 2>/dev/null || true
+
+# gh CLI — GitHub release için (opsiyonel, yoksa kurmaya çalış)
+if ! command -v gh &>/dev/null; then
+    warn "gh CLI bulunamadı, kuruluyor..."
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null || true
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list 2>/dev/null || true
+    apt-get update -qq 2>/dev/null && apt-get install -y -qq gh 2>/dev/null || \
+        warn "gh kurulamadı — GitHub release otomatik atlanacak"
+fi
 log "OK"
 
 # ── Disk alanı ────────────────────────────────────────────────────────────────
@@ -198,7 +209,9 @@ apt-get install -y -qq --no-install-recommends \
     libqt5network5 \
     libqt5svg5 \
     xfonts-base \
+    x11-apps \
     dmz-cursor-theme \
+    python3-pyqt5 \
     2>/dev/null || true
 fc-cache -f 2>/dev/null || true
 
@@ -252,6 +265,13 @@ cp "$CALA_SRC/modules/oxware_install/module.desc" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install/"
 cp "$CALA_SRC/modules/oxware_install/main.py" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install/"
+
+# OXware network viewmodule (Calamares içi ağ yapılandırması)
+mkdir -p "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork"
+cp "$CALA_SRC/modules/oxnetwork/module.desc" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
+cp "$CALA_SRC/modules/oxnetwork/main.py" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
 
 # OXware branding
 mkdir -p "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware"
@@ -420,21 +440,14 @@ if command -v openbox &>/dev/null; then
     echo "openbox başlatıldı"
 fi
 
-# Cursor teması — DMZ-White (dmz-cursor-theme paketi)
+# İmleç — DMZ-White tema + X root cursor (openbox başladıktan sonra set edilmeli)
 export XCURSOR_THEME=DMZ-White
 export XCURSOR_SIZE=24
-xsetroot -cursor_name left_ptr 2>/dev/null || true
-
-# ── 1. Ağ yapılandırması (Proxmox tarzı — Calamares öncesi) ──────────────────
-if [ -f /opt/oxware-installer/netcfg-gui.py ]; then
-    echo "netcfg-gui başlıyor..."
-    timeout 120 python3 /opt/oxware-installer/netcfg-gui.py 2>/tmp/netcfg-gui.log
-    _NETCFG_EC=$?
-    echo "netcfg-gui çıktı: $_NETCFG_EC"
-    xsetroot -solid '#0d2340' 2>/dev/null || true
+if command -v xsetroot &>/dev/null; then
+    xsetroot -cursor_name left_ptr 2>/dev/null || true
 fi
 
-# ── 2. Calamares fullscreen kurulum ──────────────────────────────────────────
+# ── Calamares fullscreen kurulum (ağ yapılandırması Calamares içinde) ─────────
 echo "Calamares başlıyor..."
 /usr/bin/calamares -D 6 > /tmp/calamares.log 2>&1
 _EXIT=$?
@@ -623,3 +636,56 @@ OXWARE_ISO_DIR="/var/lib/oxware/isos"
     cp -f "${OUTPUT_ISO}.sha256" "$OXWARE_ISO_DIR/" 2>/dev/null || true
     log "ISO kütüphanesine kopyalandı: $OXWARE_ISO_DIR"
 }
+
+# ── GitHub Release ─────────────────────────────────────────────────────────────
+step "GitHub Release"
+_GH_TAG="v${OXWARE_VERSION}"
+_GH_TITLE="OXware Hypervisor ${_GH_TAG}"
+_GH_NOTES="## OXware Hypervisor ${_GH_TAG}
+
+**Yayın tarihi:** $(date '+%d %B %Y')
+
+### Kurulum
+\`\`\`bash
+# USB'ye yaz
+sudo dd if=OXware-Hypervisor-${OXWARE_VERSION}-amd64.iso of=/dev/sdX bs=4M status=progress && sync
+\`\`\`
+
+### Boot akışı
+GRUB → live-boot → getty autologin root → startx → Calamares (OXware branding, Türkçe)
+
+### SHA256
+\`\`\`
+$(cat "${OUTPUT_ISO}.sha256")
+\`\`\`"
+
+if ! command -v gh &>/dev/null; then
+    warn "gh CLI yok — GitHub release atlandı"
+elif ! gh auth status &>/dev/null 2>&1; then
+    warn "gh auth yapılmamış — GitHub release atlandı"
+    warn "Yetkilendirmek için: gh auth login"
+else
+    # Aynı tag varsa sil (rebuild senaryosu)
+    if gh release view "$_GH_TAG" &>/dev/null 2>&1; then
+        warn "Mevcut release siliniyor: $_GH_TAG"
+        gh release delete "$_GH_TAG" --yes 2>/dev/null || true
+        git tag -d "$_GH_TAG" 2>/dev/null || true
+        git push origin ":refs/tags/$_GH_TAG" 2>/dev/null || true
+    fi
+
+    log "GitHub release oluşturuluyor: $_GH_TAG"
+    _RELEASE_URL=$(gh release create "$_GH_TAG" \
+        --title "$_GH_TITLE" \
+        --notes "$_GH_NOTES" \
+        "$OUTPUT_ISO" \
+        "${OUTPUT_ISO}.sha256" \
+        2>&1 | tail -1) || { warn "GitHub release başarısız — ISO lokal olarak mevcut"; _RELEASE_URL=""; }
+
+    if [ -n "$_RELEASE_URL" ]; then
+        echo ""
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║${NC}  ${GREEN}✓ GitHub Release Yayınlandı!${NC}                              ${CYAN}║${NC}"
+        echo -e "${CYAN}║${NC}  ${WHITE}${_RELEASE_URL}${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    fi
+fi
