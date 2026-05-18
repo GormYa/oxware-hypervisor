@@ -68,7 +68,7 @@ def add_user(username: str, password: str, role: str = "viewer") -> dict:
         raise ValueError("Kullanıcı adı en az 2 karakter olmalı")
     if len(password) < 8:
         raise ValueError("Şifre en az 8 karakter olmalı")
-    valid_roles = {"viewer", "operator", "administrator"}
+    valid_roles = {"viewer", "operator", "administrator", "vm-user"}
     if role not in valid_roles:
         raise ValueError(f"Geçersiz rol. Kabul edilenler: {', '.join(valid_roles)}")
 
@@ -98,7 +98,7 @@ def delete_user(username: str):
 
 def update_user_role(username: str, role: str):
     """Kullanıcı rolünü güncelle."""
-    valid_roles = {"viewer", "operator", "administrator"}
+    valid_roles = {"viewer", "operator", "administrator", "vm-user"}
     if role not in valid_roles:
         raise ValueError(f"Geçersiz rol: {role}")
     data = _load()
@@ -122,7 +122,7 @@ def update_user(username: str, new_username: str = None, new_password: str = Non
         user_data["password_hash"] = _hash_password(new_password)
 
     if new_role:
-        valid_roles = {"viewer", "operator", "administrator"}
+        valid_roles = {"viewer", "operator", "administrator", "vm-user"}
         if new_role not in valid_roles:
             raise ValueError(f"Geçersiz rol: {new_role}")
         user_data["role"] = new_role
@@ -154,3 +154,66 @@ def get_user_role(username: str) -> str:
     data = _load()
     user = data.get("users", {}).get(username)
     return user.get("role", "viewer") if user else "viewer"
+
+
+# ── VM Assignment (for vm-user role) ────────────────────────────────────────
+
+VM_ASSIGN_FILE = os.path.join(config.DATA_DIR, "vm_assignments.json")
+
+
+def _load_assignments() -> dict:
+    """Load vm assignments: {username: [vm_id, ...]}"""
+    if os.path.exists(VM_ASSIGN_FILE):
+        try:
+            with open(VM_ASSIGN_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_assignments(data: dict):
+    os.makedirs(os.path.dirname(VM_ASSIGN_FILE), exist_ok=True)
+    with open(VM_ASSIGN_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+    os.chmod(VM_ASSIGN_FILE, 0o600)
+
+
+def get_user_vms(username: str) -> list:
+    """Return list of vm_ids assigned to username."""
+    data = _load_assignments()
+    return data.get(username, [])
+
+
+def assign_vm(username: str, vm_id: str):
+    """Assign vm_id to username. Idempotent."""
+    data = _load_assignments()
+    if username not in data:
+        data[username] = []
+    if vm_id not in data[username]:
+        data[username].append(vm_id)
+    _save_assignments(data)
+
+
+def unassign_vm(username: str, vm_id: str):
+    """Remove vm_id from username assignments."""
+    data = _load_assignments()
+    if username in data:
+        data[username] = [v for v in data[username] if v != vm_id]
+        if not data[username]:
+            del data[username]
+    _save_assignments(data)
+
+
+def get_vm_users(vm_id: str) -> list:
+    """Return list of usernames assigned to vm_id."""
+    data = _load_assignments()
+    return [uname for uname, vms in data.items() if vm_id in vms]
+
+
+def unassign_all_user_vms(username: str):
+    """Remove all VM assignments for username (call when deleting user)."""
+    data = _load_assignments()
+    if username in data:
+        del data[username]
+    _save_assignments(data)

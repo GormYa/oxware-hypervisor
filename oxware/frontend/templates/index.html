@@ -249,6 +249,8 @@
     .vd-btn.danger:hover{background:rgba(248,81,73,.15)}
     .vd-btn.primary{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.3);color:var(--accent-lt)}
     .vd-btn.primary:hover{background:rgba(0,212,255,.18)}
+    .vd-btn.warning{background:rgba(234,179,8,.1);border-color:rgba(234,179,8,.3);color:#fbbf24}
+    .vd-btn.warning:hover{background:rgba(234,179,8,.18)}
 
     /* ── Section header ── */
     .section-header{display:flex;align-items:flex-start;margin-bottom:12px;gap:10px}
@@ -278,6 +280,7 @@
     .badge.paused .badge-dot{background:var(--yellow-lt)}
     .badge.crashed{color:var(--red-lt);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.1)}
     .badge.crashed .badge-dot{background:var(--red-lt)}
+    .badge.badge-vm-user{color:#38bdf8;border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.1)}
     .badge.active{color:var(--green-lt);border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.1)}
     .badge.active .badge-dot{background:var(--green-lt)}
     .badge.inactive{color:var(--text-dim);border-color:rgba(61,84,112,.3);background:rgba(61,84,112,.1)}
@@ -1152,33 +1155,146 @@
         <!-- ─────── VM Detail Page ─────── -->
         <div class="page" id="page-vm-detail">
 
-          <!-- VM summary card -->
+          <!-- ── VM Header ── -->
           <div class="vd-card">
             <div class="vd-card-top">
               <div class="vd-vm-icon">🖥️</div>
-              <div class="vd-vm-name" id="vd-name">—</div>
+              <div>
+                <div class="vd-vm-name" id="vd-name">—</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px" id="vd-meta-line">—</div>
+              </div>
               <div style="flex:1"></div>
               <span id="vd-state-badge"></span>
-              <span id="vd-uptime" style="font-size:11px;color:var(--text-muted);margin-left:6px"></span>
+              <span id="vd-uptime" style="font-size:11px;color:var(--text-muted);margin-left:8px"></span>
             </div>
             <div class="vd-sep"></div>
-            <div class="vd-info-row">
-              <div class="vd-info-item">⚙️ &nbsp;<span class="vd-info-val" id="vd-cpu">—</span>&nbsp;<span style="opacity:.55">vCPU</span></div>
-              <div class="vd-info-item">🧠 &nbsp;<span class="vd-info-val" id="vd-mem">—</span>&nbsp;<span id="vd-mem-sub" style="opacity:.55">MB RAM</span></div>
-              <div class="vd-info-item">💾 &nbsp;<span class="vd-info-val" id="vd-disk">—</span>&nbsp;<span id="vd-disk-sub" style="opacity:.55">GB</span></div>
-              <div class="vd-info-item">⚡ &nbsp;<span class="vd-info-val" id="vd-state">—</span></div>
+            <!-- Resource summary strip -->
+            <div class="vd-info-row" style="gap:0;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:8px">
+              <div class="vd-info-item" style="flex:1;border-right:1px solid var(--border);padding-right:16px">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">vCPU</div>
+                <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-cpu">—</div>
+                <div style="font-size:11px;color:var(--text-muted)" id="vd-cpu-pct-line">—</div>
+              </div>
+              <div class="vd-info-item" style="flex:1;border-right:1px solid var(--border);padding:0 16px">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Bellek</div>
+                <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-mem">—</div>
+                <div style="font-size:11px;color:var(--text-muted)" id="vd-mem-sub">MB toplam</div>
+              </div>
+              <div class="vd-info-item" style="flex:1;border-right:1px solid var(--border);padding:0 16px">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Disk</div>
+                <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-disk">—</div>
+                <div style="font-size:11px;color:var(--text-muted)" id="vd-disk-sub">GB</div>
+              </div>
+              <div class="vd-info-item" style="flex:1;padding:0 16px">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Durum</div>
+                <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-state">—</div>
+                <div style="font-size:11px;color:var(--text-muted)" id="vd-state-sub">—</div>
+              </div>
             </div>
+            <!-- Action buttons -->
             <div class="vd-actions-row" id="vd-actions"></div>
           </div>
 
-          <!-- VM Detail Tabs -->
+          <!-- ── Tabs ── -->
           <div class="sub-tabs" id="vd-tabs" style="margin-top:6px">
-            <div class="sub-tab active" onclick="vdTab('hw')" id="vd-tab-hw">🔧 Donanım & Tuning</div>
+            <div class="sub-tab active" onclick="vdTab('overview')" id="vd-tab-overview">📋 Genel Bakış</div>
+            <div class="sub-tab" onclick="vdTab('console')" id="vd-tab-console">▣ Konsol</div>
+            <div class="sub-tab" onclick="vdTab('hw')" id="vd-tab-hw">🔧 Donanım</div>
+            <div class="sub-tab" onclick="vdTab('monitor')" id="vd-tab-monitor">📊 İzleme</div>
             <div class="sub-tab" onclick="vdTab('snap')" id="vd-tab-snap">📸 Snapshot'lar</div>
+            <div class="sub-tab" onclick="vdTab('fw')" id="vd-tab-fw">🛡 Güvenlik Duvarı</div>
           </div>
 
-          <!-- ── Hardware & Tuning Tab ── -->
-          <div id="vd-pane-hw">
+          <!-- ══ Genel Bakış Pane ══ -->
+          <div id="vd-pane-overview">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">
+
+              <!-- VM Info -->
+              <div class="hw-section" style="margin:0">
+                <div class="hw-section-title">🖥️ VM Bilgileri</div>
+                <div class="hw-section-body" style="padding:0">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted);width:45%">UUID</td><td id="ov-uuid" style="padding:7px 12px;font-family:monospace;font-size:11px;word-break:break-all">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">OS / Varyant</td><td id="ov-os" style="padding:7px 12px">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">CPU Modu</td><td id="ov-cpumode" style="padding:7px 12px">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">Autostart</td><td id="ov-autostart" style="padding:7px 12px">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">VNC Port</td><td id="ov-vnc" style="padding:7px 12px">—</td></tr>
+                    <tr><td style="padding:7px 12px;color:var(--text-muted)">Atanan Kullanıcılar</td><td id="ov-assignees" style="padding:7px 12px">—</td></tr>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Network -->
+              <div class="hw-section" style="margin:0">
+                <div class="hw-section-title">🌐 Ağ</div>
+                <div class="hw-section-body" style="padding:0">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px" id="ov-net-table">
+                    <tr><td colspan="2" style="padding:12px;color:var(--text-muted)">Yükleniyor...</td></tr>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Resource Usage -->
+              <div class="hw-section" style="margin:0">
+                <div class="hw-section-title">📈 Kaynak Kullanımı</div>
+                <div class="hw-section-body" style="padding:14px;display:flex;flex-direction:column;gap:14px">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px"><span style="color:var(--text-muted)">CPU</span><span id="ov-cpu-pct" style="font-weight:600">—</span></div>
+                    <div style="background:var(--surface2);border-radius:3px;height:6px"><div id="ov-cpu-bar" style="width:0%;background:var(--accent);height:100%;border-radius:3px;transition:.5s"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px"><span style="color:var(--text-muted)">RAM</span><span id="ov-ram-pct" style="font-weight:600">—</span></div>
+                    <div style="background:var(--surface2);border-radius:3px;height:6px"><div id="ov-ram-bar" style="width:0%;background:#22c55e;height:100%;border-radius:3px;transition:.5s"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px"><span style="color:var(--text-muted)">Disk I/O</span><span id="ov-dio-pct" style="font-weight:600">—</span></div>
+                    <div style="background:var(--surface2);border-radius:3px;height:6px"><div id="ov-dio-bar" style="width:0%;background:#f59e0b;height:100%;border-radius:3px;transition:.5s"></div></div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px"><span style="color:var(--text-muted)">Ağ (RX)</span><span id="ov-net-pct" style="font-weight:600">—</span></div>
+                    <div style="background:var(--surface2);border-radius:3px;height:6px"><div id="ov-net-bar" style="width:0%;background:#a855f7;height:100%;border-radius:3px;transition:.5s"></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Disk list -->
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title">💾 Disk Birimleri</div>
+              <div class="table-wrap" style="margin:0;border-radius:0">
+                <table>
+                  <thead><tr><th>Aygıt</th><th>Yol</th><th>Bus</th><th>Format</th><th>Kapasite</th></tr></thead>
+                  <tbody id="ov-disk-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:12px">—</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Konsol Pane ══ -->
+          <div id="vd-pane-console" style="display:none">
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title">▣ VM Konsolu</div>
+              <div style="padding:32px;text-align:center">
+                <div style="font-size:56px;margin-bottom:16px;opacity:.7">▣</div>
+                <div style="font-size:15px;font-weight:600;margin-bottom:8px" id="con-vm-name">—</div>
+                <div style="color:var(--text-muted);margin-bottom:24px;font-size:13px">noVNC üzerinden VNC konsolu — yeni pencerede açılır.</div>
+                <button class="btn primary" style="font-size:13px;padding:10px 28px" onclick="openConsole(currentVmId)">▣ Konsolu Aç</button>
+                <div style="margin-top:20px;display:inline-grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;text-align:left">
+                  <div style="padding:8px 16px;background:var(--surface2);border-right:1px solid var(--border)">
+                    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">VNC Port</div>
+                    <div style="font-size:13px;font-weight:600" id="con-vnc-port">—</div>
+                  </div>
+                  <div style="padding:8px 16px;background:var(--surface2)">
+                    <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Durum</div>
+                    <div style="font-size:13px;font-weight:600" id="con-state">—</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Donanım Pane ══ -->
+          <div id="vd-pane-hw" style="display:none">
             <!-- CPU -->
             <div class="hw-section">
               <div class="hw-section-title">⚙️ İşlemci (CPU)</div>
@@ -1215,6 +1331,13 @@
                     <span class="hw-restart-badge">🔄 Restart</span>
                   </div>
                 </div>
+                <div class="hw-row">
+                  <div class="hw-label">CPU Pinning</div>
+                  <div class="hw-ctrl">
+                    <span style="font-size:11px;color:var(--text-muted)" id="hw-cpu-pin-info">—</span>
+                    <button class="btn-sm" onclick="openCpuPinModal()">⚙ Yapılandır</button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1238,11 +1361,14 @@
             <div class="hw-section">
               <div class="hw-section-title">
                 💾 Diskler
-                <button class="btn-sm" style="margin-left:auto" onclick="hwOpenAddDisk()">+ Disk Ekle</button>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn-sm" onclick="openCdromModal()">💿 CD-ROM</button>
+                  <button class="btn-sm" onclick="hwOpenAddDisk()">+ Disk Ekle</button>
+                </div>
               </div>
               <div class="table-wrap" style="margin:0;border-radius:0">
                 <table>
-                  <thead><tr><th>Aygıt</th><th>Yol</th><th>Bus</th><th>Format</th><th>İşlem</th></tr></thead>
+                  <thead><tr><th>Aygıt</th><th>Yol</th><th>Bus</th><th>Format</th><th>Boyut</th><th>İşlem</th></tr></thead>
                   <tbody id="hw-disk-tbody"></tbody>
                 </table>
               </div>
@@ -1261,16 +1387,72 @@
                 </table>
               </div>
             </div>
+
+            <!-- Boot & General -->
+            <div class="hw-section">
+              <div class="hw-section-title">⚙️ Genel Ayarlar</div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">Autostart</div>
+                  <div class="hw-ctrl">
+                    <label class="hw-toggle">
+                      <input type="checkbox" id="hw-autostart" onchange="hwApplyAutostart(this.checked)">
+                      <span class="hw-toggle-slider"></span>
+                    </label>
+                    <span style="font-size:11px;color:var(--text-muted)">Host başlayınca VM otomatik başlasın</span>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Açılış Sırası</div>
+                  <div class="hw-ctrl">
+                    <span style="font-size:12px;color:var(--text-muted)" id="hw-boot-order-info">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- ── Snapshots Tab ── -->
+          <!-- ══ İzleme Pane ══ -->
+          <div id="vd-pane-monitor" style="display:none">
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title">
+                📊 Gerçek Zamanlı Metrikler
+                <button class="btn-sm" style="margin-left:auto" onclick="refreshVdMetrics()">↻ Yenile</button>
+              </div>
+              <div id="vd-metrics-wrap" style="padding:14px">
+                <div class="empty-state"><div class="spinner-sm"></div><p>Metrikler yükleniyor...</p></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Snapshot'lar Pane ══ -->
           <div id="vd-pane-snap" style="display:none">
-            <div class="section-header" style="margin-top:10px"><h2>Snapshot'lar</h2></div>
+            <div class="section-header" style="margin-top:10px">
+              <h2>Snapshot'lar</h2>
+              <div class="spacer"></div>
+              <button class="btn primary" onclick="vdCreateSnapshot()">📷 Snapshot Al</button>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Ad</th><th>Tarih</th><th>Açıklama</th><th>İşlem</th></tr></thead>
                 <tbody id="vd-snap-tbody"></tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- ══ Güvenlik Duvarı Pane ══ -->
+          <div id="vd-pane-fw" style="display:none">
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title">
+                🛡 Güvenlik Duvarı Kuralları
+                <button class="btn-sm" style="margin-left:auto" onclick="openAddFwRule()">+ Kural Ekle</button>
+              </div>
+              <div class="table-wrap" style="margin:0;border-radius:0">
+                <table>
+                  <thead><tr><th>Yön</th><th>Protokol</th><th>Port</th><th>Kaynak IP</th><th>Eylem</th><th>İşlem</th></tr></thead>
+                  <tbody id="vd-fw-tbody"><tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -3571,10 +3753,14 @@
       <div class="form-row"><label>Şifre</label><input id="new-password" type="password" placeholder="En az 8 karakter"></div>
       <div class="form-row"><label>Rol</label>
         <select id="new-role">
-          <option value="viewer">İzleyici</option>
+          <option value="vm-user">VM Kullanıcısı (yalnızca atanan VM'ler)</option>
+          <option value="viewer">İzleyici (tüm VM'ler, salt okunur)</option>
           <option value="operator">Operatör</option>
           <option value="administrator">Yönetici</option>
         </select>
+      </div>
+      <div class="form-row" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;color:var(--text-muted)">
+        <strong style="color:var(--fg)">VM Kullanıcısı:</strong> Sadece Özet sayfasını ve kendisine atanan VM'leri görebilir.
       </div>
     </div>
     <div class="modal-footer">
@@ -3597,7 +3783,8 @@
       <div class="form-row"><label>Yeni Şifre</label><input id="edit-user-password" type="password" placeholder="Değiştirmek için girin (opsiyonel)"></div>
       <div class="form-row"><label>Rol</label>
         <select id="edit-user-role">
-          <option value="viewer">İzleyici</option>
+          <option value="vm-user">VM Kullanıcısı (yalnızca atanan VM'ler)</option>
+          <option value="viewer">İzleyici (tüm VM'ler, salt okunur)</option>
           <option value="operator">Operatör</option>
           <option value="administrator">Yönetici</option>
         </select>
@@ -3606,6 +3793,41 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-edit-user')">İptal</button>
       <button class="btn primary" onclick="saveEditUser()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- VM Assignment Modal -->
+<div class="modal-overlay" id="modal-vm-assign">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2>👤 VM Atama — <span id="vm-assign-name"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-vm-assign')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Bu VM'i <strong>vm-user</strong> rolündeki kullanıcılara atayın. Atanan kullanıcılar bu VM'i kendi panellerinde görür.
+      </p>
+      <!-- Current assignees -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Mevcut Atamalar</div>
+        <div id="vm-assign-current" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px">
+          <div class="spinner-sm"></div>
+        </div>
+      </div>
+      <!-- Add assignment -->
+      <div style="border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Kullanıcı Ekle</div>
+        <div style="display:flex;gap:8px">
+          <select id="vm-assign-user-select" style="flex:1">
+            <option value="">— Kullanıcı seçin —</option>
+          </select>
+          <button class="btn primary" onclick="doAssignVm()">+ Ata</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-vm-assign')">Kapat</button>
     </div>
   </div>
 </div>
@@ -6350,67 +6572,275 @@ async function loadVMDetail(vmId) {
     const data = await api(`/vms/${vmId}`);
     const v = data.vm || data;
 
+    // ── Header ────────────────────────────────────────────────────────────────
     document.getElementById("vd-name").textContent = v.name;
+    document.getElementById("vd-meta-line").textContent =
+      `${v.os_variant || "Linux"} · ${v.id || vmId}`;
     document.getElementById("vd-state-badge").innerHTML = stateBadge(v.state);
-    document.getElementById("vd-state").textContent = v.state === "running" ? "Çalışıyor" : "Durdu";
-    document.getElementById("vd-uptime").textContent = v.uptime || (v.state === "running" ? "Aktif" : "Kapalı");
-    document.getElementById("vd-cpu").textContent = v.vcpus;
-    const memUsed = v.memory_used_mb || 0;
-    const memTotal = v.memory_mb || 0;
-    document.getElementById("vd-mem").textContent = memTotal.toLocaleString();
-    document.getElementById("vd-mem-sub").textContent = v.state === 'running' && memUsed > 0
-      ? `MB (${memUsed} MB kullanımda)`
-      : 'MB toplam';
-    const totalDisk = (v.disks || []).reduce((sum, d) => sum + (d.capacity_gb || 0), 0);
-    document.getElementById("vd-disk").textContent = totalDisk.toFixed(1);
-    document.getElementById("vd-disk-sub").textContent = `GB · ${(v.disks || []).length} disk`;
+    document.getElementById("vd-uptime").textContent =
+      v.uptime || (v.state === "running" ? "Aktif" : "");
 
-    // Actions — yeni vd-btn tasarımı
+    // ── Resource strip ────────────────────────────────────────────────────────
+    document.getElementById("vd-cpu").textContent = v.vcpus || "—";
+    document.getElementById("vd-cpu-pct-line").textContent = "çekirdek";
+    const memUsed  = v.memory_used_mb || 0;
+    const memTotal = v.memory_mb || 0;
+    document.getElementById("vd-mem").textContent = memTotal >= 1024
+      ? (memTotal / 1024).toFixed(1) + " GB" : memTotal + " MB";
+    document.getElementById("vd-mem-sub").textContent =
+      v.state === "running" && memUsed > 0
+        ? `${memUsed} MB kullanımda` : "toplam";
+    const totalDisk = (v.disks || []).reduce((s, d) => s + (d.capacity_gb || 0), 0);
+    document.getElementById("vd-disk").textContent = totalDisk.toFixed(1) + " GB";
+    document.getElementById("vd-disk-sub").textContent = `${(v.disks || []).length} disk`;
+    document.getElementById("vd-state").textContent =
+      v.state === "running" ? "Çalışıyor" : v.state === "paused" ? "Duraklatıldı" : "Kapalı";
+    document.getElementById("vd-state-sub").textContent = v.state || "—";
+
+    // ── Action buttons ────────────────────────────────────────────────────────
     let actHtml = "";
     if (v.state !== "running") {
       actHtml += `<button class="vd-btn success" onclick="vmAction('${v.id}','start')">▶ Başlat</button>`;
     } else {
       actHtml += `<button class="vd-btn primary" onclick="openConsole('${v.id}')">▣ Konsol</button>`;
       actHtml += `<button class="vd-btn" onclick="vmAction('${v.id}','reboot')">↺ Yeniden Başlat</button>`;
+      actHtml += `<button class="vd-btn warning" onclick="vmAction('${v.id}','pause')">⏸ Duraklat</button>`;
       actHtml += `<button class="vd-btn danger" onclick="vmForceStop('${v.id}')">⏻ Zorla Durdur</button>`;
     }
-    actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${v.id}')" title="QEMU Guest Agent üzerinden SSH servisi etkinleştir" style="background:var(--surface2);border:1px solid var(--border2)">🔑 SSH Etkinleştir</button>`;
-    actHtml += `<button class="vd-btn" onclick="vmNatSync('${v.id}')" title="VM IP'sini ARP'tan okuyup NAT/DNAT'ı hemen güncelle" style="background:var(--surface2);border:1px solid var(--border2)">🔄 NAT Sync</button>`;
+    if (v.state === "paused") {
+      actHtml += `<button class="vd-btn success" onclick="vmAction('${v.id}','resume')">▶ Devam Et</button>`;
+    }
+    actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${v.id}')" title="SSH servisi etkinleştir">🔑 SSH</button>`;
+    actHtml += `<button class="vd-btn" onclick="vmNatSync('${v.id}')" title="NAT/DNAT güncelle">🔄 NAT Sync</button>`;
+    actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${v.id}','${escHtml(v.name)}')">👤 Atama</button>`;
     actHtml += `<button class="vd-btn danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')">✕ Sil</button>`;
     document.getElementById("vd-actions").innerHTML = actHtml;
+
+    // ── Overview panel ────────────────────────────────────────────────────────
+    document.getElementById("ov-uuid").textContent = v.id || "—";
+    document.getElementById("ov-os").textContent = v.os_variant || "—";
+    document.getElementById("ov-cpumode").textContent = v.cpu_mode || "—";
+    document.getElementById("ov-autostart").textContent = v.autostart ? "✅ Evet" : "❌ Hayır";
+    document.getElementById("ov-vnc").textContent = v.vnc_port ? `${v.vnc_port}` : "—";
+
+    const assignees = v.assignees || [];
+    document.getElementById("ov-assignees").textContent =
+      assignees.length ? assignees.join(", ") : "—";
+
+    // Network table
+    const nics = v.networks || v.nics || [];
+    const netHtml = nics.length
+      ? nics.map((n, i) => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 12px;color:var(--text-muted)">NIC ${i+1}</td>
+            <td style="padding:7px 12px;font-family:monospace;font-size:11px">${escHtml(n.mac || n.mac_address || "—")}</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 12px;color:var(--text-muted)">Ağ</td>
+            <td style="padding:7px 12px">${escHtml(n.network || n.source || "—")}</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 12px;color:var(--text-muted)">IP (DHCP)</td>
+            <td style="padding:7px 12px;font-family:monospace;font-size:11px">${escHtml(n.ip || "—")}</td>
+          </tr>`).join("")
+      : `<tr><td colspan="2" style="padding:12px;color:var(--text-muted)">NIC bulunamadı</td></tr>`;
+    document.getElementById("ov-net-table").innerHTML = netHtml;
+
+    // Disk list in overview
+    const disks = v.disks || [];
+    document.getElementById("ov-disk-tbody").innerHTML = disks.length
+      ? disks.map(d => `<tr>
+          <td><strong>${escHtml(d.target || d.dev || "—")}</strong></td>
+          <td style="font-family:monospace;font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis">${escHtml(d.source || d.path || "—")}</td>
+          <td>${escHtml(d.bus || "—")}</td>
+          <td>${escHtml(d.format || "—")}</td>
+          <td>${d.capacity_gb ? d.capacity_gb.toFixed(1) + " GB" : "—"}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:12px">Disk bulunamadı</td></tr>`;
+
+    // Console tab data
+    document.getElementById("con-vm-name").textContent = v.name;
+    document.getElementById("con-vnc-port").textContent = v.vnc_port || "—";
+    document.getElementById("con-state").textContent = v.state || "—";
+
+    // Autostart in hardware tab
+    const autostartCb = document.getElementById("hw-autostart");
+    if (autostartCb) autostartCb.checked = !!v.autostart;
 
     // Load hardware tuning panel
     loadHardwareConfig(vmId);
 
-    // Snapshots
-    try {
-      const snapData = await api(`/vms/${vmId}/snapshots`);
-      const snaps = snapData.snapshots || [];
-      document.getElementById("vd-snap-tbody").innerHTML = snaps.length
-        ? snaps.map(s => `<tr>
-            <td><strong>${escHtml(s.name)}</strong></td>
-            <td>${s.creation_time ? new Date(s.creation_time * 1000).toLocaleString("tr-TR") : "—"}</td>
-            <td>${escHtml(s.description || "—")}</td>
-            <td>
-              <button class="btn sm" onclick="revertSnapshot('${vmId}','${escHtml(s.name)}')">↶ Geri Yükle</button>
-              <button class="btn sm danger" onclick="deleteSnapshot('${vmId}','${escHtml(s.name)}')">✕</button>
-            </td>
-          </tr>`).join("")
-        : `<tr><td colspan="4"><div class="empty-state"><p>Snapshot yok</p></div></td></tr>`;
-    } catch (e) {
-      document.getElementById("vd-snap-tbody").innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>Snapshot alınamadı</p></div></td></tr>`;
-    }
+    // Load snapshots (lazy if tab active)
+    _loadVdSnapshots(vmId);
+
+    // Metrics overview (lazy, non-blocking)
+    _loadVdMetricsOverview(vmId);
+
   } catch (e) {
     toast("VM detayı alınamadı: " + e.message, "error");
   }
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
+const _vdPanes = ['overview','console','hw','monitor','snap','fw'];
+
 function vdTab(name) {
-  document.getElementById('vd-pane-hw').style.display   = name === 'hw'   ? '' : 'none';
-  document.getElementById('vd-pane-snap').style.display = name === 'snap' ? '' : 'none';
-  document.getElementById('vd-tab-hw').classList.toggle('active',   name === 'hw');
-  document.getElementById('vd-tab-snap').classList.toggle('active', name === 'snap');
+  _vdPanes.forEach(p => {
+    const pane = document.getElementById(`vd-pane-${p}`);
+    const tab  = document.getElementById(`vd-tab-${p}`);
+    if (pane) pane.style.display = p === name ? '' : 'none';
+    if (tab)  tab.classList.toggle('active', p === name);
+  });
+  if (name === 'monitor' && currentVmId) refreshVdMetrics();
+  if (name === 'fw'      && currentVmId) loadVdFirewall(currentVmId);
+  if (name === 'snap'    && currentVmId) _loadVdSnapshots(currentVmId);
+}
+
+// ── Metrics Overview (non-blocking) ──────────────────────────────────────────
+async function _loadVdMetricsOverview(vmId) {
+  try {
+    const d = await api(`/vms/${vmId}/stats`);
+    const cpuPct  = d.cpu_percent      || 0;
+    const ramPct  = d.memory_percent   || 0;
+    const dioPct  = Math.min(100, (d.disk_read_mb_s || 0) / 0.5);   // 50 MB/s = 100%
+    const netPct  = Math.min(100, (d.net_rx_mb_s   || 0) / 1.0);   // 100 MB/s = 100%
+    _el("ov-cpu-bar").style.width  = cpuPct + "%";
+    _el("ov-cpu-pct").textContent  = cpuPct.toFixed(1) + "%";
+    _el("ov-ram-bar").style.width  = ramPct + "%";
+    _el("ov-ram-pct").textContent  = ramPct.toFixed(1) + "%";
+    _el("ov-dio-bar").style.width  = dioPct + "%";
+    _el("ov-dio-pct").textContent  = (d.disk_read_mb_s || 0).toFixed(1) + " MB/s";
+    _el("ov-net-bar").style.width  = netPct + "%";
+    _el("ov-net-pct").textContent  = (d.net_rx_mb_s || 0).toFixed(2) + " MB/s";
+    // Update cpu-pct-line in header
+    _el("vd-cpu-pct-line").textContent = cpuPct > 0 ? cpuPct.toFixed(1) + "% kullanımda" : "çekirdek";
+  } catch (_) {}
+}
+
+function _el(id) { return document.getElementById(id); }
+
+// ── Monitoring Tab ────────────────────────────────────────────────────────────
+async function refreshVdMetrics() {
+  const vmId = currentVmId;
+  if (!vmId) return;
+  document.getElementById("vd-metrics-wrap").innerHTML =
+    `<div class="empty-state"><div class="spinner-sm"></div><p>Metrikler yükleniyor...</p></div>`;
+  try {
+    const d = await api(`/vms/${vmId}/stats`);
+    const m = await api(`/metrics/vm/${vmId}`).catch(() => ({}));
+    const rows = [
+      ["CPU Kullanımı",       (d.cpu_percent      || 0).toFixed(2) + " %"],
+      ["Bellek Kullanımı",    (d.memory_percent    || 0).toFixed(2) + " % (" + (d.memory_used_mb||0) + " MB / " + (d.memory_mb||0) + " MB)"],
+      ["Disk Okuma",          (d.disk_read_mb_s    || 0).toFixed(2) + " MB/s"],
+      ["Disk Yazma",          (d.disk_write_mb_s   || 0).toFixed(2) + " MB/s"],
+      ["Ağ RX",               (d.net_rx_mb_s       || 0).toFixed(3) + " MB/s"],
+      ["Ağ TX",               (d.net_tx_mb_s       || 0).toFixed(3) + " MB/s"],
+      ["Çalışma Süresi",      d.uptime || "—"],
+      ["VCPU Sayısı",         d.vcpus  || "—"],
+    ];
+    document.getElementById("vd-metrics-wrap").innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${rows.map(([k,v]) => `
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 16px">
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">${k}</div>
+            <div style="font-size:15px;font-weight:600">${v}</div>
+          </div>`).join("")}
+      </div>`;
+  } catch (e) {
+    document.getElementById("vd-metrics-wrap").innerHTML =
+      `<div class="empty-state"><p>Metrikler alınamadı: ${e.message}</p></div>`;
+  }
+}
+
+// ── Snapshots (VM Detail) ─────────────────────────────────────────────────────
+async function _loadVdSnapshots(vmId) {
+  try {
+    const snapData = await api(`/vms/${vmId}/snapshots`);
+    const snaps = snapData.snapshots || [];
+    document.getElementById("vd-snap-tbody").innerHTML = snaps.length
+      ? snaps.map(s => `<tr>
+          <td><strong>${escHtml(s.name)}</strong></td>
+          <td>${s.creation_time ? new Date(s.creation_time*1000).toLocaleString("tr-TR") : "—"}</td>
+          <td>${escHtml(s.description || "—")}</td>
+          <td>
+            <button class="btn sm" onclick="revertSnapshot('${vmId}','${escHtml(s.name)}')">↶ Geri Yükle</button>
+            <button class="btn sm danger" onclick="deleteSnapshot('${vmId}','${escHtml(s.name)}')">✕</button>
+          </td>
+        </tr>`).join("")
+      : `<tr><td colspan="4"><div class="empty-state"><p>Snapshot yok</p></div></td></tr>`;
+  } catch (e) {
+    document.getElementById("vd-snap-tbody").innerHTML =
+      `<tr><td colspan="4"><div class="empty-state"><p>Snapshot alınamadı</p></div></td></tr>`;
+  }
+}
+
+async function vdCreateSnapshot() {
+  const name = prompt("Snapshot adı:", `snap-${Date.now()}`);
+  if (!name) return;
+  const desc = prompt("Açıklama (opsiyonel):", "") || "";
+  try {
+    await api(`/vms/${currentVmId}/snapshots`, { method:"POST", body:{ name, description:desc }});
+    toast("Snapshot alındı", "success");
+    _loadVdSnapshots(currentVmId);
+  } catch(e) { toast("Snapshot hatası: " + e.message, "error"); }
+}
+
+// ── Firewall (VM Detail) ──────────────────────────────────────────────────────
+async function loadVdFirewall(vmId) {
+  document.getElementById("vd-fw-tbody").innerHTML =
+    `<tr><td colspan="6" style="text-align:center;padding:16px"><div class="spinner-sm"></div></td></tr>`;
+  try {
+    const d = await api(`/vms/${vmId}/firewall`);
+    const rules = d.rules || [];
+    document.getElementById("vd-fw-tbody").innerHTML = rules.length
+      ? rules.map((r,i) => `<tr>
+          <td><span class="badge ${r.direction==="in"?"running":"stopped"}">${r.direction === "in" ? "GİRİŞ" : "ÇIKIŞ"}</span></td>
+          <td>${escHtml(r.protocol||"—")}</td>
+          <td>${escHtml(r.port||"—")}</td>
+          <td style="font-family:monospace;font-size:11px">${escHtml(r.source_ip||"0.0.0.0/0")}</td>
+          <td><span class="badge ${r.action==="ACCEPT"?"running":"stopped"}">${escHtml(r.action||"—")}</span></td>
+          <td><button class="btn sm danger" onclick="deleteFwRule('${vmId}',${i})">✕ Sil</button></td>
+        </tr>`).join("")
+      : `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">Kural yok</td></tr>`;
+  } catch (e) {
+    document.getElementById("vd-fw-tbody").innerHTML =
+      `<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">Güvenlik duvarı bilgisi alınamadı</td></tr>`;
+  }
+}
+
+async function openAddFwRule() {
+  const dir   = prompt("Yön (in/out):", "in");
+  if (!dir) return;
+  const proto = prompt("Protokol (tcp/udp/icmp):", "tcp");
+  if (!proto) return;
+  const port  = prompt("Port (örn: 22 veya 8080-8090):", "");
+  const src   = prompt("Kaynak IP (boş = herkes):", "") || "0.0.0.0/0";
+  const act   = prompt("Eylem (ACCEPT/DROP):", "ACCEPT");
+  try {
+    await api(`/vms/${currentVmId}/firewall`, {
+      method:"POST",
+      body:{ direction:dir, protocol:proto, port:port||undefined, source_ip:src, action:act }
+    });
+    toast("Kural eklendi", "success");
+    loadVdFirewall(currentVmId);
+  } catch(e) { toast("Kural eklenemedi: " + e.message, "error"); }
+}
+
+async function deleteFwRule(vmId, idx) {
+  if (!confirm("Bu kural silinsin mi?")) return;
+  try {
+    await api(`/vms/${vmId}/firewall`, { method:"DELETE", body:{ index:idx }});
+    toast("Kural silindi", "success");
+    loadVdFirewall(vmId);
+  } catch(e) { toast("Silinemedi: " + e.message, "error"); }
+}
+
+// ── Autostart toggle ──────────────────────────────────────────────────────────
+async function hwApplyAutostart(val) {
+  try {
+    await api(`/vms/${currentVmId}/autostart`, { method:"PUT", body:{ autostart:val }});
+    toast(`Autostart ${val ? "etkinleştirildi" : "devre dışı"}`, "success");
+  } catch(e) { toast("Autostart değiştirilemedi: " + e.message, "error"); }
 }
 
 // ── Hardware Tuning Panel ─────────────────────────────────────────────────────
@@ -6453,9 +6883,10 @@ async function loadHardwareConfig(vmId) {
         <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.path)}">${pathDisp}</td>
         <td>${escHtml(d.bus)}</td>
         <td>${escHtml(d.format)}</td>
+        <td>${d.capacity_gb ? d.capacity_gb.toFixed(1) + " GB" : "—"}</td>
         <td>${action}</td>
       </tr>`;
-    }).join('') || `<tr><td colspan="5"><div class="empty-state"><p>Disk yok</p></div></td></tr>`;
+    }).join('') || `<tr><td colspan="6"><div class="empty-state"><p>Disk yok</p></div></td></tr>`;
 
     // NICs
     const nt = document.getElementById('hw-nic-tbody');
@@ -7941,19 +8372,36 @@ async function loadDiskUsage() {
 
 /* ══════════════════ Users ══════════════════ */
 
+function _roleLabel(role) {
+  return {
+    "administrator": ["Yönetici", "running"],
+    "operator":      ["Operatör", "paused"],
+    "viewer":        ["İzleyici", "stopped"],
+    "vm-user":       ["VM Kullanıcısı", "badge-vm-user"],
+  }[role] || [role, "stopped"];
+}
+
 async function loadUsers() {
   try {
     const data = await api("/users");
     const users = data.users || [];
-    document.getElementById("users-tbody").innerHTML = users.map(u => `<tr>
-      <td><div style="display:flex;align-items:center;gap:10px">
-        <div class="user-avatar" style="width:26px;height:26px;font-size:11px">${u.username[0].toUpperCase()}</div>
-        <strong>${escHtml(u.username)}</strong>
-      </div></td>
-      <td><span class="badge ${u.role==="administrator"?"running":u.role==="operator"?"paused":"stopped"}">${u.role==="administrator"?"Yönetici":u.role==="operator"?"Operatör":"İzleyici"}</span></td>
-      <td>${u.created ? new Date(u.created*1000).toLocaleString("tr-TR") : "—"}</td>
-      <td style="display:flex;gap:6px;align-items:center">${u.username !== "admin" ? `<button class="btn sm" onclick="openEditUser('${escHtml(u.username)}','${u.role}')">✏</button><button class="btn sm danger" onclick="deleteUser('${escHtml(u.username)}')">✕</button>` : "—"}</td>
-    </tr>`).join("");
+    document.getElementById("users-tbody").innerHTML = users.map(u => {
+      const [roleLabel, roleCls] = _roleLabel(u.role);
+      const isPrimary = u.is_primary || u.username === "admin";
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:10px">
+          <div class="user-avatar" style="width:26px;height:26px;font-size:11px">${u.username[0].toUpperCase()}</div>
+          <strong>${escHtml(u.username)}</strong>
+          ${isPrimary ? '<span style="font-size:10px;color:var(--text-muted);margin-left:4px">(ana yönetici)</span>' : ""}
+        </div></td>
+        <td><span class="badge ${roleCls}">${roleLabel}</span></td>
+        <td>${u.created ? new Date(u.created*1000).toLocaleString("tr-TR") : "—"}</td>
+        <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${u.role === "vm-user" ? `<button class="btn sm" onclick="openUserVmAssignModal('${escHtml(u.username)}')">👤 VM Ata</button>` : ""}
+          ${!isPrimary ? `<button class="btn sm" onclick="openEditUser('${escHtml(u.username)}','${u.role}')">✏ Düzenle</button><button class="btn sm danger" onclick="deleteUser('${escHtml(u.username)}')">✕ Sil</button>` : ""}
+        </td>
+      </tr>`;
+    }).join("");
   } catch (e) { toast("Kullanıcılar alınamadı: " + e.message, "error"); }
 }
 
@@ -8001,6 +8449,122 @@ async function saveEditUser() {
     closeModal('modal-edit-user');
     loadUsers();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+/* ══════════════════ VM Assignment ══════════════════ */
+
+let _assignVmId   = null;
+let _assignVmName = null;
+
+async function openVmAssignModal(vmId, vmName) {
+  _assignVmId   = vmId;
+  _assignVmName = vmName;
+  document.getElementById("vm-assign-name").textContent = vmName;
+  openModal("modal-vm-assign");
+  await _refreshAssignModal();
+}
+
+async function openUserVmAssignModal(username) {
+  // Open the same modal but pre-set from user side — show which VMs assigned
+  // For simplicity: open a prompt-based flow; could be enhanced later
+  const vmData = await api("/vms").catch(() => ({ vms: [] }));
+  const allVms = vmData.vms || [];
+  const userVms = await api(`/users/${username}/vms`).catch(() => ({ vm_ids: [] }));
+  const assigned = new Set(userVms.vm_ids || []);
+
+  const lines = allVms.map(v =>
+    `${assigned.has(v.id) ? "[ATANMIŞ] " : "         "} ${v.name} (${v.id})`
+  ).join("\n");
+  const choice = prompt(
+    `${username} için VM Yönetimi\nATANMIŞ VM'ler:\n\n${lines}\n\nAtamak/kaldırmak için VM ID girin:`,
+    ""
+  );
+  if (!choice) return;
+  const chosenVm = allVms.find(v => v.id === choice.trim() || v.name === choice.trim());
+  if (!chosenVm) return toast("VM bulunamadı", "error");
+
+  if (assigned.has(chosenVm.id)) {
+    if (!confirm(`"${chosenVm.name}" → "${username}" ataması KALDIRILSIN mi?`)) return;
+    await api(`/vms/${chosenVm.id}/assign/${username}`, { method:"DELETE" });
+    toast("Atama kaldırıldı", "success");
+  } else {
+    await api(`/vms/${chosenVm.id}/assign`, { method:"POST", body:{ username } });
+    toast("VM atandı", "success");
+  }
+  loadUsers();
+}
+
+async function _refreshAssignModal() {
+  if (!_assignVmId) return;
+  // Load current assignees
+  try {
+    const d = await api(`/vms/${_assignVmId}/assign`);
+    const assignees = d.assignees || [];
+    document.getElementById("vm-assign-current").innerHTML = assignees.length
+      ? assignees.map(u => `
+          <span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px">
+            👤 ${escHtml(u)}
+            <button onclick="doUnassignVm('${escHtml(u)}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:13px;padding:0 2px;line-height:1">✕</button>
+          </span>`).join("")
+      : `<span style="color:var(--text-muted);font-size:12px">Atama yok</span>`;
+  } catch(e) {
+    document.getElementById("vm-assign-current").textContent = "Yüklenemedi";
+  }
+
+  // Load user list for dropdown
+  try {
+    const udata = await api("/users");
+    const allUsers = (udata.users || []).filter(u => u.role === "vm-user");
+    const sel = document.getElementById("vm-assign-user-select");
+    sel.innerHTML = `<option value="">— Kullanıcı seçin —</option>` +
+      allUsers.map(u => `<option value="${escHtml(u.username)}">${escHtml(u.username)}</option>`).join("");
+  } catch(e) {}
+}
+
+async function doAssignVm() {
+  const username = document.getElementById("vm-assign-user-select").value;
+  if (!username) return toast("Kullanıcı seçin", "error");
+  try {
+    await api(`/vms/${_assignVmId}/assign`, { method:"POST", body:{ username } });
+    toast(`"${username}" atandı`, "success");
+    await _refreshAssignModal();
+  } catch(e) { toast("Atama hatası: " + e.message, "error"); }
+}
+
+async function doUnassignVm(username) {
+  if (!confirm(`"${username}" ataması kaldırılsın mı?`)) return;
+  try {
+    await api(`/vms/${_assignVmId}/assign/${username}`, { method:"DELETE" });
+    toast("Atama kaldırıldı", "success");
+    await _refreshAssignModal();
+  } catch(e) { toast("Hata: " + e.message, "error"); }
+}
+
+// Helper stubs for new hw panel functions
+function openCdromModal() {
+  const vmId = currentVmId;
+  if (!vmId) return;
+  const iso = prompt("ISO yolunu girin (boş bırak = çıkar):", "");
+  if (iso === null) return;
+  api(`/vms/${vmId}/cdrom`, { method:"PUT", body:{ iso_path: iso || "" }})
+    .then(() => { toast(iso ? "ISO takıldı" : "ISO çıkarıldı", "success"); loadHardwareConfig(vmId); })
+    .catch(e => toast("CD-ROM hatası: " + e.message, "error"));
+}
+
+function openCpuPinModal() {
+  const vmId = currentVmId;
+  if (!vmId) return;
+  api(`/vms/${vmId}/cpu-pinning`).then(d => {
+    const pinned = JSON.stringify(d.pinning || {}, null, 2);
+    const input = prompt("CPU Pinning (JSON):", pinned);
+    if (!input) return;
+    try {
+      const body = JSON.parse(input);
+      api(`/vms/${vmId}/cpu-pinning`, { method:"POST", body })
+        .then(() => toast("CPU pinning uygulandı", "success"))
+        .catch(e => toast("Hata: " + e.message, "error"));
+    } catch(e) { toast("Geçersiz JSON", "error"); }
+  }).catch(e => toast("CPU pinning alınamadı: " + e.message, "error"));
 }
 
 /* ══════════════════ Topology ══════════════════ */

@@ -17,6 +17,7 @@ ROLES = {
     "administrator": ["*"],
     "operator": ["vm.*", "storage.read", "network.read", "system.read"],
     "viewer": ["*.read", "system.read"],
+    "vm-user": ["vm.read"],   # only assigned VMs via filtering
 }
 
 _PBKDF2_ITER = 260_000

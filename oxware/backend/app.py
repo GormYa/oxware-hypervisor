@@ -1380,7 +1380,20 @@ def api_change_password():
 @require_auth
 def api_list_vms():
     try:
+        from flask_jwt_extended import get_jwt_identity
+        username = get_jwt_identity()
+        role = user_manager.get_user_role(username)
+        # Primary admin check
+        try:
+            _pa = cred_mgr.get_username()
+            if username == _pa:
+                role = "administrator"
+        except Exception:
+            pass
         vms = vm_manager.list_vms()
+        if role == "vm-user":
+            allowed = set(user_manager.get_user_vms(username))
+            vms = [v for v in vms if v.get("id") in allowed or v.get("name") in allowed]
         return ok(vms=vms, count=len(vms))
     except Exception as e:
         return err(e, 500)
@@ -1389,7 +1402,23 @@ def api_list_vms():
 @require_auth
 def api_get_vm(vm_id):
     try:
-        return ok(vm=vm_manager.get_vm(vm_id))
+        from flask_jwt_extended import get_jwt_identity
+        username = get_jwt_identity()
+        role = user_manager.get_user_role(username)
+        try:
+            if username == cred_mgr.get_username():
+                role = "administrator"
+        except Exception:
+            pass
+        vm = vm_manager.get_vm(vm_id)
+        if role == "vm-user":
+            allowed = set(user_manager.get_user_vms(username))
+            if vm_id not in allowed and (vm or {}).get("name") not in allowed:
+                return err("Bu VM'e erişim izniniz yok", 403)
+        # Attach assignees list for admin/operator
+        if role in ("administrator", "admin", "operator"):
+            vm["assignees"] = user_manager.get_vm_users(vm_id)
+        return ok(vm=vm)
     except Exception as e:
         return err(e, 404)
 
@@ -3292,6 +3321,7 @@ def api_delete_user(username):
         return err("Ana yönetici silinemez", 403)
     try:
         user_manager.delete_user(username)
+        user_manager.unassign_all_user_vms(username)
         ev.info(f"Kullanıcı silindi: {username}", category="auth")
         return ok(status="deleted")
     except KeyError as e:
@@ -3334,6 +3364,68 @@ def api_update_user(username):
         return err(str(e))
     except Exception as e:
         return err(str(e), 500)
+
+# ── VM Assignment endpoints ──────────────────────────────────────────────────
+
+@app.route("/api/vms/<vm_id>/assign", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_get_vm_assignees(vm_id):
+    """Get users assigned to this VM."""
+    try:
+        assignees = user_manager.get_vm_users(vm_id)
+        return ok(assignees=assignees)
+    except Exception as e:
+        return err(e, 500)
+
+
+@app.route("/api/vms/<vm_id>/assign", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_assign_vm(vm_id):
+    """Assign VM to a user."""
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    if not username:
+        return err("username gerekli")
+    try:
+        # Validate user exists
+        all_users = user_manager.list_users()
+        names = {u["username"] for u in all_users}
+        primary = cred_mgr.get_username()
+        if username not in names and username != primary:
+            return err(f"Kullanıcı bulunamadı: {username}", 404)
+        user_manager.assign_vm(username, vm_id)
+        ev.info(f"VM atandı: {vm_id} → {username}", category="auth")
+        return ok(status="assigned")
+    except Exception as e:
+        return err(e, 500)
+
+
+@app.route("/api/vms/<vm_id>/assign/<username>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_unassign_vm(vm_id, username):
+    """Remove VM assignment from user."""
+    try:
+        user_manager.unassign_vm(username, vm_id)
+        ev.info(f"VM ataması kaldırıldı: {vm_id} → {username}", category="auth")
+        return ok(status="unassigned")
+    except Exception as e:
+        return err(e, 500)
+
+
+@app.route("/api/users/<username>/vms", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_get_user_vms(username):
+    """Get VMs assigned to a user."""
+    try:
+        vm_ids = user_manager.get_user_vms(username)
+        return ok(vm_ids=vm_ids)
+    except Exception as e:
+        return err(e, 500)
+
 
 # ── Shell Konsol ──────────────────────────────────────────────────────────────
 @app.route("/api/system/execute", methods=["POST"])
