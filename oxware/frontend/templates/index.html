@@ -12675,10 +12675,12 @@ const _origLoadSettings = typeof loadSettings === 'function' ? loadSettings : nu
 <!-- OVA Import Modal -->
 <div id="modal-ova-import" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:480px">
-    <h3>⬆ OVA/OVF Import</h3>
-    <p style="color:var(--fg2);font-size:13px">OVA, OVF veya VMDK içeren tar arşivini yükle. Disk otomatik qcow2'ye dönüştürülür.</p>
+    <h3>⬆ VM Import</h3>
+    <p style="color:var(--fg2);font-size:13px">Desteklenen formatlar: <code>.ova</code> <code>.vmdk</code> <code>.ovf</code> <code>.qcow2</code> <code>.vhd</code> <code>.vhdx</code> <code>.raw</code> <code>.img</code> <code>.tar</code> — disk otomatik qcow2'ye dönüştürülür.</p>
     <div style="margin:16px 0">
-      <input type="file" id="ova-file-input" accept=".ova,.ovf,.tar,.tar.gz" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg)">
+      <input type="file" id="ova-file-input"
+        accept=".ova,.ovf,.tar,.tar.gz,.vmdk,.qcow2,.raw,.img,.vhd,.vhdx,.nvr,.nvrx"
+        style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg)">
     </div>
     <div id="ova-import-status" style="font-size:13px;color:var(--fg2);min-height:20px"></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">

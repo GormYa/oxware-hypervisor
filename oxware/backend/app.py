@@ -6949,8 +6949,13 @@ def api_import_ova():
         return jsonify({"error": "file alanı gerekli"}), 400
     f = request.files["file"]
     fname = f.filename or "import.ova"
-    if not fname.lower().endswith((".ova", ".ovf", ".tar", ".tar.gz")):
-        return jsonify({"error": "Desteklenen format: .ova .ovf .tar .tar.gz"}), 400
+    _ALLOWED_IMPORT_EXTS = (
+        ".ova", ".ovf", ".tar", ".tar.gz",
+        ".vmdk", ".qcow2", ".raw", ".img",
+        ".vhd", ".vhdx", ".nvr", ".nvrx",
+    )
+    if not any(fname.lower().endswith(ext) for ext in _ALLOWED_IMPORT_EXTS):
+        return jsonify({"error": "Desteklenen formatlar: .ova .vmdk .ovf .qcow2 .vhd .vhdx .raw .img .tar"}), 400
     _IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     save_path = _IMPORT_DIR / fname
     f.save(str(save_path))
@@ -6971,15 +6976,31 @@ def api_import_ova():
             for fp in extract_dir.iterdir():
                 if fp.suffix.lower() == ".ovf":
                     ovf_file = fp
-                elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw"):
+                elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw", ".vhd", ".vhdx", ".nvr", ".nvrx"):
                     disk_files.append(fp)
             if not disk_files:
                 ev.warning(f"OVA import: disk dosyası bulunamadı — {fname}", category="vm")
                 return
-            vm_name = fname.replace(".ova", "").replace(".tar.gz", "").replace(".tar", "")
+            _vm_strip_exts = (".tar.gz", ".ova", ".ovf", ".tar", ".vmdk", ".qcow2",
+                              ".raw", ".img", ".vhd", ".vhdx", ".nvr", ".nvrx")
+            vm_name = fname
+            for _ext in _vm_strip_exts:
+                if vm_name.lower().endswith(_ext):
+                    vm_name = vm_name[:-len(_ext)]
+                    break
+            vm_name = vm_name.replace(" ", "_").replace(".", "_") or "imported-vm"
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
             src_disk = disk_files[0]
-            r_conv = subprocess.run(["qemu-img", "convert", "-O", "qcow2", str(src_disk), str(disk_path)], capture_output=True, text=True)
+            # Detect source format so qemu-img doesn't have to guess (important for vmdk/vhd)
+            _fmt_map = {".vmdk": "vmdk", ".vhd": "vpc", ".vhdx": "vhdx",
+                        ".qcow2": "qcow2", ".raw": "raw", ".img": "raw",
+                        ".nvr": "raw", ".nvrx": "raw"}
+            _src_fmt = _fmt_map.get(src_disk.suffix.lower(), "")
+            _conv_cmd = ["qemu-img", "convert", "-p", "-O", "qcow2"]
+            if _src_fmt:
+                _conv_cmd += ["-f", _src_fmt]
+            _conv_cmd += [str(src_disk), str(disk_path)]
+            r_conv = subprocess.run(_conv_cmd, capture_output=True, text=True)
             if r_conv.returncode != 0:
                 ev.warning(f"OVA import disk convert hatası: {r_conv.stderr}", category="vm")
                 return
