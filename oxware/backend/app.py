@@ -6948,6 +6948,216 @@ def _import_job_update(job_id: str, **kw):
         if job_id in _import_jobs:
             _import_jobs[job_id].update(kw)
 
+
+def _parse_ovf(ovf_path) -> dict:
+    """Parse OVF file for CPU, RAM and OS type. Returns safe defaults on failure."""
+    specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown", "os_desc": ""}
+    try:
+        tree = ET.parse(str(ovf_path))
+        root = tree.getroot()
+
+        # ── OS type detection ──────────────────────────────────────────────────
+        for os_el in root.iter():
+            if os_el.tag.split("}")[-1] == "OperatingSystemSection":
+                # VMware OVF uses ovf:id attribute; Windows IDs are 65-120
+                os_id_str = ""
+                for attr_name, attr_val in os_el.attrib.items():
+                    if attr_name.endswith("}id") or attr_name == "id":
+                        os_id_str = attr_val
+                try:
+                    os_id_int = int(os_id_str)
+                    if 65 <= os_id_int <= 120:
+                        specs["os_type"] = "windows"
+                    elif os_id_int > 0:
+                        specs["os_type"] = "linux"
+                except (ValueError, TypeError):
+                    pass
+                for child in os_el:
+                    if child.tag.split("}")[-1] == "Description" and child.text:
+                        specs["os_desc"] = child.text
+                        dl = child.text.lower()
+                        if "windows" in dl:
+                            specs["os_type"] = "windows"
+                        elif any(x in dl for x in ["linux","ubuntu","debian","centos",
+                                                    "red hat","rhel","fedora","suse",
+                                                    "kali","mint","arch","rocky","alma"]):
+                            specs["os_type"] = "linux"
+                break
+
+        # ── CPU / RAM from VirtualHardwareSection ─────────────────────────────
+        for item in root.iter():
+            if item.tag.split("}")[-1] != "Item":
+                continue
+            rt = qty = units = None
+            for child in item:
+                tag = child.tag.split("}")[-1]
+                if tag == "ResourceType":
+                    rt = child.text
+                elif tag == "VirtualQuantity":
+                    qty = child.text
+                elif tag == "AllocationUnits":
+                    units = (child.text or "").lower()
+            if rt == "3" and qty:          # vCPU
+                try:
+                    specs["vcpus"] = max(1, min(128, int(qty)))
+                except ValueError:
+                    pass
+            elif rt == "4" and qty:        # Memory
+                try:
+                    mb = int(qty)
+                    if units and ("gb" in units or "gigabyte" in units):
+                        mb *= 1024
+                    elif units and "kb" in units:
+                        mb //= 1024
+                    elif units and "byte * 2^30" in units:
+                        mb = mb // (1024 * 1024)
+                    # "byte * 2^20" == MiB — no conversion needed
+                    specs["ram_mb"] = max(512, min(262144, mb))
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return specs
+
+
+def _detect_os_from_name(name: str) -> str:
+    """Guess OS type from filename when OVF is absent."""
+    n = name.lower()
+    if any(x in n for x in ["win", "windows", "w10", "w11", "w7", "w8",
+                             "server", "2016", "2019", "2022", "2012"]):
+        return "windows"
+    if any(x in n for x in ["ubuntu", "debian", "centos", "rhel", "linux",
+                             "fedora", "kali", "mint", "arch", "rocky", "alma",
+                             "suse", "freebsd", "proxmox"]):
+        return "linux"
+    return "unknown"
+
+
+def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int, os_type: str) -> str:
+    """Return OS-optimised libvirt domain XML for imported VM."""
+    dp = str(disk_path)
+
+    if os_type == "windows":
+        # q35 + SATA (no VirtIO needed) + e1000 + HyperV enlightenments
+        # Clock: localtime (Windows expects hardware clock = local time)
+        return f"""<domain type='kvm'>
+  <name>{vm_name}</name>
+  <memory unit='MiB'>{ram_mb}</memory>
+  <vcpu placement='static'>{vcpus}</vcpu>
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/><apic/>
+    <hyperv mode='custom'>
+      <relaxed state='on'/><vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+      <vpindex state='on'/><runtime state='on'/>
+      <synic state='on'/><stimer state='on'/>
+      <reset state='on'/><frequencies state='on'/>
+    </hyperv>
+    <vmport state='off'/>
+  </features>
+  <cpu mode='host-passthrough' check='none' migratable='on'/>
+  <clock offset='localtime'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+    <timer name='hypervclock' present='yes'/>
+  </clock>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none' io='native'/>
+      <source file='{dp}'/>
+      <target dev='sda' bus='sata'/>
+    </disk>
+    <controller type='sata' index='0'/>
+    <interface type='network'>
+      <source network='default'/>
+      <model type='e1000'/>
+    </interface>
+    <input type='tablet' bus='usb'/>
+    <input type='keyboard' bus='usb'/>
+    <graphics type='vnc' port='-1' listen='0.0.0.0'/>
+    <video><model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/></video>
+    <memballoon model='none'/>
+  </devices>
+</domain>"""
+
+    elif os_type == "linux":
+        # q35 + SATA disk (keeps /dev/sda — same as VMware SCSI, GRUB/fstab safe)
+        # virtio-net (Linux always has it in initrd)
+        # Clock: UTC (Linux standard)
+        return f"""<domain type='kvm'>
+  <name>{vm_name}</name>
+  <memory unit='MiB'>{ram_mb}</memory>
+  <vcpu placement='static'>{vcpus}</vcpu>
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features><acpi/><apic/></features>
+  <cpu mode='host-passthrough' check='none' migratable='on'/>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>
+      <source file='{dp}'/>
+      <target dev='sda' bus='sata'/>
+    </disk>
+    <controller type='sata' index='0'/>
+    <interface type='network'>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+    <input type='tablet' bus='usb'/>
+    <graphics type='vnc' port='-1' listen='0.0.0.0'/>
+    <video><model type='vga' vram='16384' heads='1' primary='yes'/></video>
+    <memballoon model='virtio'><stats period='10'/></memballoon>
+    <rng model='virtio'><backend model='random'>/dev/urandom</backend></rng>
+  </devices>
+</domain>"""
+
+    else:
+        # Unknown OS — conservative SATA + e1000 + qxl (safest universal config)
+        return f"""<domain type='kvm'>
+  <name>{vm_name}</name>
+  <memory unit='MiB'>{ram_mb}</memory>
+  <vcpu placement='static'>{vcpus}</vcpu>
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features><acpi/><apic/></features>
+  <cpu mode='host-passthrough' check='none' migratable='on'/>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none' io='native'/>
+      <source file='{dp}'/>
+      <target dev='sda' bus='sata'/>
+    </disk>
+    <controller type='sata' index='0'/>
+    <interface type='network'>
+      <source network='default'/>
+      <model type='e1000'/>
+    </interface>
+    <input type='tablet' bus='usb'/>
+    <graphics type='vnc' port='-1' listen='0.0.0.0'/>
+    <video><model type='qxl' ram='65536' vram='65536' vgamem='16384'/></video>
+    <memballoon model='none'/>
+  </devices>
+</domain>"""
+
 @app.route("/api/import/ova", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
@@ -6996,13 +7206,14 @@ def api_import_ova():
                 import shutil as _sh
                 _sh.copy(str(save_path), str(extract_dir / fname))
 
-            _import_job_update(job_id, step="Disk aranıyor", percent=18)
+            _import_job_update(job_id, step="Disk ve OVF aranıyor", percent=18)
             ovf_file = None
             disk_files = []
             for fp in extract_dir.iterdir():
                 if fp.suffix.lower() == ".ovf":
                     ovf_file = fp
-                elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw", ".vhd", ".vhdx", ".nvr", ".nvrx"):
+                elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw",
+                                           ".vhd", ".vhdx", ".nvr", ".nvrx"):
                     disk_files.append(fp)
             if not disk_files:
                 _import_job_update(job_id, status="error", step="Hata: disk bulunamadı",
@@ -7010,6 +7221,7 @@ def api_import_ova():
                 ev.warn(f"OVA import: disk dosyası bulunamadı — {fname}", category="vm")
                 return
 
+            # ── VM name from filename ──────────────────────────────────────────
             _vm_strip_exts = (".tar.gz", ".ova", ".ovf", ".tar", ".vmdk", ".qcow2",
                               ".raw", ".img", ".vhd", ".vhdx", ".nvr", ".nvrx")
             vm_name = fname
@@ -7018,14 +7230,32 @@ def api_import_ova():
                     vm_name = vm_name[:-len(_ext)]
                     break
             vm_name = vm_name.replace(" ", "_").replace(".", "_") or "imported-vm"
+
+            # ── OVF parse: CPU, RAM, OS type ──────────────────────────────────
+            if ovf_file:
+                _import_job_update(job_id, step="OVF okunuyor", percent=20)
+                ovf_specs = _parse_ovf(ovf_file)
+            else:
+                ovf_specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown", "os_desc": ""}
+
+            # Fallback: detect OS from filename if OVF didn't determine it
+            if ovf_specs["os_type"] == "unknown":
+                ovf_specs["os_type"] = _detect_os_from_name(fname)
+
+            vcpus   = ovf_specs["vcpus"]
+            ram_mb  = ovf_specs["ram_mb"]
+            os_type = ovf_specs["os_type"]
+            os_desc = ovf_specs.get("os_desc", "") or os_type
+
             _import_job_update(job_id, vm_name=vm_name,
-                               step=f"Disk bulundu: {disk_files[0].name}", percent=22)
+                               step=f"Disk bulundu: {disk_files[0].name} | OS: {os_desc} | {vcpus} vCPU {ram_mb} MB",
+                               percent=22)
 
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
-            src_disk = disk_files[0]
-            src_size = max(src_disk.stat().st_size, 1)
+            src_disk  = disk_files[0]
+            src_size  = max(src_disk.stat().st_size, 1)
 
-            # Detect source format so qemu-img doesn't have to guess (important for vmdk/vhd)
+            # ── qemu-img convert ──────────────────────────────────────────────
             _fmt_map = {".vmdk": "vmdk", ".vhd": "vpc", ".vhdx": "vhdx",
                         ".qcow2": "qcow2", ".raw": "raw", ".img": "raw",
                         ".nvr": "raw", ".nvrx": "raw"}
@@ -7041,7 +7271,6 @@ def api_import_ova():
                 time.sleep(1.5)
                 try:
                     out_sz = disk_path.stat().st_size if disk_path.exists() else 0
-                    # qcow2 allocates lazily → use 2× multiplier to compensate compression ratio
                     pct = min(89, 25 + int(64 * out_sz * 2 / src_size))
                     _import_job_update(job_id, step="Disk dönüştürülüyor", percent=pct)
                 except Exception:
@@ -7054,45 +7283,12 @@ def api_import_ova():
                 ev.warn(f"OVA import disk convert hatası (rc={proc.returncode})", category="vm")
                 return
 
-            _import_job_update(job_id, step="libvirt'e kaydediliyor", percent=92)
-            # q35 machine + sata bus + e1000 NIC = no guest driver needed.
-            # virtio requires guest drivers (missing on imported Windows VMs → recovery screen).
-            # e1000 + sata work out-of-the-box on Windows XP+ and all Linux distros.
-            xml = f"""<domain type='kvm'>
-  <name>{vm_name}</name>
-  <memory unit='MiB'>4096</memory>
-  <vcpu>2</vcpu>
-  <os>
-    <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-    <hyperv>
-      <relaxed state='on'/>
-      <vapic state='on'/>
-      <spinlocks state='on' retries='8191'/>
-    </hyperv>
-  </features>
-  <cpu mode='host-passthrough' check='none'/>
-  <devices>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='none' io='native'/>
-      <source file='{disk_path}'/>
-      <target dev='sda' bus='sata'/>
-    </disk>
-    <controller type='sata' index='0'/>
-    <interface type='network'>
-      <source network='default'/>
-      <model type='e1000'/>
-    </interface>
-    <input type='tablet' bus='usb'/>
-    <graphics type='vnc' port='-1' listen='0.0.0.0'/>
-    <video><model type='qxl' ram='65536' vram='65536' vgamem='16384'/></video>
-    <memballoon model='none'/>
-  </devices>
-</domain>"""
+            # ── OS-optimised libvirt XML ───────────────────────────────────────
+            _import_job_update(job_id,
+                               step=f"libvirt'e kaydediliyor ({os_type}, {vcpus} vCPU, {ram_mb} MB)",
+                               percent=92)
+            xml = _build_import_xml(vm_name, disk_path, vcpus, ram_mb, os_type)
+
             import tempfile as _tmp3
             with _tmp3.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as xf:
                 xf.write(xml)
@@ -7100,9 +7296,10 @@ def api_import_ova():
             r_def = subprocess.run(["virsh", "define", xml_path], capture_output=True, text=True)
             os.unlink(xml_path)
             if r_def.returncode == 0:
-                _import_job_update(job_id, status="done", step="Tamamlandı",
+                _import_job_update(job_id, status="done",
+                                   step=f"Tamamlandı — {vm_name} ({os_type}, {vcpus} vCPU, {ram_mb} MB)",
                                    percent=100, finished=time.time())
-                ev.info(f"OVA import tamamlandı: {vm_name}", category="vm")
+                ev.info(f"OVA import tamamlandı: {vm_name} [{os_type}, {vcpus}v, {ram_mb}MB]", category="vm")
             else:
                 _import_job_update(job_id, status="error",
                                    step="Hata: virsh define başarısız",
