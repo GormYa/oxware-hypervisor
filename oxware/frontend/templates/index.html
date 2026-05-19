@@ -1171,10 +1171,15 @@
                 <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-disk">—</div>
                 <div style="font-size:11px;color:var(--text-muted)" id="vd-disk-sub">GB</div>
               </div>
-              <div class="vd-info-item" style="flex:1;padding:0 16px">
+              <div class="vd-info-item" style="flex:1;border-right:1px solid var(--border);padding:0 16px">
                 <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Durum</div>
                 <div style="font-size:20px;font-weight:700;color:var(--fg)" id="vd-state">—</div>
                 <div style="font-size:11px;color:var(--text-muted)" id="vd-state-sub">—</div>
+              </div>
+              <div class="vd-info-item" style="flex:1.4;padding:0 16px">
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">IP Adresi</div>
+                <div style="font-size:15px;font-weight:700;color:var(--accent-lt);font-family:monospace;padding-top:3px" id="vd-ip">—</div>
+                <div style="font-size:11px;color:var(--text-muted)" id="vd-ip-sub">—</div>
               </div>
             </div>
             <!-- Action buttons -->
@@ -1566,7 +1571,7 @@
             <table>
               <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="vm-select-all" onchange="toggleAllVms(this.checked)" title="Tümünü seç"></th>
-                <th>Ad</th><th>Durum</th><th>CPU</th><th>Bellek</th><th>Disk</th><th>Ağ</th><th>İşlemler</th>
+                <th>Ad</th><th>Durum</th><th>CPU</th><th>Bellek</th><th>Disk</th><th>IP Adresi</th><th>İşlemler</th>
               </tr></thead>
               <tbody id="vm-tbody">
                 <tr><td colspan="8"><div class="empty-state"><div class="spinner-sm"></div><p style="margin-top:8px">Yükleniyor...</p></div></td></tr>
@@ -6637,6 +6642,24 @@ async function loadVMDetail(vmId) {
       v.state === "running" ? "Çalışıyor" : v.state === "paused" ? "Duraklatıldı" : "Kapalı";
     document.getElementById("vd-state-sub").textContent = v.state || "—";
 
+    // ── IP Address (from DHCP lease via virsh net-dhcp-leases) ───────────────
+    const nets = v.networks || [];
+    const firstIp = nets.map(n => n.ip).find(ip => ip && ip.length > 0) || "";
+    const ipEl    = document.getElementById("vd-ip");
+    const ipSubEl = document.getElementById("vd-ip-sub");
+    if (firstIp) {
+      ipEl.textContent = firstIp;
+      ipEl.title = firstIp;
+      const mac = nets.find(n => n.ip === firstIp)?.mac || "";
+      ipSubEl.textContent = mac ? `MAC: ${mac}` : (nets[0]?.network || "");
+    } else if (v.state === "running") {
+      ipEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Bekleniyor…</span>`;
+      ipSubEl.textContent = "DHCP lease henüz yok";
+    } else {
+      ipEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Kapalı</span>`;
+      ipSubEl.textContent = "";
+    }
+
     // ── Action buttons ────────────────────────────────────────────────────────
     const _vid = v.id;
     const _vnm = escHtml(v.name);
@@ -7228,8 +7251,12 @@ async function loadVMs() {
       return;
     }
     tbody.innerHTML = vms.map(v => {
-      const disks = v.disks?.map(d => d.device).join(", ") || "—";
-      const nets  = v.networks?.map(n => n.network || n.type).join(", ") || "—";
+      const disks   = v.disks?.map(d => d.device).join(", ") || "—";
+      const nets    = v.networks?.map(n => n.network || n.type).join(", ") || "—";
+      const vmIp    = v.networks?.map(n => n.ip).find(ip => ip) || "";
+      const ipHtml  = vmIp
+        ? `<code style="font-size:11px;color:var(--accent-lt);background:rgba(88,166,255,.08);padding:1px 5px;border-radius:3px">${vmIp}</code>`
+        : (v.state === "running" ? `<span style="color:var(--text-muted);font-size:11px">DHCP…</span>` : `<span style="color:var(--text-muted);font-size:11px">—</span>`);
       const checked = _selectedVMs.has(v.id) ? 'checked' : '';
 
       // vm-user: minimal row (no checkboxes, no heavy action buttons)
@@ -7239,7 +7266,7 @@ async function loadVMs() {
           <td>${stateBadge(v.state)}</td>
           <td>${v.vcpus} vCPU</td>
           <td>${(v.memory_mb||0).toLocaleString()} MB</td>
-          <td style="font-size:11px">${escHtml(nets)}</td>
+          <td>${ipHtml}</td>
           <td>
             <div class="action-btns">
               ${v.state !== "running"
@@ -7259,7 +7286,7 @@ async function loadVMs() {
         <td>${v.vcpus} vCPU</td>
         <td>${v.memory_mb.toLocaleString()} MB</td>
         <td style="font-size:11px">${escHtml(disks)}</td>
-        <td style="font-size:11px">${escHtml(nets)}</td>
+        <td style="font-size:11px">${ipHtml}</td>
         <td>
           <div class="action-btns">
             ${v.state !== "running"
