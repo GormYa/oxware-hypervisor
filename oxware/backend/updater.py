@@ -23,15 +23,20 @@ UPDATE_LOG_FILE    = os.path.join(os.environ.get("OXWARE_LOG_DIR", "/var/log/oxw
 
 # ── Konfigürasyon ─────────────────────────────────────────────────────────────
 
+DEFAULT_REPO_URL = "https://github.com/ShinnAsukha/oxware-hypervisor"
+DEFAULT_BRANCH   = "main"
+
+
 def _load_config() -> dict:
     defaults = {
-        "repo_url":    "",       # https://github.com/user/repo
-        "branch":      "main",
-        "auto_check":  "false",
-        "github_token": "",      # Personal Access Token (private repo / rate limit fix)
+        "repo_url":   DEFAULT_REPO_URL,
+        "branch":     DEFAULT_BRANCH,
+        "auto_check": "false",
         "project_dir": _detect_project_dir(),
     }
     if not os.path.exists(UPDATE_CONFIG_FILE):
+        # İlk kurulum: config dosyası yoksa varsayılanları yaz
+        _write_config(DEFAULT_REPO_URL, DEFAULT_BRANCH, False)
         return defaults
     try:
         cfg = {}
@@ -42,25 +47,34 @@ def _load_config() -> dict:
             if "=" in line:
                 k, v = line.split("=", 1)
                 cfg[k.strip().lower()] = v.strip()
-        return {**defaults, **cfg}
+        merged = {**defaults, **cfg}
+        # Boş repo_url varsa (eski kurulum) default'a düşür
+        if not merged.get("repo_url"):
+            merged["repo_url"] = DEFAULT_REPO_URL
+        if not merged.get("branch"):
+            merged["branch"] = DEFAULT_BRANCH
+        return merged
     except Exception:
         return defaults
 
 
-def save_config(repo_url: str, branch: str = "main", auto_check: bool = False,
-                github_token: str = ""):
+def _write_config(repo_url: str, branch: str, auto_check: bool):
     os.makedirs(os.path.dirname(UPDATE_CONFIG_FILE), exist_ok=True)
     lines = [
         "# OXware Güncelleme Yapılandırması",
-        f"REPO_URL      = {repo_url}",
-        f"BRANCH        = {branch}",
-        f"AUTO_CHECK    = {'true' if auto_check else 'false'}",
-        f"GITHUB_TOKEN  = {github_token}",
-        f"PROJECT_DIR   = {_detect_project_dir()}",
+        f"REPO_URL    = {repo_url}",
+        f"BRANCH      = {branch}",
+        f"AUTO_CHECK  = {'true' if auto_check else 'false'}",
+        f"PROJECT_DIR = {_detect_project_dir()}",
     ]
     with open(UPDATE_CONFIG_FILE, "w") as f:
         f.write("\n".join(lines) + "\n")
     os.chmod(UPDATE_CONFIG_FILE, 0o600)
+
+
+def save_config(repo_url: str = DEFAULT_REPO_URL, branch: str = DEFAULT_BRANCH,
+                auto_check: bool = False):
+    _write_config(repo_url, branch, auto_check)
 
 
 def _detect_project_dir() -> str:
@@ -129,8 +143,7 @@ def _github_api_url(repo_url: str) -> str:
     return f"https://api.github.com/repos/{url}"
 
 
-def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
-                        token: str = "") -> list | tuple:
+def _get_remote_commits(repo_url: str, branch: str, limit: int = 20) -> list | tuple:
     """
     GitHub API üzerinden son commit'leri çek.
     Başarı: list of commit dicts
@@ -138,8 +151,6 @@ def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
     """
     api_url = _github_api_url(repo_url) + f"/commits?sha={branch}&per_page={limit}"
     headers = {"Accept": "application/vnd.github.v3+json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     try:
         r = requests.get(api_url, timeout=10, headers=headers)
         if r.status_code == 200:
@@ -154,10 +165,7 @@ def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
                 }
                 for c in commits
             ]
-        elif r.status_code == 401:
-            return ("GitHub token geçersiz veya süresi dolmuş. Ayarlar → Güncellemeler bölümünden yeni token girin.",)
         elif r.status_code == 403:
-            # Rate limit veya private repo erişim engeli
             reset_ts = r.headers.get("X-RateLimit-Reset", "")
             if r.headers.get("X-RateLimit-Remaining") == "0":
                 from datetime import datetime
@@ -166,11 +174,10 @@ def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
                 except Exception:
                     reset_str = reset_ts
                 return (f"GitHub API rate limit doldu. Sıfırlanma: {reset_str}. "
-                        "Çözüm: Ayarlar → Güncellemeler → GitHub Token ekleyin.",)
-            return ("GitHub erişim reddedildi (403). Repo private ise token gereklidir.",)
+                        "1 saat sonra tekrar deneyin.",)
+            return ("GitHub erişim reddedildi (403).",)
         elif r.status_code == 404:
-            return ("Repo bulunamadı (404). URL'yi ve branch adını kontrol edin. "
-                    "Private repo ise GitHub Token gereklidir.",)
+            return ("Repo bulunamadı (404). URL ve branch adını kontrol edin.",)
         else:
             return (f"GitHub API beklenmedik yanıt: HTTP {r.status_code}",)
     except requests.exceptions.ConnectionError:
@@ -182,9 +189,9 @@ def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
         return (f"GitHub API hatası: {e}",)
 
 
-def _get_remote_head(repo_url: str, branch: str, token: str = "") -> str:
+def _get_remote_head(repo_url: str, branch: str) -> str:
     """GitHub API üzerinden en son commit SHA'sını al."""
-    commits = _get_remote_commits(repo_url, branch, limit=1, token=token)
+    commits = _get_remote_commits(repo_url, branch, limit=1)
     if isinstance(commits, list) and commits:
         return commits[0]["sha_full"]
     return ""
@@ -198,9 +205,8 @@ def check_updates() -> dict:
     Dönüş: {up_to_date, current_sha, remote_sha, new_commits, error}
     """
     cfg = _load_config()
-    repo_url = cfg.get("repo_url", "")
-    branch   = cfg.get("branch", "main")
-    token    = cfg.get("github_token", "")
+    repo_url = cfg.get("repo_url", DEFAULT_REPO_URL)
+    branch   = cfg.get("branch", DEFAULT_BRANCH)
     proj_dir = cfg.get("project_dir", _detect_project_dir())
 
     if not repo_url:
@@ -212,14 +218,14 @@ def check_updates() -> dict:
         local_sha = _local_commit(proj_dir)
 
     # Uzak commit'leri çek — branch yanlışsa default branch'i dene
-    remote_commits = _get_remote_commits(repo_url, branch, token=token)
+    remote_commits = _get_remote_commits(repo_url, branch)
     if isinstance(remote_commits, tuple):
         err_msg = remote_commits[0]
         # 404 + branch hatası olabilir: default branch'i öğren ve tekrar dene
         if "404" in err_msg or "bulunamadı" in err_msg:
-            real_branch = _detect_default_branch(repo_url, token)
+            real_branch = _detect_default_branch(repo_url)
             if real_branch != branch:
-                remote_commits2 = _get_remote_commits(repo_url, real_branch, token=token)
+                remote_commits2 = _get_remote_commits(repo_url, real_branch)
                 if isinstance(remote_commits2, list) and remote_commits2:
                     remote_commits = remote_commits2
                     branch = real_branch
@@ -258,19 +264,17 @@ def check_updates() -> dict:
     }
 
 
-def _detect_default_branch(repo_url: str, token: str = "") -> str:
+def _detect_default_branch(repo_url: str) -> str:
     """GitHub API'den repo'nun default branch'ini al. Başarısız → 'main'."""
     try:
         api_url = _github_api_url(repo_url)
         headers = {"Accept": "application/vnd.github.v3+json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
         r = requests.get(api_url, timeout=8, headers=headers)
         if r.status_code == 200:
-            return r.json().get("default_branch", "main")
+            return r.json().get("default_branch", DEFAULT_BRANCH)
     except Exception:
         pass
-    return "main"
+    return DEFAULT_BRANCH
 
 
 def apply_update() -> dict:
@@ -278,9 +282,8 @@ def apply_update() -> dict:
     Güncellemeyi uygula: git pull çek, servisi yeniden başlat.
     """
     cfg      = _load_config()
-    repo_url = cfg.get("repo_url", "")
-    branch   = cfg.get("branch", "main")
-    token    = cfg.get("github_token", "")
+    repo_url = cfg.get("repo_url", DEFAULT_REPO_URL)
+    branch   = cfg.get("branch", DEFAULT_BRANCH)
     proj_dir = cfg.get("project_dir", _detect_project_dir())
 
     if not repo_url:
@@ -299,7 +302,7 @@ def apply_update() -> dict:
         if code != 0:
             if "couldn't find remote ref" in err or "invalid refspec" in err.lower():
                 # Branch adı yanlış — GitHub API'den gerçek default branch'i al
-                real_branch = _detect_default_branch(repo_url, token)
+                real_branch = _detect_default_branch(repo_url)
                 log.warning("Branch '%s' bulunamadı, '%s' deneniyor.", branch, real_branch)
                 if real_branch != branch:
                     code2, out2, err2 = _run(
@@ -389,16 +392,13 @@ def get_update_history(limit: int = 20) -> list:
 
 def get_config() -> dict:
     cfg = _load_config()
-    token = cfg.get("github_token", "")
     return {
-        "repo_url":      cfg.get("repo_url", ""),
-        "branch":        cfg.get("branch", "main"),
-        "auto_check":    cfg.get("auto_check", "false").lower() == "true",
-        "github_token":  token,
-        "has_token":     bool(token),          # UI için — token var mı?
-        "project_dir":   cfg.get("project_dir", ""),
-        "is_git_repo":   _is_git_repo(cfg.get("project_dir", _detect_project_dir())),
-        "local_sha":     _local_commit(cfg.get("project_dir", _detect_project_dir()))[:8],
+        "repo_url":    cfg.get("repo_url", DEFAULT_REPO_URL),
+        "branch":      cfg.get("branch", DEFAULT_BRANCH),
+        "auto_check":  cfg.get("auto_check", "false").lower() == "true",
+        "project_dir": cfg.get("project_dir", ""),
+        "is_git_repo": _is_git_repo(cfg.get("project_dir", _detect_project_dir())),
+        "local_sha":   _local_commit(cfg.get("project_dir", _detect_project_dir()))[:8],
     }
 
 

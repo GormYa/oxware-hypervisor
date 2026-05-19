@@ -2859,13 +2859,10 @@ def api_update_config_get():
 @require_auth
 def api_update_config_save():
     data = request.get_json() or {}
-    repo_url     = data.get("repo_url", "").strip()
-    branch       = data.get("branch", "main").strip() or "main"
-    auto_check   = bool(data.get("auto_check", False))
-    github_token = data.get("github_token", "").strip()
-    if not repo_url:
-        return err_resp("repo_url boş olamaz", 400)
-    updater.save_config(repo_url, branch, auto_check, github_token)
+    repo_url   = data.get("repo_url", updater.DEFAULT_REPO_URL).strip() or updater.DEFAULT_REPO_URL
+    branch     = data.get("branch", updater.DEFAULT_BRANCH).strip() or updater.DEFAULT_BRANCH
+    auto_check = bool(data.get("auto_check", False))
+    updater.save_config(repo_url, branch, auto_check)
     ev.info("Güncelleme yapılandırması kaydedildi", category="system")
     return ok(message="Kaydedildi")
 
