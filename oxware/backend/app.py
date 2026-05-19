@@ -6948,8 +6948,8 @@ def _import_job_update(job_id: str, **kw):
 
 
 def _parse_ovf(ovf_path) -> dict:
-    """Parse OVF file for CPU, RAM and OS type. Returns safe defaults on failure."""
-    specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown", "os_desc": ""}
+    """Parse OVF file for CPU, RAM, OS type and firmware. Returns safe defaults on failure."""
+    specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown", "os_desc": "", "firmware": "bios"}
     try:
         tree = ET.parse(str(ovf_path))
         root = tree.getroot()
@@ -6957,7 +6957,6 @@ def _parse_ovf(ovf_path) -> dict:
         # ── OS type detection ──────────────────────────────────────────────────
         for os_el in root.iter():
             if os_el.tag.split("}")[-1] == "OperatingSystemSection":
-                # VMware OVF uses ovf:id attribute; Windows IDs are 65-120
                 os_id_str = ""
                 for attr_name, attr_val in os_el.attrib.items():
                     if attr_name.endswith("}id") or attr_name == "id":
@@ -6980,6 +6979,18 @@ def _parse_ovf(ovf_path) -> dict:
                                                     "red hat","rhel","fedora","suse",
                                                     "kali","mint","arch","rocky","alma"]):
                             specs["os_type"] = "linux"
+                break
+
+        # ── Firmware: EFI vs BIOS ─────────────────────────────────────────────
+        # VMware OVF: <vmw:Config ovf:required="false" vmw:key="firmware" vmw:value="efi"/>
+        for el in root.iter():
+            attribs = el.attrib
+            key_val = next((v for k, v in attribs.items()
+                            if k.endswith("}key") or k == "key"), "").lower()
+            cfg_val = next((v for k, v in attribs.items()
+                            if k.endswith("}value") or k == "value"), "").lower()
+            if "firmware" in key_val and "efi" in cfg_val:
+                specs["firmware"] = "efi"
                 break
 
         # ── CPU / RAM from VirtualHardwareSection ─────────────────────────────
@@ -7009,7 +7020,6 @@ def _parse_ovf(ovf_path) -> dict:
                         mb //= 1024
                     elif units and "byte * 2^30" in units:
                         mb = mb // (1024 * 1024)
-                    # "byte * 2^20" == MiB — no conversion needed
                     specs["ram_mb"] = max(512, min(262144, mb))
                 except ValueError:
                     pass
@@ -7018,11 +7028,60 @@ def _parse_ovf(ovf_path) -> dict:
     return specs
 
 
+def _parse_vmx(vmx_path) -> dict:
+    """
+    Parse VMware .vmx config file.
+    Returns: {vcpus, ram_mb, os_type, firmware, disk_file}
+    More reliable than OVF for firmware and guestOS detection.
+    """
+    specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown",
+             "firmware": "bios", "disk_file": None}
+    try:
+        with open(str(vmx_path), "r", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip().lower()
+                v = v.strip().strip('"')
+                vl = v.lower()
+
+                if k in ("numvcpus", "nummvcpus"):
+                    try: specs["vcpus"] = max(1, min(128, int(v)))
+                    except ValueError: pass
+                elif k == "memsize":
+                    try: specs["ram_mb"] = max(512, min(262144, int(v)))
+                    except ValueError: pass
+                elif k == "firmware":
+                    specs["firmware"] = "efi" if vl == "efi" else "bios"
+                elif k == "guestos":
+                    if any(x in vl for x in ["win", "windows", "server"]):
+                        specs["os_type"] = "windows"
+                    elif any(x in vl for x in ["linux", "ubuntu", "centos", "rhel",
+                                                "fedora", "debian", "suse", "rocky",
+                                                "alma", "oracle", "freebsd"]):
+                        specs["os_type"] = "linux"
+                elif k.endswith(".filename") and vl.endswith(".vmdk"):
+                    # First disk file found (e.g. scsi0:0.filename or sata0:0.filename)
+                    # Skip flat/extent files
+                    if "-flat" not in vl and not _re_vmdk_extent.search(vl):
+                        if specs["disk_file"] is None:
+                            specs["disk_file"] = v   # relative path
+    except Exception:
+        pass
+    return specs
+
+
+import re as _re
+_re_vmdk_extent = _re.compile(r"-s\d{3}\.vmdk$", _re.IGNORECASE)
+
+
 def _detect_os_from_name(name: str) -> str:
-    """Guess OS type from filename when OVF is absent."""
+    """Guess OS type from filename when OVF/VMX absent."""
     n = name.lower()
     if any(x in n for x in ["win", "windows", "w10", "w11", "w7", "w8",
-                             "server", "2016", "2019", "2022", "2012"]):
+                             "server", "2016", "2019", "2022", "2012", "plesk"]):
         return "windows"
     if any(x in n for x in ["ubuntu", "debian", "centos", "rhel", "linux",
                              "fedora", "kali", "mint", "arch", "rocky", "alma",
@@ -7031,21 +7090,33 @@ def _detect_os_from_name(name: str) -> str:
     return "unknown"
 
 
-def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int, os_type: str) -> str:
+def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int,
+                      os_type: str, firmware: str = "bios") -> str:
     """Return OS-optimised libvirt domain XML for imported VM."""
-    dp = str(disk_path)
+    dp  = str(disk_path)
+    efi = firmware.lower() == "efi"
+
+    # EFI os block — libvirt auto-selects OVMF (requires libvirt ≥6.0)
+    # secure-boot disabled: imported VMs don't have enrolled SB keys
+    os_efi_block = """  <os firmware='efi'>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <firmware>
+      <feature enabled='no' name='secure-boot'/>
+    </firmware>
+    <boot dev='hd'/>
+  </os>"""
+    os_bios_block = """  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>"""
+    os_block = os_efi_block if efi else os_bios_block
 
     if os_type == "windows":
-        # q35 + SATA (no VirtIO needed) + e1000 + HyperV enlightenments
-        # Clock: localtime (Windows expects hardware clock = local time)
         return f"""<domain type='kvm'>
   <name>{vm_name}</name>
   <memory unit='MiB'>{ram_mb}</memory>
   <vcpu placement='static'>{vcpus}</vcpu>
-  <os>
-    <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
-  </os>
+{os_block}
   <features>
     <acpi/><apic/>
     <hyperv mode='custom'>
@@ -7084,17 +7155,11 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int, os_type:
 </domain>"""
 
     elif os_type == "linux":
-        # q35 + SATA disk (keeps /dev/sda — same as VMware SCSI, GRUB/fstab safe)
-        # virtio-net (Linux always has it in initrd)
-        # Clock: UTC (Linux standard)
         return f"""<domain type='kvm'>
   <name>{vm_name}</name>
   <memory unit='MiB'>{ram_mb}</memory>
   <vcpu placement='static'>{vcpus}</vcpu>
-  <os>
-    <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
-  </os>
+{os_block}
   <features><acpi/><apic/></features>
   <cpu mode='host-passthrough' check='none' migratable='on'/>
   <clock offset='utc'>
@@ -7122,15 +7187,11 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int, os_type:
 </domain>"""
 
     else:
-        # Unknown OS — conservative SATA + e1000 + qxl (safest universal config)
         return f"""<domain type='kvm'>
   <name>{vm_name}</name>
   <memory unit='MiB'>{ram_mb}</memory>
   <vcpu placement='static'>{vcpus}</vcpu>
-  <os>
-    <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
-  </os>
+{os_block}
   <features><acpi/><apic/></features>
   <cpu mode='host-passthrough' check='none' migratable='on'/>
   <clock offset='utc'>
@@ -7160,7 +7221,7 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int, os_type:
 @require_auth
 @require_role("admin", "administrator", "operator")
 def api_import_ova():
-    """OVA/OVF/VMDK/VHD dosyasından VM içe aktar. admin ve operator rolü gerekli."""
+    """OVA/OVF/VMDK/VHD/ZIP dosyasından VM içe aktar. admin ve operator rolü gerekli."""
     if "file" not in request.files:
         return jsonify({"error": "file alanı gerekli"}), 400
     f = request.files["file"]
@@ -7169,9 +7230,10 @@ def api_import_ova():
         ".ova", ".ovf", ".tar", ".tar.gz",
         ".vmdk", ".qcow2", ".raw", ".img",
         ".vhd", ".vhdx", ".nvr", ".nvrx",
+        ".zip",   # VMware Workstation VM klasörü zip olarak
     )
     if not any(fname.lower().endswith(ext) for ext in _ALLOWED_IMPORT_EXTS):
-        return jsonify({"error": "Desteklenen formatlar: .ova .vmdk .ovf .qcow2 .vhd .vhdx .raw .img .tar"}), 400
+        return jsonify({"error": "Desteklenen formatlar: .ova .vmdk .ovf .qcow2 .vhd .vhdx .raw .img .tar .zip"}), 400
     _IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     save_path = _IMPORT_DIR / fname
     f.save(str(save_path))
@@ -7195,24 +7257,44 @@ def api_import_ova():
         try:
             _import_job_update(job_id, step="Arşiv açılıyor", percent=10)
             import tarfile as _tar
+            import zipfile as _zip
             extract_dir = _IMPORT_DIR / (fname + "_extracted")
             extract_dir.mkdir(exist_ok=True)
-            if fname.lower().endswith((".ova", ".tar", ".tar.gz")):
+
+            _fl = fname.lower()
+            if _fl.endswith((".ova", ".tar", ".tar.gz")):
                 with _tar.open(str(save_path)) as tf:
                     tf.extractall(str(extract_dir))
+            elif _fl.endswith(".zip"):
+                with _zip.ZipFile(str(save_path)) as zf:
+                    zf.extractall(str(extract_dir))
             else:
                 import shutil as _sh
                 _sh.copy(str(save_path), str(extract_dir / fname))
 
-            _import_job_update(job_id, step="Disk ve OVF aranıyor", percent=18)
-            ovf_file = None
-            disk_files = []
-            for fp in extract_dir.iterdir():
-                if fp.suffix.lower() == ".ovf":
+            # ── Tüm dosyaları recursive tara ──────────────────────────────────
+            _import_job_update(job_id, step="Disk, OVF ve VMX aranıyor", percent=18)
+            ovf_file  = None
+            vmx_file  = None
+            disk_files = []   # (path, is_descriptor) pairs
+
+            for fp in extract_dir.rglob("*"):
+                if not fp.is_file():
+                    continue
+                sfx = fp.suffix.lower()
+                nm  = fp.name.lower()
+                if sfx == ".ovf":
                     ovf_file = fp
-                elif fp.suffix.lower() in (".vmdk", ".qcow2", ".img", ".raw",
-                                           ".vhd", ".vhdx", ".nvr", ".nvrx"):
+                elif sfx == ".vmx":
+                    vmx_file = fp
+                elif sfx in (".vmdk", ".qcow2", ".img", ".raw",
+                             ".vhd", ".vhdx", ".nvr", ".nvrx"):
+                    # Skip VMware flat/extent files — they're raw data blocks,
+                    # not standalone disk images. qemu-img needs the descriptor.
+                    if nm.endswith("-flat.vmdk") or _re_vmdk_extent.search(nm):
+                        continue
                     disk_files.append(fp)
+
             if not disk_files:
                 _import_job_update(job_id, status="error", step="Hata: disk bulunamadı",
                                    percent=0, message="Disk dosyası bulunamadı", finished=time.time())
@@ -7221,7 +7303,7 @@ def api_import_ova():
 
             # ── VM name from filename ──────────────────────────────────────────
             _vm_strip_exts = (".tar.gz", ".ova", ".ovf", ".tar", ".vmdk", ".qcow2",
-                              ".raw", ".img", ".vhd", ".vhdx", ".nvr", ".nvrx")
+                              ".raw", ".img", ".vhd", ".vhdx", ".nvr", ".nvrx", ".zip")
             vm_name = fname
             for _ext in _vm_strip_exts:
                 if vm_name.lower().endswith(_ext):
@@ -7229,24 +7311,53 @@ def api_import_ova():
                     break
             vm_name = vm_name.replace(" ", "_").replace(".", "_") or "imported-vm"
 
-            # ── OVF parse: CPU, RAM, OS type ──────────────────────────────────
+            # ── Parse specs: VMX → OVF → fallback ────────────────────────────
+            specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown",
+                     "os_desc": "", "firmware": "bios", "disk_file": None}
+
+            if vmx_file:
+                _import_job_update(job_id, step="VMX okunuyor", percent=19)
+                vmx_specs = _parse_vmx(vmx_file)
+                specs.update({k: v for k, v in vmx_specs.items() if v not in (None, "unknown", "bios") or k in ("vcpus","ram_mb")})
+                # If VMX gave os_type/firmware prefer those; keep bios default if still unknown
+                if vmx_specs.get("firmware"): specs["firmware"] = vmx_specs["firmware"]
+                if vmx_specs.get("os_type") != "unknown": specs["os_type"] = vmx_specs["os_type"]
+                specs["vcpus"]  = vmx_specs["vcpus"]
+                specs["ram_mb"] = vmx_specs["ram_mb"]
+                # VMX disk file hint
+                if vmx_specs.get("disk_file"):
+                    _hint = vmx_file.parent / vmx_specs["disk_file"]
+                    if _hint.exists():
+                        disk_files = [_hint] + [d for d in disk_files if d != _hint]
+
             if ovf_file:
                 _import_job_update(job_id, step="OVF okunuyor", percent=20)
                 ovf_specs = _parse_ovf(ovf_file)
-            else:
-                ovf_specs = {"vcpus": 2, "ram_mb": 4096, "os_type": "unknown", "os_desc": ""}
+                # OVF takes precedence for CPU/RAM if VMX wasn't found
+                if not vmx_file:
+                    specs["vcpus"]  = ovf_specs["vcpus"]
+                    specs["ram_mb"] = ovf_specs["ram_mb"]
+                # OVF firmware overrides VMX only if explicitly "efi"
+                if ovf_specs.get("firmware") == "efi":
+                    specs["firmware"] = "efi"
+                if ovf_specs.get("os_type") != "unknown" and specs["os_type"] == "unknown":
+                    specs["os_type"] = ovf_specs["os_type"]
+                specs["os_desc"] = ovf_specs.get("os_desc", "")
 
-            # Fallback: detect OS from filename if OVF didn't determine it
-            if ovf_specs["os_type"] == "unknown":
-                ovf_specs["os_type"] = _detect_os_from_name(fname)
+            # Final fallback: filename-based OS detection
+            if specs["os_type"] == "unknown":
+                specs["os_type"] = _detect_os_from_name(fname)
 
-            vcpus   = ovf_specs["vcpus"]
-            ram_mb  = ovf_specs["ram_mb"]
-            os_type = ovf_specs["os_type"]
-            os_desc = ovf_specs.get("os_desc", "") or os_type
+            vcpus    = specs["vcpus"]
+            ram_mb   = specs["ram_mb"]
+            os_type  = specs["os_type"]
+            firmware = specs["firmware"]
+            os_desc  = specs.get("os_desc", "") or os_type
+            fw_label = "UEFI" if firmware == "efi" else "BIOS"
 
             _import_job_update(job_id, vm_name=vm_name,
-                               step=f"Disk bulundu: {disk_files[0].name} | OS: {os_desc} | {vcpus} vCPU {ram_mb} MB",
+                               step=f"Disk: {disk_files[0].name} | {os_desc or os_type} | "
+                                    f"{fw_label} | {vcpus} vCPU {ram_mb} MB",
                                percent=22)
 
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
@@ -7263,29 +7374,44 @@ def api_import_ova():
                 _conv_cmd += ["-f", _src_fmt]
             _conv_cmd += [str(src_disk), str(disk_path)]
 
-            _import_job_update(job_id, step="Disk dönüştürülüyor", percent=25)
-            proc = subprocess.Popen(_conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _import_job_update(job_id,
+                               step=f"Disk dönüştürülüyor ({fw_label}, {os_type})",
+                               percent=25)
+            proc = subprocess.Popen(_conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             while proc.poll() is None:
                 time.sleep(1.5)
                 try:
                     out_sz = disk_path.stat().st_size if disk_path.exists() else 0
                     pct = min(89, 25 + int(64 * out_sz * 2 / src_size))
-                    _import_job_update(job_id, step="Disk dönüştürülüyor", percent=pct)
+                    _import_job_update(job_id,
+                                       step=f"Disk dönüştürülüyor ({fw_label}, {os_type})",
+                                       percent=pct)
                 except Exception:
                     pass
+            _conv_stderr = (proc.stderr.read() or b"").decode(errors="ignore").strip()
             proc.wait()
             if proc.returncode != 0:
                 _import_job_update(job_id, status="error",
                                    step="Hata: disk dönüştürme başarısız",
-                                   percent=0, message="qemu-img dönüştürme hatası", finished=time.time())
-                ev.warn(f"OVA import disk convert hatası (rc={proc.returncode})", category="vm")
+                                   percent=0,
+                                   message=f"qemu-img hatası: {_conv_stderr[:200]}",
+                                   finished=time.time())
+                ev.warn(f"OVA import disk convert hatası (rc={proc.returncode}): {_conv_stderr[:200]}",
+                        category="vm")
                 return
+
+            # ── Disk bütünlük kontrolü ─────────────────────────────────────────
+            _chk = subprocess.run(["qemu-img", "check", str(disk_path)],
+                                  capture_output=True, text=True)
+            if _chk.returncode not in (0, 1):   # 1 = minor errors (fixed), 0 = ok
+                ev.warn(f"OVA import: disk kontrolü uyarısı — {_chk.stdout[:200]}", category="vm")
 
             # ── OS-optimised libvirt XML ───────────────────────────────────────
             _import_job_update(job_id,
-                               step=f"libvirt'e kaydediliyor ({os_type}, {vcpus} vCPU, {ram_mb} MB)",
+                               step=f"libvirt'e kaydediliyor ({os_type}, {fw_label}, "
+                                    f"{vcpus} vCPU, {ram_mb} MB)",
                                percent=92)
-            xml = _build_import_xml(vm_name, disk_path, vcpus, ram_mb, os_type)
+            xml = _build_import_xml(vm_name, disk_path, vcpus, ram_mb, os_type, firmware)
 
             import tempfile as _tmp3
             with _tmp3.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as xf:
@@ -7295,13 +7421,16 @@ def api_import_ova():
             os.unlink(xml_path)
             if r_def.returncode == 0:
                 _import_job_update(job_id, status="done",
-                                   step=f"Tamamlandı — {vm_name} ({os_type}, {vcpus} vCPU, {ram_mb} MB)",
+                                   step=f"Tamamlandı — {vm_name} "
+                                        f"({os_type}, {fw_label}, {vcpus} vCPU, {ram_mb} MB)",
                                    percent=100, finished=time.time())
-                ev.info(f"OVA import tamamlandı: {vm_name} [{os_type}, {vcpus}v, {ram_mb}MB]", category="vm")
+                ev.info(f"OVA import tamamlandı: {vm_name} [{os_type}/{fw_label}, "
+                        f"{vcpus}v, {ram_mb}MB]", category="vm")
             else:
                 _import_job_update(job_id, status="error",
                                    step="Hata: virsh define başarısız",
-                                   percent=92, message=r_def.stderr.strip()[:200], finished=time.time())
+                                   percent=92, message=r_def.stderr.strip()[:200],
+                                   finished=time.time())
                 ev.warn(f"OVA import virsh define hatası: {r_def.stderr}", category="vm")
         except Exception as ex:
             _import_job_update(job_id, status="error", step="Hata",
