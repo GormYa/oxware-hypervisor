@@ -6690,7 +6690,6 @@ async function loadVMDetail(vmId) {
       actHtml += `<button class="vd-btn" onclick="openPciModal('${_vid}','${_vnm}')" title="PCI/USB Passthrough" style="color:#f97316">🔌 PCI</button>`;
       actHtml += `<button class="vd-btn" onclick="openCpuPinModal('${_vid}','${_vnm}')" title="CPU Pinning" style="color:#e879f9">📌 CPU Pin</button>`;
       actHtml += `<button class="vd-btn" onclick="openMacModal('${_vid}','${_vnm}')" title="MAC Adresi" style="color:#38bdf8">🔗 MAC</button>`;
-      actHtml += `<button class="vd-btn" onclick="openVmFirewallModal('${_vid}','${_vnm}')" title="VM Firewall" style="color:#f43f5e">🛡 Firewall</button>`;
       actHtml += `<button class="vd-btn" onclick="toggleMaintenance('${_vid}','${_vnm}')" title="Bakım Modu" style="color:#fbbf24">🔧 Bakım</button>`;
       actHtml += `<button class="vd-btn" onclick="openSpiceInfo('${_vid}','${_vnm}')" title="SPICE Konsol" style="color:#34d399">📺 SPICE</button>`;
       actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${_vid}')" title="SSH">🔑 SSH</button>`;
