@@ -1180,6 +1180,7 @@
                 <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">IP Adresi</div>
                 <div style="font-size:15px;font-weight:700;color:var(--accent-lt);font-family:monospace;padding-top:3px" id="vd-ip">—</div>
                 <div style="font-size:11px;color:var(--text-muted)" id="vd-ip-sub">—</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px" id="vd-ip-dhcp"></div>
               </div>
             </div>
             <!-- Action buttons -->
@@ -6642,22 +6643,43 @@ async function loadVMDetail(vmId) {
       v.state === "running" ? "Çalışıyor" : v.state === "paused" ? "Duraklatıldı" : "Kapalı";
     document.getElementById("vd-state-sub").textContent = v.state || "—";
 
-    // ── IP Address (from DHCP lease via virsh net-dhcp-leases) ───────────────
-    const nets = v.networks || [];
-    const firstIp = nets.map(n => n.ip).find(ip => ip && ip.length > 0) || "";
-    const ipEl    = document.getElementById("vd-ip");
-    const ipSubEl = document.getElementById("vd-ip-sub");
-    if (firstIp) {
-      ipEl.textContent = firstIp;
-      ipEl.title = firstIp;
-      const mac = nets.find(n => n.ip === firstIp)?.mac || "";
-      ipSubEl.textContent = mac ? `MAC: ${mac}` : (nets[0]?.network || "");
+    // ── IP Address — pool IP (primary) + DHCP lease (secondary) ─────────────
+    const nets     = v.networks || [];
+    const dhcpIp   = nets.map(n => n.ip).find(ip => ip && ip.length > 0) || "";
+    const poolIp   = v.pool_ip   || "";
+    const poolName = v.pool_name || "";
+    const ipEl     = document.getElementById("vd-ip");
+    const ipSubEl  = document.getElementById("vd-ip-sub");
+    const ipDhcpEl = document.getElementById("vd-ip-dhcp");
+
+    if (poolIp) {
+      // Pool IP is primary — show it big
+      ipEl.textContent = poolIp;
+      ipEl.title = poolIp;
+      ipSubEl.textContent = poolName ? `Havuz: ${poolName}` : "IP Havuzu";
+      // DHCP IP secondary below
+      if (dhcpIp && dhcpIp !== poolIp) {
+        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: </span><span style="font-family:monospace">${dhcpIp}</span>`;
+      } else if (!dhcpIp && v.state === "running") {
+        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: bekleniyor…</span>`;
+      } else {
+        ipDhcpEl.textContent = "";
+      }
+    } else if (dhcpIp) {
+      // No pool IP — show DHCP IP as primary
+      ipEl.textContent = dhcpIp;
+      ipEl.title = dhcpIp;
+      const mac = nets.find(n => n.ip === dhcpIp)?.mac || "";
+      ipSubEl.textContent = mac ? `MAC: ${mac}` : (nets[0]?.network || "DHCP");
+      ipDhcpEl.textContent = "";
     } else if (v.state === "running") {
       ipEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Bekleniyor…</span>`;
       ipSubEl.textContent = "DHCP lease henüz yok";
+      ipDhcpEl.textContent = "";
     } else {
       ipEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Kapalı</span>`;
       ipSubEl.textContent = "";
+      ipDhcpEl.textContent = "";
     }
 
     // ── Action buttons ────────────────────────────────────────────────────────

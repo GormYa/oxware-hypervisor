@@ -1027,6 +1027,18 @@ def api_get_vm(vm_id):
         # Attach assignees list for admin/operator
         if role in ("administrator", "admin", "operator"):
             vm["assignees"] = user_manager.get_vm_users(vm_id)
+        # Attach pool IP (public/assigned IP from ip_pool) — separate from DHCP lease
+        try:
+            assignment = ip_pool_mgr.get_vm_assignment(vm_id)
+            if assignment and assignment.get("pool") not in ("__internal__", "", None):
+                vm["pool_ip"]   = assignment.get("ip", "")
+                vm["pool_name"] = assignment.get("pool", "")
+            else:
+                vm["pool_ip"]   = ""
+                vm["pool_name"] = ""
+        except Exception:
+            vm["pool_ip"]   = ""
+            vm["pool_name"] = ""
         return ok(vm=vm)
     except Exception as e:
         return err(e, 404)
