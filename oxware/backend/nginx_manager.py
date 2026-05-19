@@ -1,6 +1,9 @@
 """
-nginx_manager.py — nginx reverse proxy management
+nginx_manager.py — nginx/OpenResty reverse proxy management
 OXware Hypervisor backend module
+
+OpenResty (openresty) is preferred when available — it supports Lua scripting
+via ngx_http_lua_module. Falls back to plain nginx automatically.
 """
 
 import subprocess
@@ -9,6 +12,7 @@ import logging
 import os
 import threading
 import re
+import shutil
 
 log = logging.getLogger("oxware.nginx")
 
@@ -19,44 +23,82 @@ _lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
+# OpenResty / Nginx detection
+# ---------------------------------------------------------------------------
+
+def _detect_binary() -> str:
+    """openresty varsa openresty, yoksa nginx döner."""
+    if shutil.which("openresty"):
+        return "openresty"
+    return "nginx"
+
+
+def _detect_sites_dirs() -> tuple:
+    """
+    OpenResty ve nginx config dizinlerini tespit et.
+    Döner: (sites_available, sites_enabled)
+    """
+    # OpenResty default locations
+    for base in ("/usr/local/openresty/nginx/conf",
+                 "/etc/openresty"):
+        avail = os.path.join(base, "sites-available")
+        enabl = os.path.join(base, "sites-enabled")
+        if os.path.isdir(avail):
+            return avail, enabl
+    # Fallback: standard nginx
+    return "/etc/nginx/sites-available", "/etc/nginx/sites-enabled"
+
+
+BINARY = _detect_binary()
+SITES_DIR, ENABLED_DIR = _detect_sites_dirs()
+
+
+# ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
 
 def get_status():
     """
-    Return nginx service status.
+    Return nginx/openresty service status.
 
     Returns:
-        dict: active, version, config_ok
+        dict: active, version, config_ok, binary, openresty
     """
     active = False
     version = None
     config_ok = False
+    svc_name = "openresty" if BINARY == "openresty" else "nginx"
 
     try:
         r = subprocess.run(
-            ["systemctl", "is-active", "nginx"],
+            ["systemctl", "is-active", svc_name],
             capture_output=True, text=True, timeout=10
         )
         active = r.stdout.strip() == "active"
     except Exception as exc:
-        log.warning("systemctl is-active nginx failed: %s", exc)
+        log.warning("systemctl is-active %s failed: %s", svc_name, exc)
 
     try:
         r = subprocess.run(
-            ["nginx", "-v"],
+            [BINARY, "-v"],
             capture_output=True, text=True, timeout=10
         )
         m = re.search(r"nginx/(\S+)", r.stderr + r.stdout)
         if m:
             version = m.group(1)
     except Exception as exc:
-        log.warning("nginx -v failed: %s", exc)
+        log.warning("%s -v failed: %s", BINARY, exc)
 
     config_ok_result = test_config()
     config_ok = config_ok_result.get("ok", False)
 
-    return {"active": active, "version": version, "config_ok": config_ok}
+    return {
+        "active":    active,
+        "version":   version,
+        "config_ok": config_ok,
+        "binary":    BINARY,
+        "openresty": BINARY == "openresty",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -191,21 +233,22 @@ def delete_site(name):
 # ---------------------------------------------------------------------------
 
 def reload():
-    """Test config then reload nginx. Returns dict with success and output."""
+    """Test config then reload nginx/openresty. Returns dict with success and output."""
+    svc_name = "openresty" if BINARY == "openresty" else "nginx"
     test = test_config()
     if not test.get("ok"):
         return {"success": False, "output": test.get("output", "Config test failed")}
     try:
         r = subprocess.run(
-            ["systemctl", "reload", "nginx"],
+            ["systemctl", "reload", svc_name],
             capture_output=True, text=True, timeout=30
         )
         success = r.returncode == 0
         output  = (r.stdout + r.stderr).strip()
         if success:
-            log.info("nginx reloaded")
+            log.info("%s reloaded", svc_name)
         else:
-            log.warning("nginx reload failed: %s", output)
+            log.warning("%s reload failed: %s", svc_name, output)
         return {"success": success, "output": output}
     except Exception as exc:
         log.exception("reload error: %s", exc)
@@ -213,16 +256,16 @@ def reload():
 
 
 def test_config():
-    """Run ``nginx -t`` and return {ok, output}."""
+    """Run ``nginx -t`` / ``openresty -t`` and return {ok, output}."""
     try:
         r = subprocess.run(
-            ["nginx", "-t"],
+            [BINARY, "-t"],
             capture_output=True, text=True, timeout=15
         )
         ok = r.returncode == 0
         return {"ok": ok, "output": (r.stdout + r.stderr).strip()}
     except FileNotFoundError:
-        return {"ok": False, "output": "nginx not found"}
+        return {"ok": False, "output": f"{BINARY} not found"}
     except Exception as exc:
         log.exception("test_config error: %s", exc)
         return {"ok": False, "output": str(exc)}
@@ -276,9 +319,62 @@ def add_location(site_name, path, proxy_pass, extra=""):
 # Config generation
 # ---------------------------------------------------------------------------
 
+def generate_lua_middleware(rate_limit_rps: int = 20,
+                           auth_token: str = "",
+                           block_ips: list = None) -> str:
+    """
+    OpenResty Lua middleware bloğu üret (access_by_lua_block).
+    Özellikler: rate limiting, Bearer token kontrolü, IP bloklama.
+    nginx'te lua desteği yoksa bu blok atlanmalı.
+    """
+    block_ips = block_ips or []
+    blocked_set = (
+        "local blocked = {" +
+        ", ".join(f'["{ip}"]=true' for ip in block_ips) +
+        "}\n" if block_ips else "local blocked = {}\n"
+    )
+
+    auth_check = ""
+    if auth_token:
+        auth_check = f"""
+        local auth = ngx.req.get_headers()["Authorization"] or ""
+        if auth ~= "Bearer {auth_token}" then
+            ngx.status = 401
+            ngx.header["WWW-Authenticate"] = 'Bearer realm="oxware"'
+            ngx.say('{{"error":"Unauthorized"}}')
+            return ngx.exit(401)
+        end"""
+
+    lua_block = f"""
+    access_by_lua_block {{
+        local ip = ngx.var.remote_addr
+        {blocked_set}
+        if blocked[ip] then
+            ngx.status = 403
+            ngx.say('{{"error":"Forbidden"}}')
+            return ngx.exit(403)
+        end
+        {auth_check}
+        -- Rate limit: {rate_limit_rps} req/s per IP
+        local limit = require("resty.limit.req")
+        local lim, err = limit.new("oxware_rate_limit", {rate_limit_rps}, {rate_limit_rps * 2})
+        if lim then
+            local _, err2 = lim:incoming(ip, true)
+            if err2 == "rejected" then
+                ngx.status = 429
+                ngx.say('{{"error":"Rate limit exceeded"}}')
+                return ngx.exit(429)
+            end
+        end
+    }}
+"""
+    return lua_block
+
+
 def _generate_config(name, server_name, upstream_host, upstream_port,
-                     ssl, ssl_cert, ssl_key, websocket, extra_locations):
-    """Build and return an nginx server config string."""
+                     ssl, ssl_cert, ssl_key, websocket, extra_locations,
+                     lua_middleware: str = ""):
+    """Build and return an nginx/openresty server config string."""
     listen_plain = "80"
     listen_ssl   = "443 ssl"
     upstream_def = (
@@ -320,12 +416,13 @@ def _generate_config(name, server_name, upstream_host, upstream_port,
     )
 
     config = (
-        f"# OXware nginx config: {name}\n"
+        f"# OXware {'openresty' if BINARY == 'openresty' else 'nginx'} config: {name}\n"
         + upstream_def
         + f"server {{\n"
         + listen_directive
         + f"    server_name {server_name};\n\n"
         + f"    location / {{\n"
+        + lua_middleware
         + f"        proxy_pass http://{name}_backend;\n"
         + f"        proxy_set_header Host $host;\n"
         + f"        proxy_set_header X-Real-IP $remote_addr;\n"

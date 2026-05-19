@@ -1,0 +1,270 @@
+"""
+bgp_manager.py — BGP tünelleme yönetimi (FRRouting / BIRD)
+OXware Hypervisor backend module
+
+Gereksinimler:
+  - FRRouting: apt install frr frr-pythontools
+    veya
+  - BIRD: apt install bird2
+
+Desteklenen işlemler:
+  - BGP peer ekleme/silme/listeleme
+  - Route redistribution
+  - Oturum durumu sorgulama (vtysh)
+  - Announce prefix
+"""
+
+import subprocess
+import json
+import logging
+import os
+import re
+import shutil
+import threading
+
+log = logging.getLogger("oxware.bgp")
+
+FRR_CONF    = "/etc/frr/frr.conf"
+FRR_DAEMON  = "/etc/frr/daemons"
+BGP_DB_FILE = "/var/lib/oxware/bgp_peers.json"
+_lock       = threading.Lock()
+
+
+# ── Backend detection ──────────────────────────────────────────────────────────
+
+def detect_backend() -> str:
+    """FRRouting veya BIRD kurulu mu? 'frr' | 'bird' | 'none' döner."""
+    if shutil.which("vtysh"):
+        return "frr"
+    if shutil.which("birdc"):
+        return "bird"
+    return "none"
+
+
+BACKEND = detect_backend()
+
+
+# ── Yardımcı ──────────────────────────────────────────────────────────────────
+
+def _vtysh(*commands: str, timeout: int = 10) -> tuple:
+    """
+    vtysh üzerinden FRR komutları çalıştır.
+    Döner: (stdout, stderr, returncode)
+    """
+    cmd_args = ["vtysh"]
+    for c in commands:
+        cmd_args += ["-c", c]
+    try:
+        r = subprocess.run(cmd_args, capture_output=True, text=True, timeout=timeout)
+        return r.stdout.strip(), r.stderr.strip(), r.returncode
+    except Exception as e:
+        return "", str(e), -1
+
+
+def _birdc(command: str, timeout: int = 10) -> tuple:
+    """birdc üzerinden BIRD komutu çalıştır."""
+    try:
+        r = subprocess.run(
+            ["birdc", command], capture_output=True, text=True, timeout=timeout
+        )
+        return r.stdout.strip(), r.stderr.strip(), r.returncode
+    except Exception as e:
+        return "", str(e), -1
+
+
+def _load_db() -> dict:
+    try:
+        if os.path.exists(BGP_DB_FILE):
+            with open(BGP_DB_FILE) as f:
+                return json.load(f)
+    except Exception as e:
+        log.warning("BGP DB yükleme hatası: %s", e)
+    return {"peers": {}}
+
+
+def _save_db(data: dict):
+    try:
+        os.makedirs(os.path.dirname(BGP_DB_FILE), exist_ok=True)
+        tmp = BGP_DB_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, BGP_DB_FILE)
+    except Exception as e:
+        log.error("BGP DB kaydetme hatası: %s", e)
+
+
+# ── Peer yönetimi ──────────────────────────────────────────────────────────────
+
+def add_peer(peer_ip: str, peer_asn: int, local_asn: int,
+             description: str = "", password: str = "",
+             multihop: int = 1, soft_reconfig: bool = True) -> dict:
+    """
+    BGP peer ekle (FRRouting vtysh).
+    Döner: {success, message}
+    """
+    if BACKEND != "frr":
+        return {"success": False, "message": f"FRRouting kurulu değil (backend={BACKEND})"}
+    if not re.match(r"^[\d\.]+$|^[a-fA-F0-9:]+$", peer_ip):
+        return {"success": False, "message": "Geçersiz peer IP"}
+
+    sr_cmd = f"  neighbor {peer_ip} soft-reconfiguration inbound" if soft_reconfig else ""
+    mh_cmd = f"  neighbor {peer_ip} ebgp-multihop {multihop}" if multihop > 1 else ""
+    pw_cmd = f"  neighbor {peer_ip} password {password}" if password else ""
+    desc_cmd = f"  neighbor {peer_ip} description {description}" if description else ""
+
+    cmds = [
+        "configure terminal",
+        f"router bgp {local_asn}",
+        f"  neighbor {peer_ip} remote-as {peer_asn}",
+    ]
+    for extra in [desc_cmd, pw_cmd, mh_cmd, sr_cmd]:
+        if extra:
+            cmds.append(extra)
+    cmds += ["  exit", "exit", "write memory"]
+
+    stdout, stderr, rc = _vtysh(*cmds)
+    if rc == 0:
+        with _lock:
+            db = _load_db()
+            db["peers"][peer_ip] = {
+                "peer_ip":    peer_ip,
+                "peer_asn":   peer_asn,
+                "local_asn":  local_asn,
+                "description": description,
+                "multihop":   multihop,
+                "soft_reconfig": soft_reconfig,
+                "has_password": bool(password),
+            }
+            _save_db(db)
+        log.info("BGP peer eklendi: %s AS%d", peer_ip, peer_asn)
+        return {"success": True, "message": f"Peer {peer_ip} (AS{peer_asn}) eklendi"}
+    else:
+        log.error("BGP peer ekleme hatası: %s", stderr or stdout)
+        return {"success": False, "message": stderr or stdout or "vtysh hatası"}
+
+
+def remove_peer(peer_ip: str, local_asn: int) -> dict:
+    """BGP peer kaldır."""
+    if BACKEND != "frr":
+        return {"success": False, "message": "FRRouting kurulu değil"}
+
+    stdout, stderr, rc = _vtysh(
+        "configure terminal",
+        f"router bgp {local_asn}",
+        f"  no neighbor {peer_ip}",
+        "  exit", "exit", "write memory"
+    )
+    if rc == 0:
+        with _lock:
+            db = _load_db()
+            db["peers"].pop(peer_ip, None)
+            _save_db(db)
+        log.info("BGP peer kaldırıldı: %s", peer_ip)
+        return {"success": True, "message": f"Peer {peer_ip} kaldırıldı"}
+    return {"success": False, "message": stderr or stdout}
+
+
+def list_peers() -> list:
+    """Kayıtlı peer'ları DB'den döndür."""
+    with _lock:
+        db = _load_db()
+    return list(db.get("peers", {}).values())
+
+
+def get_peer_status(peer_ip: str = None) -> list:
+    """
+    FRRouting'den BGP oturum durumu al.
+    peer_ip: None ise tüm peer'lar.
+    """
+    if BACKEND == "frr":
+        cmd = f"show bgp neighbors {peer_ip} json" if peer_ip else "show bgp summary json"
+        stdout, stderr, rc = _vtysh(cmd)
+        if rc != 0:
+            return [{"error": stderr or "vtysh hatası"}]
+        try:
+            data = json.loads(stdout)
+            # Normalize: summary → list of {peer, state, uptime, prefixes}
+            if "peers" in data:
+                return [
+                    {
+                        "peer":     p,
+                        "state":    info.get("bgpState", "Unknown"),
+                        "uptime":   info.get("bgpTimerUp", 0),
+                        "prefixes": info.get("prefixReceivedCount", 0),
+                        "asn":      info.get("remoteAs"),
+                    }
+                    for p, info in data["peers"].items()
+                ]
+            return [data]
+        except json.JSONDecodeError:
+            return [{"raw": stdout}]
+    elif BACKEND == "bird":
+        stdout, _, _ = _birdc("show protocols all")
+        return [{"raw": stdout}]
+    return []
+
+
+def announce_prefix(prefix: str, local_asn: int, next_hop: str = "self") -> dict:
+    """
+    BGP prefix announce et (network komutu ile).
+    prefix: "192.0.2.0/24"
+    """
+    if BACKEND != "frr":
+        return {"success": False, "message": "FRRouting kurulu değil"}
+    if not re.match(r"^[\d\.]+/\d+$|^[a-fA-F0-9:]+/\d+$", prefix):
+        return {"success": False, "message": "Geçersiz prefix"}
+
+    stdout, stderr, rc = _vtysh(
+        "configure terminal",
+        f"router bgp {local_asn}",
+        f"  network {prefix}",
+        "  exit", "exit", "write memory"
+    )
+    if rc == 0:
+        return {"success": True, "message": f"Prefix {prefix} announce edildi"}
+    return {"success": False, "message": stderr or stdout}
+
+
+def withdraw_prefix(prefix: str, local_asn: int) -> dict:
+    """BGP prefix withdraw et."""
+    if BACKEND != "frr":
+        return {"success": False, "message": "FRRouting kurulu değil"}
+
+    stdout, stderr, rc = _vtysh(
+        "configure terminal",
+        f"router bgp {local_asn}",
+        f"  no network {prefix}",
+        "  exit", "exit", "write memory"
+    )
+    if rc == 0:
+        return {"success": True, "message": f"Prefix {prefix} withdraw edildi"}
+    return {"success": False, "message": stderr or stdout}
+
+
+def get_routes(address_family: str = "ipv4") -> list:
+    """BGP route tablosunu al."""
+    if BACKEND == "frr":
+        cmd = f"show bgp {address_family} unicast json"
+        stdout, _, rc = _vtysh(cmd)
+        if rc != 0:
+            return []
+        try:
+            data = json.loads(stdout)
+            routes = data.get("routes", {})
+            return [
+                {"prefix": pfx, "paths": info}
+                for pfx, info in routes.items()
+            ]
+        except Exception:
+            return [{"raw": stdout}]
+    return []
+
+
+def get_full_status() -> dict:
+    """BGP genel durum özeti."""
+    return {
+        "backend":  BACKEND,
+        "available": BACKEND != "none",
+        "peers":    list_peers(),
+        "sessions": get_peer_status() if BACKEND != "none" else [],
+    }

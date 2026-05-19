@@ -1264,3 +1264,140 @@ def clone_vm(vm_id, new_name):
         return {"id": new_dom.UUIDString(), "name": final_name, "cloned_from": vm_id}
     finally:
         conn.close()
+
+
+# ── QEMU Guest Agent ──────────────────────────────────────────────────────────
+
+def _qemu_agent_cmd(vm_name: str, execute: str, arguments: dict = None, timeout: int = 5):
+    """virsh qemu-agent-command wrapper. None döner hata/timeout durumunda."""
+    import json as _json
+    cmd_obj = {"execute": execute}
+    if arguments:
+        cmd_obj["arguments"] = arguments
+    try:
+        r = subprocess.run(
+            ["virsh", "qemu-agent-command", vm_name,
+             _json.dumps(cmd_obj), "--timeout", str(timeout)],
+            capture_output=True, text=True, timeout=timeout + 3
+        )
+        if r.returncode != 0:
+            return None
+        parsed = _json.loads(r.stdout)
+        return parsed.get("return")
+    except Exception:
+        return None
+
+
+def get_guest_agent_info(vm_id: str) -> dict:
+    """
+    QEMU guest agent üzerinden VM içinden bilgi topla.
+    Döner: {status, version, hostname, os, interfaces, filesystems}
+    """
+    # VM adını bul
+    conn = _connect()
+    try:
+        try:
+            dom = conn.lookupByUUIDString(vm_id)
+        except libvirt.libvirtError:
+            dom = conn.lookupByName(vm_id)
+        vm_name = dom.name()
+        state   = dom.info()[0]
+    finally:
+        conn.close()
+
+    result = {
+        "status":      "unavailable",
+        "version":     None,
+        "hostname":    None,
+        "os":          None,
+        "interfaces":  [],
+        "filesystems": [],
+    }
+
+    # VM çalışmıyorsa agent yoktur
+    if state != libvirt.VIR_DOMAIN_RUNNING:
+        result["status"] = "vm_stopped"
+        return result
+
+    # Ping — agent canlı mı?
+    ping = _qemu_agent_cmd(vm_name, "guest-ping", timeout=3)
+    if ping is None:
+        return result  # unavailable
+    result["status"] = "running"
+
+    # Agent sürümü
+    info = _qemu_agent_cmd(vm_name, "guest-info")
+    if info and isinstance(info, dict):
+        result["version"] = info.get("version")
+
+    # Hostname
+    hn = _qemu_agent_cmd(vm_name, "guest-get-host-name")
+    if hn and isinstance(hn, dict):
+        result["hostname"] = hn.get("host-name")
+
+    # OS bilgisi
+    os_info = _qemu_agent_cmd(vm_name, "guest-get-osinfo")
+    if os_info and isinstance(os_info, dict):
+        result["os"] = {
+            "id":      os_info.get("id"),
+            "name":    os_info.get("name"),
+            "version": os_info.get("version-id"),
+            "kernel":  os_info.get("kernel-version"),
+            "machine": os_info.get("machine"),
+        }
+
+    # Ağ arayüzleri + IP'ler (DHCP'den daha doğru)
+    net_ifaces = _qemu_agent_cmd(vm_name, "guest-network-get-interfaces")
+    if net_ifaces and isinstance(net_ifaces, list):
+        result["interfaces"] = [
+            {
+                "name": iface.get("name"),
+                "mac":  iface.get("hardware-address"),
+                "ips":  [
+                    {
+                        "ip":     addr.get("ip-address"),
+                        "prefix": addr.get("prefix"),
+                        "type":   addr.get("ip-address-type"),
+                    }
+                    for addr in iface.get("ip-addresses", [])
+                ],
+            }
+            for iface in net_ifaces
+            if iface.get("name") != "lo"
+        ]
+
+    # Dosya sistemi kullanımı
+    fs_info = _qemu_agent_cmd(vm_name, "guest-get-fsinfo")
+    if fs_info and isinstance(fs_info, list):
+        result["filesystems"] = [
+            {
+                "mountpoint":  f.get("mountpoint"),
+                "total_bytes": f.get("total-bytes"),
+                "used_bytes":  f.get("used-bytes"),
+                "fs_type":     f.get("type"),
+                "name":        f.get("name"),
+            }
+            for f in fs_info
+            if f.get("total-bytes") and f.get("mountpoint")
+        ]
+
+    return result
+
+
+def get_guest_agent_status(vm_id: str) -> str:
+    """Hızlı durum kontrolü: 'running' | 'unavailable' | 'vm_stopped'."""
+    conn = _connect()
+    try:
+        try:
+            dom = conn.lookupByUUIDString(vm_id)
+        except libvirt.libvirtError:
+            dom = conn.lookupByName(vm_id)
+        vm_name = dom.name()
+        state   = dom.info()[0]
+    finally:
+        conn.close()
+
+    if state != libvirt.VIR_DOMAIN_RUNNING:
+        return "vm_stopped"
+    ping = _qemu_agent_cmd(vm_name, "guest-ping", timeout=2)
+    return "running" if ping is not None else "unavailable"

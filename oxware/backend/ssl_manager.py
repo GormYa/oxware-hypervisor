@@ -462,3 +462,79 @@ def start_monitor(interval=86400):
     t = threading.Thread(target=_worker, daemon=True, name="ssl-monitor")
     t.start()
     return t
+
+
+# ---------------------------------------------------------------------------
+# Self-signed certificate generation
+# ---------------------------------------------------------------------------
+
+HTTPS_ENFORCE_FLAG = "/var/lib/oxware/https_enforced"
+
+
+def generate_self_signed(common_name: str = "oxware-hypervisor",
+                         days: int = 3650,
+                         cert_path: str = None,
+                         key_path: str = None) -> dict:
+    """
+    openssl ile self-signed sertifika üret.
+    Döner: {success, cert_path, key_path, message}
+    """
+    cp = cert_path or CERT_PATH
+    kp = key_path or KEY_PATH
+    try:
+        os.makedirs(os.path.dirname(cp), exist_ok=True)
+        r = subprocess.run(
+            [
+                "openssl", "req", "-x509", "-nodes",
+                "-newkey", "rsa:4096",
+                "-keyout", kp,
+                "-out",    cp,
+                "-days",   str(days),
+                "-subj",   f"/CN={common_name}/O=OXware/OU=Hypervisor",
+                "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost",
+            ],
+            capture_output=True, text=True, timeout=60
+        )
+        if r.returncode == 0:
+            os.chmod(kp, 0o600)
+            log.info("generate_self_signed: %s oluşturuldu (%d gün).", cp, days)
+            return {"success": True, "cert_path": cp, "key_path": kp,
+                    "message": f"Self-signed sertifika oluşturuldu ({days} gün)."}
+        else:
+            msg = r.stderr.strip() or r.stdout.strip()
+            log.error("generate_self_signed hatası: %s", msg)
+            return {"success": False, "cert_path": cp, "key_path": kp, "message": msg}
+    except Exception as e:
+        log.error("generate_self_signed exception: %s", e)
+        return {"success": False, "cert_path": cp, "key_path": kp, "message": str(e)}
+
+
+def set_https_enforce(enabled: bool) -> dict:
+    """
+    HTTPS zorunluluk bayrağını yaz/sil.
+    nginx_manager.py bu bayrağı okuyarak redirect uygular.
+    """
+    try:
+        if enabled:
+            os.makedirs("/var/lib/oxware", exist_ok=True)
+            with open(HTTPS_ENFORCE_FLAG, "w") as f:
+                f.write("1")
+            log.info("HTTPS enforce aktif edildi.")
+        else:
+            if os.path.exists(HTTPS_ENFORCE_FLAG):
+                os.remove(HTTPS_ENFORCE_FLAG)
+            log.info("HTTPS enforce devre dışı.")
+        return {"success": True, "https_enforced": enabled}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+def is_https_enforced() -> bool:
+    return os.path.exists(HTTPS_ENFORCE_FLAG)
+
+
+def get_full_status() -> dict:
+    """SSL + HTTPS enforce durumu birlikte."""
+    status = get_status()
+    status["https_enforced"] = is_https_enforced()
+    return status

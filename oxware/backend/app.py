@@ -82,6 +82,7 @@ api_key_mgr     = _safe_import("api_key_manager")
 backup_sched    = _safe_import("backup_scheduler")
 firewall_mgr    = _safe_import("firewall_manager")
 wireguard_mgr   = _safe_import("wireguard_manager")
+bgp_mgr         = _safe_import("bgp_manager")
 dns_mgr         = _safe_import("dns_manager")
 vlan_mgr        = _safe_import("vlan_manager")
 resource_quota  = _safe_import("resource_quota")
@@ -1039,9 +1040,26 @@ def api_get_vm(vm_id):
         except Exception:
             vm["pool_ip"]   = ""
             vm["pool_name"] = ""
+        # Guest agent quick status (non-blocking, 2s timeout)
+        try:
+            vm["guest_agent"] = vm_manager.get_guest_agent_status(vm_id)
+        except Exception:
+            vm["guest_agent"] = "unavailable"
         return ok(vm=vm)
     except Exception as e:
         return err(e, 404)
+
+
+@app.route("/api/vms/<vm_id>/guest-agent")
+@require_auth
+def api_vm_guest_agent(vm_id):
+    """QEMU guest agent üzerinden detaylı VM içi bilgi."""
+    try:
+        info = vm_manager.get_guest_agent_info(vm_id)
+        return ok(guest_agent=info)
+    except Exception as e:
+        return ok(guest_agent={"status": "unavailable", "error": str(e)})
+
 
 @app.route("/api/vms", methods=["POST"])
 @require_auth
@@ -3238,6 +3256,98 @@ def api_delete_snapshot_v2(vm_id, snap_name):
         return err(e, 500)
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────
+
+# VM event subscribers: sid → set of vm_ids (or "*" for all)
+_vm_event_subscribers: dict = {}
+_vm_event_subscribers_lock  = threading.Lock()
+
+
+def _ws_emit_vm_event(vm_id: str, event_type: str, data: dict):
+    """Tüm ilgili subscriber'lara VM event gönder."""
+    with _vm_event_subscribers_lock:
+        sids = list(_vm_event_subscribers.items())
+    for sid, filter_ids in sids:
+        if filter_ids == "*" or vm_id in filter_ids:
+            try:
+                sock.emit("vm_event", {
+                    "vm_id": vm_id,
+                    "type":  event_type,
+                    **data
+                }, to=sid, namespace="/")
+            except Exception:
+                pass
+
+
+# Expose globally so vmAction endpoints can call it
+app.ws_emit_vm_event = _ws_emit_vm_event
+
+
+@sock.on("subscribe_vm_events")
+def on_subscribe_vm_events(data):
+    """
+    Client VM durumu değişikliklerine abone olur.
+    data: {vm_ids: ["uuid1", "uuid2", ...]}  or {vm_ids: "*"}
+    Olaylar: vm_event {vm_id, type, state?, metric?}
+    """
+    sid = request.sid
+    vm_ids = (data or {}).get("vm_ids", "*")
+    with _vm_event_subscribers_lock:
+        _vm_event_subscribers[sid] = vm_ids if vm_ids == "*" else set(vm_ids)
+    emit("vm_events_subscribed", {"vm_ids": vm_ids})
+
+    # Immediately push current state for subscribed VMs
+    try:
+        all_vms = vm_manager.list_vms()
+        target  = all_vms if vm_ids == "*" else [v for v in all_vms if v["id"] in set(vm_ids)]
+        for v in target:
+            sock.emit("vm_event", {
+                "vm_id": v["id"],
+                "type":  "state",
+                "state": v.get("state", "unknown"),
+                "name":  v.get("name", ""),
+            }, to=sid, namespace="/")
+    except Exception:
+        pass
+
+
+@sock.on("subscribe_vm_metrics")
+def on_subscribe_vm_metrics(data):
+    """
+    Belirli bir VM için gerçek zamanlı metrik push.
+    data: {vm_id: "<uuid>", interval: 3}
+    Olaylar: vm_metrics {vm_id, cpu_pct, mem_mb, disk_rd, disk_wr, net_rx, net_tx}
+    """
+    sid      = request.sid
+    vm_id    = (data or {}).get("vm_id", "")
+    interval = max(1, int((data or {}).get("interval", 3)))
+    if not vm_id:
+        emit("error", {"message": "vm_id gerekli"})
+        return
+
+    def _push():
+        while True:
+            try:
+                # Check if sid still subscribed
+                with _vm_event_subscribers_lock:
+                    still_connected = True  # rely on socketio disconnect to clean up
+                stats = vm_manager.get_vm_stats(vm_id)
+                sock.emit("vm_metrics", {
+                    "vm_id":    vm_id,
+                    "cpu_pct":  stats.get("cpu_pct", 0),
+                    "mem_mb":   stats.get("memory_used_mb", 0),
+                    "disk_rd":  stats.get("disk_read_bytes", 0),
+                    "disk_wr":  stats.get("disk_write_bytes", 0),
+                    "net_rx":   stats.get("net_rx_bytes", 0),
+                    "net_tx":   stats.get("net_tx_bytes", 0),
+                }, to=sid, namespace="/")
+            except Exception:
+                break
+            time.sleep(interval)
+
+    threading.Thread(target=_push, daemon=True).start()
+    emit("vm_metrics_subscribed", {"vm_id": vm_id, "interval": interval})
+
+
 @sock.on("subscribe_stats")
 def on_subscribe_stats(data):
     def push():
@@ -3386,6 +3496,9 @@ def ws_disconnect():
             tcp.close()
         except Exception:
             pass
+    # VM event subscriber temizle
+    with _vm_event_subscribers_lock:
+        _vm_event_subscribers.pop(session_id, None)
 
 
 # (VNC WebSocket proxy now handled by _vnc_ws_middleware + eventlet.websocket above)
@@ -3875,6 +3988,75 @@ def api_vpn_stop():
     if not wireguard_mgr: return err("WireGuard modülü yüklenemedi")
     return ok(wireguard_mgr.stop())
 
+
+# ── BGP Tunneling ─────────────────────────────────────────────────────────────
+@app.route("/api/bgp/status", methods=["GET"])
+@require_auth
+def api_bgp_status():
+    if not bgp_mgr: return ok({"available": False, "backend": "none"})
+    return ok(bgp_mgr.get_full_status())
+
+@app.route("/api/bgp/peers", methods=["GET"])
+@require_auth
+def api_bgp_list_peers():
+    if not bgp_mgr: return ok({"peers": []})
+    return ok({"peers": bgp_mgr.list_peers()})
+
+@app.route("/api/bgp/peers", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bgp_add_peer():
+    if not bgp_mgr: return err("BGP modülü yüklenemedi")
+    d = request.get_json() or {}
+    return ok(bgp_mgr.add_peer(
+        peer_ip     = d["peer_ip"],
+        peer_asn    = int(d["peer_asn"]),
+        local_asn   = int(d["local_asn"]),
+        description = d.get("description", ""),
+        password    = d.get("password", ""),
+        multihop    = int(d.get("multihop", 1)),
+        soft_reconfig = bool(d.get("soft_reconfig", True)),
+    ))
+
+@app.route("/api/bgp/peers/<peer_ip>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bgp_remove_peer(peer_ip):
+    if not bgp_mgr: return err("BGP modülü yüklenemedi")
+    d = request.get_json() or {}
+    return ok(bgp_mgr.remove_peer(peer_ip, int(d.get("local_asn", 65000))))
+
+@app.route("/api/bgp/peers/status", methods=["GET"])
+@require_auth
+def api_bgp_peer_status():
+    if not bgp_mgr: return ok({"sessions": []})
+    peer_ip = request.args.get("peer_ip")
+    return ok({"sessions": bgp_mgr.get_peer_status(peer_ip)})
+
+@app.route("/api/bgp/prefix/announce", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bgp_announce():
+    if not bgp_mgr: return err("BGP modülü yüklenemedi")
+    d = request.get_json() or {}
+    return ok(bgp_mgr.announce_prefix(d["prefix"], int(d["local_asn"])))
+
+@app.route("/api/bgp/prefix/withdraw", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bgp_withdraw():
+    if not bgp_mgr: return err("BGP modülü yüklenemedi")
+    d = request.get_json() or {}
+    return ok(bgp_mgr.withdraw_prefix(d["prefix"], int(d["local_asn"])))
+
+@app.route("/api/bgp/routes", methods=["GET"])
+@require_auth
+def api_bgp_routes():
+    if not bgp_mgr: return ok({"routes": []})
+    af = request.args.get("af", "ipv4")
+    return ok({"routes": bgp_mgr.get_routes(af)})
+
+
 # ── DNS ───────────────────────────────────────────────────────────────────────
 @app.route("/api/dns/status", methods=["GET"])
 @require_auth
@@ -4338,6 +4520,67 @@ def api_ssl_autorenew_status():
     """Systemd timer aktif mi?"""
     if not ssl_mgr: return ok({"active": False})
     return ok(ssl_mgr.get_timer_status())
+
+
+@app.route("/api/ssl/generate-self-signed", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ssl_generate_self_signed():
+    """Self-signed sertifika üret (openssl req -x509)."""
+    if not ssl_mgr: return err("SSL modülü yüklenemedi")
+    d  = request.get_json() or {}
+    cn = d.get("common_name", "oxware-hypervisor")
+    days = int(d.get("days", 3650))
+    return ok(ssl_mgr.generate_self_signed(common_name=cn, days=days))
+
+
+@app.route("/api/ssl/enforce-https", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ssl_enforce_https():
+    """
+    HTTPS zorunluluğunu etkinleştir/devre dışı bırak.
+    body: {enabled: true|false}
+    """
+    if not ssl_mgr: return err("SSL modülü yüklenemedi")
+    d       = request.get_json() or {}
+    enabled = bool(d.get("enabled", True))
+    result  = ssl_mgr.set_https_enforce(enabled)
+    # Nginx'i yeniden yükle (redirect bloğu aktif olsun)
+    if nginx_mgr:
+        try:
+            nginx_mgr.reload()
+        except Exception:
+            pass
+    return ok(**result)
+
+
+@app.route("/api/ssl/full-status", methods=["GET"])
+@require_auth
+def api_ssl_full_status():
+    """SSL + HTTPS enforce durumu birlikte."""
+    if not ssl_mgr: return ok({"ssl_enabled": False, "https_enforced": False})
+    return ok(ssl_mgr.get_full_status())
+
+
+# ── Nginx/OpenResty Lua middleware ────────────────────────────────────────────
+@app.route("/api/nginx/lua-middleware", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_nginx_lua_middleware():
+    """
+    OpenResty Lua access middleware config'i üret + göster.
+    body: {rate_limit_rps, auth_token, block_ips:[...]}
+    """
+    if not nginx_mgr: return err("nginx modülü yüklenemedi")
+    d = request.get_json() or {}
+    lua = nginx_mgr.generate_lua_middleware(
+        rate_limit_rps = int(d.get("rate_limit_rps", 20)),
+        auth_token     = d.get("auth_token", ""),
+        block_ips      = d.get("block_ips", []),
+    )
+    return ok(lua_block=lua)
+
 
 # ── Nginx Reverse Proxy ───────────────────────────────────────────────────────
 @app.route("/api/nginx/status", methods=["GET"])
@@ -4823,6 +5066,33 @@ def api_scaler_policy(pid):
 def api_scaler_events():
     if not auto_scaler: return ok({"events": []})
     return ok({"events": auto_scaler.get_scaling_events(request.args.get("vm_id"))})
+
+@app.route("/api/autoscaler/status", methods=["GET"])
+@require_auth
+def api_scaler_status():
+    """AutoElastic HVM durum özeti — tüm politikalar + son olaylar."""
+    if not auto_scaler:
+        return ok({"available": False})
+    policies = auto_scaler.list_policies()
+    events   = auto_scaler.get_scaling_events(limit=10)
+    return ok({
+        "available":   True,
+        "policy_count": len(policies),
+        "policies":    policies,
+        "recent_events": events,
+    })
+
+@app.route("/api/autoscaler/trigger", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_scaler_trigger():
+    """AutoElastic kontrolünü hemen çalıştır (cron beklemeden)."""
+    if not auto_scaler: return err("Auto-scaler modülü yüklenemedi")
+    try:
+        auto_scaler.check_and_scale()
+        return ok({"message": "AutoElastic kontrol tamamlandı"})
+    except Exception as e:
+        return err(str(e))
 
 # ── SDN ───────────────────────────────────────────────────────────────────────
 @app.route("/api/sdn/status", methods=["GET"])

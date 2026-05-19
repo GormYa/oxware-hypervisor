@@ -16,6 +16,12 @@ try:
 except ImportError:
     _BOTO3_OK = False
 
+try:
+    import paramiko
+    _PARAMIKO_OK = True
+except ImportError:
+    _PARAMIKO_OK = False
+
 import json
 import threading
 import time
@@ -24,6 +30,7 @@ import os
 import subprocess
 import logging
 import ftplib
+import io
 
 log = logging.getLogger("oxware.backup_scheduler")
 
@@ -239,6 +246,10 @@ def _run_backup(schedule):
             _upload_s3(vm_name, snap_name, remote_config)
         elif remote_type == "ftp":
             _upload_ftp(vm_name, snap_name, remote_config)
+        elif remote_type == "sftp":
+            _upload_sftp(vm_name, snap_name, remote_config)
+        elif remote_type == "ssh":
+            _upload_ssh_scp(vm_name, snap_name, remote_config)
 
         success = True
 
@@ -300,6 +311,88 @@ def _upload_ftp(vm_name, snap_name, cfg):
         log.info("_upload_ftp: ftp://%s/%s/%s yüklendi.", host, remote_dir, filename)
     except Exception as e:
         log.error("_upload_ftp hatası: %s", e)
+
+
+def _upload_sftp(vm_name, snap_name, cfg):
+    """
+    paramiko ile SFTP üzerinden backup yükleme.
+    cfg keys: host, port(22), username, password|private_key_path, remote_dir
+    """
+    if not _PARAMIKO_OK:
+        log.warning("_upload_sftp: paramiko yok. 'pip install paramiko' çalıştırın.")
+        return
+    try:
+        host       = cfg.get("host", "localhost")
+        port       = int(cfg.get("port", 22))
+        user       = cfg.get("username", "root")
+        passwd     = cfg.get("password", "")
+        key_path   = cfg.get("private_key_path", "")
+        remote_dir = cfg.get("remote_dir", "/backups")
+        filename   = f"{snap_name}.json"
+        payload    = json.dumps({
+            "vm_name": vm_name, "snapshot": snap_name, "ts": time.time()
+        }).encode("utf-8")
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if key_path and os.path.isfile(key_path):
+            pkey = paramiko.RSAKey.from_private_key_file(key_path)
+            ssh.connect(host, port=port, username=user, pkey=pkey, timeout=30)
+        else:
+            ssh.connect(host, port=port, username=user, password=passwd, timeout=30)
+
+        sftp = ssh.open_sftp()
+        # Dizini oluştur (exist_ok)
+        try:
+            sftp.stat(remote_dir)
+        except FileNotFoundError:
+            sftp.mkdir(remote_dir)
+        remote_path = remote_dir.rstrip("/") + "/" + filename
+        sftp.putfo(io.BytesIO(payload), remote_path)
+        sftp.close()
+        ssh.close()
+        log.info("_upload_sftp: sftp://%s%s yüklendi.", host, remote_path)
+    except Exception as e:
+        log.error("_upload_sftp hatası: %s", e)
+
+
+def _upload_ssh_scp(vm_name, snap_name, cfg):
+    """
+    scp (subprocess) ile SSH üzerinden yükleme.
+    cfg keys: host, port(22), username, private_key_path, remote_dir
+    Parola desteklenmez — SSH key kullan.
+    """
+    try:
+        host       = cfg.get("host", "localhost")
+        port       = int(cfg.get("port", 22))
+        user       = cfg.get("username", "root")
+        key_path   = cfg.get("private_key_path", "")
+        remote_dir = cfg.get("remote_dir", "/backups")
+        filename   = f"{snap_name}.json"
+        payload    = json.dumps({
+            "vm_name": vm_name, "snapshot": snap_name, "ts": time.time()
+        }).encode("utf-8")
+
+        # Geçici dosyaya yaz
+        tmp_path = f"/tmp/{filename}"
+        with open(tmp_path, "wb") as f:
+            f.write(payload)
+
+        scp_cmd = ["scp", "-P", str(port),
+                   "-o", "StrictHostKeyChecking=no",
+                   "-o", "BatchMode=yes"]
+        if key_path and os.path.isfile(key_path):
+            scp_cmd += ["-i", key_path]
+        scp_cmd += [tmp_path, f"{user}@{host}:{remote_dir}/{filename}"]
+
+        r = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
+        os.unlink(tmp_path)
+        if r.returncode == 0:
+            log.info("_upload_ssh_scp: %s → %s:%s/%s", filename, host, remote_dir, filename)
+        else:
+            log.error("_upload_ssh_scp hata: %s", r.stderr.strip())
+    except Exception as e:
+        log.error("_upload_ssh_scp hatası: %s", e)
 
 
 # ---------------------------------------------------------------------------

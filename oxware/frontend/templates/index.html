@@ -1211,6 +1211,8 @@
                     <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">CPU Modu</td><td id="ov-cpumode" style="padding:7px 12px">—</td></tr>
                     <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">Autostart</td><td id="ov-autostart" style="padding:7px 12px">—</td></tr>
                     <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">VNC Port</td><td id="ov-vnc" style="padding:7px 12px">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">Guest Agent</td><td id="ov-guest-agent" style="padding:7px 12px">—</td></tr>
+                    <tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;color:var(--text-muted)">Hostname (GA)</td><td id="ov-ga-hostname" style="padding:7px 12px;font-family:monospace;font-size:11px">—</td></tr>
                     <tr><td style="padding:7px 12px;color:var(--text-muted)">Atanan Kullanıcılar</td><td id="ov-assignees" style="padding:7px 12px">—</td></tr>
                   </table>
                 </div>
@@ -6728,6 +6730,20 @@ async function loadVMDetail(vmId) {
     document.getElementById("ov-autostart").textContent = v.autostart ? "✅ Evet" : "❌ Hayır";
     document.getElementById("ov-vnc").textContent = v.vnc_port ? `${v.vnc_port}` : "—";
 
+    // ── Guest Agent status (quick, from api_get_vm) ───────────────────────────
+    const gaStatus = v.guest_agent || "unavailable";
+    const gaEl = document.getElementById("ov-guest-agent");
+    if (gaStatus === "running") {
+      gaEl.innerHTML = `<span style="color:#4ade80;font-weight:600">✅ Çalışıyor</span>`;
+      // Load detailed GA info asynchronously
+      _loadGuestAgentDetail(v.id);
+    } else if (gaStatus === "vm_stopped") {
+      gaEl.innerHTML = `<span style="color:var(--text-muted)">— VM kapalı</span>`;
+    } else {
+      gaEl.innerHTML = `<span style="color:#f87171">❌ Yüklü değil / kapalı</span>`;
+    }
+    document.getElementById("ov-ga-hostname").textContent = "—";
+
     const assignees = v.assignees || [];
     document.getElementById("ov-assignees").textContent =
       assignees.length ? assignees.join(", ") : "—";
@@ -6899,6 +6915,53 @@ async function refreshVdMetrics() {
       </div>`;
   } catch (e) {
     wrap.innerHTML = `<div class="empty-state"><p>Metrikler alınamadı: ${escHtml(e.message)}</p></div>`;
+  }
+}
+
+// ── Guest Agent Detail ────────────────────────────────────────────────────────
+async function _loadGuestAgentDetail(vmId) {
+  try {
+    const d = await api(`/vms/${vmId}/guest-agent`);
+    const ga = d.guest_agent || {};
+    if (ga.status !== "running") return;
+
+    // Hostname
+    if (ga.hostname) {
+      const hn = document.getElementById("ov-ga-hostname");
+      if (hn) hn.textContent = ga.hostname;
+    }
+
+    // OS info
+    if (ga.os && ga.os.name) {
+      const osEl = document.getElementById("ov-os");
+      if (osEl) {
+        const existing = osEl.textContent;
+        const gaOs = ga.os.name + (ga.os.version ? ` ${ga.os.version}` : "");
+        osEl.textContent = existing && existing !== "—" ? existing : gaOs;
+        osEl.title = `Guest Agent: ${gaOs}\nKernel: ${ga.os.kernel || "—"}`;
+      }
+    }
+
+    // GA IPs — show in IP card if no DHCP/pool IP
+    const gaIps = (ga.interfaces || []).flatMap(i =>
+      (i.ips || []).filter(a => a.type !== "ipv6" && a.ip && !a.ip.startsWith("127."))
+    );
+    if (gaIps.length > 0) {
+      const ipEl = document.getElementById("vd-ip");
+      const ipSubEl = document.getElementById("vd-ip-sub");
+      if (ipEl && ipEl.textContent === "—") {
+        ipEl.textContent = gaIps[0].ip;
+        ipEl.title = gaIps[0].ip;
+        if (ipSubEl) ipSubEl.textContent = "Guest Agent";
+      }
+      // Show GA IP in DHCP row if pool IP is primary
+      const dhcpEl = document.getElementById("vd-ip-dhcp");
+      if (dhcpEl && !dhcpEl.textContent && gaIps.length > 0) {
+        dhcpEl.innerHTML = `<span style="color:var(--text-muted)">GA IP: </span><span style="font-family:monospace">${gaIps[0].ip}</span>`;
+      }
+    }
+  } catch (e) {
+    // GA detail not critical — silent fail
   }
 }
 
@@ -12893,6 +12956,70 @@ async function _initSmigVmSel() {
 
 // load resource pools and init smig when tab-settings opens
 const _origLoadSettings = typeof loadSettings === 'function' ? loadSettings : null;
+
+
+// ── WebSocket VM Events Hub ──────────────────────────────────────────────────
+// Global WS connection for real-time VM state/metrics push.
+// subscribe_vm_events → vm_event {vm_id, type, state, name}
+// subscribe_vm_metrics → vm_metrics {vm_id, cpu_pct, mem_mb, ...}
+
+let _vmEventsSocket = null;
+
+function _initVmEventsSocket() {
+  if (_vmEventsSocket) return;
+  if (!TOKEN()) return;
+  try {
+    _vmEventsSocket = io({ transports: ["websocket", "polling"], reconnection: true, reconnectionDelay: 3000 });
+
+    _vmEventsSocket.on("connect", () => {
+      // Subscribe to all VM state events
+      _vmEventsSocket.emit("subscribe_vm_events", { vm_ids: "*" });
+    });
+
+    // VM state change → update tree badge + list row
+    _vmEventsSocket.on("vm_event", (data) => {
+      const { vm_id, type, state } = data;
+      if (type === "state" && vm_id && state) {
+        // Update tree badge color
+        const badge = document.querySelector(`.tree-item[data-vmid="${vm_id}"] .vm-state-dot`);
+        if (badge) {
+          badge.className = "vm-state-dot";
+          badge.classList.add(state === "running" ? "dot-running" : state === "paused" ? "dot-paused" : "dot-stopped");
+        }
+        // If VM detail page is open for this VM, refresh state indicator
+        if (currentVmId === vm_id) {
+          const stEl = document.getElementById("vd-state");
+          if (stEl) stEl.textContent = state === "running" ? "Çalışıyor" : state === "paused" ? "Duraklatıldı" : "Kapalı";
+        }
+      }
+    });
+
+    _vmEventsSocket.on("disconnect", () => {
+      _vmEventsSocket = null;
+    });
+  } catch(e) {}
+}
+
+// Subscribe to per-VM real-time metrics when VM detail opens
+function subscribeVmMetrics(vmId, interval = 3) {
+  if (!_vmEventsSocket) return;
+  _vmEventsSocket.emit("subscribe_vm_metrics", { vm_id: vmId, interval });
+  _vmEventsSocket.off("vm_metrics");
+  _vmEventsSocket.on("vm_metrics", (data) => {
+    if (data.vm_id !== vmId) return;
+    // Update mini metric bars in header strip if present
+    const cpuEl = document.getElementById("vd-cpu-sub");
+    if (cpuEl && data.cpu_pct != null)
+      cpuEl.textContent = `CPU: ${data.cpu_pct.toFixed(1)}%`;
+  });
+}
+
+// Start WS hub after login
+if (TOKEN()) {
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(_initVmEventsSocket, 1000);
+  });
+}
 
 
 </script>
