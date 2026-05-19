@@ -25,9 +25,10 @@ UPDATE_LOG_FILE    = os.path.join(os.environ.get("OXWARE_LOG_DIR", "/var/log/oxw
 
 def _load_config() -> dict:
     defaults = {
-        "repo_url":   "",       # https://github.com/user/repo
-        "branch":     "main",
-        "auto_check": "false",
+        "repo_url":    "",       # https://github.com/user/repo
+        "branch":      "main",
+        "auto_check":  "false",
+        "github_token": "",      # Personal Access Token (private repo / rate limit fix)
         "project_dir": _detect_project_dir(),
     }
     if not os.path.exists(UPDATE_CONFIG_FILE):
@@ -46,14 +47,16 @@ def _load_config() -> dict:
         return defaults
 
 
-def save_config(repo_url: str, branch: str = "main", auto_check: bool = False):
+def save_config(repo_url: str, branch: str = "main", auto_check: bool = False,
+                github_token: str = ""):
     os.makedirs(os.path.dirname(UPDATE_CONFIG_FILE), exist_ok=True)
     lines = [
         "# OXware Güncelleme Yapılandırması",
-        f"REPO_URL   = {repo_url}",
-        f"BRANCH     = {branch}",
-        f"AUTO_CHECK = {'true' if auto_check else 'false'}",
-        f"PROJECT_DIR = {_detect_project_dir()}",
+        f"REPO_URL      = {repo_url}",
+        f"BRANCH        = {branch}",
+        f"AUTO_CHECK    = {'true' if auto_check else 'false'}",
+        f"GITHUB_TOKEN  = {github_token}",
+        f"PROJECT_DIR   = {_detect_project_dir()}",
     ]
     with open(UPDATE_CONFIG_FILE, "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -126,37 +129,65 @@ def _github_api_url(repo_url: str) -> str:
     return f"https://api.github.com/repos/{url}"
 
 
-def _get_remote_commits(repo_url: str, branch: str, limit: int = 20) -> list:
-    """GitHub API üzerinden son commit'leri çek."""
+def _get_remote_commits(repo_url: str, branch: str, limit: int = 20,
+                        token: str = "") -> list | tuple:
+    """
+    GitHub API üzerinden son commit'leri çek.
+    Başarı: list of commit dicts
+    Hata:   (str,) — hata mesajı içeren tek elemanlı tuple
+    """
     api_url = _github_api_url(repo_url) + f"/commits?sha={branch}&per_page={limit}"
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        r = requests.get(api_url, timeout=10, headers={"Accept": "application/vnd.github.v3+json"})
+        r = requests.get(api_url, timeout=10, headers=headers)
         if r.status_code == 200:
             commits = r.json()
             return [
                 {
-                    "sha":     c["sha"][:8],
+                    "sha":      c["sha"][:8],
                     "sha_full": c["sha"],
-                    "message": c["commit"]["message"].split("\n")[0][:100],
-                    "author":  c["commit"]["author"]["name"],
-                    "date":    c["commit"]["author"]["date"],
+                    "message":  c["commit"]["message"].split("\n")[0][:100],
+                    "author":   c["commit"]["author"]["name"],
+                    "date":     c["commit"]["author"]["date"],
                 }
                 for c in commits
             ]
+        elif r.status_code == 401:
+            return ("GitHub token geçersiz veya süresi dolmuş. Ayarlar → Güncellemeler bölümünden yeni token girin.",)
+        elif r.status_code == 403:
+            # Rate limit veya private repo erişim engeli
+            reset_ts = r.headers.get("X-RateLimit-Reset", "")
+            if r.headers.get("X-RateLimit-Remaining") == "0":
+                from datetime import datetime
+                try:
+                    reset_str = datetime.fromtimestamp(int(reset_ts)).strftime("%H:%M")
+                except Exception:
+                    reset_str = reset_ts
+                return (f"GitHub API rate limit doldu. Sıfırlanma: {reset_str}. "
+                        "Çözüm: Ayarlar → Güncellemeler → GitHub Token ekleyin.",)
+            return ("GitHub erişim reddedildi (403). Repo private ise token gereklidir.",)
         elif r.status_code == 404:
-            return []
+            return ("Repo bulunamadı (404). URL'yi ve branch adını kontrol edin. "
+                    "Private repo ise GitHub Token gereklidir.",)
         else:
-            log.warning("GitHub API yanıtı: %s", r.status_code)
-            return []
+            return (f"GitHub API beklenmedik yanıt: HTTP {r.status_code}",)
+    except requests.exceptions.ConnectionError:
+        return ("GitHub'a bağlanılamadı. Sunucunun internet erişimini kontrol edin.",)
+    except requests.exceptions.Timeout:
+        return ("GitHub API zaman aşımı (10s). Ağ bağlantısı yavaş veya kesik.",)
     except Exception as e:
         log.error("GitHub API hatası: %s", e)
-        return []
+        return (f"GitHub API hatası: {e}",)
 
 
-def _get_remote_head(repo_url: str, branch: str) -> str:
+def _get_remote_head(repo_url: str, branch: str, token: str = "") -> str:
     """GitHub API üzerinden en son commit SHA'sını al."""
-    commits = _get_remote_commits(repo_url, branch, limit=1)
-    return commits[0]["sha_full"] if commits else ""
+    commits = _get_remote_commits(repo_url, branch, limit=1, token=token)
+    if isinstance(commits, list) and commits:
+        return commits[0]["sha_full"]
+    return ""
 
 
 # ── Ana Fonksiyonlar ──────────────────────────────────────────────────────────
@@ -169,6 +200,7 @@ def check_updates() -> dict:
     cfg = _load_config()
     repo_url = cfg.get("repo_url", "")
     branch   = cfg.get("branch", "main")
+    token    = cfg.get("github_token", "")
     proj_dir = cfg.get("project_dir", _detect_project_dir())
 
     if not repo_url:
@@ -180,7 +212,10 @@ def check_updates() -> dict:
         local_sha = _local_commit(proj_dir)
 
     # Uzak commit'leri çek
-    remote_commits = _get_remote_commits(repo_url, branch)
+    remote_commits = _get_remote_commits(repo_url, branch, token=token)
+    if isinstance(remote_commits, tuple):
+        # Hata tuple döndü — açıklayıcı mesajı ilet
+        return {"error": remote_commits[0]}
     if not remote_commits:
         return {"error": "GitHub'a bağlanılamadı veya repo bulunamadı."}
 
@@ -297,13 +332,16 @@ def get_update_history(limit: int = 20) -> list:
 
 def get_config() -> dict:
     cfg = _load_config()
+    token = cfg.get("github_token", "")
     return {
-        "repo_url":   cfg.get("repo_url", ""),
-        "branch":     cfg.get("branch", "main"),
-        "auto_check": cfg.get("auto_check", "false").lower() == "true",
-        "project_dir": cfg.get("project_dir", ""),
-        "is_git_repo": _is_git_repo(cfg.get("project_dir", _detect_project_dir())),
-        "local_sha":  _local_commit(cfg.get("project_dir", _detect_project_dir()))[:8],
+        "repo_url":      cfg.get("repo_url", ""),
+        "branch":        cfg.get("branch", "main"),
+        "auto_check":    cfg.get("auto_check", "false").lower() == "true",
+        "github_token":  token,
+        "has_token":     bool(token),          # UI için — token var mı?
+        "project_dir":   cfg.get("project_dir", ""),
+        "is_git_repo":   _is_git_repo(cfg.get("project_dir", _detect_project_dir())),
+        "local_sha":     _local_commit(cfg.get("project_dir", _detect_project_dir()))[:8],
     }
 
 

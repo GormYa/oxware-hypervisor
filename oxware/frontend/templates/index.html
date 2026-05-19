@@ -1804,10 +1804,17 @@
 
           <div class="card" style="margin-bottom:14px">
             <div class="card-title">⚙️ GitHub Repo Ayarı</div>
-            <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:flex-end">
+            <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:flex-end;margin-bottom:10px">
               <div class="form-row" style="margin:0"><label>GitHub Repo URL</label><input id="upd-repo-url" placeholder="https://github.com/kullanici/OXware"></div>
               <div class="form-row" style="margin:0;min-width:120px"><label>Branch</label><input id="upd-branch" value="main"></div>
               <button class="btn primary" onclick="saveUpdateConfig()">💾 Kaydet</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:flex-end">
+              <div class="form-row" style="margin:0">
+                <label>GitHub Token <span style="color:var(--text-dim);font-size:11px">(Private repo veya rate limit için)</span></label>
+                <input id="upd-gh-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="new-password">
+              </div>
+              <span id="upd-token-badge" style="display:none;font-size:11px;color:var(--green-lt);padding-bottom:8px">✔ Token kayıtlı</span>
             </div>
           </div>
 
@@ -9390,6 +9397,9 @@ async function loadUpdates() {
     const cfg = await api("/update/config");
     if (cfg.repo_url) document.getElementById("upd-repo-url").value = cfg.repo_url;
     if (cfg.branch)   document.getElementById("upd-branch").value   = cfg.branch;
+    // Token: sadece "kayıtlı" badge göster, değeri input'a koyma (güvenlik)
+    const badge = document.getElementById("upd-token-badge");
+    if (badge) badge.style.display = cfg.has_token ? "inline" : "none";
   } catch {}
   // Otomatik kontrol aktif badge göster
   document.getElementById('upd-auto-badge').style.display = 'inline';
@@ -9458,10 +9468,19 @@ function _renderUpdateResult(data) {
 }
 
 async function saveUpdateConfig() {
-  const repo_url = document.getElementById("upd-repo-url").value.trim();
-  const branch = document.getElementById("upd-branch").value.trim() || "main";
+  const repo_url     = document.getElementById("upd-repo-url").value.trim();
+  const branch       = document.getElementById("upd-branch").value.trim() || "main";
+  const github_token = (document.getElementById("upd-gh-token")?.value || "").trim();
   if (!repo_url) return toast("Repo URL boş", "error");
-  try { await api("/update/config", { method: "POST", body: { repo_url, branch } }); toast("Kaydedildi", "success"); }
+  try {
+    await api("/update/config", { method: "POST", body: { repo_url, branch, github_token } });
+    toast("Kaydedildi", "success");
+    // Token input'u temizle, badge göster
+    const tokenInput = document.getElementById("upd-gh-token");
+    const badge      = document.getElementById("upd-token-badge");
+    if (tokenInput) tokenInput.value = "";
+    if (badge) badge.style.display = github_token ? "inline" : "none";
+  }
   catch (e) { toast(e.message, "error"); }
 }
 
