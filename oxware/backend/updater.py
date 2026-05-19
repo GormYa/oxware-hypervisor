@@ -211,11 +211,26 @@ def check_updates() -> dict:
     if _is_git_repo(proj_dir):
         local_sha = _local_commit(proj_dir)
 
-    # Uzak commit'leri çek
+    # Uzak commit'leri çek — branch yanlışsa default branch'i dene
     remote_commits = _get_remote_commits(repo_url, branch, token=token)
     if isinstance(remote_commits, tuple):
-        # Hata tuple döndü — açıklayıcı mesajı ilet
-        return {"error": remote_commits[0]}
+        err_msg = remote_commits[0]
+        # 404 + branch hatası olabilir: default branch'i öğren ve tekrar dene
+        if "404" in err_msg or "bulunamadı" in err_msg:
+            real_branch = _detect_default_branch(repo_url, token)
+            if real_branch != branch:
+                remote_commits2 = _get_remote_commits(repo_url, real_branch, token=token)
+                if isinstance(remote_commits2, list) and remote_commits2:
+                    remote_commits = remote_commits2
+                    branch = real_branch
+                    log.warning("check_updates: branch '%s' → '%s' otomatik düzeltildi.",
+                                cfg.get("branch"), branch)
+                else:
+                    return {"error": err_msg}
+            else:
+                return {"error": err_msg}
+        else:
+            return {"error": err_msg}
     if not remote_commits:
         return {"error": "GitHub'a bağlanılamadı veya repo bulunamadı."}
 
@@ -243,6 +258,21 @@ def check_updates() -> dict:
     }
 
 
+def _detect_default_branch(repo_url: str, token: str = "") -> str:
+    """GitHub API'den repo'nun default branch'ini al. Başarısız → 'main'."""
+    try:
+        api_url = _github_api_url(repo_url)
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        r = requests.get(api_url, timeout=8, headers=headers)
+        if r.status_code == 200:
+            return r.json().get("default_branch", "main")
+    except Exception:
+        pass
+    return "main"
+
+
 def apply_update() -> dict:
     """
     Güncellemeyi uygula: git pull çek, servisi yeniden başlat.
@@ -250,6 +280,7 @@ def apply_update() -> dict:
     cfg      = _load_config()
     repo_url = cfg.get("repo_url", "")
     branch   = cfg.get("branch", "main")
+    token    = cfg.get("github_token", "")
     proj_dir = cfg.get("project_dir", _detect_project_dir())
 
     if not repo_url:
@@ -263,10 +294,36 @@ def apply_update() -> dict:
         _init_repo_if_needed(proj_dir, repo_url, branch)
         steps.append({"step": "repo_init", "status": "ok"})
 
-        # 2. Fetch
+        # 2. Fetch — branch bulunamazsa GitHub'dan default branch'i öğren ve tekrar dene
         code, out, err = _run(["git", "fetch", "origin", branch], cwd=proj_dir)
         if code != 0:
-            return {"success": False, "error": f"git fetch başarısız: {err}", "steps": steps}
+            if "couldn't find remote ref" in err or "invalid refspec" in err.lower():
+                # Branch adı yanlış — GitHub API'den gerçek default branch'i al
+                real_branch = _detect_default_branch(repo_url, token)
+                log.warning("Branch '%s' bulunamadı, '%s' deneniyor.", branch, real_branch)
+                if real_branch != branch:
+                    code2, out2, err2 = _run(
+                        ["git", "fetch", "origin", real_branch], cwd=proj_dir
+                    )
+                    if code2 == 0:
+                        branch = real_branch   # geri kalan adımlar için güncelle
+                        steps.append({"step": "branch_autofix",
+                                      "status": "warning",
+                                      "detail": f"Branch '{cfg.get('branch')}' yerine '{branch}' kullanıldı. Ayarlar → Güncellemeler'den düzeltin."})
+                    else:
+                        return {"success": False,
+                                "error": (f"Branch '{cfg.get('branch')}' bulunamadı ve "
+                                          f"'{real_branch}' da başarısız: {err2}. "
+                                          "Ayarlar → Güncellemeler → Branch alanını kontrol edin."),
+                                "steps": steps}
+                else:
+                    return {"success": False,
+                            "error": (f"Branch '{branch}' GitHub'da bulunamadı: {err}. "
+                                      "Ayarlar → Güncellemeler → Branch alanını düzeltin "
+                                      "(örn. 'main' veya 'master')."),
+                            "steps": steps}
+            else:
+                return {"success": False, "error": f"git fetch başarısız: {err}", "steps": steps}
         steps.append({"step": "fetch", "status": "ok"})
 
         # 3. Mevcut SHA
