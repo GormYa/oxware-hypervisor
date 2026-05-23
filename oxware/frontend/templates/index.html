@@ -1970,11 +1970,43 @@
           </div>
 
           <!-- Overview stat cards -->
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px" id="net-stat-cards">
-            <div class="stat-card"><div class="stat-label">Sanal Ağlar</div><div class="stat-value" id="net-stat-total">—</div></div>
-            <div class="stat-card"><div class="stat-label">Aktif Ağlar</div><div class="stat-value" id="net-stat-active">—</div></div>
-            <div class="stat-card"><div class="stat-label">Host Arayüzleri</div><div class="stat-value" id="net-stat-ifaces">—</div></div>
-            <div class="stat-card"><div class="stat-label">Aktif Arayüzler</div><div class="stat-value" id="net-stat-ifaces-up">—</div></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px" id="net-stat-cards">
+            <div style="background:linear-gradient(135deg,#1e3a5f 0%,#16213e 100%);border:1px solid #2a4a7f;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid fa-diagram-project" style="color:#60a5fa;font-size:18px"></i>
+              </div>
+              <div>
+                <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Sanal Ağlar</div>
+                <div style="font-size:24px;font-weight:700;color:#e2e8f0;line-height:1" id="net-stat-total">—</div>
+              </div>
+            </div>
+            <div style="background:linear-gradient(135deg,#14432a 0%,#0f2d1c 100%);border:1px solid #1a5c38;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:rgba(34,197,94,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid fa-circle-check" style="color:#4ade80;font-size:18px"></i>
+              </div>
+              <div>
+                <div style="font-size:11px;color:#86efac;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aktif Ağlar</div>
+                <div style="font-size:24px;font-weight:700;color:#e2e8f0;line-height:1" id="net-stat-active">—</div>
+              </div>
+            </div>
+            <div style="background:linear-gradient(135deg,#2d1b4e 0%,#1e1035 100%);border:1px solid #4c1d95;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:rgba(139,92,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid fa-ethernet" style="color:#a78bfa;font-size:18px"></i>
+              </div>
+              <div>
+                <div style="font-size:11px;color:#c4b5fd;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Host Arayüzleri</div>
+                <div style="font-size:24px;font-weight:700;color:#e2e8f0;line-height:1" id="net-stat-ifaces">—</div>
+              </div>
+            </div>
+            <div style="background:linear-gradient(135deg,#3b2005 0%,#271600 100%);border:1px solid #7c3c00;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:rgba(251,146,60,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid fa-signal" style="color:#fb923c;font-size:18px"></i>
+              </div>
+              <div>
+                <div style="font-size:11px;color:#fdba74;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aktif Arayüzler</div>
+                <div style="font-size:24px;font-weight:700;color:#e2e8f0;line-height:1" id="net-stat-ifaces-up">—</div>
+              </div>
+            </div>
           </div>
 
           <!-- Network sub-tabs -->
@@ -10720,12 +10752,12 @@ function loadHostingPage() {
 
 async function downloadModule(name) {
   const token = TOKEN();
-  if (!token) { showToast('Oturum açık değil', 'error'); return; }
+  if (!token) { toast('Oturum açık değil', 'error'); return; }
   try {
     const res = await fetch(`/api/hosting/download/${name}`, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
-    if (!res.ok) { showToast('İndirme başarısız: ' + res.status, 'error'); return; }
+    if (!res.ok) { toast('İndirme başarısız: ' + res.status, 'error'); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -10734,7 +10766,7 @@ async function downloadModule(name) {
     a.click();
     URL.revokeObjectURL(url);
   } catch(e) {
-    showToast('İndirme hatası: ' + e, 'error');
+    toast('İndirme hatası: ' + e, 'error');
   }
 }
 
@@ -10770,12 +10802,12 @@ async function hostingCreateKey() {
       expires_days: days,
     });
     const key = d.key || d.api_key || "";
-    if (!key) { showToast("Anahtar oluşturulamadı", "error"); return; }
+    if (!key) { toast("Anahtar oluşturulamadı", "error"); return; }
     document.getElementById("hst-key-val").textContent = key;
     document.getElementById("hst-key-result").style.display = "block";
-    showToast("API anahtarı oluşturuldu", "success");
+    toast("API anahtarı oluşturuldu", "success");
   } catch(e) {
-    showToast("Hata: " + e, "error");
+    toast("Hata: " + e, "error");
   }
 }
 
@@ -11555,15 +11587,15 @@ async function saveAutoSnapConfig() {
   const keep_days  = parseInt(document.getElementById('autosnap-keep').value);
   try {
     await api('/auto-snapshot/config', {method:'POST', body:{enabled,hour,minute,keep_days}});
-    showToast('Auto-snapshot ayarları kaydedildi', 'success');
-  } catch(e) { showToast('Kayıt hatası: ' + e, 'error'); }
+    toast('Auto-snapshot ayarları kaydedildi', 'success');
+  } catch(e) { toast('Kayıt hatası: ' + e, 'error'); }
 }
 async function runAutoSnapshotNow() {
   if (!await showConfirm('Tüm VM\'lerin snapshot\'ı şimdi alınacak.', 'Snapshot Al')) return;
   try {
     await api('/auto-snapshot/run', {method:'POST'});
-    showToast('Auto-snapshot başlatıldı (arkaplanda çalışıyor)', 'success');
-  } catch(e) { showToast('Hata: ' + e, 'error'); }
+    toast('Auto-snapshot başlatıldı (arkaplanda çalışıyor)', 'success');
+  } catch(e) { toast('Hata: ' + e, 'error'); }
 }
 
 /* ══════════════════ Security Audit ══════════════════ */
@@ -11653,7 +11685,7 @@ async function applySecFix(checkId) {
   try {
     const r = await api(`/security/audit/fix/${checkId}`, {method:'POST'});
     if (r.success) {
-      showToast('Düzeltme uygulandı ✓ Yeniden taranıyor...', 'success');
+      toast('Düzeltme uygulandı ✓ Yeniden taranıyor...', 'success');
       msg.style.display = 'none';
       await runSecurityAudit();
     } else {
@@ -11691,9 +11723,9 @@ async function loadSecurityLockouts() {
 async function unlockAccount(username) {
   try {
     await api(`/security/lockouts/${username}`, {method:'DELETE'});
-    showToast(`${username} kilidi açıldı`, 'success');
+    toast(`${username} kilidi açıldı`, 'success');
     loadSecurityLockouts();
-  } catch(e) { showToast('Hata: ' + e, 'error'); }
+  } catch(e) { toast('Hata: ' + e, 'error'); }
 }
 
 /* ══════════════════ Pen Test ══════════════════ */
