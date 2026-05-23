@@ -103,6 +103,7 @@
   <div class="spacer"></div>
   <span id="status" class="status">Bağlanıyor…</span>
   <button id="lock-btn" class="btn" onclick="togglePointerLock()" title="Mouse'u konsola kilitle (veya konsola tıkla)">🖱 Mouse Kilitle</button>
+  <button class="btn" onclick="vncPaste()" title="Panodan yapıştır (Ctrl+Shift+V)">📋 Yapıştır</button>
   <button class="btn" onclick="sendCtrlAltDel()">Ctrl+Alt+Del</button>
   <button class="btn" onclick="toggleFS()">⛶ Tam Ekran</button>
   <button class="btn danger" onclick="window.close()">✕ Kapat</button>
@@ -364,6 +365,27 @@ const _lockPoller = setInterval(() => {
   const canvas = document.querySelector("#screen canvas");
   if (canvas) { clearInterval(_lockPoller); setupPointerLock(canvas); }
 }, 150);
+
+// ── Paste support (#36) ──────────────────────────────────────────────────────
+async function vncPaste() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (_rfb && text) {
+      // noVNC: send clipboard text then key sequence to paste
+      _rfb.clipboardPasteFrom(text);
+    }
+  } catch(e) {
+    alert("Pano erişimi reddedildi. Tarayıcı izni gerekli (HTTPS + clipboard-read).");
+  }
+}
+
+// Ctrl+Shift+V → paste
+document.addEventListener("keydown", async (e) => {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'V' || e.code === 'KeyV')) {
+    e.preventDefault();
+    await vncPaste();
+  }
+});
 </script>
 </body>
 </html>

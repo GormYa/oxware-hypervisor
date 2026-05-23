@@ -333,6 +333,10 @@
     .sub-tab{padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s,border-color .12s;background:none;border-top:none;border-left:none;border-right:none}
     .sub-tab.active{color:var(--accent-lt);border-bottom-color:var(--accent)}
     .sub-tab:hover{color:var(--text)}
+    /* ── Console Type Cards ── */
+    .con-type-card{border:1px solid var(--border);border-radius:8px;padding:14px 12px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:var(--surface)}
+    .con-type-card:hover{border-color:var(--accent);background:var(--surface2)}
+    .con-type-card.selected{border-color:var(--accent);background:rgba(42,109,217,.08)}
     /* ── Hardware Tuning Panel ── */
     .hw-section{border:1px solid var(--border);border-radius:8px;margin-bottom:10px;background:var(--surface);overflow:hidden}
     .hw-section-title{font-size:12px;font-weight:700;color:var(--text);padding:11px 16px;display:flex;align-items:center;gap:8px;background:var(--surface2);border-bottom:1px solid var(--border)}
@@ -606,14 +610,7 @@
     .ha-node{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:6px}
     .ha-indicator{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 
-    /* PDF print */
-    @media print{
-      #topbar,#ctx-nav,#oxy-panel,#oxy-btn,.tb-actions,#themeToggle,#lang-btn,.section-header button,.action-btns{display:none!important}
-      .page{display:block!important;overflow:visible!important}
-      body{background:#fff!important;color:#000!important}
-    }
-
-    /* ── Mobile Responsive ── */
+/* ── Mobile Responsive ── */
     #mob-menu-btn{display:none;align-items:center;justify-content:center;width:44px;height:100%;background:none;border:none;border-right:1px solid var(--border);color:var(--text-muted);font-size:20px;cursor:pointer;flex-shrink:0}
     #mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:340}
     #mob-overlay.visible{display:block}
@@ -1284,12 +1281,34 @@
           <div id="vd-pane-console" style="display:none">
             <div class="hw-section" style="margin-top:12px">
               <div class="hw-section-title">▣ VM Konsolu</div>
-              <div style="padding:32px;text-align:center">
-                <div style="font-size:56px;margin-bottom:16px;opacity:.7">▣</div>
-                <div style="font-size:15px;font-weight:600;margin-bottom:8px" id="con-vm-name">—</div>
-                <div style="color:var(--text-muted);margin-bottom:24px;font-size:13px">noVNC üzerinden VNC konsolu — yeni pencerede açılır.</div>
-                <button class="btn primary" style="font-size:13px;padding:10px 28px" onclick="openConsole(currentVmId)">▣ Konsolu Aç</button>
-                <div style="margin-top:20px;display:inline-grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;text-align:left">
+              <div style="padding:20px 24px">
+                <div style="font-size:15px;font-weight:600;margin-bottom:4px" id="con-vm-name">—</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">Konsol türünü seçin ve bağlanın.</div>
+
+                <!-- Console type picker -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px" id="console-type-grid">
+                  <div class="con-type-card selected" data-type="novnc" onclick="_selectConsoleType('novnc')">
+                    <div style="font-size:26px;margin-bottom:6px">🖥️</div>
+                    <div style="font-weight:600;font-size:13px">noVNC</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Grafik VNC konsolu<br>Yeni pencerede açılır</div>
+                    <div style="margin-top:8px"><span class="badge-success" style="font-size:10px">Hazır</span></div>
+                  </div>
+                  <div class="con-type-card" data-type="xterm" onclick="_selectConsoleType('xterm')">
+                    <div style="font-size:26px;margin-bottom:6px">⌨️</div>
+                    <div style="font-weight:600;font-size:13px">xterm.js</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Seri konsol (PTY)<br>Tarayıcı içinde çalışır</div>
+                    <div style="margin-top:8px"><span class="badge-info" style="font-size:10px">virsh console</span></div>
+                  </div>
+                  <div class="con-type-card" data-type="spice" onclick="_selectConsoleType('spice')">
+                    <div style="font-size:26px;margin-bottom:6px">🎮</div>
+                    <div style="font-weight:600;font-size:13px">SPICE</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Yüksek performanslı<br>USB/Ses desteği</div>
+                    <div style="margin-top:8px" id="spice-badge"><span class="badge" style="font-size:10px;background:var(--surface2)">Kontrol ediliyor…</span></div>
+                  </div>
+                </div>
+
+                <!-- Info row -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden;text-align:left;margin-bottom:18px">
                   <div style="padding:8px 16px;background:var(--surface2);border-right:1px solid var(--border)">
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">VNC Port</div>
                     <div style="font-size:13px;font-weight:600" id="con-vnc-port">—</div>
@@ -1298,6 +1317,25 @@
                     <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Durum</div>
                     <div style="font-size:13px;font-weight:600" id="con-state">—</div>
                   </div>
+                </div>
+
+                <button class="btn primary" style="font-size:13px;padding:10px 28px;width:100%" onclick="_openSelectedConsole()">▶ Konsolu Aç</button>
+
+                <!-- xterm.js inline terminal (hidden by default) -->
+                <div id="vm-xterm-wrap" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">
+                    <div id="vm-serial-dot" style="width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0"></div>
+                    <span style="font-size:12px;font-weight:600">Serial Console — <span id="vm-xterm-vmid"></span></span>
+                    <div class="spacer"></div>
+                    <button class="btn sm" onclick="_vmSerialPaste()" title="Panodan yapıştır (Ctrl+Shift+V)">📋 Yapıştır</button>
+                    <button class="btn sm danger" onclick="_vmSerialDisconnect()">✕ Kapat</button>
+                  </div>
+                  <div id="vm-xterm-terminal" style="height:360px;background:#0d1117;padding:4px"></div>
+                </div>
+
+                <!-- SPICE info panel (hidden by default) -->
+                <div id="vm-spice-info" style="display:none;margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:16px">
+                  <div id="vm-spice-content"></div>
                 </div>
               </div>
             </div>
@@ -1579,6 +1617,7 @@
             </div>
             <div class="spacer"></div>
             <button class="btn sm" id="shell-connect-btn" onclick="shellToggleConnect()">▶ Bağlan</button>
+            <button class="btn sm" onclick="shellPaste()" title="Panodan yapıştır (Ctrl+Shift+V veya sağ tık)">📋 Yapıştır</button>
             <button class="btn sm" onclick="shellClear()">✕ Temizle</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden">
@@ -1615,8 +1654,7 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadVMs()">↻ Yenile</button>
             <span id="vms-admin-btns">
-              <button class="btn" onclick="exportPDF('vms')" title="PDF olarak indir">📄 PDF</button>
-              <button class="btn" onclick="openModal('modal-vm-template')">📋 Şablonlar</button>
+<button class="btn" onclick="openModal('modal-vm-template')">📋 Şablonlar</button>
               <button class="btn primary" onclick="openCreateVMModal()">+ Yeni VM</button>
               <button class="btn" onclick="openAiVmModal()" style="color:var(--accent-lt)" title="AI ile VM oluştur">🤖 AI ile Oluştur</button>
               <button class="btn" onclick="openImportOvaModal()" style="color:#34d399">⬆ OVA Import</button>
@@ -2610,8 +2648,7 @@
           <div class="section-header" style="margin-top:14px">
             <h2>📈 Trend Analizi</h2>
             <div class="spacer"></div>
-            <button class="btn" onclick="exportPDF('monitoring')">📄 PDF</button>
-            <button class="btn sm" onclick="openModal('modal-backup-schedule')">⏰ Yedekleme Planı</button>
+<button class="btn sm" onclick="openModal('modal-backup-schedule')">⏰ Yedekleme Planı</button>
           </div>
           <div id="trend-container" style="margin-bottom:14px">
             <div class="empty-state" style="padding:20px"><p>Yükleniyor...</p></div>
@@ -4490,6 +4527,11 @@ function _tokenExpired() {
   document.getElementById("tbUsername").textContent = user;
   document.getElementById("tbRealm").textContent = role;
   document.getElementById("tbAvatar").textContent = user[0].toUpperCase();
+  // #31 — VM_USER OXY AI'e erişemez
+  if (role === "vm-user") {
+    const oxyBtn = document.getElementById("oxy-btn");
+    if (oxyBtn) oxyBtn.style.display = "none";
+  }
 })();
 
 /* ══ API helper ══ */
@@ -8091,17 +8133,6 @@ async function createVM() {
   } catch (e) { toast(e.message, "error"); }
 }
 
-/* ══════════ PDF Export ══════════ */
-function exportPDF(section) {
-  // Navigate to the relevant section first, then print
-  if (section === 'vms') navigate('vms');
-  setTimeout(() => {
-    const title = document.title;
-    document.title = `OXware — ${section.toUpperCase()} Raporu — ${new Date().toLocaleDateString()}`;
-    window.print();
-    document.title = title;
-  }, 200);
-}
 
 /* ══════════ VM Templates ══════════ */
 const BUILTIN_TEMPLATES = {
@@ -8410,6 +8441,139 @@ async function openConsole(vmId) {
   } catch (e) {
     toast("Konsol hatası: " + e.message, "error");
   }
+}
+
+/* ── Console Type Selector (#26) ── */
+let _selectedConsoleType = 'novnc';
+let _vmSerialTerm = null;
+let _vmSerialFit  = null;
+let _vmSerialSock = null;
+
+function _selectConsoleType(type) {
+  _selectedConsoleType = type;
+  document.querySelectorAll('.con-type-card').forEach(c => c.classList.toggle('selected', c.dataset.type === type));
+  // Hide inline panels when switching
+  if (type !== 'xterm') { document.getElementById('vm-xterm-wrap').style.display = 'none'; }
+  if (type !== 'spice') { document.getElementById('vm-spice-info').style.display = 'none'; }
+  if (type === 'spice') { _loadSpiceInfo(currentVmId); }
+}
+
+async function _openSelectedConsole() {
+  const vmId = currentVmId;
+  if (!vmId) return toast("VM seçili değil", "error");
+  if (_selectedConsoleType === 'novnc') {
+    await openConsole(vmId);
+  } else if (_selectedConsoleType === 'xterm') {
+    _openVmSerialConsole(vmId);
+  } else if (_selectedConsoleType === 'spice') {
+    await _openSpiceConsole(vmId);
+  }
+}
+
+async function _loadSpiceInfo(vmId) {
+  if (!vmId) return;
+  const wrap = document.getElementById('vm-spice-info');
+  const cont = document.getElementById('vm-spice-content');
+  const badge = document.getElementById('spice-badge');
+  wrap.style.display = 'block';
+  cont.innerHTML = '<span class="text-muted">SPICE durumu kontrol ediliyor…</span>';
+  try {
+    const d = await api(`/vms/${vmId}/spice`);
+    if (d.error) {
+      badge.innerHTML = '<span class="badge-danger" style="font-size:10px">Yapılandırılmamış</span>';
+      cont.innerHTML = `<p style="color:var(--red);margin:0 0 8px">⚠ ${escHtml(d.error)}</p>
+        <p style="font-size:12px;color:var(--text-muted);margin:0">SPICE eklemek için VM kapalıyken:<br>
+        <code>virsh edit ${escHtml(vmId)}</code> → &lt;graphics type='spice' port='-1' autoport='yes'/&gt;</p>`;
+    } else if (d.type === 'spice') {
+      badge.innerHTML = '<span class="badge-success" style="font-size:10px">Aktif</span>';
+      cont.innerHTML = `<div class="hw-row"><span class="hw-label">URL</span><code>${escHtml(d.url)}</code></div>
+        <div class="hw-row"><span class="hw-label">Port</span><strong>${escHtml(d.port)}</strong></div>
+        <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">${escHtml(d.note||'')}</p>`;
+    } else {
+      badge.innerHTML = '<span class="badge-warning" style="font-size:10px">VNC fallback</span>';
+      cont.innerHTML = `<p style="font-size:12px;color:var(--text-muted);margin:0">Bu VM SPICE değil VNC kullanıyor. SPICE için virsh edit ile grafik türünü spice olarak değiştirin.</p>`;
+    }
+  } catch(e) {
+    cont.innerHTML = `<p style="color:var(--red);margin:0">Hata: ${escHtml(e.message)}</p>`;
+  }
+}
+
+async function _openSpiceConsole(vmId) {
+  const d = await api(`/vms/${vmId}/spice`);
+  if (d.error) { toast("SPICE yapılandırılmamış: " + d.error, "error"); return; }
+  if (d.type === 'vnc') { toast("SPICE yok, noVNC ile bağlanılıyor…", "warning"); await openConsole(vmId); return; }
+  toast("SPICE bağlantısı: " + (d.url||d.port) + " — SPICE istemcisi gerekli", "info");
+}
+
+/* ── VM Serial Console via xterm.js (#26, #35, #36) ── */
+function _openVmSerialConsole(vmId) {
+  const wrap = document.getElementById('vm-xterm-wrap');
+  const termEl = document.getElementById('vm-xterm-terminal');
+  document.getElementById('vm-xterm-vmid').textContent = vmId;
+  wrap.style.display = 'block';
+
+  // Destroy previous instance if any
+  _vmSerialDisconnect();
+
+  // Init xterm.js
+  _vmSerialTerm = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace",
+    theme: { background: '#0d1117', foreground: '#e6edf3', cursor: '#58a6ff' },
+    scrollback: 5000,
+    allowProposedApi: true,
+  });
+  if (window.FitAddon) {
+    _vmSerialFit = new FitAddon.FitAddon();
+    _vmSerialTerm.loadAddon(_vmSerialFit);
+  }
+  _vmSerialTerm.open(termEl);
+  if (_vmSerialFit) { setTimeout(() => _vmSerialFit.fit(), 50); }
+
+  // Paste support (#36) — xterm.js Ctrl+Shift+V or right-click paste
+  _vmSerialTerm.attachCustomKeyEventHandler((e) => {
+    if ((e.ctrlKey && e.shiftKey && e.key === 'V') || (e.ctrlKey && e.shiftKey && e.code === 'KeyV')) {
+      navigator.clipboard.readText().then(t => { if (_vmSerialSock) _vmSerialSock.emit('vm_serial_input', {data: t}); });
+      return false;
+    }
+    return true;
+  });
+  _vmSerialTerm.onData(data => {
+    if (_vmSerialSock) _vmSerialSock.emit('vm_serial_input', { data });
+  });
+
+  // SocketIO connection
+  _vmSerialSock = io({ transports: ['websocket'] });
+  _vmSerialSock.on('connect', () => {
+    document.getElementById('vm-serial-dot').style.background = '#22c55e';
+    _vmSerialSock.emit('vm_serial_open', { token: TOKEN(), vm_id: vmId });
+    if (_vmSerialFit) { _vmSerialFit.fit(); _vmSerialSock.emit('vm_serial_resize', { cols: _vmSerialTerm.cols, rows: _vmSerialTerm.rows }); }
+  });
+  _vmSerialSock.on('vm_serial_output', d => { if (_vmSerialTerm) _vmSerialTerm.write(d.data || ''); });
+  _vmSerialSock.on('disconnect', () => { document.getElementById('vm-serial-dot').style.background = '#555'; });
+  _vmSerialSock.on('connect_error', e => { if (_vmSerialTerm) _vmSerialTerm.write('\r\n[Bağlantı hatası: ' + e.message + ']\r\n'); });
+
+  // Resize on terminal resize
+  _vmSerialTerm.onResize(({cols, rows}) => {
+    if (_vmSerialSock) _vmSerialSock.emit('vm_serial_resize', { cols, rows });
+  });
+}
+
+async function _vmSerialPaste() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (_vmSerialSock && text) _vmSerialSock.emit('vm_serial_input', { data: text });
+  } catch(e) {
+    toast("Pano erişimi reddedildi — Ctrl+Shift+V deneyin", "warning");
+  }
+}
+
+function _vmSerialDisconnect() {
+  if (_vmSerialSock) { _vmSerialSock.emit('vm_serial_close'); _vmSerialSock.disconnect(); _vmSerialSock = null; }
+  if (_vmSerialTerm) { try { _vmSerialTerm.dispose(); } catch(e){} _vmSerialTerm = null; }
+  _vmSerialFit = null;
+  document.getElementById('vm-serial-dot').style.background = '#555';
 }
 
 function _setVncStatus(msg, ok) {
@@ -9701,6 +9865,8 @@ const OXY_STORE = 'oxy-messages-v2';
 const OXY_MAX = 200; // max stored messages
 
 function toggleOxyPanel() {
+  // #31 — VM_USER OXY AI erişimi engellendi
+  if (_currentRole() === "vm-user") { toast("OXY AI erişimi kısıtlandı", "error"); return; }
   _oxyOpen = !_oxyOpen;
   const panel = document.getElementById('oxy-panel');
   const btn   = document.getElementById('oxy-btn');
@@ -10164,6 +10330,26 @@ function _initShellTerminal() {
   _shellTerm.writeln("\x1b[36m║  yukarıdaki ▶ Bağlan butonuna tıklayın  ║\x1b[0m");
   _shellTerm.writeln("\x1b[36m╚══════════════════════════════════════════╝\x1b[0m");
 
+  // Paste support (#36) — Ctrl+Shift+V, middle-click, right-click context
+  _shellTerm.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && e.ctrlKey && e.shiftKey &&
+        (e.key === 'V' || e.code === 'KeyV')) {
+      navigator.clipboard.readText().then(t => {
+        if (t && _shellSocket) _shellSocket.emit('shell_input', { data: t });
+      }).catch(() => toast("Pano erişimi reddedildi — tarayıcı izni gerekli", "warning"));
+      return false;
+    }
+    return true;
+  });
+  // Right-click paste
+  termEl.addEventListener('contextmenu', async (e) => {
+    e.preventDefault();
+    try {
+      const t = await navigator.clipboard.readText();
+      if (t && _shellSocket) _shellSocket.emit('shell_input', { data: t });
+    } catch(_) {}
+  });
+
   // Resize observer
   if (typeof ResizeObserver !== "undefined") {
     new ResizeObserver(() => {
@@ -10171,6 +10357,15 @@ function _initShellTerminal() {
         try { _shellFit.fit(); _shellSendResize(); } catch(e) {}
       }
     }).observe(termEl);
+  }
+}
+
+async function shellPaste() {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (t && _shellSocket) _shellSocket.emit('shell_input', { data: t });
+  } catch(e) {
+    toast("Pano erişimi reddedildi — Ctrl+Shift+V deneyin", "warning");
   }
 }
 
@@ -10740,7 +10935,25 @@ async function loadTabData(tabId) {
     case 'tab-dns':          loadDnsHosts(); loadDhcpLeases(); break;
     case 'tab-ipam':         loadIpamPage(); break;
     case 'tab-proxy':        loadNginxSites(); break;
-    case 'tab-monitoring':   loadPerfHistory('1h'); loadSmartData(); loadUptimes(); loadIdsStatus(); loadTrendAnalysis(); loadHAStatus(); loadAlertRules(); loadCostEstimate(); loadAlertHistory(); loadNetworkQos(); loadStorageMigrations(); break;
+    case 'tab-monitoring': {
+      // #41 Optimize: stagger 11 API calls — don't hammer server simultaneously
+      const _now = Date.now();
+      const _skip = (window._monitorLoadedAt && (_now - window._monitorLoadedAt) < 30000);
+      window._monitorLoadedAt = _now;
+      // Tier 1 — critical (immediate)
+      loadPerfHistory('1h');
+      // Tier 2 — secondary (150ms)
+      setTimeout(() => { loadUptimes(); loadSmartData(); }, 150);
+      // Tier 3 — status cards (400ms)
+      setTimeout(() => { loadHAStatus(); loadIdsStatus(); }, 400);
+      // Tier 4 — trend charts (expensive: 2× API) (750ms)
+      setTimeout(() => { if (!_skip) loadTrendAnalysis(); }, 750);
+      // Tier 5 — alerts & rules (1100ms)
+      setTimeout(() => { loadAlertRules(); loadNetworkQos(); }, 1100);
+      // Tier 6 — cost & history (1600ms)
+      setTimeout(() => { if (!_skip) { loadCostEstimate(); loadAlertHistory(); loadStorageMigrations(); } }, 1600);
+      break;
+    }
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
@@ -13299,7 +13512,7 @@ const _origLoadPageData = typeof window._oxLoadPage === 'function' ? window._oxL
   // but we listen via a MutationObserver on page visibility instead.
   document.addEventListener('oxware:tab-changed', function(e) {
     const tab = e.detail?.tab;
-    if (tab === 'tab-monitoring') { loadAlertRules(); loadCostEstimate(); loadAlertHistory(); }
+    // tab-monitoring: handled by loadTabData stagger above — no duplicate calls here
     if (tab === 'tab-security') { loadVault(); }
   });
 })();

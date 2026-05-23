@@ -2891,13 +2891,15 @@ def api_get_provision(provision_id):
     return ok(provision=p)
 
 # ── AI Agentlar ───────────────────────────────────────────────────────────────
+# SECURITY: VM_USER rolü OXY AI'e erişemez (bilgi sızdırma riski).
+# Sadece admin/administrator/operator erişebilir.
 @app.route("/api/ai/agents")
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_list_agents():
     return ok(agents=ai_agent.list_agents())
 
 @app.route("/api/ai/agents", methods=["POST"])
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_add_agent():
     data = request.get_json() or {}
     required = ["agent_id", "name", "provider", "api_key"]
@@ -2912,7 +2914,7 @@ def api_add_agent():
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>", methods=["DELETE"])
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_delete_agent(agent_id):
     try:
         ai_agent.delete_agent(agent_id)
@@ -2921,7 +2923,7 @@ def api_delete_agent(agent_id):
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>", methods=["PUT"])
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_update_agent(agent_id):
     data = request.get_json() or {}
     try:
@@ -2930,7 +2932,7 @@ def api_update_agent(agent_id):
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>/query", methods=["POST"])
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_query_agent(agent_id):
     data = request.get_json() or {}
     prompt = data.get("prompt", "").strip()
@@ -2943,7 +2945,7 @@ def api_query_agent(agent_id):
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>/query-vm", methods=["POST"])
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_query_agent_vm(agent_id):
     data = request.get_json() or {}
     vm_id    = data.get("vm_id")
@@ -2956,13 +2958,13 @@ def api_query_agent_vm(agent_id):
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>/logs")
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_agent_logs(agent_id):
     limit = int(request.args.get("limit", 20))
     return ok(logs=ai_agent.get_agent_logs(agent_id, limit=limit))
 
 @app.route("/api/ai/providers")
-@require_auth
+@require_role("admin", "administrator", "operator")
 def api_ai_providers():
     return ok(providers=[
         {"id": "openrouter", "name": "OpenRouter",    "url": "https://openrouter.ai",       "notes": "100+ model, tek API"},
@@ -3476,9 +3478,10 @@ def on_subscribe_stats(data):
     threading.Thread(target=push, daemon=True).start()
 
 # ── PTY Shell WebSocket ────────────────────────────────────────────────────────
-_shell_sessions = {}
-_iso_fetch_jobs = {}   # job_id → {status, filename, progress, ...}
-_vnc_sessions   = {}   # sid    → tcp_socket
+_shell_sessions  = {}
+_serial_sessions = {}  # sid → {proc, master_fd, vm_id}
+_iso_fetch_jobs  = {}   # job_id → {status, filename, progress, ...}
+_vnc_sessions    = {}   # sid    → tcp_socket
 
 @sock.on("shell_open")
 def ws_shell_open(data=None):
@@ -3603,6 +3606,13 @@ def ws_disconnect():
             os.close(sess["master_fd"])
         except Exception:
             pass
+    # VM serial console temizle
+    ser = _serial_sessions.pop(session_id, None)
+    if ser:
+        try: ser["proc"].terminate()
+        except Exception: pass
+        try: os.close(ser["master_fd"])
+        except Exception: pass
     # VNC proxy temizle
     tcp = _vnc_sessions.pop(session_id, None)
     if tcp:
@@ -3722,6 +3732,137 @@ def ws_vnc_close(data=None):
             tcp.close()
         except Exception:
             pass
+
+
+# ── VM Serial Console (xterm.js) ── virsh console proxy ──────────────────────
+@sock.on("vm_serial_open")
+def ws_vm_serial_open(data=None):
+    """VM'in seri konsolunu aç — virsh console aracılığıyla PTY proxy."""
+    sid = request.sid
+    data = data or {}
+
+    def _emit(text):
+        sock.emit("vm_serial_output", {"data": text}, to=sid, namespace="/")
+
+    # Token doğrulama
+    try:
+        from flask_jwt_extended import decode_token as _dt2
+        token = data.get("token", "")
+        if not token:
+            _emit("\r\n[Hata: token gönderilmedi]\r\n"); return
+        decoded = _dt2(token)
+        identity = decoded.get("sub") or decoded.get("identity", "")
+        if not identity:
+            _emit("\r\n[Hata: geçersiz token]\r\n"); return
+        # VM_USER sadece atanmış VM'e erişebilir
+        _prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+        if identity != _prim:
+            try:
+                _role = (cred_mgr.get_role(identity) if hasattr(cred_mgr, "get_role")
+                         else user_manager.get_user_role(identity))
+                vm_id = data.get("vm_id", "")
+                if _role == "vm-user":
+                    allowed = user_manager.get_user_vms(identity) if user_manager else []
+                    if vm_id not in allowed:
+                        _emit("\r\n[Erişim reddedildi: VM atanmamış]\r\n"); return
+            except Exception:
+                pass
+    except Exception as e:
+        _emit(f"\r\n[Yetkilendirme hatası: {e}]\r\n"); return
+
+    vm_id = data.get("vm_id", "")
+    if not vm_id:
+        _emit("\r\n[Hata: vm_id eksik]\r\n"); return
+
+    # VM çalışıyor mu?
+    try:
+        r_state = subprocess.run(["virsh", "domstate", vm_id], capture_output=True, text=True)
+        if "running" not in r_state.stdout.lower():
+            _emit(f"\r\n[VM çalışmıyor: {r_state.stdout.strip()}]\r\n"); return
+    except Exception as e:
+        _emit(f"\r\n[virsh domstate hatası: {e}]\r\n"); return
+
+    try:
+        import pty, fcntl, eventlet as _ev2
+
+        master_fd, slave_fd = pty.openpty()
+        proc = subprocess.Popen(
+            ["virsh", "console", vm_id, "--force"],
+            stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+            close_fds=True, preexec_fn=os.setsid,
+        )
+        os.close(slave_fd)
+        _serial_sessions[sid] = {"proc": proc, "master_fd": master_fd, "vm_id": vm_id}
+
+        fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+
+        def _read_loop():
+            while True:
+                try:
+                    out = os.read(master_fd, 4096)
+                    if out:
+                        sock.emit("vm_serial_output",
+                                  {"data": out.decode("utf-8", errors="replace")},
+                                  to=sid, namespace="/")
+                    else:
+                        break
+                except BlockingIOError:
+                    _ev2.sleep(0.05)
+                    continue
+                except OSError:
+                    break
+                except Exception as _ex:
+                    log.error("vm_serial read_loop: %s", _ex); break
+            sock.emit("vm_serial_output", {"data": "\r\n[Konsol bağlantısı kesildi]\r\n"},
+                      to=sid, namespace="/")
+            _serial_sessions.pop(sid, None)
+
+        _ev2.spawn(_read_loop)
+        _emit(f"\r\nOXware VM Konsolu — {vm_id}\r\nBağlanıyor (Ctrl+] çıkış)...\r\n")
+        log.info("vm_serial_open: sid=%s vm=%s pid=%d", sid, vm_id, proc.pid)
+
+    except Exception as e:
+        log.error("vm_serial_open hata: %s", e)
+        _emit(f"\r\n[Seri konsol açılamadı: {e}]\r\n")
+
+
+@sock.on("vm_serial_input")
+def ws_vm_serial_input(data):
+    sess = _serial_sessions.get(request.sid)
+    if not sess: return
+    try:
+        inp = data.get("data", "")
+        if isinstance(inp, str):
+            inp = inp.encode("utf-8")
+        os.write(sess["master_fd"], inp)
+    except Exception as e:
+        log.error("vm_serial_input: %s", e)
+
+
+@sock.on("vm_serial_resize")
+def ws_vm_serial_resize(data):
+    import fcntl, struct, termios
+    sess = _serial_sessions.get(request.sid)
+    if not sess: return
+    try:
+        cols = int(data.get("cols", 80))
+        rows = int(data.get("rows", 24))
+        fcntl.ioctl(sess["master_fd"], termios.TIOCSWINSZ,
+                    struct.pack("HHHH", rows, cols, 0, 0))
+    except Exception:
+        pass
+
+
+@sock.on("vm_serial_close")
+def ws_vm_serial_close(data=None):
+    sess = _serial_sessions.pop(request.sid, None)
+    if sess:
+        try: sess["proc"].terminate()
+        except Exception: pass
+        try: os.close(sess["master_fd"])
+        except Exception: pass
+
 
 # ── API Key Yönetimi ──────────────────────────────────────────────────────────
 @app.route("/api/apikeys", methods=["GET"])
