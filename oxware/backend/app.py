@@ -613,6 +613,9 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
+    "/opt/oxware/OXware-Hypervisor-2.5.0-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.0-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.0-amd64.iso",
     "/opt/oxware/OXware-Hypervisor-2.0.0-amd64.iso",
     "/root/OXware-Hypervisor-2.0.0-amd64.iso",
     "/tmp/OXware-Hypervisor-2.0.0-amd64.iso",
@@ -3326,7 +3329,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.0.0",
+        oxware_version="2.5.0",
     )
 
 @app.route("/api/system/stats")
