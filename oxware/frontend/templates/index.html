@@ -2744,6 +2744,37 @@
             </div>
             <div id="smig-jobs-list" style="font-size:12px;color:var(--text-muted)">—</div>
           </div>
+
+          <!-- Speedtest (#39) -->
+          <div class="section-header" style="margin-top:14px">
+            <h2>🚀 Ağ Hız Testi</h2>
+            <div class="spacer"></div>
+            <button class="btn sm" onclick="loadSpeedtestServers()">↻ Sunucular</button>
+          </div>
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px">
+              <div class="form-group" style="flex:1;min-width:200px">
+                <label style="font-size:11px;color:var(--text-muted)">Test Sunucusu</label>
+                <select id="speedtest-server-sel" style="width:100%">
+                  <option value="">— Yükleniyor —</option>
+                </select>
+              </div>
+              <div class="form-group" style="display:flex;align-items:center;gap:6px;margin-bottom:0">
+                <input type="checkbox" id="speedtest-dl-cb" checked>
+                <label for="speedtest-dl-cb" style="font-size:12px">İndirme testi</label>
+              </div>
+              <button class="btn primary" onclick="runSpeedtest()" id="speedtest-run-btn">▶ Testi Başlat</button>
+            </div>
+            <div id="speedtest-results">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px" id="speedtest-cards">
+                <div class="stat-card"><div class="stat-label">Gecikme (ms)</div><div class="stat-value" id="st-latency">—</div></div>
+                <div class="stat-card"><div class="stat-label">Paket Kaybı</div><div class="stat-value" id="st-loss">—</div></div>
+                <div class="stat-card"><div class="stat-label">İndirme (Mbps)</div><div class="stat-value" id="st-dl">—</div></div>
+                <div class="stat-card"><div class="stat-label">Test Süresi (s)</div><div class="stat-value" id="st-time">—</div></div>
+              </div>
+              <div id="speedtest-history" style="margin-top:12px;font-size:12px;color:var(--text-muted)"></div>
+            </div>
+          </div>
         </div>
 
         <!-- ─────── tab-ai ─────── -->
@@ -8272,6 +8303,69 @@ async function loadHAStatus() {
   }
 }
 
+/* ══════════ Speedtest (#39) ══════════ */
+let _speedtestHistory = [];
+
+async function loadSpeedtestServers() {
+  const sel = document.getElementById('speedtest-server-sel');
+  if (!sel) return;
+  const d = await _api('/api/speedtest/servers');
+  const servers = d.servers || [];
+  sel.innerHTML = servers.map(s =>
+    `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`
+  ).join('');
+}
+
+async function runSpeedtest() {
+  const sel = document.getElementById('speedtest-server-sel');
+  const btn = document.getElementById('speedtest-run-btn');
+  const dlCb = document.getElementById('speedtest-dl-cb');
+  if (!sel || !sel.value) { toast('Sunucu seçin', 'warning'); return; }
+
+  btn.disabled = true; btn.textContent = '⏳ Test çalışıyor…';
+  ['st-latency','st-loss','st-dl','st-time'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = '…';
+  });
+
+  try {
+    const d = await _api('/api/speedtest/run', 'POST', {
+      server_id: sel.value,
+      download: dlCb ? dlCb.checked : true
+    });
+
+    document.getElementById('st-latency').textContent =
+      d.latency_ms != null ? d.latency_ms.toFixed(1) : '⚠ ' + (d.ping_error || 'N/A');
+    document.getElementById('st-loss').textContent = d.packet_loss || '—';
+    document.getElementById('st-dl').textContent =
+      d.speed_mbps != null ? d.speed_mbps.toFixed(2) : (d.download_error ? '⚠ ' + d.download_error : '—');
+    document.getElementById('st-time').textContent =
+      d.download_time != null ? d.download_time.toFixed(1) : '—';
+
+    // History
+    _speedtestHistory.unshift({
+      server: d.server_name, latency: d.latency_ms, dl: d.speed_mbps,
+      ts: new Date().toLocaleTimeString()
+    });
+    if (_speedtestHistory.length > 10) _speedtestHistory.pop();
+    const hist = document.getElementById('speedtest-history');
+    if (hist) {
+      hist.innerHTML = '<div style="font-weight:600;margin-bottom:6px">Son testler:</div>' +
+        _speedtestHistory.map(h =>
+          `<div style="display:flex;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span style="flex:2">${escHtml(h.server)}</span>
+            <span style="flex:1">${h.latency != null ? h.latency.toFixed(1) + ' ms' : '—'}</span>
+            <span style="flex:1">${h.dl != null ? h.dl.toFixed(2) + ' Mbps' : '—'}</span>
+            <span style="color:var(--text-muted)">${escHtml(h.ts)}</span>
+          </div>`
+        ).join('');
+    }
+  } catch(e) {
+    toast('Speedtest hatası: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Testi Başlat';
+  }
+}
+
 /* ══════════ Trend Analysis ══════════ */
 let _trendCharts = {};
 async function loadTrendAnalysis(periods=['7d','30d']) {
@@ -10941,7 +11035,7 @@ async function loadTabData(tabId) {
       const _skip = (window._monitorLoadedAt && (_now - window._monitorLoadedAt) < 30000);
       window._monitorLoadedAt = _now;
       // Tier 1 — critical (immediate)
-      loadPerfHistory('1h');
+      loadPerfHistory('1h'); loadSpeedtestServers();
       // Tier 2 — secondary (150ms)
       setTimeout(() => { loadUptimes(); loadSmartData(); }, 150);
       // Tier 3 — status cards (400ms)

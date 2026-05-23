@@ -1099,7 +1099,8 @@ def api_create_vm():
         iso_path   = data.get("iso_path")
         if iso_path:
             iso_path = security.validate_path_safe(
-                iso_path, [config.ISO_DIR, "/var/lib/oxware/isos"]
+                iso_path, [config.ISO_DIR, "/var/lib/oxware/isos",
+                           "/tmp", "/var/lib/libvirt/images"]
             )
         app_install = security.sanitize_str(data.get("app_install", ""), 64)
         if app_install and app_install not in _VALID_APPS:
@@ -4904,6 +4905,131 @@ def api_nginx_lua_middleware():
         block_ips      = d.get("block_ips", []),
     )
     return ok(lua_block=lua)
+
+
+# ── Speedtest (#39) ───────────────────────────────────────────────────────────
+_SPEEDTEST_SERVERS = [
+    # Turkish servers
+    {"id": "ist-superonline",  "name": "İstanbul — Superonline",       "country": "TR", "host": "speedtest.superonline.net",  "test_url": "http://speedtest.superonline.net/1GB.zip"},
+    {"id": "ist-ttnet",        "name": "İstanbul — Türk Telekom",       "country": "TR", "host": "hiztest.turktelekom.com.tr", "test_url": "http://hiztest.turktelekom.com.tr/testfile1024"},
+    {"id": "ank-vodafone",     "name": "Ankara — Vodafone TR",          "country": "TR", "host": "speedtest.vodafone.com.tr",  "test_url": "http://speedtest.vodafone.com.tr/speedtest/random1000x1000.jpg"},
+    {"id": "izm-turkcell",     "name": "İzmir — Turkcell",              "country": "TR", "host": "speedtest.turkcell.com.tr",  "test_url": "http://speedtest.turkcell.com.tr/speedtest/random1000x1000.jpg"},
+    # International
+    {"id": "de-frankfurt",     "name": "Frankfurt — DE",                "country": "DE", "host": "speedtest.fra1.linode.com",  "test_url": "http://speedtest.fra1.linode.com/100MB-fra1.bin"},
+    {"id": "nl-amsterdam",     "name": "Amsterdam — NL",                "country": "NL", "host": "speedtest.ams1.linode.com",  "test_url": "http://speedtest.ams1.linode.com/100MB-ams1.bin"},
+    {"id": "uk-london",        "name": "London — UK",                   "country": "GB", "host": "speedtest.lon1.linode.com",  "test_url": "http://speedtest.lon1.linode.com/100MB-lon1.bin"},
+    {"id": "us-newark",        "name": "New York/Newark — US",          "country": "US", "host": "speedtest.newark.linode.com","test_url": "http://speedtest.newark.linode.com/100MB-newark.bin"},
+    {"id": "us-fremont",       "name": "Los Angeles — US",              "country": "US", "host": "speedtest.fremont.linode.com","test_url": "http://speedtest.fremont.linode.com/100MB-fremont.bin"},
+    {"id": "sg-singapore",     "name": "Singapore — SG",                "country": "SG", "host": "speedtest.sgp1.linode.com",  "test_url": "http://speedtest.sgp1.linode.com/100MB-sgp1.bin"},
+    {"id": "jp-tokyo",         "name": "Tokyo — JP",                    "country": "JP", "host": "speedtest.tokyo2.linode.com","test_url": "http://speedtest.tokyo2.linode.com/100MB-tokyo2.bin"},
+    {"id": "cf-global",        "name": "Cloudflare — Global CDN",       "country": "GLOBAL", "host": "speed.cloudflare.com",   "test_url": "https://speed.cloudflare.com/__down?bytes=10000000"},
+]
+
+def _run_ping(host: str, count: int = 3) -> dict:
+    """Returns avg latency in ms or error."""
+    try:
+        r = subprocess.run(
+            ["ping", "-c", str(count), "-W", "3", host],
+            capture_output=True, text=True, timeout=15
+        )
+        # Parse avg from: rtt min/avg/max/mdev = 1.2/2.3/3.4/0.5 ms
+        import re as _re_ping
+        m = _re_ping.search(r"(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)", r.stdout)
+        if m:
+            return {"latency_ms": float(m.group(2)), "packet_loss": "0%"}
+        # Check packet loss
+        pl = _re_ping.search(r"(\d+)% packet loss", r.stdout)
+        loss = pl.group(1) + "%" if pl else "100%"
+        return {"latency_ms": None, "packet_loss": loss, "error": "Timeout / unreachable"}
+    except subprocess.TimeoutExpired:
+        return {"latency_ms": None, "packet_loss": "100%", "error": "Ping timeout"}
+    except Exception as e:
+        return {"latency_ms": None, "error": str(e)}
+
+
+def _run_download(url: str, max_bytes: int = 10_000_000) -> dict:
+    """Download up to max_bytes, measure speed. Returns speed_mbps or error."""
+    try:
+        import time as _time
+        cmd = [
+            "curl", "-s", "-L", "--max-time", "20",
+            "--max-filesize", str(max_bytes),
+            "-o", "/dev/null",
+            "-w", "%{speed_download}|%{time_total}|%{http_code}",
+            url
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+        parts = r.stdout.strip().split("|")
+        if len(parts) == 3:
+            speed_bps = float(parts[0])   # bytes/sec
+            time_s    = float(parts[1])
+            http_code = parts[2]
+            if http_code not in ("200", "206") and speed_bps == 0:
+                return {"speed_mbps": None, "error": f"HTTP {http_code}"}
+            speed_mbps = round(speed_bps * 8 / 1_000_000, 2)
+            return {"speed_mbps": speed_mbps, "time_s": round(time_s, 2)}
+        return {"speed_mbps": None, "error": "curl parse error: " + r.stdout[:80]}
+    except subprocess.TimeoutExpired:
+        return {"speed_mbps": None, "error": "Download timeout"}
+    except Exception as e:
+        return {"speed_mbps": None, "error": str(e)}
+
+
+@app.route("/api/speedtest/servers", methods=["GET"])
+@require_auth
+def api_speedtest_servers():
+    return ok(servers=_SPEEDTEST_SERVERS)
+
+
+@app.route("/api/speedtest/run", methods=["POST"])
+@require_auth
+def api_speedtest_run():
+    """
+    Run ping + optional download test against a server.
+    Body: { server_id: str, download: bool }
+    Requires operator/admin — prevents abuse.
+    """
+    username = get_jwt_identity()
+    _prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+    if username != _prim:
+        try:
+            role = (cred_mgr.get_role(username) if hasattr(cred_mgr, "get_role")
+                    else user_manager.get_user_role(username))
+            if role not in ("admin", "administrator", "operator"):
+                return err("Speedtest için operator yetkisi gerekli", 403)
+        except Exception:
+            return err("Yetki kontrol hatası", 403)
+
+    data = request.get_json() or {}
+    server_id = data.get("server_id", "")
+    do_download = bool(data.get("download", True))
+
+    srv = next((s for s in _SPEEDTEST_SERVERS if s["id"] == server_id), None)
+    if not srv:
+        return err("Geçersiz server_id")
+
+    result = {
+        "server_id":   srv["id"],
+        "server_name": srv["name"],
+        "country":     srv["country"],
+    }
+
+    # Ping
+    ping_r = _run_ping(srv["host"])
+    result["latency_ms"]   = ping_r.get("latency_ms")
+    result["packet_loss"]  = ping_r.get("packet_loss", "?")
+    result["ping_error"]   = ping_r.get("error")
+
+    # Download
+    if do_download:
+        dl_r = _run_download(srv["test_url"])
+        result["speed_mbps"]    = dl_r.get("speed_mbps")
+        result["download_time"] = dl_r.get("time_s")
+        result["download_error"]= dl_r.get("error")
+    else:
+        result["speed_mbps"] = None
+
+    return ok(**result)
 
 
 # ── Nginx Reverse Proxy ───────────────────────────────────────────────────────

@@ -172,16 +172,40 @@ def upload_iso(file_path, dest_name=None):
 
 
 def list_isos():
+    """Scan ISO_DIR and /tmp for .iso files (#27)."""
     isos = []
-    if os.path.exists(config.ISO_DIR):
-        for f in os.listdir(config.ISO_DIR):
-            if f.lower().endswith(".iso"):
-                path = os.path.join(config.ISO_DIR, f)
+    _seen = set()
+
+    def _scan_dir(directory: str):
+        if not os.path.isdir(directory):
+            return
+        try:
+            for f in os.listdir(directory):
+                if not f.lower().endswith(".iso"):
+                    continue
+                path = os.path.join(directory, f)
+                rpath = os.path.realpath(path)
+                if rpath in _seen:
+                    continue
+                _seen.add(rpath)
+                try:
+                    size_mb = round(os.path.getsize(path) / (1024 ** 2), 1)
+                except OSError:
+                    size_mb = 0
                 isos.append({
                     "name": f,
                     "path": path,
-                    "size_mb": round(os.path.getsize(path) / (1024**2), 1),
+                    "size_mb": size_mb,
+                    "size_gb": round(size_mb / 1024, 2),
+                    "source": directory,
                 })
+        except PermissionError:
+            pass
+
+    _scan_dir(config.ISO_DIR)
+    _scan_dir("/tmp")
+    # Also scan libvirt images dir
+    _scan_dir("/var/lib/libvirt/images")
     return isos
 
 
