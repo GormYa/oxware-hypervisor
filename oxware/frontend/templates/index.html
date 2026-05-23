@@ -2220,9 +2220,13 @@
                     <div style="font-weight:700;font-size:12px;margin-bottom:2px">AlmaLinux 8</div>
                     <div style="font-size:11px;color:var(--text-muted)">RHEL 8 uyumlu · Minimal · ~2.0 GB</div>
                   </button>
-                  <button onclick="selectIsoPreset('https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.4.0-amd64-netinst.iso','debian-13.4.0-amd64-netinst.iso')" class="iso-preset-btn" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--text)">
-                    <div style="font-weight:700;font-size:12px;margin-bottom:2px">Debian 13</div>
-                    <div style="font-size:11px;color:var(--text-muted)">Trixie · NetInst · ~0.75 GB</div>
+                  <button onclick="selectIsoPreset('https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.11.0-amd64-netinst.iso','debian-12.11.0-amd64-netinst.iso')" class="iso-preset-btn" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--text)">
+                    <div style="font-weight:700;font-size:12px;margin-bottom:2px">Debian 12 Bookworm</div>
+                    <div style="font-size:11px;color:var(--text-muted)">NetInst · Stable · ~0.68 GB</div>
+                  </button>
+                  <button onclick="selectIsoPreset('https://cdimage.debian.org/cdimage/archive/12.11.0/amd64/iso-cd/debian-12.11.0-amd64-netinst.iso','debian-12.11.0-amd64-netinst-mirror.iso')" class="iso-preset-btn" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--text)">
+                    <div style="font-weight:700;font-size:12px;margin-bottom:2px">Debian 12 (Arşiv Mirror)</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Alternatif mirror · ~0.68 GB</div>
                   </button>
                   <button onclick="selectIsoPreset('https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/iso/CentOS-Stream-9-latest-x86_64-boot.iso','CentOS-Stream-9-latest-x86_64-boot.iso')" class="iso-preset-btn" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--text)">
                     <div style="font-weight:700;font-size:12px;margin-bottom:2px">CentOS Stream 9</div>
@@ -5523,12 +5527,65 @@ async function deactivateLicense() {
 let _isoFetchJobId = null;
 let _isoFetchTimer = null;
 
-function openIsoFetchModal() {
+async function openIsoFetchModal() {
   document.getElementById('modal-iso-fetch').classList.add('open');
   document.getElementById('iso-fetch-url').value = '';
   _isoPresetFilename = '';
   document.getElementById('iso-fetch-progress-wrap').style.display = 'none';
   document.getElementById('iso-fetch-start-btn').disabled = false;
+  // Show ISOs already on server
+  _loadLocalIsoSection();
+}
+
+async function _loadLocalIsoSection() {
+  let container = document.getElementById('local-isos-section');
+  if (!container) {
+    // Create section before the preset list
+    const presetArea = document.getElementById('iso-preset-list');
+    if (!presetArea) return;
+    container = document.createElement('div');
+    container.id = 'local-isos-section';
+    container.style.cssText = 'margin-bottom:14px;padding:10px 12px;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.25);border-radius:6px';
+    presetArea.parentElement.parentElement.insertBefore(container, presetArea.parentElement);
+  }
+  container.innerHTML = `<div style="font-size:11px;color:var(--text-muted)">Sunucudaki ISO'lar yükleniyor…</div>`;
+  try {
+    const d = await _api('/api/storage/isos');
+    const isos = d.isos || [];
+    if (!isos.length) {
+      container.innerHTML = `<div style="font-size:11px;color:var(--text-muted)">Sunucuda ISO bulunamadı.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:6px">📀 Sunucuda Mevcut ISO'lar</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${isos.map(iso => `
+          <button onclick="selectLocalIso('${escHtml(iso.path)}','${escHtml(iso.name)}')"
+            style="background:var(--surface3);border:1px solid rgba(0,212,255,.3);border-radius:5px;padding:5px 10px;cursor:pointer;color:var(--accent-lt);font-size:11px;font-weight:600"
+            title="${escHtml(iso.path)}">
+            ${escHtml(iso.name)} <span style="color:var(--text-muted);font-weight:400">(${iso.size_gb ? iso.size_gb.toFixed(1)+'GB' : '?'})</span>
+          </button>
+        `).join('')}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div style="font-size:11px;color:var(--text-muted)">ISO listesi alınamadı.</div>`;
+  }
+}
+
+function selectLocalIso(path, name) {
+  // Close modal and set the ISO path directly in the VM creation form
+  closeIsoFetchModal();
+  const isoSel = document.getElementById('vm-iso');
+  if (isoSel) {
+    // Find or add option
+    let opt = Array.from(isoSel.options).find(o => o.value === path);
+    if (!opt) {
+      opt = new Option(name, path);
+      isoSel.add(opt);
+    }
+    isoSel.value = path;
+    toast(`ISO seçildi: ${name}`, 'success');
+  }
 }
 function closeIsoFetchModal() {
   document.getElementById('modal-iso-fetch').classList.remove('open');
@@ -7095,10 +7152,13 @@ async function loadHardwareConfig(vmId) {
       } else {
         action = `<button class="btn sm danger" onclick="hwDetachDisk('${escHtml(d.target)}')">✕ Çıkar</button>`;
       }
+      const dtColors = {nvme:'#60a5fa',ssd:'#34d399',hdd:'#fb923c',virtual:'#a78bfa',unknown:'#6b7280'};
+      const dtLabel  = (d.disk_type || 'unknown').toLowerCase();
+      const dtBadge  = `<span style="font-size:10px;font-weight:600;color:${dtColors[dtLabel]||dtColors.unknown};margin-left:4px">${dtLabel.toUpperCase()}</span>`;
       return `<tr>
         <td><code>${escHtml(d.target)}</code>${isCdrom ? ' <span style="font-size:10px;color:var(--accent)">CD</span>' : ''}</td>
         <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(d.path)}">${pathDisp}</td>
-        <td>${escHtml(d.bus)}</td>
+        <td>${escHtml(d.bus)}${!isCdrom ? dtBadge : ''}</td>
         <td>${escHtml(d.format)}</td>
         <td>${d.capacity_gb ? d.capacity_gb.toFixed(1) + " GB" : "—"}</td>
         <td>${action}</td>

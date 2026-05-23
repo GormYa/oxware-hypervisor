@@ -188,13 +188,22 @@ def get_host_interfaces():
                 for a in iface.get("addr_info", [])
                 if a.get("family") == "inet"
             ]
+            flags     = iface.get("flags", [])
+            operstate = iface.get("operstate", "UNKNOWN").lower()
+            # UNKNOWN operstate: VMware/virtual NICs report UNKNOWN even when active.
+            # Use "UP" flag as ground truth instead.
+            if operstate in ("unknown", "") and "UP" in flags:
+                operstate = "up"
+            # Fallback: if has IP addresses, must be up
+            if operstate not in ("up", "down") and addrs:
+                operstate = "up"
             interfaces.append({
-                "name": iface.get("ifname", ""),
-                "state": iface.get("operstate", "UNKNOWN").lower(),
-                "mac": iface.get("address", ""),
+                "name":      iface.get("ifname", ""),
+                "state":     operstate,
+                "mac":       iface.get("address", ""),
                 "addresses": addrs,
-                "flags": iface.get("flags", []),
-                "mtu": iface.get("mtu", 1500),
+                "flags":     flags,
+                "mtu":       iface.get("mtu", 1500),
             })
     except Exception:
         pass

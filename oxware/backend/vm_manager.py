@@ -180,6 +180,45 @@ def _get_domain_stats(dom):
         return {"state": "unknown", "cpu_time": 0, "memory_used_kb": 0, "memory_max_kb": 0}
 
 
+def _get_host_disk_type(file_path: str) -> str:
+    """
+    Backing dosyasının bulunduğu host disk türünü tespit et.
+    Döner: 'nvme' | 'ssd' | 'hdd' | 'virtual' | 'unknown'
+    """
+    try:
+        import stat as _stat
+        # Dosyanın bulunduğu block device'i bul (df ile)
+        r = subprocess.run(
+            ["df", "--output=source", file_path],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = r.stdout.strip().splitlines()
+        if len(lines) < 2:
+            return "unknown"
+        dev = lines[1].strip()
+        # /dev/sda1 → sda, /dev/nvme0n1p1 → nvme0n1, /dev/mapper/... → skip
+        import re as _re
+        m = _re.match(r"/dev/(nvme\w+|sd\w+|vd\w+|hd\w+|xvd\w+)", dev)
+        if not m:
+            return "virtual"
+        dev_name = _re.sub(r"p?\d+$", "", m.group(1))  # strip partition number
+        # NVMe
+        if dev_name.startswith("nvme"):
+            return "nvme"
+        # rotational: 0=SSD, 1=HDD
+        rot_path = f"/sys/block/{dev_name}/queue/rotational"
+        if os.path.exists(rot_path):
+            with open(rot_path) as f:
+                rotational = f.read().strip()
+            return "hdd" if rotational == "1" else "ssd"
+        # virtio/xen virtual disk
+        if dev_name.startswith(("vd", "xvd")):
+            return "virtual"
+    except Exception:
+        pass
+    return "unknown"
+
+
 def _parse_disk_info(xml_str):
     disks = []
     try:
@@ -195,10 +234,14 @@ def _parse_disk_info(xml_str):
                         _cap_gb = round(os.path.getsize(_fpath) / (1024 ** 3), 2)
                 except Exception:
                     pass
+                bus = target.get("bus", "")
+                # Detect underlying host disk type
+                disk_type = _get_host_disk_type(_fpath) if _fpath else "unknown"
                 disks.append({
-                    "path": _fpath,
-                    "device": target.get("dev", ""),
-                    "bus": target.get("bus", ""),
+                    "path":        _fpath,
+                    "device":      target.get("dev", ""),
+                    "bus":         bus,
+                    "disk_type":   disk_type,   # nvme|ssd|hdd|virtual|unknown
                     "capacity_gb": _cap_gb,
                 })
     except Exception:

@@ -120,6 +120,9 @@ app.config["JWT_SECRET_KEY"]           = config.SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=12)
 app.config["JWT_TOKEN_LOCATION"]       = ["headers", "cookies"]
 app.config["MAX_CONTENT_LENGTH"]       = 64 * 1024 * 1024 * 1024
+# CVE-2023-25577 / Werkzeug multipart resource exhaustion mitigation
+app.config["MAX_FORM_MEMORY_SIZE"]     = 16 * 1024 * 1024   # 16 MB form fields max
+app.config["MAX_FORM_PARTS"]           = 256                 # max multipart parts
 # Security: restrict JWT to HS256 only — blocks alg:none / RSA confusion attacks
 app.config["JWT_ALGORITHM"]            = "HS256"
 app.config["JWT_DECODE_ALGORITHMS"]    = ["HS256"]
@@ -973,8 +976,22 @@ def api_me():
 
 @app.route("/api/auth/change-password", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator")
 def api_change_password():
+    """
+    Sadece kurulum sırasında oluşturulan birincil yönetici
+    kendi şifresini değiştirebilir.
+    Alt kullanıcılar ve diğer roller bu endpoint'i kullanamaz.
+    """
+    from flask_jwt_extended import get_jwt_identity
+    caller = get_jwt_identity()
+    try:
+        primary_admin = cred_mgr.get_username()
+    except Exception:
+        return err("Birincil yönetici bilgisi okunamadı", 500)
+
+    if caller != primary_admin:
+        return err("Sadece sistem kurucusu kendi şifresini değiştirebilir", 403)
+
     data = request.get_json() or {}
     old_pass = data.get("old_password", "")
     new_pass = data.get("new_password", "")
@@ -982,7 +999,7 @@ def api_change_password():
         return err("Yeni şifre en az 8 karakter olmalıdır")
     if not cred_mgr.change_password(old_pass, new_pass):
         return err("Mevcut şifre yanlış", 401)
-    ev.info("Şifre değiştirildi", category="auth")
+    ev.info("Birincil yönetici şifresi değiştirildi", category="auth")
     return ok(message="Şifre değiştirildi")
 
 # ── VM API ────────────────────────────────────────────────────────────────────
