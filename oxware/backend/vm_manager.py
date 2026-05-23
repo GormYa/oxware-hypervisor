@@ -488,8 +488,14 @@ def remove_dhcp_host(network: str, mac: str, ip: str) -> bool:
 
 
 def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
-    """cloud-init NoCloud ISO oluştur. Yol döndürür veya None."""
-    import shutil as _sh, tempfile as _tf, textwrap as _tw
+    """
+    cloud-init NoCloud ISO oluştur.
+    ci dict anahtarları:
+      user, password, ssh_key, hostname, user_data (opsiyonel)
+      static_ip, gateway, netmask, dns (bridge/doğrudan IP için opsiyonel)
+    Yol döndürür veya None.
+    """
+    import shutil as _sh, tempfile as _tf
     try:
         ci_dir = _tf.mkdtemp(prefix=f"ci-{vm_name}-")
         hostname = ci.get("hostname") or vm_name
@@ -528,30 +534,70 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
 
         user_data = "\n".join(lines) + "\n"
 
+        # network-config: statik IP atanacaksa (bridge/passthrough ağlar için)
+        static_ip  = _safe(ci.get("static_ip", "") or "")
+        gateway    = _safe(ci.get("gateway", "") or "")
+        netmask    = _safe(ci.get("netmask", "") or "")
+        dns_list   = ci.get("dns") or ["8.8.8.8", "1.1.1.1"]
+        prefix     = ci.get("prefix", "")
+
+        network_config_str = None
+        if static_ip and gateway:
+            # Prefix hesapla
+            if not prefix and netmask:
+                try:
+                    import ipaddress as _ipa
+                    prefix = str(ipaddress.IPv4Network(f"0.0.0.0/{netmask}", strict=False).prefixlen)
+                except Exception:
+                    prefix = "24"
+            if not prefix:
+                prefix = "24"
+            dns_yaml = "\n".join(f"      - {d}" for d in dns_list)
+            network_config_str = f"""version: 2
+ethernets:
+  eth0:
+    dhcp4: false
+    addresses:
+      - {static_ip}/{prefix}
+    gateway4: {gateway}
+    nameservers:
+      addresses:
+{dns_yaml}
+"""
+
         with open(os.path.join(ci_dir, "meta-data"), "w") as f:
             f.write(meta)
         with open(os.path.join(ci_dir, "user-data"), "w") as f:
             f.write(user_data)
+        if network_config_str:
+            with open(os.path.join(ci_dir, "network-config"), "w") as f:
+                f.write(network_config_str)
 
         iso_path = os.path.join("/tmp", f"ci-{vm_name}.iso")
-        # try genisoimage, then mkisofs, then cloud-localds
+
+        # cloud-localds supports network-config natively
+        # genisoimage/mkisofs: include network-config file manually
+        nc_path = os.path.join(ci_dir, "network-config")
+        nc_args = [nc_path] if network_config_str else []
+
         for cmd in (
             ["genisoimage", "-output", iso_path, "-volid", "cidata", "-joliet", "-rock",
-             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")],
+             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")] + nc_args,
             ["mkisofs", "-output", iso_path, "-volid", "cidata", "-joliet", "-rock",
-             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")],
+             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")] + nc_args,
             ["cloud-localds", iso_path,
-             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")],
+             os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")] +
+            (["--network-config", nc_path] if network_config_str else []),
         ):
             r = subprocess.run(cmd, capture_output=True)
             if r.returncode == 0 and os.path.exists(iso_path):
                 _sh.rmtree(ci_dir, ignore_errors=True)
                 return iso_path
         _sh.rmtree(ci_dir, ignore_errors=True)
-        log.warning("cloud-init ISO oluşturulamadı (genisoimage/mkisofs/cloud-localds bulunamadı)")
+        _log.warning("cloud-init ISO oluşturulamadı (genisoimage/mkisofs/cloud-localds bulunamadı)")
         return None
     except Exception as e:
-        log.error("_build_cloud_init_iso hatası: %s", e)
+        _log.error("_build_cloud_init_iso hatası: %s", e)
         return None
 
 
@@ -1047,18 +1093,89 @@ def hot_set_vcpus(vm_id: str, count: int) -> dict:
 
 
 def hot_set_memory(vm_id: str, mb: int) -> dict:
-    """Çalışan VM'de RAM'i balloon ile canlı değiştir (max değerini aşamaz)."""
+    """
+    VM RAM değiştir.
+    - Azaltma: balloon ile canlı (VM çalışırken anında).
+    - Artırma: maxmemory değeri aşıldığında VM durdur → XML güncelle → yeniden başlat.
+    """
     conn = _connect()
     try:
         dom = conn.lookupByUUIDString(vm_id)
         state_val, _ = dom.state()
         running = (state_val == libvirt.VIR_DOMAIN_RUNNING)
         kb = mb * 1024
-        flags = libvirt.VIR_DOMAIN_MEM_CONFIG
-        if running:
-            flags |= libvirt.VIR_DOMAIN_MEM_LIVE
-        dom.setMemoryFlags(kb, flags)
-        return {"ok": True, "memory_mb": mb, "live": running}
+
+        # Mevcut max memory (KiB) — inactive XML'den oku (güvenilir)
+        xml_str = dom.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        root = ET.fromstring(xml_str)
+        mem_el  = root.find("memory")
+        cur_el  = root.find("currentMemory")
+
+        if mem_el is not None:
+            unit = mem_el.get("unit", "KiB")
+            raw  = int(mem_el.text or "0")
+            if unit in ("MiB", "mib"):
+                cur_max_kb = raw * 1024
+            elif unit in ("GiB", "gib"):
+                cur_max_kb = raw * 1024 * 1024
+            else:
+                cur_max_kb = raw
+        else:
+            cur_max_kb = 0
+
+        if kb > cur_max_kb:
+            # RAM artırma: maxmemory değiştirilmeli → offline işlem gerekli
+            was_running = running
+            if running:
+                dom.destroy()   # force stop
+                time.sleep(1)
+
+            # <memory> ve <currentMemory> güncelle
+            if mem_el is not None:
+                mem_el.text = str(kb)
+                mem_el.set("unit", "KiB")
+            else:
+                mem_el = ET.SubElement(root, "memory")
+                mem_el.text = str(kb)
+                mem_el.set("unit", "KiB")
+
+            if cur_el is not None:
+                cur_el.text = str(kb)
+                cur_el.set("unit", "KiB")
+            else:
+                cur_el = ET.SubElement(root, "currentMemory")
+                cur_el.text = str(kb)
+                cur_el.set("unit", "KiB")
+
+            new_xml = ET.tostring(root, encoding="unicode")
+            conn.defineXML(new_xml)
+
+            restarted = False
+            if was_running:
+                time.sleep(1)
+                dom2 = conn.lookupByUUIDString(vm_id)
+                dom2.create()
+                restarted = True
+
+            _invalidate_list_cache()
+            return {
+                "ok": True, "memory_mb": mb, "live": False,
+                "restarted": restarted,
+                "message": ("VM RAM artırıldı ve yeniden başlatıldı." if restarted
+                            else "RAM artırıldı (VM zaten durduydu).")
+            }
+        else:
+            # RAM azaltma: balloon ile canlı değiştir
+            flags = libvirt.VIR_DOMAIN_MEM_CONFIG
+            if running:
+                flags |= libvirt.VIR_DOMAIN_MEM_LIVE
+            dom.setMemoryFlags(kb, flags)
+            _invalidate_list_cache()
+            return {
+                "ok": True, "memory_mb": mb, "live": running,
+                "restarted": False,
+                "message": "RAM balloon ile güncellendi."
+            }
     finally:
         conn.close()
 

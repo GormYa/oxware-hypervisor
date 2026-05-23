@@ -1,5 +1,5 @@
 """
-AdaOS Bildirim Sistemi
+OXware Bildirim Sistemi
 ─────────────────────
 Telegram Bot, Discord Webhook ve E-posta üzerinden uyarı gönderir.
 Yapılandırma: /etc/oxware/notifications.conf
@@ -75,7 +75,7 @@ def save_notif_config(
     merged = {**existing, **updates}
 
     lines = [
-        "# AdaOS Bildirim Yapılandırması",
+        "# OXware Bildirim Yapılandırması",
         "# Bu dosyayı düzenleyerek bildirim ayarlarını değiştirin",
         "",
     ]

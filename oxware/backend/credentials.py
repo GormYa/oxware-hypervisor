@@ -1,12 +1,12 @@
 """
-AdaOS Şifreli Kimlik Bilgisi Sistemi
+OXware Şifreli Kimlik Bilgisi Sistemi
 ─────────────────────────────────────
 Dosya konumları:
-  /etc/adaos/.auth            — Şifreli kimlik bilgileri (AES-256-CBC)
-  /etc/adaos/.passwd_reset    — Şifre sıfırlama dosyası (varsa uygula, sonra sil)
+  /etc/oxware/.auth            — Şifreli kimlik bilgileri (AES-256-CBC)
+  /etc/oxware/.passwd_reset    — Şifre sıfırlama dosyası (varsa uygula, sonra sil)
 
 Şifre değiştirme:
-  Aşağıdaki formatta /etc/adaos/.passwd_reset dosyası oluşturun:
+  Aşağıdaki formatta /etc/oxware/.passwd_reset dosyası oluşturun:
     USERNAME=yeni_kullanici
     PASSWORD=yeni_sifre
   Servis yeniden başladığında otomatik uygular ve dosyayı siler.
@@ -58,7 +58,7 @@ def _machine_key() -> bytes:
                 seeds.append(fallback)
         except Exception:
             seeds.append(secrets.token_hex(32))
-    combined = "|".join(seeds) + "|adaos-v1"
+    combined = "|".join(seeds) + "|oxware-v1"
     return hashlib.sha256(combined.encode()).digest()
 
 
@@ -169,7 +169,7 @@ def get_username() -> str:
 
 def apply_reset_if_exists():
     """
-    /etc/adaos/.passwd_reset dosyası varsa şifreyi günceller ve dosyayı siler.
+    /etc/oxware/.passwd_reset dosyası varsa şifreyi günceller ve dosyayı siler.
     Servis başlangıcında çağrılmalıdır.
 
     Dosya formatı:

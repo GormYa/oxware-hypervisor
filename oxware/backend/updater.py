@@ -1,5 +1,5 @@
 """
-AdaOS Güncelleme Sistemi
+OXware Güncelleme Sistemi
 ─────────────────────────
 GitHub üzerinden otomatik güncelleme:
   - Uzak repo ile yerel commit karşılaştırması
@@ -78,9 +78,9 @@ def save_config(repo_url: str = DEFAULT_REPO_URL, branch: str = DEFAULT_BRANCH,
 
 
 def _detect_project_dir() -> str:
-    """AdaOS proje kök dizinini bul."""
+    """OXware proje kök dizinini bul."""
     this_file = os.path.abspath(__file__)
-    # backend/updater.py → AdaOS/
+    # backend/updater.py → OXware/
     return os.path.dirname(os.path.dirname(os.path.dirname(this_file)))
 
 

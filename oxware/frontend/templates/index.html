@@ -15,7 +15,6 @@
   <link rel="stylesheet" href="/static/xterm.min.css">
   <script src="/static/xterm.min.js"></script>
   <script src="/static/addon-fit.min.js"></script>
-  <script src="/static/addon-fit.min.js"></script>
   <style>
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -748,6 +747,71 @@
     .smig-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
     .smig-controls select,.smig-controls input{padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2,var(--surface));color:var(--fg,var(--text));font-size:12px;min-width:0}
     .smig-controls select:focus,.smig-controls input:focus{outline:none;border-color:var(--accent)}
+
+    /* ── Network page improvements (#63) ── */
+    .net-forward-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .net-forward-nat{background:rgba(56,189,248,.12);color:var(--accent-lt);border:1px solid rgba(56,189,248,.25)}
+    .net-forward-bridge{background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25)}
+    .net-forward-route{background:rgba(251,191,36,.12);color:#f59e0b;border:1px solid rgba(251,191,36,.25)}
+    .net-forward-isolated{background:rgba(139,148,158,.12);color:var(--text-muted);border:1px solid rgba(139,148,158,.2)}
+    .net-card{border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--surface);transition:border-color .15s,box-shadow .15s;margin-bottom:10px}
+    .net-card:hover{border-color:var(--accent-lt);box-shadow:0 2px 12px rgba(0,212,255,.06)}
+    .net-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .net-card-name{font-weight:700;font-size:14px;flex:1}
+    .net-card-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;font-size:12px}
+    .net-card-item{display:flex;flex-direction:column;gap:2px}
+    .net-card-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+    .net-card-val{color:var(--text);font-weight:500}
+    .net-card-actions{display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap}
+    .net-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+    .net-stat-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+    .net-stat-val{font-size:24px;font-weight:700;color:var(--accent-lt)}
+    .net-stat-lbl{font-size:11px;color:var(--text-muted);margin-top:2px}
+    #net-stat-cards .stat-card{position:relative;overflow:hidden}
+    #net-stat-cards .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,212,255,.04),transparent);pointer-events:none}
+    .iface-card{border:1px solid var(--border);border-radius:8px;padding:10px 14px;background:var(--surface);display:flex;align-items:center;gap:12px;transition:border-color .15s}
+    .iface-card:hover{border-color:var(--accent-lt)}
+    .iface-card-name{font-weight:700;font-size:13px;min-width:90px}
+    .iface-card-type{font-size:10px;color:var(--text-muted);text-transform:uppercase}
+    .iface-card-ips{flex:1;font-family:monospace;font-size:11px;color:var(--accent-lt)}
+    .iface-status-up{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
+    .iface-status-down{width:8px;height:8px;border-radius:50%;background:#6b7280;flex-shrink:0}
+    .dhcp-lease-row{display:grid;grid-template-columns:130px 150px 1fr 100px 100px;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+    .dhcp-lease-row:last-child{border-bottom:none}
+    .dhcp-lease-row:hover{background:var(--surface2)}
+    .dhcp-lease-ip{font-family:monospace;color:var(--accent-lt);font-weight:600}
+    .dhcp-lease-mac{font-family:monospace;color:var(--text-muted);font-size:11px}
+    .dhcp-lease-exp{font-size:11px;color:var(--text-muted)}
+    /* Network table helpers */
+    .net-card-name{font-weight:700;color:var(--text)}
+    .net-autostart-badge{font-size:10px;color:var(--text-muted);margin-left:4px}
+    .net-dhcp-range{font-size:11px;color:var(--green-lt);line-height:1.5}
+    .net-dhcp-cell{font-size:11px}
+    /* Interface table helpers */
+    .iface-card-name{font-weight:700;font-size:13px;color:var(--text)}
+    .iface-mac{font-size:11px;color:var(--text-muted)}
+    .iface-ip4{font-size:11px;color:var(--accent-lt)}
+    .iface-ip6{font-size:10px;color:var(--text-muted)}
+    .iface-stat-cell{font-size:11px}
+    .iface-rx{color:var(--green-lt)}
+    .iface-tx{color:var(--accent-lt)}
+    .iface-pkt{font-size:10px;color:var(--text-muted)}
+    /* Interface type badges */
+    .iface-card-type{font-size:10px;padding:1px 6px;border-radius:3px;color:#fff;font-weight:600;letter-spacing:.3px}
+    .iface-type-eth{background:#3b82f6}
+    .iface-type-bridge{background:#22c55e}
+    .iface-type-virtual{background:#a78bfa}
+    .iface-type-bond{background:#f59e0b}
+    .iface-type-vlan{background:#06b6d4}
+    .iface-type-lo{background:#6b7280}
+    .iface-type-wifi{background:#ec4899}
+    .iface-type-tunnel{background:#f97316}
+    .iface-status-up{font-size:11px}
+    .iface-status-down{font-size:11px}
+    @media(max-width:768px){
+      .net-card-body{grid-template-columns:1fr 1fr}
+      .dhcp-lease-row{grid-template-columns:1fr 1fr;row-gap:4px}
+    }
   </style>
 </head>
 <body>
@@ -1399,7 +1463,7 @@
                     <input type="number" id="hw-mem-mb" min="128" step="256" value="1024" style="width:90px" class="hw-input">
                     <span style="font-size:11px;color:var(--text-muted)">MB &nbsp;/ max <span id="hw-mem-max">—</span> MB</span>
                     <button class="btn-sm" onclick="hwApplyMemory()">▶ Uygula</button>
-                    <span class="hw-live-badge">⚡ Live (balloon)</span>
+                    <span class="hw-live-badge" title="Azaltma: balloon (canlı). Artırma: VM yeniden başlar.">⚡ Live↓ / Restart↑</span>
                   </div>
                 </div>
               </div>
@@ -1433,6 +1497,68 @@
                   <thead><tr><th>MAC</th><th>Ağ</th><th>Model</th><th>İşlem</th></tr></thead>
                   <tbody id="hw-nic-tbody"></tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- Sound Card (#61) -->
+            <div class="hw-section">
+              <div class="hw-section-title">
+                🔊 Ses Kartı
+                <span id="hw-sound-status" style="margin-left:8px;font-size:11px;font-weight:400;color:var(--text-muted)">yükleniyor...</span>
+              </div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">Model</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-sound-model" class="hw-input" style="width:200px">
+                      <option value="">— Ses kartı yok —</option>
+                      <option value="ich9">Intel ICH9 (önerilen)</option>
+                      <option value="ich6">Intel ICH6</option>
+                      <option value="ac97">AC97</option>
+                      <option value="usb-audio">USB Audio</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwApplySound()">▶ Uygula</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Bilgi</div>
+                  <div style="font-size:11px;color:var(--text-muted)">KVM sanal ses kartı — Windows/Linux sürücü gerektirmez. ICH9 en geniş destek sunar.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- GPU / Display (#62) -->
+            <div class="hw-section">
+              <div class="hw-section-title">
+                🎮 Ekran Kartı / Görüntü
+                <button class="btn-sm" style="margin-left:auto" onclick="loadGpuInfo()">↻ GPU Tara</button>
+              </div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">Sanal GPU (yazılımsal)</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-vgpu-model" class="hw-input" style="width:200px">
+                      <option value="virtio">virtio-vga (önerilen — CPU'dan)</option>
+                      <option value="qxl">QXL (SPICE için)</option>
+                      <option value="vga">VGA (std)</option>
+                      <option value="cirrus">Cirrus (eski)</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwApplyVgpu()">▶ Uygula</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div class="hw-row" id="hw-gpu-passthrough-row" style="display:none">
+                  <div class="hw-label">GPU Passthrough</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-gpu-pci-sel" class="hw-input" style="width:260px">
+                      <option value="">— Fiziksel GPU seçin —</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwApplyGpuPassthrough()">▶ Bağla</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div id="hw-gpu-info" style="font-size:11px;color:var(--text-muted);margin-top:6px">GPU bilgisi için "GPU Tara" butonuna tıklayın.</div>
               </div>
             </div>
 
@@ -1703,11 +1829,12 @@
           </div>
 
           <!-- Network sub-tabs -->
-          <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap">
             <button class="settings-tab active" data-ntab="vnets" onclick="switchNetTab('vnets',this)"><i class="fa-solid fa-diagram-project"></i> Sanal Ağlar</button>
             <button class="settings-tab" data-ntab="ifaces" onclick="switchNetTab('ifaces',this)"><i class="fa-solid fa-ethernet"></i> Host Arayüzleri</button>
             <button class="settings-tab" data-ntab="leases" onclick="switchNetTab('leases',this)"><i class="fa-solid fa-list-ul"></i> DHCP Kiraları</button>
             <button class="settings-tab" data-ntab="routes" onclick="switchNetTab('routes',this)"><i class="fa-solid fa-route"></i> Yönlendirme</button>
+            <button class="settings-tab" data-ntab="bridge" onclick="switchNetTab('bridge',this)"><i class="fa-solid fa-bridge"></i> Bridge & IP İzolasyonu</button>
           </div>
 
           <!-- Virtual Networks -->
@@ -1753,6 +1880,63 @@
                 <thead><tr><th>Hedef</th><th>Ağ Geçidi</th><th>Arayüz</th><th>Protokol</th><th>Metric</th></tr></thead>
                 <tbody id="net-routes-tbody"><tr><td colspan="5"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Bridge & IP Isolation -->
+          <div id="net-tab-bridge" style="display:none">
+            <div class="card" style="border-left:3px solid var(--accent);margin-bottom:14px">
+              <div style="font-size:13px;font-weight:600;color:var(--accent-lt);margin-bottom:6px">🌉 Bridge Ağı — Gerçek IP İzolasyonu</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                <strong>Problem:</strong> NAT modunda tüm VM'ler host IP'sini paylaşır. Speedtest ve tüm trafik host IP'sinden görünür.<br>
+                <strong>Çözüm:</strong> Host NIC üzerinde bir Linux bridge oluşturun. VM'ler bridge'e bağlanarak upstream'den kendi bağımsız IP'lerini alır.
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title">Bridge Kur</div>
+              <div class="form-row"><label>Bridge Adı</label><input id="br-name" value="oxbr0" placeholder="oxbr0"></div>
+              <div class="form-row"><label>Fiziksel NIC</label>
+                <select id="br-nic">
+                  <option value="">Yükleniyor...</option>
+                </select>
+                <div class="form-hint">VM trafiği bu NIC üzerinden geçecek</div>
+              </div>
+              <div class="form-row"><label>Libvirt Ağ Adı</label><input id="br-libvirt-net" value="oxbridge" placeholder="oxbridge"></div>
+              <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--text-muted);line-height:1.7">
+                ⚠️ Bu işlem <strong id="br-nic-preview">seçilen NIC</strong>'i bridge'e bağlar. Eğer OXware bu NIC üzerindeyse bağlantı kesilebilir.<br>
+                Güvenli kullanım: İkinci bir NIC kullanın veya önce iSCSI/SSH bağlantısı kurun.
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px">
+                <button class="btn primary" onclick="setupBridge()">🌉 Bridge Kur</button>
+                <button class="btn sm" onclick="loadBridgeStatus()">↻ Mevcut Bridge'leri Gör</button>
+              </div>
+              <div id="bridge-setup-result" style="margin-top:12px"></div>
+            </div>
+
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                Mevcut Bridge'ler
+                <button class="btn sm" onclick="loadBridgeStatus()" style="margin-left:auto">↻</button>
+              </div>
+              <div id="bridge-list-container" style="font-size:12px;color:var(--text-muted)">— Yüklemek için ↻ tıklayın —</div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">VM Oluşturma: Statik IP Ataması</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:10px">
+                Bridge ağ kurulduktan sonra VM oluştururken:<br>
+                1. <strong>Ağ</strong> alanında <code>oxbridge</code> seçin<br>
+                2. <strong>Statik IP</strong>, <strong>Gateway</strong> ve <strong>DNS</strong> girin<br>
+                3. cloud-init bu bilgileri VM içine yazar — VM kendi IP'siyle açılır<br>
+                4. Speedtest ve tüm trafik VM'in kendi IP'sinden görünür ✓
+              </div>
+              <div style="padding:10px;background:var(--surface2);border-radius:6px;font-family:monospace;font-size:11px;color:var(--accent-lt)">
+                VM IP: &lt;atanan_ip&gt;/24<br>
+                Gateway: &lt;upstream_gateway&gt;<br>
+                DNS: 8.8.8.8, 1.1.1.1<br>
+                → Speedtest = VM'in gerçek IP'si (host IP değil)
+              </div>
             </div>
           </div>
         </div>
@@ -2326,6 +2510,25 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Subnet Calculator -->
+          <div class="card" style="margin-top:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div class="card-title" style="margin:0;padding:0;border:none"><i class="fa-solid fa-calculator" style="margin-right:7px;color:var(--accent-lt)"></i>Subnet Hesaplayıcı</div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <div style="flex:1;min-width:200px">
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">CIDR Notasyonu</label>
+                <input id="subnet-calc-input" type="text" placeholder="192.168.1.0/24"
+                  style="width:100%;padding:8px 11px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:13px;font-family:monospace;box-sizing:border-box"
+                  oninput="subnetCalc()" onkeydown="if(event.key==='Enter')subnetCalc()">
+              </div>
+              <button onclick="subnetCalc()" style="padding:8px 18px;background:var(--accent);border:none;color:white;border-radius:5px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap">
+                <i class="fa-solid fa-calculator"></i> Hesapla
+              </button>
+            </div>
+            <div id="subnet-calc-result" style="margin-top:12px"></div>
+          </div>
         </div>
 
         <!-- ─── ISO Otomatik İndirme Modalı ─── -->
@@ -2697,10 +2900,14 @@
           <div class="section-header" style="margin-top:14px">
             <h2>📈 Trend Analizi</h2>
             <div class="spacer"></div>
-<button class="btn sm" onclick="openModal('modal-backup-schedule')">⏰ Yedekleme Planı</button>
+            <button class="btn sm" onclick="loadTrendAnalysis()">↻ Yükle</button>
+            <button class="btn sm" onclick="openModal('modal-backup-schedule')" style="margin-left:4px">⏰ Yedekleme Planı</button>
           </div>
           <div id="trend-container" style="margin-bottom:14px">
-            <div class="empty-state" style="padding:20px"><p>Yükleniyor...</p></div>
+            <div class="card" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+              Trend analizini yüklemek için <strong>↻ Yükle</strong> butonuna tıklayın.
+              <br><small>7 günlük ve 30 günlük CPU/RAM verisini çeker.</small>
+            </div>
           </div>
 
           <!-- HA Status -->
@@ -2745,8 +2952,11 @@
               <div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>
             </div>
             <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
-              <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Son Uyarılar</div>
-              <div id="alert-history-list" style="font-size:12px;color:var(--text-muted)">—</div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+                Son Uyarılar
+                <button class="btn sm" onclick="loadAlertHistory()" style="font-size:10px;padding:2px 8px">↻</button>
+              </div>
+              <div id="alert-history-list" style="font-size:12px;color:var(--text-muted)">— Yüklemek için ↻ tıklayın —</div>
             </div>
           </div>
 
@@ -2770,11 +2980,11 @@
           <div class="card" style="margin-top:14px">
             <div class="card-title" style="display:flex;align-items:center;gap:8px">
               <span>🌐</span> Ağ Bant Genişliği (QoS)
-              <button class="btn sm" onclick="loadNetworkQos()" style="margin-left:auto">↻</button>
+              <button class="btn sm" onclick="loadNetworkQos()" style="margin-left:auto">↻ Yükle</button>
             </div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM başına NIC bant genişliği kısıtlaması. 0 = sınırsız.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM başına NIC bant genişliği kısıtlaması. 0 = sınırsız. Yüklemek için ↻ butonuna tıklayın.</div>
             <div id="qos-vm-list" style="display:flex;flex-direction:column;gap:8px">
-              <div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>
+              <div style="color:var(--text-muted);font-size:12px">— Yüklemek için ↻ Yükle butonuna tıklayın —</div>
             </div>
           </div>
 
@@ -2782,9 +2992,9 @@
           <div class="card" style="margin-top:14px">
             <div class="card-title" style="display:flex;align-items:center;gap:8px">
               <span>💽</span> Canlı Disk Taşıma
-              <button class="btn sm" onclick="loadStorageMigrations()" style="margin-left:auto">↻</button>
+              <button class="btn sm" onclick="loadStorageMigrations()" style="margin-left:auto">↻ Yükle</button>
             </div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM çalışırken disk başka depolama havuzuna taşınır (virsh blockcopy).</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM çalışırken disk başka depolama havuzuna taşınır (virsh blockcopy). Aktif işler için ↻ Yükle tıklayın.</div>
             <div class="smig-controls">
               <select id="smig-vm-sel" style="flex:1;min-width:140px"><option>VM seç...</option></select>
               <select id="smig-disk-sel" style="flex:1;min-width:100px"><option>Disk...</option></select>
@@ -3593,20 +3803,39 @@
             </div>
           </div>
 
-          <!-- SFTP Uzak Yedekleme -->
+          <!-- SFTP Uzak Yedekleme + ESXi Import -->
           <div class="card" style="margin-bottom:14px">
-            <div class="card-title">📤 SFTP / SSH Uzak Yedekleme</div>
-            <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Backup sekmesinde zamanlama oluştururken SFTP/SSH hedefi seçebilirsiniz. Bağlantı testi burada yapın.</p>
+            <div class="card-title">📤 SFTP / SSH — Uzak Yedekleme & ESXi Import</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+              Backup sekmesinde SFTP hedefi seçin ya da <strong>ESXi</strong>'dan doğrudan VMDK indirin.
+            </p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div class="form-row" style="margin:0"><label style="font-size:11px">Host</label><input id="sftp-host" class="form-control" placeholder="backup.example.com"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Host</label><input id="sftp-host" class="form-control" placeholder="backup.example.com veya ESXi IP"></div>
               <div class="form-row" style="margin:0"><label style="font-size:11px">Port</label><input id="sftp-port" class="form-control" value="22" style="width:80px"></div>
-              <div class="form-row" style="margin:0"><label style="font-size:11px">Kullanıcı</label><input id="sftp-user" class="form-control" placeholder="backup"></div>
-              <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Key Yolu</label><input id="sftp-key" class="form-control" placeholder="/root/.ssh/id_rsa"></div>
-              <div class="form-row" style="margin:0;grid-column:1/-1"><label style="font-size:11px">Uzak Dizin</label><input id="sftp-dir" class="form-control" placeholder="/backups/oxware"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Kullanıcı</label><input id="sftp-user" class="form-control" placeholder="root (ESXi: root)"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Şifre</label><input id="sftp-password" type="password" class="form-control" placeholder="SSH şifresi (key yoksa)"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Key Yolu</label><input id="sftp-key" class="form-control" placeholder="/root/.ssh/id_rsa (opsiyonel)"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Uzak Dizin</label><input id="sftp-dir" class="form-control" placeholder="/vmfs/volumes (ESXi) veya /backups"></div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:10px">
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
               <button class="btn sm" onclick="sftpTestConnection()">🔌 Bağlantı Test Et</button>
+              <button class="btn sm" onclick="sftpBrowseFiles()">📂 Dosyaları Listele</button>
               <span id="sftp-test-result" style="font-size:11px;align-self:center"></span>
+            </div>
+            <!-- Import network selector for SFTP downloads -->
+            <div style="margin-top:10px">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">🌐 Import Edilecek Ağ</label>
+              <select id="sftp-import-network" style="width:100%;padding:6px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px"
+                      onfocus="if(!this.options.length||this.options[0].value==='default')_fillImportNetworkSelect(this)">
+                <option value="default">default (NAT)</option>
+              </select>
+            </div>
+            <!-- ESXi file browser -->
+            <div id="sftp-file-browser" style="margin-top:12px;display:none">
+              <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px">
+                Uzak Dosyalar <span id="sftp-browse-path" style="font-family:monospace;color:var(--accent-lt)"></span>
+              </div>
+              <div id="sftp-file-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border2);border-radius:6px;background:var(--surface2)"></div>
             </div>
           </div>
 
@@ -3695,7 +3924,7 @@
 
 <!-- ── Global Confirm Modal ── -->
 <!-- ── Setup Guide Modal ── -->
-<div id="modal-setup-guide" class="modal-overlay" style="display:none;z-index:9990" onclick="if(event.target===this)closeModal('modal-setup-guide')">
+<div id="modal-setup-guide" class="modal-overlay" style="z-index:9990" onclick="if(event.target===this)closeModal('modal-setup-guide')">
   <div class="modal" style="max-width:680px;max-height:80vh;overflow-y:auto">
     <div class="modal-header"><span>📖 Sunucu Kurulum Rehberi</span><button class="modal-close" onclick="closeModal('modal-setup-guide')">✕</button></div>
     <div class="modal-body" style="font-size:13px;line-height:1.7">
@@ -3894,18 +4123,50 @@ systemctl enable --now qemu-guest-agent</pre>
           <option value="hd">Yalnızca Disk</option>
         </select>
       </div>
-      <!-- Cloud-Init -->
-      <details style="margin-top:8px">
-        <summary style="font-size:11px;font-weight:700;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:6px 0">☁️ Cloud-Init (Opsiyonel)</summary>
-        <div style="margin-top:10px">
-          <div class="form-row"><label>Kullanıcı Adı</label><input id="ci-user" placeholder="ubuntu"></div>
-          <div class="form-row"><label>Şifre</label><input id="ci-password" type="password" placeholder="••••"></div>
-          <div class="form-row"><label>SSH Public Key</label><input id="ci-sshkey" placeholder="ssh-rsa AAAA..."></div>
-          <div class="form-row"><label>Başlangıç Script'i</label>
-            <textarea id="ci-userdata" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:7px 10px;resize:vertical;font-family:monospace" placeholder="#!/bin/bash&#10;apt-get update"></textarea>
-          </div>
+      <!-- Kullanıcı Adı & Şifre (Cloud-Init / unattend.xml) -->
+      <div style="margin-top:10px;padding:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">🔐 Giriş Bilgileri</div>
+        <div class="form-row">
+          <label>Kullanıcı Adı</label>
+          <input id="ci-user" placeholder="ubuntu (VM adından otomatik)" oninput="window._ciUserManual=true">
+          <div class="form-hint" id="ci-user-hint">Linux: VM adı kullanılır. Windows: otomatik Administrator.</div>
         </div>
-      </details>
+        <div class="form-row">
+          <label>Şifre <span style="color:var(--red-lt)">*</span></label>
+          <input id="ci-password" type="password" placeholder="Güçlü bir şifre girin" autocomplete="new-password">
+          <div class="form-hint">Bu şifre ile VM'e giriş yapacaksınız</div>
+        </div>
+        <details style="margin-top:8px">
+          <summary style="font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;padding:4px 0">☁️ Gelişmiş (SSH Key / Başlangıç Script / Statik IP)</summary>
+          <div style="margin-top:8px">
+            <div class="form-row"><label>SSH Public Key</label><input id="ci-sshkey" placeholder="ssh-rsa AAAA..."></div>
+            <div class="form-row"><label>Başlangıç Script'i</label>
+              <textarea id="ci-userdata" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:7px 10px;resize:vertical;font-family:monospace" placeholder="#!/bin/bash&#10;apt-get update"></textarea>
+            </div>
+            <!-- Statik IP — Bridge ağlar için -->
+            <div style="margin-top:10px;padding:10px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:6px">
+              <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:8px">🌐 Statik IP (Bridge Ağ)</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Bridge ağ seçildiğinde VM kendi gerçek IP'siyle açılır. Speedtest, host IP'sini değil VM'in IP'sini gösterir.</div>
+              <div class="form-row" style="margin:0 0 6px 0">
+                <label style="min-width:80px">IP Adresi</label>
+                <input id="ci-static-ip" placeholder="203.0.113.10" style="font-family:monospace">
+              </div>
+              <div class="form-row" style="margin:0 0 6px 0">
+                <label style="min-width:80px">Gateway</label>
+                <input id="ci-gateway" placeholder="203.0.113.1" style="font-family:monospace">
+              </div>
+              <div class="form-row" style="margin:0 0 6px 0">
+                <label style="min-width:80px">Netmask</label>
+                <input id="ci-netmask" placeholder="255.255.255.0" value="255.255.255.0" style="font-family:monospace">
+              </div>
+              <div class="form-row" style="margin:0">
+                <label style="min-width:80px">DNS</label>
+                <input id="ci-dns" placeholder="8.8.8.8, 1.1.1.1" value="8.8.8.8, 1.1.1.1">
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
     </div>
       <!-- App Install -->
       <details id="app-install-section" style="margin-top:8px">
@@ -3963,14 +4224,37 @@ systemctl enable --now qemu-guest-agent</pre>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-net-uuid">
-      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px">
-        <tr><td style="color:var(--text-muted);padding:5px 0;width:120px">Gateway</td><td id="edit-net-gateway">—</td></tr>
-        <tr><td style="color:var(--text-muted);padding:5px 0">Netmask</td><td id="edit-net-netmask">—</td></tr>
-        <tr><td style="color:var(--text-muted);padding:5px 0">DHCP Başlangıç</td><td id="edit-net-dhcp-start">—</td></tr>
-        <tr><td style="color:var(--text-muted);padding:5px 0">DHCP Bitiş</td><td id="edit-net-dhcp-end">—</td></tr>
-        <tr><td style="color:var(--text-muted);padding:5px 0">Bridge</td><td id="edit-net-bridge">—</td></tr>
-        <tr><td style="color:var(--text-muted);padding:5px 0">Durum</td><td id="edit-net-status">—</td></tr>
-      </table>
+      <!-- Info row -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text-muted)">
+        <span>Bridge: <code id="edit-net-bridge">—</code></span>
+        <span>Durum: <span id="edit-net-status">—</span></span>
+      </div>
+      <!-- Editable fields -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Gateway</label>
+          <input id="edit-net-gateway" type="text" placeholder="192.168.100.1"
+            style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;box-sizing:border-box;font-family:monospace">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Netmask</label>
+          <input id="edit-net-netmask" type="text" placeholder="255.255.255.0"
+            style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;box-sizing:border-box;font-family:monospace">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">DHCP Başlangıç</label>
+          <input id="edit-net-dhcp-start" type="text" placeholder="192.168.100.100"
+            style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;box-sizing:border-box;font-family:monospace">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">DHCP Bitiş</label>
+          <input id="edit-net-dhcp-end" type="text" placeholder="192.168.100.200"
+            style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;box-sizing:border-box;font-family:monospace">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--orange);margin-bottom:10px;padding:7px 10px;background:rgba(245,158,11,.08);border-radius:5px;border:1px solid rgba(245,158,11,.2)">
+        ⚠ IP/DHCP değişikliği ağı yeniden başlatır (bağlı VM'ler etkilenebilir).
+      </div>
       <div class="form-group" style="margin-bottom:14px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
           <input type="checkbox" id="edit-net-autostart" style="width:16px;height:16px">
@@ -4660,9 +4944,9 @@ function showConfirm(message, title = 'Emin misiniz?', danger = false) {
     };
     document.getElementById('modal-confirm-title').textContent = title;
     document.getElementById('modal-confirm-msg').textContent   = message;
-    document.getElementById('modal-confirm-icon').textContent  = danger ? '🗑️' : '⚠️';
+    document.getElementById('modal-confirm-icon').textContent  = danger ? '⚠️' : '⚠️';
     const okBtn = document.getElementById('modal-confirm-ok');
-    okBtn.textContent = danger ? 'Evet, Sil' : 'Onayla';
+    okBtn.textContent = 'Onayla';
     okBtn.style.background = danger ? 'var(--red-lt)' : 'var(--accent)';
     okBtn.style.color = '#fff';
     document.getElementById('modal-confirm').style.display = 'flex';
@@ -4698,9 +4982,42 @@ window.addEventListener("click", e => {
   if (e.target.classList.contains("modal-overlay")) e.target.classList.remove("open");
 });
 
+function _updateCiUser() {
+  if (window._ciUserManual) return;
+  const os = document.getElementById('vm-os')?.value || '';
+  const isWin = os.startsWith('win');
+  const ciUserEl = document.getElementById('ci-user');
+  const ciHint   = document.getElementById('ci-user-hint');
+  if (isWin) {
+    ciUserEl.value = 'Administrator';
+    ciUserEl.readOnly = true;
+    if (ciHint) ciHint.textContent = 'Windows: kullanıcı adı otomatik Administrator';
+  } else {
+    ciUserEl.readOnly = false;
+    const rawName = (document.getElementById('vm-name')?.value || '').trim();
+    ciUserEl.value = rawName ? rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g,'').slice(0,32) || 'ubuntu' : '';
+    if (ciHint) ciHint.textContent = 'Linux: VM adından otomatik. Boş bırakırsan "ubuntu" kullanılır.';
+  }
+}
+
 async function openCreateVMModal() {
   loadISOOptions(); loadIpPoolOptions(); loadNetworkOptions();
   openModal("modal-create-vm");
+  // Reset manual flag so auto-fill works fresh each open
+  window._ciUserManual = false;
+  document.getElementById('ci-password').value = '';
+  document.getElementById('ci-user').value = '';
+  document.getElementById('ci-user').readOnly = false;
+  _updateCiUser();
+  // Wire up auto-fill on name/OS change (remove old listeners first)
+  const nameEl = document.getElementById('vm-name');
+  const osEl   = document.getElementById('vm-os');
+  nameEl._ciHandler = nameEl._ciHandler || (() => { if (!window._ciUserManual) _updateCiUser(); });
+  osEl._ciHandler  = osEl._ciHandler   || (() => { window._ciUserManual = false; _updateCiUser(); });
+  nameEl.removeEventListener('input', nameEl._ciHandler);
+  nameEl.addEventListener('input', nameEl._ciHandler);
+  osEl.removeEventListener('change', osEl._ciHandler);
+  osEl.addEventListener('change', osEl._ciHandler);
   // Sunucu kapasitesine göre slider max değerlerini ayarla
   try {
     const d = await api('/system/stats');
@@ -4711,7 +5028,6 @@ async function openCreateVMModal() {
     const diskSlider = document.getElementById('vm-disk');
     memSlider.max  = ramMaxMb;
     diskSlider.max = Math.max(diskMaxGb, parseInt(diskSlider.value));
-    // Mevcut değerleri tekrar render et (fill bar güncelle)
     resSliderMem(memSlider.value);
     resSliderDisk(diskSlider.value);
   } catch {}
@@ -6320,6 +6636,85 @@ function buildContextNav(type) {
 // ── IPAM ──────────────────────────────────────────────────────────────────────
 let _ipamAllLeases = [];
 
+function subnetCalc() {
+  const raw = (document.getElementById('subnet-calc-input')?.value || '').trim();
+  const out  = document.getElementById('subnet-calc-result');
+  if (!out) return;
+  if (!raw) { out.innerHTML = ''; return; }
+
+  // Parse CIDR or IP/mask
+  let ip32, prefix;
+  try {
+    let cidr = raw;
+    if (!cidr.includes('/')) cidr = cidr + '/24';  // fallback default
+    const [ipStr, prefStr] = cidr.split('/');
+    prefix = parseInt(prefStr, 10);
+    if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('Geçersiz prefix');
+    const parts = ipStr.split('.');
+    if (parts.length !== 4) throw new Error('Geçersiz IP');
+    ip32 = parts.reduce((acc, p) => {
+      const n = parseInt(p, 10);
+      if (isNaN(n) || n < 0 || n > 255) throw new Error('Geçersiz oktet');
+      return (acc << 8) | n;
+    }, 0) >>> 0;
+  } catch(e) {
+    out.innerHTML = `<div style="color:var(--red-lt);font-size:12px">⚠ ${escHtml(e.message)}</div>`;
+    return;
+  }
+
+  const mask32      = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  const wild32      = (~mask32) >>> 0;
+  const network32   = (ip32 & mask32) >>> 0;
+  const broadcast32 = (network32 | wild32) >>> 0;
+  const firstHost32 = prefix < 31 ? (network32 + 1) >>> 0 : network32;
+  const lastHost32  = prefix < 31 ? (broadcast32 - 1) >>> 0 : broadcast32;
+  const hostCount   = prefix >= 31 ? (prefix === 32 ? 1 : 2) : (Math.pow(2, 32 - prefix) - 2);
+
+  const _ip = n => [(n>>>24)&0xff,(n>>>16)&0xff,(n>>>8)&0xff,n&0xff].join('.');
+  const _bin = (n, sep) => {
+    const b = n.toString(2).padStart(32,'0');
+    return sep ? [b.slice(0,8),b.slice(8,16),b.slice(16,24),b.slice(24)].join('.') : b;
+  };
+
+  // IP class
+  const firstOctet = (ip32 >>> 24) & 0xff;
+  const ipClass = firstOctet < 128 ? 'A' : firstOctet < 192 ? 'B' : firstOctet < 224 ? 'C' : firstOctet < 240 ? 'D (Multicast)' : 'E (Reserved)';
+  const isPrivate = (
+    (firstOctet === 10) ||
+    (firstOctet === 172 && ((ip32>>>16)&0xff) >= 16 && ((ip32>>>16)&0xff) <= 31) ||
+    (firstOctet === 192 && ((ip32>>>16)&0xff) === 168)
+  );
+
+  const row = (label, val, mono) =>
+    `<tr><td style="font-size:12px;color:var(--text-muted);padding:5px 12px 5px 0;white-space:nowrap">${label}</td>`+
+    `<td style="font-size:12px;padding:5px 0;${mono?'font-family:monospace':''}">${val}</td></tr>`;
+
+  out.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <table style="border-collapse:collapse">
+        ${row('Ağ Adresi',    `<strong style="color:var(--accent-lt)">${_ip(network32)}/${prefix}</strong>`, true)}
+        ${row('Broadcast',    `<span style="color:var(--orange)">${_ip(broadcast32)}</span>`, true)}
+        ${row('İlk Host',     `<span style="color:var(--green-lt)">${_ip(firstHost32)}</span>`, true)}
+        ${row('Son Host',     `<span style="color:var(--green-lt)">${_ip(lastHost32)}</span>`, true)}
+        ${row('Host Sayısı',  `<strong>${hostCount.toLocaleString()}</strong>`, false)}
+        ${row('Subnet Mask',  _ip(mask32), true)}
+        ${row('Wildcard',     _ip(wild32), true)}
+        ${row('IP Sınıfı',   `${ipClass} ${isPrivate?'<span style="font-size:10px;background:var(--surface3);padding:1px 5px;border-radius:3px">RFC1918</span>':''}`)}
+      </table>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">İKİLİK GÖSTERIM</div>
+        <div style="font-family:monospace;font-size:11px;line-height:2;background:var(--surface2);padding:10px;border-radius:6px;word-break:break-all">
+          <span style="color:var(--text-muted)">IP:   </span><span style="color:var(--accent-lt)">${_bin(network32,true)}</span><br>
+          <span style="color:var(--text-muted)">Mask: </span><span style="color:var(--green-lt)">${'1'.repeat(prefix)}${'0'.repeat(32-prefix)}</span><span style="color:var(--text-muted)"> (/${prefix})</span>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">
+          <div>📋 Giriş: <code style="font-family:monospace">${escHtml(raw)}</code></div>
+          <div style="margin-top:4px">📊 Toplam adres: <strong>${Math.pow(2,32-prefix).toLocaleString()}</strong></div>
+        </div>
+      </div>
+    </div>`;
+}
+
 async function loadIpamPage() {
   loadIpamLeases();
   loadIpamPools();
@@ -6923,7 +7318,7 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.0.0"}-generic#Ubuntu`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.0.0"}-generic#${infoData.host?.distro || 'Linux'}`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available ✓" : "Not Available ✗";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
@@ -7647,9 +8042,22 @@ async function hwApplyVcpu() {
 async function hwApplyMemory() {
   if (!_hwVmId) return;
   const mb = parseInt(document.getElementById('hw-mem-mb').value);
+  const maxMb = parseInt(document.getElementById('hw-mem-max')?.textContent) || 0;
+  // Artırma durumunda kullanıcıyı uyar (VM yeniden başlar)
+  if (maxMb > 0 && mb > maxMb) {
+    const ok = await showConfirm(
+      `${mb} MB, mevcut maksimum RAM'den (${maxMb} MB) büyük.\n\nVM otomatik olarak durdurulup yeniden başlatılacak. Devam etmek istiyor musunuz?`,
+      'RAM Artır', false
+    );
+    if (!ok) return;
+  }
   try {
     const r = await api(`/vms/${_hwVmId}/hardware/memory`, { method:'POST', body: {mb} });
-    toast(`RAM ${mb} MB ${r.live ? 'canlı balloon' : 'config'} uygulandı`, 'success');
+    if (r.restarted) {
+      toast(`RAM ${mb} MB olarak artırıldı. VM yeniden başlatıldı.`, 'success');
+    } else {
+      toast(`RAM ${mb} MB ${r.live ? '(balloon ile canlı)' : '(config)'} uygulandı`, 'success');
+    }
     loadVMDetail(_hwVmId);
   } catch(e) { toast('RAM değiştirilemedi: ' + e.message, 'error'); }
 }
@@ -7672,6 +8080,63 @@ async function hwApplyNestedVirt(enabled) {
     toast('Nested virt değiştirilemedi: ' + e.message, 'error');
     document.getElementById('hw-nested-virt').checked = !enabled;  // revert
   }
+}
+
+// ── Sound Card (#61) ───────────────────────────────────────────────────────────
+async function hwApplySound() {
+  if (!_hwVmId) return;
+  const model = document.getElementById('hw-sound-model').value;
+  try {
+    await api(`/vms/${_hwVmId}/hardware/sound`, { method:'POST', body: {model} });
+    toast(model ? `Ses kartı "${model}" eklendi. VM yeniden başlatılmalı.` : 'Ses kartı kaldırıldı.', 'warning');
+    loadVMDetail(_hwVmId);
+  } catch(e) { toast('Ses kartı değiştirilemedi: ' + e.message, 'error'); }
+}
+
+// ── GPU / Display (#62) ────────────────────────────────────────────────────────
+async function hwApplyVgpu() {
+  if (!_hwVmId) return;
+  const model = document.getElementById('hw-vgpu-model').value;
+  try {
+    await api(`/vms/${_hwVmId}/hardware/video`, { method:'POST', body: {model} });
+    toast(`Sanal GPU "${model}" ayarlandı. VM yeniden başlatılmalı.`, 'warning');
+    loadVMDetail(_hwVmId);
+  } catch(e) { toast('Sanal GPU değiştirilemedi: ' + e.message, 'error'); }
+}
+
+async function loadGpuInfo() {
+  const infoEl = document.getElementById('hw-gpu-info');
+  const pciRow = document.getElementById('hw-gpu-passthrough-row');
+  const pciSel = document.getElementById('hw-gpu-pci-sel');
+  if (infoEl) infoEl.textContent = '⏳ GPU taranıyor...';
+  try {
+    const d = await api('/system/gpus');
+    const gpus = d.gpus || [];
+    if (gpus.length > 0) {
+      if (infoEl) infoEl.textContent = `${gpus.length} fiziksel GPU bulundu. PCI passthrough için aşağıdan seçin.`;
+      if (pciRow) pciRow.style.display = '';
+      if (pciSel) {
+        pciSel.innerHTML = '<option value="">— Fiziksel GPU seçin —</option>' +
+          gpus.map(g => `<option value="${escHtml(g.pci)}">[${escHtml(g.pci)}] ${escHtml(g.name||'')}</option>`).join('');
+      }
+    } else {
+      if (infoEl) infoEl.textContent = 'Fiziksel GPU bulunamadı. Sanal GPU (virtio/QXL) kullanın — CPU\'dan çalışır.';
+      if (pciRow) pciRow.style.display = 'none';
+    }
+  } catch(e) {
+    if (infoEl) infoEl.textContent = 'GPU bilgisi alınamadı: ' + e.message;
+  }
+}
+
+async function hwApplyGpuPassthrough() {
+  if (!_hwVmId) return;
+  const pci = document.getElementById('hw-gpu-pci-sel')?.value;
+  if (!pci) return toast('GPU seçin', 'error');
+  try {
+    await api(`/vms/${_hwVmId}/hardware/gpu-passthrough`, { method:'POST', body: {pci_address: pci} });
+    toast('GPU passthrough eklendi. VM yeniden başlatılmalı. IOMMU/VFIO aktif olmalı.', 'warning');
+    loadVMDetail(_hwVmId);
+  } catch(e) { toast('GPU passthrough başarısız: ' + e.message, 'error'); }
 }
 
 async function hwDetachDisk(targetDev) {
@@ -8197,13 +8662,26 @@ async function createVM() {
   // App install
   const appInstall = document.querySelector('input[name="app_install"]:checked')?.value || '';
   if (appInstall) body.app_install = appInstall;
-  // Cloud-Init fields
-  const ciUser = document.getElementById("ci-user")?.value.trim();
-  const ciPass = document.getElementById("ci-password")?.value.trim();
+  // Cloud-Init / unattend.xml credentials
+  const ciUser = document.getElementById("ci-user")?.value.trim() || 'ubuntu';
+  const ciPass = document.getElementById("ci-password")?.value;
   const ciKey  = document.getElementById("ci-sshkey")?.value.trim();
   const ciData = document.getElementById("ci-userdata")?.value.trim();
-  if (ciUser || ciPass || ciKey || ciData) {
-    body.cloud_init = { user: ciUser||undefined, password: ciPass||undefined, ssh_key: ciKey||undefined, user_data: ciData||undefined };
+  if (!ciPass || ciPass.length < 4) return toast("Şifre en az 4 karakter olmalı", "error");
+  // Static IP (bridge networks)
+  const ciStaticIp = document.getElementById("ci-static-ip")?.value.trim();
+  const ciGateway  = document.getElementById("ci-gateway")?.value.trim();
+  const ciNetmask  = document.getElementById("ci-netmask")?.value.trim() || "255.255.255.0";
+  const ciDnsRaw   = document.getElementById("ci-dns")?.value.trim() || "8.8.8.8, 1.1.1.1";
+  const ciDns      = ciDnsRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  body.cloud_init  = {
+    user: ciUser, password: ciPass,
+    ssh_key: ciKey||undefined, user_data: ciData||undefined,
+    static_ip: ciStaticIp||undefined, gateway: ciGateway||undefined,
+    netmask: ciNetmask, dns: ciDns,
+  };
+  if (ciStaticIp) { body.static_ip = ciStaticIp; body.gateway = ciGateway; body.netmask = ciNetmask; body.dns = ciDns; }
+  if (false) { // legacy block — kept to avoid syntax break
   }
   try {
     await api("/vms", { method: "POST", body });
@@ -8975,13 +9453,84 @@ async function _initVNC(vmId) {
 /* ══════════════════ Networks ══════════════════ */
 
 function switchNetTab(tab, btn) {
-  ['vnets','ifaces','leases','routes'].forEach(t => {
+  ['vnets','ifaces','leases','routes','bridge'].forEach(t => {
     const el = document.getElementById('net-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('[data-ntab]').forEach(b => b.classList.toggle('active', b.dataset.ntab === tab));
-  if (tab === 'leases') loadDhcpLeasesNet();
-  if (tab === 'routes') loadRoutingTable();
+  if (tab === 'leases')  loadDhcpLeasesNet();
+  if (tab === 'routes')  loadRoutingTable();
+  if (tab === 'bridge')  _initBridgeTab();
+}
+
+async function _initBridgeTab() {
+  // Populate NIC selector from host interfaces
+  const sel = document.getElementById('br-nic');
+  if (!sel || sel.dataset.loaded) return;
+  sel.dataset.loaded = '1';
+  try {
+    const d = await _api('/api/networks/host-interfaces');
+    const ifaces = (d.interfaces||[]).filter(i => i.type === 'ethernet' && i.state === 'up');
+    sel.innerHTML = ifaces.length
+      ? ifaces.map(i => `<option value="${escHtml(i.name)}">${escHtml(i.name)} — ${i.addresses?.[0]||'IP yok'}</option>`).join('')
+      : '<option value="enp1s0">enp1s0 (varsayılan)</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="enp1s0">enp1s0 (varsayılan)</option>';
+  }
+  sel.addEventListener('change', () => {
+    const prev = document.getElementById('br-nic-preview');
+    if (prev) prev.textContent = sel.value || 'seçilen NIC';
+  });
+}
+
+async function setupBridge() {
+  const brName = (document.getElementById('br-name')?.value||'oxbr0').trim();
+  const nic    = document.getElementById('br-nic')?.value?.trim();
+  const libNet = (document.getElementById('br-libvirt-net')?.value||'oxbridge').trim();
+  const res    = document.getElementById('bridge-setup-result');
+  if (!nic) { toast('Fiziksel NIC seçin', 'error'); return; }
+  if (res) res.innerHTML = '<div style="color:var(--text-muted);font-size:12px">⏳ Bridge kuruluyor...</div>';
+  try {
+    const d = await _api('/api/networks/bridge/setup', 'POST', {
+      bridge_name: brName, physical_iface: nic, libvirt_net_name: libNet
+    });
+    if (res) {
+      const color = d.ok ? '#3fb950' : '#f85149';
+      const icon  = d.ok ? '✅' : '⚠️';
+      res.innerHTML = `
+        <div style="padding:10px;border-radius:6px;background:var(--surface2);font-size:12px">
+          <div style="color:${color};font-weight:600;margin-bottom:6px">${icon} ${d.ok ? 'Bridge başarıyla kuruldu' : 'Kısmi kurulum'}</div>
+          ${(d.steps||[]).map(s=>`<div style="color:var(--text-muted)">✓ ${escHtml(s)}</div>`).join('')}
+          ${(d.errors||[]).map(e=>`<div style="color:#f85149">✗ ${escHtml(e)}</div>`).join('')}
+          ${d.ok ? `<div style="margin-top:8px;color:var(--accent-lt)">Libvirt ağ adı: <strong>${escHtml(d.libvirt_network)}</strong> — VM oluşturma ekranında bu ağı seçin</div>` : ''}
+        </div>`;
+    }
+    if (d.ok) { toast('Bridge kuruldu: '+brName, 'success'); loadNetworks(); }
+    else toast('Bridge kısmen kuruldu — hataları kontrol edin', 'warning');
+  } catch(e) {
+    if (res) res.innerHTML = `<div style="color:#f85149;font-size:12px">Hata: ${escHtml(e.message)}</div>`;
+    toast('Bridge kurulamadı: '+e.message, 'error');
+  }
+}
+
+async function loadBridgeStatus() {
+  const el = document.getElementById('bridge-list-container');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>';
+  try {
+    const d = await _api('/api/networks/bridges');
+    const bridges = d.bridges || [];
+    if (!bridges.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Host bridge bulunamadı.</div>'; return; }
+    el.innerHTML = bridges.map(b => `
+      <div style="padding:8px 10px;border-radius:6px;background:var(--surface2);margin-bottom:6px;font-size:12px">
+        <strong style="color:var(--accent-lt)">${escHtml(b.name)}</strong>
+        <span class="badge-${b.state==='up'?'success':'muted'}" style="margin-left:8px">${escHtml(b.state)}</span>
+        ${b.members?.length ? `<span style="color:var(--text-muted);margin-left:8px">Üyeler: ${b.members.map(escHtml).join(', ')}</span>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:#f85149;font-size:12px">Yüklenemedi: ${escHtml(e.message)}</div>`;
+  }
 }
 
 function _fmtBytes(bytes) {
@@ -9012,24 +9561,24 @@ async function loadNetworks() {
 
     // Virtual Networks table
     const _modeBadge = m => {
-      const colors = { nat:'var(--accent)', bridge:'var(--green-lt)', isolated:'var(--orange)', route:'#a78bfa' };
-      return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${colors[m]||'var(--surface2)'};color:#fff;font-weight:600">${escHtml(m||'nat').toUpperCase()}</span>`;
+      const cls = { nat:'net-forward-nat', bridge:'net-forward-bridge', isolated:'net-forward-isolated', route:'net-forward-route' };
+      return `<span class="net-forward-badge ${cls[m]||'net-forward-isolated'}">${escHtml(m||'nat').toUpperCase()}</span>`;
     };
     document.getElementById("net-tbody").innerHTML = nets.length ? nets.map(n => `<tr>
       <td>
-        <strong>${escHtml(n.name)}</strong>
-        ${n.autostart ? '<span style="font-size:10px;color:var(--text-muted)"> ⚡auto</span>' : ''}
+        <strong class="net-card-name">${escHtml(n.name)}</strong>
+        ${n.autostart ? '<span class="net-autostart-badge"> ⚡auto</span>' : ''}
       </td>
       <td>${n.active ? '<span class="badge active"><span class="badge-dot"></span>Aktif</span>' : '<span class="badge inactive">Pasif</span>'}</td>
       <td>${_modeBadge(n.forward_mode || n.mode)}</td>
       <td>
-        <code>${escHtml(n.ip || n.gateway || '—')}</code>
-        ${n.netmask ? `<span style="color:var(--text-muted);font-size:11px"> /${n.netmask}</span>` : ''}
+        <code class="net-card-val">${escHtml(n.ip || n.gateway || '—')}</code>
+        ${n.netmask ? `<span class="net-card-label"> /${n.netmask}</span>` : ''}
       </td>
-      <td><code>${escHtml(n.bridge || '—')}</code></td>
-      <td style="font-size:11px">${n.dhcp ? `<span style="color:var(--green-lt)">${escHtml(n.dhcp.start)}<br>→ ${escHtml(n.dhcp.end)}</span>` : '<span class="text-muted">DHCP yok</span>'}</td>
+      <td><code class="net-card-val">${escHtml(n.bridge || '—')}</code></td>
+      <td class="net-dhcp-cell">${n.dhcp ? `<span class="net-dhcp-range">${escHtml(n.dhcp.start)}<br>→ ${escHtml(n.dhcp.end)}</span>` : '<span class="net-card-label">DHCP yok</span>'}</td>
       <td>
-        <span id="net-vm-count-${n.uuid}" style="font-size:11px;color:var(--text-muted)">—</span>
+        <span id="net-vm-count-${n.uuid}" class="net-card-label">—</span>
       </td>
       <td>
         <div class="action-btns">
@@ -9044,25 +9593,27 @@ async function loadNetworks() {
 
     // Host Interfaces — detailed
     const _ifTypeBadge = t => {
-      const map = { ethernet:'#3b82f6', bridge:'#22c55e', virtual:'#a78bfa', bond:'#f59e0b', vlan:'#06b6d4', loopback:'#6b7280', wifi:'#ec4899', tunnel:'#f97316' };
-      return `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${map[t]||'var(--surface2)'};color:#fff">${escHtml(t||'eth')}</span>`;
+      const cls = { ethernet:'iface-type-eth', bridge:'iface-type-bridge', virtual:'iface-type-virtual',
+                    bond:'iface-type-bond', vlan:'iface-type-vlan', loopback:'iface-type-lo',
+                    wifi:'iface-type-wifi', tunnel:'iface-type-tunnel' };
+      return `<span class="iface-card-type ${cls[t]||'iface-type-eth'}">${escHtml(t||'eth')}</span>`;
     };
     document.getElementById("iface-tbody").innerHTML = ifaces.map(i => `<tr>
       <td>
-        <code style="font-weight:700">${escHtml(i.name)}</code>
-        ${i.duplex ? `<span style="font-size:10px;color:var(--text-muted)"> ${i.duplex}</span>` : ''}
+        <code class="iface-card-name">${escHtml(i.name)}</code>
+        ${i.duplex ? `<span class="net-card-label"> ${i.duplex}</span>` : ''}
       </td>
       <td>${_ifTypeBadge(i.type)}</td>
-      <td>${i.state === 'up' ? '<span class="badge active"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive">' + (i.state||'DOWN').toUpperCase() + '</span>'}</td>
-      <td><code style="font-size:11px">${escHtml(i.mac || '—')}</code></td>
-      <td>
-        ${(i.addresses||[]).map(a => `<code style="font-size:11px">${escHtml(a)}</code>`).join('<br>') || '—'}
-        ${(i.addresses6||[]).map(a => `<br><code style="font-size:10px;color:var(--text-muted)">${escHtml(a)}</code>`).join('') || ''}
+      <td>${i.state === 'up' ? '<span class="badge active iface-status-up"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive iface-status-down">' + (i.state||'DOWN').toUpperCase() + '</span>'}</td>
+      <td><code class="iface-mac">${escHtml(i.mac || '—')}</code></td>
+      <td class="iface-card-ips">
+        ${(i.addresses||[]).map(a => `<code class="iface-ip4">${escHtml(a)}</code>`).join('<br>') || '—'}
+        ${(i.addresses6||[]).map(a => `<br><code class="iface-ip6">${escHtml(a)}</code>`).join('') || ''}
       </td>
-      <td style="font-size:11px">${i.speed_mbps ? (i.speed_mbps >= 1000 ? (i.speed_mbps/1000).toFixed(1) + ' Gbps' : i.speed_mbps + ' Mbps') : '—'}</td>
-      <td style="font-size:11px">${i.mtu || '—'}</td>
-      <td style="font-size:11px;color:var(--green-lt)">${_fmtBytes(i.rx_bytes)}<br><span style="font-size:10px;color:var(--text-muted)">${i.rx_packets||0} pkt</span></td>
-      <td style="font-size:11px;color:var(--accent-lt)">${_fmtBytes(i.tx_bytes)}<br><span style="font-size:10px;color:var(--text-muted)">${i.tx_packets||0} pkt</span></td>
+      <td class="iface-stat-cell">${i.speed_mbps ? (i.speed_mbps >= 1000 ? (i.speed_mbps/1000).toFixed(1) + ' Gbps' : i.speed_mbps + ' Mbps') : '—'}</td>
+      <td class="iface-stat-cell">${i.mtu || '—'}</td>
+      <td class="iface-stat-cell iface-rx">${_fmtBytes(i.rx_bytes)}<br><span class="iface-pkt">${i.rx_packets||0} pkt</span></td>
+      <td class="iface-stat-cell iface-tx">${_fmtBytes(i.tx_bytes)}<br><span class="iface-pkt">${i.tx_packets||0} pkt</span></td>
     </tr>`).join("") || `<tr><td colspan="9" class="text-center text-muted" style="padding:14px">Arayüz bulunamadı</td></tr>`;
 
   } catch (e) { toast("Ağ alınamadı: " + e.message, "error"); }
@@ -9077,12 +9628,12 @@ async function loadDhcpLeasesNet() {
     const leases = d.leases || [];
     tbody.innerHTML = leases.length ? leases.map(l => {
       const exp = l.expires ? new Date(l.expires * 1000).toLocaleString() : '—';
-      return `<tr>
-        <td><code>${escHtml(l.ip||'—')}</code></td>
-        <td><code style="font-size:11px">${escHtml(l.mac||'—')}</code></td>
+      return `<tr class="dhcp-lease-row">
+        <td><code class="dhcp-lease-ip">${escHtml(l.ip||'—')}</code></td>
+        <td><code class="dhcp-lease-mac">${escHtml(l.mac||'—')}</code></td>
         <td>${escHtml(l.hostname||'—')}</td>
         <td>${escHtml(l.network||'—')}</td>
-        <td style="font-size:11px;color:var(--text-muted)">${exp}</td>
+        <td class="dhcp-lease-exp">${exp}</td>
       </tr>`;
     }).join('') : `<tr><td colspan="5" class="text-center text-muted" style="padding:14px">DHCP kirası yok</td></tr>`;
   } catch(e) {
@@ -9148,19 +9699,19 @@ let _editNetActive = false;
 async function openEditNetwork(uuid, name) {
   document.getElementById('edit-net-uuid').value = uuid;
   document.getElementById('edit-net-name-label').textContent = name;
-  document.getElementById('edit-net-gateway').textContent = '...';
-  document.getElementById('edit-net-netmask').textContent = '...';
-  document.getElementById('edit-net-dhcp-start').textContent = '...';
-  document.getElementById('edit-net-dhcp-end').textContent = '...';
+  document.getElementById('edit-net-gateway').value = '';
+  document.getElementById('edit-net-netmask').value = '';
+  document.getElementById('edit-net-dhcp-start').value = '';
+  document.getElementById('edit-net-dhcp-end').value = '';
   document.getElementById('edit-net-bridge').textContent = '...';
   openModal('modal-edit-net');
   try {
     const d = await api(`/networks/${uuid}`);
     const n = d.network || d;
-    document.getElementById('edit-net-gateway').textContent = n.gateway || '—';
-    document.getElementById('edit-net-netmask').textContent = n.netmask || '—';
-    document.getElementById('edit-net-dhcp-start').textContent = n.dhcp_start || '—';
-    document.getElementById('edit-net-dhcp-end').textContent = n.dhcp_end || '—';
+    document.getElementById('edit-net-gateway').value    = n.gateway || '';
+    document.getElementById('edit-net-netmask').value    = n.netmask || '';
+    document.getElementById('edit-net-dhcp-start').value = n.dhcp_start || '';
+    document.getElementById('edit-net-dhcp-end').value   = n.dhcp_end || '';
     document.getElementById('edit-net-bridge').textContent = n.bridge || '—';
     document.getElementById('edit-net-status').textContent = n.active ? '🟢 Aktif' : '🔴 Pasif';
     document.getElementById('edit-net-autostart').checked = !!n.autostart;
@@ -9171,10 +9722,24 @@ async function openEditNetwork(uuid, name) {
   } catch(e) { toast('Ağ bilgisi alınamadı: ' + e.message, 'error'); }
 }
 async function netEditSave() {
-  const uuid = document.getElementById('edit-net-uuid').value;
+  const uuid      = document.getElementById('edit-net-uuid').value;
   const autostart = document.getElementById('edit-net-autostart').checked;
+  const gateway   = document.getElementById('edit-net-gateway').value.trim();
+  const netmask   = document.getElementById('edit-net-netmask').value.trim();
+  const dhcpStart = document.getElementById('edit-net-dhcp-start').value.trim();
+  const dhcpEnd   = document.getElementById('edit-net-dhcp-end').value.trim();
   try {
+    // Save autostart
     await api(`/networks/${uuid}/autostart`, { method: 'POST', body: { enabled: autostart } });
+    // Save IP/DHCP if any field filled
+    if (gateway || netmask || dhcpStart || dhcpEnd) {
+      const body = {};
+      if (gateway)   body.ip_address = gateway;
+      if (netmask)   body.netmask    = netmask;
+      if (dhcpStart) body.dhcp_start = dhcpStart;
+      if (dhcpEnd)   body.dhcp_end   = dhcpEnd;
+      await api(`/networks/${uuid}/update`, { method: 'POST', body });
+    }
     toast('Ağ ayarları kaydedildi', 'success');
     closeModal('modal-edit-net'); loadNetworks();
   } catch(e) { toast('Kayıt hatası: ' + e.message, 'error'); }
@@ -10139,7 +10704,7 @@ async function refreshOxyAgents() {
       _oxyActiveAgent = null;
       return;
     }
-    sel.innerHTML = _oxyAgents.map(a=>`<option value="${a.id}">${a.name} (${a.provider})</option>`).join('');
+    sel.innerHTML = _oxyAgents.map(a=>`<option value="${escHtml(a.id)}">${escHtml(a.name)} (${escHtml(a.provider||'')})</option>`).join('');
     if (!_oxyActiveAgent || !_oxyAgents.find(a=>a.id===_oxyActiveAgent)) {
       _oxyActiveAgent = _oxyAgents[0].id;
     }
@@ -11184,22 +11749,27 @@ async function loadTabData(tabId) {
     case 'tab-ipam':         loadIpamPage(); break;
     case 'tab-proxy':        loadNginxSites(); break;
     case 'tab-monitoring': {
-      // #41 Optimize: stagger 11 API calls — don't hammer server simultaneously
+      // #41/#46 CRITICAL FIX: stagger all calls, 2min cache for first load
       const _now = Date.now();
-      const _skip = (window._monitorLoadedAt && (_now - window._monitorLoadedAt) < 30000);
-      window._monitorLoadedAt = _now;
-      // Tier 1 — critical (immediate)
-      loadPerfHistory('1h'); loadSpeedtestServers();
-      // Tier 2 — secondary (150ms)
-      setTimeout(() => { loadUptimes(); loadSmartData(); }, 150);
-      // Tier 3 — status cards (400ms)
-      setTimeout(() => { loadHAStatus(); loadIdsStatus(); }, 400);
-      // Tier 4 — trend charts (expensive: 2× API) (750ms)
-      setTimeout(() => { if (!_skip) loadTrendAnalysis(); }, 750);
-      // Tier 5 — alerts & rules (1100ms)
-      setTimeout(() => { loadAlertRules(); loadNetworkQos(); }, 1100);
-      // Tier 6 — cost & history (1600ms)
-      setTimeout(() => { if (!_skip) { loadCostEstimate(); loadAlertHistory(); loadStorageMigrations(); } }, 1600);
+      const _skip = (window._monitorLoadedAt && (_now - window._monitorLoadedAt) < 120000);
+      if (!_skip) window._monitorLoadedAt = _now;
+
+      // Tier 1 — CPU/RAM chart only (immediate, uses backend cache → fast)
+      loadPerfHistory('1h');
+
+      if (!_skip) {
+        // Tier 2 — uptime + alert rules (lightweight, 800ms)
+        setTimeout(() => { loadUptimes(); loadAlertRules(); }, 800);
+        // Tier 3 — SMART, HA, IDS (moderate, 1800ms)
+        setTimeout(() => { loadSmartData(); loadHAStatus(); loadIdsStatus(); }, 1800);
+        // Tier 4 — cost estimate only (not QoS, not trend, not migration — too heavy)
+        setTimeout(() => loadCostEstimate(), 3000);
+        // Tier 5 — speedtest server list only (no test runs)
+        setTimeout(() => loadSpeedtestServers(), 4000);
+      }
+      // loadNetworkQos(), loadTrendAnalysis(), loadAlertHistory(), loadStorageMigrations()
+      // are NOT auto-loaded — they run only when user clicks the ↻ button
+      // This prevents N×libvirt calls from freezing the system
       break;
     }
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
@@ -11792,12 +12362,15 @@ async function runAiAnalysis() {
   }
 }
 
+let _lastNlParsed = null;  // stores last NL parsed response for confirmation
+
 async function sendNlCommand(presetCmd) {
   const input = document.getElementById('nlCommandInput');
   const cmd = presetCmd || input?.value?.trim();
   if (!cmd) return;
   const result = document.getElementById('nlResult');
   if (result) result.innerHTML = '<div style="color:var(--text-muted);font-size:12px;margin-top:8px">İşleniyor...</div>';
+  _lastNlParsed = null;
   try {
     const d = await _api('/api/ai/nl', 'POST', {command: cmd});
     if (!d) { if (result) result.innerHTML = '<div style="color:#ef4444;font-size:12px;margin-top:8px">Bağlantı hatası veya oturum süresi doldu.</div>'; return; }
@@ -11805,15 +12378,40 @@ async function sendNlCommand(presetCmd) {
       if (result) result.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:8px;padding:10px;border:1px solid rgba(239,68,68,.3);border-radius:6px">⚠ ${escHtml(d.error||d.message||'Bilinmeyen hata')}</div>`;
       return;
     }
+    _lastNlParsed = {cmd, action: d.action, params: d.params};
     if (result) result.innerHTML = `
       <div style="margin-top:10px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
         <div style="font-size:12px;margin-bottom:6px"><strong>Aksiyon:</strong> <code style="background:var(--surface3);padding:2px 6px;border-radius:4px">${escHtml(d.action||d.command||'—')}</code></div>
         ${d.human_response||d.message ? `<div style="font-size:12px;color:var(--text-muted)">${escHtml(d.human_response||d.message)}</div>` : ''}
-        ${d.result ? `<div style="margin-top:6px;font-size:11px;color:#22c55e">✓ ${escHtml(String(d.result))}</div>` : ''}
-        ${d.confirmation_required ? `<button class="btn-primary" style="margin-top:10px;font-size:12px" onclick="confirmNlAction()">✓ Onayla ve Çalıştır</button>` : ''}
+        ${d.execution_result && Object.keys(d.execution_result||{}).length ? `<div style="margin-top:6px;font-size:11px;color:#22c55e">✓ Çalıştırıldı: ${escHtml(JSON.stringify(d.execution_result).slice(0,120))}</div>` : ''}
+        ${d.confirmation_required ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="btn-primary" style="font-size:12px" onclick="confirmNlAction()">✓ Onayla ve Çalıştır</button><button class="btn" style="font-size:12px" onclick="document.getElementById('nlResult').innerHTML=''">✕ İptal</button></div>` : '<div style="font-size:11px;color:#22c55e;margin-top:6px">✓ Otomatik çalıştırıldı</div>'}
       </div>
     `;
     if (input && !presetCmd) input.value = '';
+  } catch(e) {
+    if (result) result.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:8px">Hata: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function confirmNlAction() {
+  if (!_lastNlParsed) { toast('Onaylanacak komut yok', 'error'); return; }
+  const result = document.getElementById('nlResult');
+  if (result) result.innerHTML = '<div style="color:var(--text-muted);font-size:12px;margin-top:8px">Çalıştırılıyor...</div>';
+  try {
+    const d = await _api('/api/ai/nl', 'POST', {
+      command: _lastNlParsed.cmd,
+      force_execute: true,
+      action: _lastNlParsed.action,
+      params: _lastNlParsed.params
+    });
+    _lastNlParsed = null;
+    if (!d) return;
+    const res = d.execution_result || d;
+    if (result) result.innerHTML = `
+      <div style="margin-top:10px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:12px;color:#22c55e;font-weight:600">✓ Çalıştırıldı</div>
+        <pre style="font-size:11px;margin-top:6px;color:var(--text-muted);white-space:pre-wrap">${escHtml(JSON.stringify(res, null, 2).slice(0,500))}</pre>
+      </div>`;
   } catch(e) {
     if (result) result.innerHTML = `<div style="color:#ef4444;font-size:12px;margin-top:8px">Hata: ${escHtml(e.message)}</div>`;
   }
@@ -12326,24 +12924,95 @@ async function bgpRemovePeer(peerIp, localAsn) {
   } catch(e) { toast('Hata: ' + e.message, 'error'); }
 }
 
+function _sftpParams() {
+  return {
+    host: document.getElementById('sftp-host').value.trim(),
+    port: parseInt(document.getElementById('sftp-port').value) || 22,
+    username: document.getElementById('sftp-user').value.trim(),
+    private_key_path: document.getElementById('sftp-key').value.trim() || undefined,
+    password: document.getElementById('sftp-password')?.value || undefined,
+    remote_dir: document.getElementById('sftp-dir').value.trim() || '/backups',
+  };
+}
+
 async function sftpTestConnection() {
-  const host = document.getElementById('sftp-host').value.trim();
-  const port = parseInt(document.getElementById('sftp-port').value) || 22;
-  const user = document.getElementById('sftp-user').value.trim();
-  const key  = document.getElementById('sftp-key').value.trim();
-  const dir  = document.getElementById('sftp-dir').value.trim();
-  const st   = document.getElementById('sftp-test-result');
-  if (!host || !user) { toast('Host ve kullanıcı gerekli', 'error'); return; }
+  const p  = _sftpParams();
+  const st = document.getElementById('sftp-test-result');
+  if (!p.host || !p.username) { toast('Host ve kullanıcı gerekli', 'error'); return; }
+  if (!p.private_key_path && !p.password) { toast('SSH Key Yolu veya Şifre gerekli', 'error'); return; }
   st.textContent = '⏳ Test ediliyor...';
   st.style.color = 'var(--text-muted)';
   try {
-    const d = await _api('/api/backup/sftp-test', 'POST', { host, port, username: user, private_key_path: key || undefined, remote_dir: dir || '/backups' });
+    const d = await _api('/api/backup/sftp-test', 'POST', p);
     st.textContent = d.success ? '✅ Bağlantı başarılı' : ('✕ ' + (d.error || 'Bağlantı hatası'));
     st.style.color = d.success ? '#22c55e' : '#f87171';
   } catch(e) {
     st.textContent = '✕ ' + e.message;
     st.style.color = '#f87171';
   }
+}
+
+async function sftpBrowseFiles(remotePath) {
+  const p = _sftpParams();
+  if (!p.host || !p.username) { toast('Önce SFTP bağlantı bilgilerini girin', 'error'); return; }
+  if (!p.private_key_path && !p.password) { toast('SSH Key Yolu veya Şifre gerekli', 'error'); return; }
+  const browseDir = remotePath || p.remote_dir;
+  const browser   = document.getElementById('sftp-file-browser');
+  const listEl    = document.getElementById('sftp-file-list');
+  const pathEl    = document.getElementById('sftp-browse-path');
+  if (browser) browser.style.display = '';
+  if (pathEl)  pathEl.textContent = browseDir;
+  if (listEl)  listEl.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:12px">⏳ Yükleniyor...</div>';
+  try {
+    const d = await _api('/api/backup/sftp-list', 'POST', { ...p, remote_dir: browseDir });
+    if (!d.success) {
+      listEl.innerHTML = `<div style="padding:10px;color:#f87171;font-size:12px">✕ ${escHtml(d.error||'Hata')}</div>`;
+      return;
+    }
+    const files = d.files || [];
+    if (!files.length) {
+      listEl.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px">Dosya bulunamadı.</div>';
+      return;
+    }
+    // Parent dir link
+    const parentPath = browseDir.split('/').slice(0,-1).join('/') || '/';
+    let html = '';
+    if (browseDir !== '/') {
+      html += `<div style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;color:var(--accent-lt)" onclick="sftpBrowseFiles('${parentPath.replace(/'/g,"\\'")}')">📁 ..</div>`;
+    }
+    files.forEach(f => {
+      const icon = f.is_dir ? '📁' : '💾';
+      const size = f.is_dir ? '' : ` <span style="color:var(--text-muted)">${f.size_mb} MB</span>`;
+      const dlBtn = !f.is_dir ? `<button class="btn sm" style="font-size:10px;padding:2px 8px;margin-left:auto" onclick="sftpDownloadFile('${f.path.replace(/'/g,"\\'")}')">⬇ İndir+İmport</button>` : '';
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;${f.is_dir?'cursor:pointer':''}${f.is_dir?';color:var(--accent-lt)':''}"
+        ${f.is_dir ? `onclick="sftpBrowseFiles('${f.path.replace(/'/g,"\\'")}')"`:''}
+      >
+        ${icon} ${escHtml(f.name)}${size}${dlBtn}
+      </div>`;
+    });
+    listEl.innerHTML = html;
+  } catch(e) {
+    listEl.innerHTML = `<div style="padding:10px;color:#f87171;font-size:12px">Hata: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function sftpDownloadFile(remotePath) {
+  const p = _sftpParams();
+  if (!p.host || !p.username) { toast('SFTP bağlantı bilgileri gerekli', 'error'); return; }
+  const fname = remotePath.split('/').pop();
+  // Ask user which network to connect imported VM to
+  const importNet = document.getElementById('sftp-import-network')?.value || 'default';
+  const taskId = 'sftp-dl-' + Date.now();
+  addTaskToPanel(taskId, `SFTP İndir+Import: ${escHtml(fname)} → ${escHtml(importNet)}`, 'running');
+  switchTaskTab('tasks');
+  try {
+    const d = await _api('/api/backup/sftp-download', 'POST', { ...p, remote_path: remotePath, network: importNet });
+    if (!d.ok) { toast('İndirme başlatılamadı: '+(d.error||'hata'), 'error'); return; }
+    toast(`İndirme+Import başladı: ${fname}`, 'info');
+    // Poll job
+    const statusEl = { innerHTML: '' };
+    _pollImportJob(d.job_id, taskId, statusEl, fname);
+  } catch(e) { toast('SFTP hata: '+e.message, 'error'); }
 }
 
 async function loadSslStatus() {
@@ -12882,6 +13551,17 @@ function openImportOvaModal() {
   document.getElementById('ova-file-input').value = '';
   document.getElementById('modal-ova-import').style.display = 'flex';
 }
+async function _fillImportNetworkSelect(sel) {
+  try {
+    const d = await api('/networks');
+    const nets = (d.networks || []);
+    sel.innerHTML = '<option value="default">default (NAT)</option>' +
+      nets.filter(n => n.active && n.name !== 'default')
+          .map(n => `<option value="${escHtml(n.name)}">${escHtml(n.name)} (${escHtml(n.forward_mode||n.mode||'nat')})</option>`)
+          .join('');
+  } catch(e) { /* keep default option */ }
+}
+
 function doImportOva() {
   const fileInput = document.getElementById('ova-file-input');
   const statusEl  = document.getElementById('ova-import-status');
@@ -12899,6 +13579,8 @@ function doImportOva() {
   // ── Use XHR so we get upload progress events ─────────────────────────────
   const fd = new FormData();
   fd.append('file', file);
+  const importNetwork = document.getElementById('ova-import-network')?.value || 'default';
+  fd.append('network', importNetwork);
   const xhr = new XMLHttpRequest();
 
   xhr.upload.addEventListener('progress', e => {
@@ -13885,12 +14567,12 @@ async function _initSmigVmSel() {
   const sel = document.getElementById('smig-vm-sel'); if (!sel) return;
   try {
     const vms = _gsCacheVMs.length ? _gsCacheVMs : (await api('/vms')).vms || [];
-    sel.innerHTML = '<option>VM seç...</option>' + vms.map(v=>`<option value="${v.name||v.id}">${v.name||v.id}</option>`).join('');
+    sel.innerHTML = '<option>VM seç...</option>' + vms.map(v=>`<option value="${escHtml(v.name||v.id)}">${escHtml(v.name||v.id)}</option>`).join('');
     sel.onchange = async function() {
       const diskSel = document.getElementById('smig-disk-sel');
       try {
         const disks = (await api(`/vms/${this.value}/disks`)).disks || [];
-        diskSel.innerHTML = disks.map(d=>`<option value="${d.target}">${d.target} (${d.source_path})</option>`).join('');
+        diskSel.innerHTML = disks.map(d=>`<option value="${escHtml(d.target)}">${escHtml(d.target)} (${escHtml(d.source_path||'')})</option>`).join('');
       } catch(e) { diskSel.innerHTML = '<option>Disk...</option>'; }
     };
   } catch(e) {}
@@ -14075,6 +14757,13 @@ if (TOKEN()) {
       <input type="file" id="ova-file-input"
         accept=".ova,.ovf,.tar,.tar.gz,.vmdk,.qcow2,.raw,.img,.vhd,.vhdx,.nvr,.nvrx,.zip"
         style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg)">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">🌐 Ağ Bağlantısı</label>
+      <select id="ova-import-network" style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px"
+              onfocus="if(!this.options.length||this.options[0].value==='default')_fillImportNetworkSelect(this)">
+        <option value="default">default (NAT)</option>
+      </select>
     </div>
     <div id="ova-import-status" style="font-size:13px;color:var(--fg2);min-height:20px"></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">

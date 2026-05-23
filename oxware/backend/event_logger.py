@@ -1,5 +1,5 @@
 """
-AdaOS Olay Defteri (Event Logger)
+OXware Olay Defteri (Event Logger)
 Her hypervisor'ın olaylarını JSON formatında kaydeder.
 """
 

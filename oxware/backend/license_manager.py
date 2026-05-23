@@ -88,10 +88,24 @@ def validate_license(code: str, ip: str = None) -> dict:
         if not codes:
             return {"valid": False, "error": "Lisans sunucusuna bağlanılamadı. Lütfen internet bağlantısını kontrol edin."}
 
+        code_hash = hashlib.sha256(code.encode()).hexdigest()
+        records = {}
+        if os.path.exists(ACTIVATIONS_FILE):
+            try:
+                with open(ACTIVATIONS_FILE) as f:
+                    records = json.load(f)
+            except Exception:
+                records = {}
+        for entry in records.values():
+            if entry.get("code_hash") == code_hash:
+                if entry.get("activation_count", 0) >= 1 and entry.get("ip") != ip:
+                    return {"valid": False, "error": "Bu lisans kodu başka bir sunucuda kullanımda. Her lisans yalnızca 1 sunucuda kullanılabilir."}
+                break
+
         if code in codes:
             _save_license(code, ip=ip)
             _record_activation(code, ip=ip)
-            return {"valid": True, "code": code, "message": "Lisans başarıyla doğrulandı"}
+            return {"valid": True, "code": code, "message": "Lisans başarıyla doğrulandı", "max_servers": 1}
         else:
             return {"valid": False, "error": "Lisans kodu bulunamadı veya geçersiz"}
     except Exception as e:

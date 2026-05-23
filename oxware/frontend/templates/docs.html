@@ -335,6 +335,8 @@
 
     <div class="sidebar-section">Infrastructure</div>
     <a href="#networking"><i class="fas fa-network-wired"></i> Networking</a>
+    <a href="#networking" style="padding-left:2rem;font-size:0.8rem;color:var(--muted)"><i class="fas fa-bridge"></i> Bridge &amp; Static IP</a>
+    <a href="#networking" style="padding-left:2rem;font-size:0.8rem;color:var(--muted)"><i class="fas fa-calculator"></i> Subnet Calculator</a>
     <a href="#storage"><i class="fas fa-hard-drive"></i> Storage &amp; Snapshots</a>
     <a href="#security"><i class="fas fa-lock"></i> Security</a>
 
@@ -365,7 +367,7 @@
     <!-- OVERVIEW -->
     <section id="overview">
       <h1>OXware Hypervisor Documentation</h1>
-      <p><strong>Version 2.3</strong></p>
+      <p><strong>Version 2.4</strong> — <span style="color:var(--accent2)">Latest</span></p>
       <p>
         OXware is an open-source hypervisor management platform built on KVM/QEMU and Ubuntu/Debian.
         It provides a complete web-based control plane for virtual machine lifecycle, role-based access,
@@ -510,16 +512,31 @@
         </tbody>
       </table>
 
-      <h3>Method 1 — Web UI (OVA Import button)</h3>
+      <h3>Method 1 — Web UI (OVA Import button) <span class="tag">Updated v2.4</span></h3>
       <ol>
         <li>Go to <strong>Virtual Machines</strong> dashboard.</li>
         <li>Click <strong>↑ OVA Import</strong> button (top-right area, next to New VM).</li>
         <li>Select your <code>.ova</code>, <code>.vmdk</code>, or supported file.</li>
-        <li>OXware extracts the archive, converts the disk to <code>qcow2</code> with <code>qemu-img convert</code>, defines the VM in libvirt, and adds it to the dashboard automatically.</li>
+        <li>Select the <strong>target libvirt network</strong> from the dropdown (default, bridge, custom).</li>
+        <li>OXware extracts the archive, converts the disk to <code>qcow2</code>, auto-deduplicates the VM name on conflict, defines the VM in libvirt connected to the chosen network.</li>
       </ol>
-      <p>Default config applied on import: <strong>2 vCPU, 2 GB RAM, virtio NIC, VNC display</strong>. Adjust from VM Detail → Hardware after import.</p>
+      <p>Firmware (UEFI/BIOS), CPU, and RAM are auto-detected from VMX/OVF metadata when available. Adjust from VM Detail → Hardware after import.</p>
 
-      <h3>Method 2 — Direct SCP + Convert (faster for large disks)</h3>
+      <h3>Method 2 — SFTP Browser (ESXi direct) <span class="tag tag-green">New v2.4</span></h3>
+      <ol>
+        <li>Go to <strong>Settings → Backup → SFTP/ESXi Yedek</strong>.</li>
+        <li>Enter your ESXi host IP, SSH username, password or private key path.</li>
+        <li>Select the <strong>import network</strong> from the dropdown.</li>
+        <li>Click <strong>📂 Dosyaları Listele</strong> — OXware connects via SFTP and lists the remote filesystem.</li>
+        <li>Navigate to your datastore directory (e.g. <code>/vmfs/volumes/datastore1/myvm/</code>).</li>
+        <li>Click <strong>⬇ İndir+Import</strong> on any <code>.vmdk</code>, <code>.ova</code>, or <code>.qcow2</code> file.</li>
+        <li>OXware downloads the file in the background, converts it with <code>qemu-img</code>, and registers it in libvirt. Track progress in the Tasks panel.</li>
+      </ol>
+      <div class="callout callout-info">
+        <strong>No downtime:</strong> Import runs in a background thread. The UI remains fully usable while the download and conversion proceed.
+      </div>
+
+      <h3>Method 3 — Direct SCP + Convert (fastest for huge disks)</h3>
       <p>Skip the browser upload for very large disks (50 GB+). Copy the VMDK directly to the OXware host, convert manually, then register:</p>
       <pre><code># 1. Copy VMDK from ESXi host
 scp root@esxi-host:/vmfs/volumes/datastore/myvm/myvm.vmdk \
@@ -736,6 +753,35 @@ curl -X POST https://localhost:8006/api/import/ova \
 
       <h3>Per-VM Firewall</h3>
       <p>See <a href="#vm-detail">VM Detail → Firewall tab</a>. Rules use nftables and take effect immediately.</p>
+
+      <h3>Bridge IP Isolation <span class="tag tag-green">v2.4</span></h3>
+      <p>Navigate to <strong>Network → Bridge &amp; IP İzolasyonu</strong>. Enter a bridge name (e.g. <code>oxbr0</code>), select the physical NIC, and click <strong>Kur</strong>. OXware will:</p>
+      <ol>
+        <li>Create the Linux bridge device with <code>ip link add oxbr0 type bridge</code></li>
+        <li>Attach the physical NIC as a bridge member</li>
+        <li>Bring the bridge up</li>
+        <li>Define a libvirt <code>forward mode='bridge'</code> network</li>
+      </ol>
+      <div class="callout callout-warn">
+        <strong>Warning:</strong> Attaching the management NIC to the bridge interrupts SSH/panel access until the bridge gets an IP (from upstream DHCP or a static assignment). Use the host console or a second NIC for management.
+      </div>
+
+      <h3>cloud-init Static IP <span class="tag tag-green">v2.4</span></h3>
+      <p>When creating a VM (advanced options), set <strong>Static IP / Gateway / Netmask / DNS</strong>. OXware generates a cloud-init <code>network-config v2</code> YAML and injects it via a NoCloud seed ISO. The VM configures its interface at first boot — no DHCP dependency.</p>
+      <pre><code><span class="comment"># Generated network-config v2</span>
+version: 2
+ethernets:
+  eth0:
+    addresses: [203.0.113.10/24]
+    gateway4: 203.0.113.1
+    nameservers:
+      addresses: [8.8.8.8, 1.1.1.1]</code></pre>
+
+      <h3>Network DHCP Live Edit <span class="tag tag-green">v2.4</span></h3>
+      <p>Click the <strong>✏</strong> button on any virtual network to open the edit modal. You can modify Gateway, Netmask, DHCP Start, and DHCP End. OXware stops the network, redefines it with updated XML, then restarts it — matching the <code>virsh net-destroy / net-define / net-start</code> workflow.</p>
+
+      <h3>Subnet Calculator <span class="tag tag-green">v2.4</span></h3>
+      <p>Available in <strong>Network → IPAM</strong> at the bottom of the page. Enter any CIDR (e.g. <code>10.0.1.0/22</code>) to instantly see: Network address, Broadcast, First/Last host, Host count, Subnet mask, Wildcard, IP class, RFC1918 status, and binary representation. No server round-trip.</p>
     </section>
 
     <!-- STORAGE -->

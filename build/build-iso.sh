@@ -27,7 +27,14 @@ echo "$OXWARE_VERSION" > "$VERSION_FILE"
 # ── Paths ─────────────────────────────────────────────────────────────────────
 # Debian 12 Live Standard — masaüstü yok, sadece temel sistem
 # "standard" variant ~700MB, bizim ihtiyacımıza tam uygun
-DEBIAN_VER="12.11.0"   # Update this when Debian releases a new point version
+DEBIAN_VER="12.11.0"   # fallback — overridden by dynamic detection below
+_DEBIAN_DIR_URL="https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/"
+_detected_ver="$(curl -s --connect-timeout 15 "$_DEBIAN_DIR_URL" 2>/dev/null \
+    | grep -oP 'debian-live-\K[\d.]+(?=-amd64-standard\.iso)' \
+    | head -1)"
+if [ -n "$_detected_ver" ]; then
+    DEBIAN_VER="$_detected_ver"
+fi
 _ISO_FILE="debian-live-${DEBIAN_VER}-amd64-standard.iso"
 DEBIAN_LIVE_URL="https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/${_ISO_FILE}"
 DEBIAN_LIVE_MIRRORS=(

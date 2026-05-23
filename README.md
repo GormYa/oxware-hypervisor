@@ -1,7 +1,7 @@
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.3-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.4-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -10,6 +10,8 @@
 **OXware** is a full-featured, open-source KVM/QEMU hypervisor management platform. It replaces VMware ESXi and Proxmox VE with a modern dark-theme web UI, REST API, real-time monitoring, role-based access control, VNC console, AI assistant, and more — with zero licensing fees.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
+
+> **v2.4 (2026-05):** Bridge IP isolation, cloud-init static IP injection, RAM hot-increase (stop/restart), SFTP ESXi VMDK browser + auto-import, monitoring stagger fix, subnet calculator, network DHCP live edit, natural language command confirmation, import name dedup, VM-to-network auto-connect.
 
 ---
 
@@ -46,13 +48,16 @@
 - **Clone VMs** — full disk copy with automatic name deduplication
 - **Bulk operations** — start all / stop all / delete selected VMs in one click
 - **CPU pinning** — bind vCPUs to specific physical cores for NUMA-aware workloads
-- **vCPU hot-plug & memory ballooning** — resize without downtime
+- **vCPU hot-plug & memory ballooning** — reduce RAM without downtime; increase RAM auto-stops + resizes + restarts VM
 - **VM scheduling** — start/stop VMs at specific times via cron-like rules
 - **Auto-start on boot** — mark VMs to start automatically after host reboot
 - **Tags & groups** — organize VMs with custom tags, filter/search the dashboard
 - **Notes & credentials vault** — per-VM encrypted notes and SSH key storage
 - **OS image templates** — rapid deployment from pre-built qcow2 templates
-- **Import from ESXi / Proxmox / VirtualBox** — `.ova`, `.vmdk`, `.ovf`, `.qcow2`, `.raw`
+- **Import from ESXi / Proxmox / VirtualBox** — `.ova`, `.vmdk`, `.ovf`, `.qcow2`, `.raw`, `.zip`; auto name-conflict dedup
+- **SFTP/ESXi VMDK browser** — browse ESXi datastore directories directly in UI; one-click download + convert + import
+- **Import VM → auto-connect network** — choose which libvirt network to connect the imported VM to; no manual XML edit
+- **cloud-init static IP injection** — set real routable IP, gateway, netmask, DNS at VM creation; no DHCP needed
 - **KVM → KVM live migration** — zero-downtime migration between two OXware nodes
 - **OVA export** — download any VM as a portable `.tar.gz` archive
 
@@ -78,14 +83,17 @@
 - Session management — view and revoke active sessions from the web UI
 
 ### Networking
-- **Detailed network page** — 4-tab view: Virtual Networks, Host Interfaces, DHCP Leases, Routing Table
-- **Host interface stats** — type badge (ethernet/bridge/virtual/bond/vlan/tunnel), speed (Mbps/Gbps), duplex, RX/TX bytes+packets
+- **Detailed network page** — 5-tab view: Virtual Networks, Host Interfaces, DHCP Leases, Routing Table, Bridge & IP Isolation
+- **Host interface stats** — CSS-styled type badges (ethernet/bridge/virtual/bond/vlan/tunnel/wifi), speed, duplex, RX/TX bytes+packets
 - **DHCP live leases** — browse all active DHCP assignments with hostname, MAC, expiry
 - **Routing table** — live kernel route table view via `ip route`
-- **IP pool management** — CIDR-based allocation, static assignment, NAT and bridge modes
+- **Network DHCP live edit** — edit Gateway / Netmask / DHCP range of any virtual network from UI; auto stop→redefine→start
+- **Bridge IP isolation** — one-click setup of `oxbr0` Linux bridge with physical NIC as member; VMs get real upstream IPs
+- **IP pool management (IPAM)** — CIDR-based allocation, static assignment, NAT and bridge modes
+- **Subnet calculator** — built-in CIDR calculator in IPAM page: network/broadcast/host range/count/mask/wildcard/class/RFC1918
 - **DHCP static entries** — bind VM MAC → IP via libvirt dnsmasq
 - **Per-VM firewall** — nftables rules managed via web UI (allow/deny by port, protocol, source)
-- **Network QoS** — per-VM bandwidth limits (ingress/egress)
+- **Network QoS** — per-VM bandwidth limits (ingress/egress); manual load button (no auto-freeze)
 - **BGP tunneling** — peer management (add/remove BGP peers) via UI and API
 - **DNS watchdog** — monitors resolution health, auto-repairs broken dnsmasq
 - **HAProxy load balancer** — configure L4/L7 backends from the UI
@@ -130,14 +138,16 @@
 - **Prometheus endpoint** — `/metrics` exposes all VM and host stats for Grafana
 - **Uptime tracker** — per-VM uptime history, SLA calculation
 - **Node summary** — host CPU, RAM, disk, load, network overview
-- **Optimized İzleme+ page** — staggered API loading (6 tiers) prevents UI freeze; 30s reload cache
+- **İzleme+ staggered loading** — 5-tier deferred load prevents UI freeze; QoS/Trend/Migration load on demand only
 - **Network speedtest** — server-to-internet latency + download test; 12 servers across 4 continents
 
 ### AI Assistant
 - **Natural-language VM creation** — "Create a 4-core Ubuntu server with 8 GB RAM" → done
+- **Natural-language commands with confirmation** — AI parses intent (start/stop/list/snapshot); confirmation dialog for destructive actions; direct execution after confirm
 - **Capacity forecasting** — predicts when resources will run out based on growth trends
 - **Auto-scaler** — automatically start/stop VMs based on load policies
 - **Recommended actions** — AI suggests optimizations (right-sizing, snapshot scheduling)
+- **vm-user AI block** — `vm-user` role cannot access OXY AI; prevents host information disclosure
 
 ### Integrations
 - **LDAP / Active Directory** — SSO login, group-to-role mapping
@@ -382,11 +392,14 @@ OXware imports VMs from any hypervisor that exports to standard formats, and sup
 | Format | Source | Method |
 |--------|--------|--------|
 | `.ova` | VMware ESXi, VirtualBox, Proxmox | Upload via **↑ OVA Import** button |
-| `.vmdk` | VMware ESXi / Workstation | Upload or SCP + manual convert |
-| `.ovf` + `.vmdk` | VMware ESXi | Bundle as `.tar`, then upload |
+| `.vmdk` | VMware ESXi / Workstation | Upload, SCP, or **SFTP browser** |
+| `.ovf` + `.vmdk` | VMware ESXi | Bundle as `.tar` or use SFTP browser |
+| `.zip` | VMware Workstation VM folder | Upload as `.zip` — auto-extracted |
 | `.qcow2` / `.raw` | Any KVM host | Direct import, no conversion needed |
 
-**Via Web UI:** Dashboard → **↑ OVA Import** → select file → OXware extracts the archive, runs `qemu-img convert -O qcow2`, defines the domain in libvirt, and adds it to the dashboard.
+**Via Web UI:** Dashboard → **↑ OVA Import** → select file + target network → OXware extracts the archive, runs `qemu-img convert -O qcow2`, auto-deduplicates name on conflict, defines the domain in libvirt connected to the chosen network.
+
+**Via SFTP Browser (ESXi direct, new in v2.4):** Settings → Backup → SFTP tab → enter ESXi host/credentials → **📂 Dosyaları Listele** → navigate datastore → click **⬇ İndir+Import** on any VMDK. OXware downloads, converts, and imports automatically. Choose target network before download.
 
 **Via SCP (faster for large disks):**
 
@@ -711,6 +724,31 @@ systemctl restart libvirtd
 ```bash
 sudo bash repair.sh --reset-password
 ```
+
+---
+
+## Changelog
+
+### v2.4 — 2026-05
+
+**New features:**
+- **Bridge IP isolation** — `oxbr0` Linux bridge setup from UI (Network → Bridge & IP İzolasyonu); VMs get real upstream IPs
+- **cloud-init static IP** — set static IP/gateway/netmask/DNS at VM creation; injected as `network-config v2` YAML via NoCloud ISO
+- **RAM hot-increase** — requesting RAM above current max: VM stops → XML updated → VM restarts; below max uses balloon
+- **SFTP ESXi browser** — navigate ESXi datastore directories in UI; one-click download → qemu-img convert → virsh define
+- **Import VM → network** — choose target libvirt network for OVA upload and SFTP import; eliminates manual post-import XML edit
+- **Import name dedup** — auto-appends `-1`, `-2`... when imported VM name conflicts with existing domain
+- **Subnet calculator** — built-in CIDR calculator in IPAM page (network, broadcast, host range, count, mask, wildcard, class, binary)
+- **Network DHCP live edit** — edit Gateway/Netmask/DHCP start-end from network edit modal; auto stop→redefine→start
+- **Natural language confirm** — NL commands requiring confirmation show Onayla button; `force_execute` bypasses re-parse
+- **Monitoring stagger** — İzleme+ loads in 5 deferred tiers; QoS/Trend/Migration are manual-only (no freeze)
+
+**Bug fixes:**
+- Kurulum rehberi button now opens modal (inline `display:none` removed)
+- Network page badges use CSS classes instead of inline styles (`.net-forward-badge`, `.iface-card-type`, etc.)
+- `vm-user` role blocked from all `/api/ai/*` endpoints
+- PDF export removed from all paths (security hardening)
+- All AdaOS → OXware references updated in docstrings, log names, paths
 
 ---
 

@@ -1,5 +1,5 @@
 """
-AdaOS Güvenlik Katmanı
+OXware Güvenlik Katmanı
 ──────────────────────
 1.  Rate limiting      — brute-force önleme (login + genel API)
 2.  Security headers   — HSTS, CSP, X-Frame-Options, vb.
@@ -18,7 +18,7 @@ import logging
 from functools import wraps
 from flask import request, jsonify, g
 
-log = logging.getLogger("adaos.security")
+log = logging.getLogger("oxware.security")
 
 # ── 1. Rate Limiter ───────────────────────────────────────────────────────────
 

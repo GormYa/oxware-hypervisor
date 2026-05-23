@@ -306,6 +306,37 @@ else
     echo "  systemctl status oxware"
 fi
 
+# ── 12. AdaOS → OXware Uyumluluk Sembolik Linkleri ──────────
+step "AdaOS → OXware Geriye Dönük Uyumluluk"
+
+if [ -d /etc/adaos ] && [ ! -e /etc/oxware ]; then
+    ln -s /etc/adaos /etc/oxware
+    log "Sembolik link oluşturuldu: /etc/oxware → /etc/adaos"
+elif [ -e /etc/adaos ] && [ ! -d /etc/adaos ]; then
+    warn "/etc/adaos dizin değil — atlandı"
+else
+    info "/etc/oxware zaten mevcut veya /etc/adaos yok — sembolik link gerekmedi"
+fi
+
+if [ -d /var/lib/adaos ] && [ ! -e /var/lib/oxware ]; then
+    ln -s /var/lib/adaos /var/lib/oxware
+    log "Sembolik link oluşturuldu: /var/lib/oxware → /var/lib/adaos"
+elif [ -e /var/lib/adaos ] && [ ! -d /var/lib/adaos ]; then
+    warn "/var/lib/adaos dizin değil — atlandı"
+else
+    info "/var/lib/oxware zaten mevcut veya /var/lib/adaos yok — sembolik link gerekmedi"
+fi
+
+if [ -d /etc/oxware ]; then
+    COUNT=$(grep -rl "AdaOS" /etc/oxware/ 2>/dev/null | wc -l)
+    if [ "$COUNT" -gt 0 ]; then
+        grep -rl "AdaOS" /etc/oxware/ 2>/dev/null | xargs sed -i 's/AdaOS/OXware/g'
+        log "Config dosyalarında AdaOS → OXware değiştirildi ($COUNT dosya)"
+    else
+        info "/etc/oxware/ altında AdaOS referansı bulunamadı"
+    fi
+fi
+
 # SSH bağlantı bilgisi
 echo ""
 echo -e "${BOLD}SSH hâlâ çalışmıyorsa:${NC}"

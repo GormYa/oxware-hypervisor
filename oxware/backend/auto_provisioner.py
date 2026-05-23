@@ -1,5 +1,5 @@
 """
-AdaOS Otomatik VM Kurulum Sistemi
+OXware Otomatik VM Kurulum Sistemi
 ──────────────────────────────────
 Tek API çağrısıyla:
   - ISO seçimi (havuzdan)

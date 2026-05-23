@@ -147,6 +147,62 @@ def set_network_autostart(net_uuid, enabled: bool):
     finally:
         conn.close()
 
+
+def update_network(net_uuid: str, dhcp_start: str = None, dhcp_end: str = None,
+                   ip_address: str = None, netmask: str = None) -> dict:
+    """
+    Edit a libvirt network's IP/DHCP config.
+    Must stop → redefine → start because libvirt doesn't support live DHCP edits.
+    """
+    conn = _connect()
+    try:
+        net = conn.networkLookupByUUIDString(net_uuid)
+        was_active = bool(net.isActive())
+        was_autostart = bool(net.autostart())
+
+        xml_str = net.XMLDesc(0)
+        root = ET.fromstring(xml_str)
+
+        ip_el = root.find("ip")
+        if ip_el is not None:
+            if ip_address:
+                ip_el.set("address", ip_address)
+            if netmask:
+                ip_el.set("netmask", netmask)
+            dhcp_el = ip_el.find("dhcp")
+            if dhcp_el is not None:
+                range_el = dhcp_el.find("range")
+                if range_el is None:
+                    range_el = ET.SubElement(dhcp_el, "range")
+                if dhcp_start:
+                    range_el.set("start", dhcp_start)
+                if dhcp_end:
+                    range_el.set("end", dhcp_end)
+            elif dhcp_start and dhcp_end:
+                dhcp_el = ET.SubElement(ip_el, "dhcp")
+                range_el = ET.SubElement(dhcp_el, "range")
+                range_el.set("start", dhcp_start)
+                range_el.set("end", dhcp_end)
+
+        new_xml = ET.tostring(root, encoding="unicode")
+
+        # Stop → redefine → start
+        if was_active:
+            net.destroy()
+        net.undefine()
+        new_net = conn.networkDefineXML(new_xml)
+        new_net.setAutostart(1 if was_autostart else 0)
+        if was_active:
+            new_net.create()
+
+        return {
+            "ok": True,
+            "active": bool(new_net.isActive()),
+            "autostart": bool(new_net.autostart()),
+        }
+    finally:
+        conn.close()
+
 def get_network_info(net_uuid):
     """Get detailed info for a single network."""
     conn = _connect()
@@ -220,6 +276,122 @@ def _iface_type(name: str) -> str:
     if name.startswith("tun") or name.startswith("wg"):
         return "tunnel"
     return "ethernet"
+
+
+def setup_host_bridge(bridge_name: str = "oxbr0", physical_iface: str = "enp1s0",
+                      libvirt_net_name: str = "oxbridge") -> dict:
+    """
+    Host üzerinde Linux bridge oluştur ve libvirt'e kaydet.
+    VMs bu bridge'e bağlanarak host NIC üzerinden doğrudan IP alır (gerçek IP izolasyonu).
+
+    Adımlar:
+    1. ip link add oxbr0 type bridge
+    2. ip link set enp1s0 master oxbr0
+    3. ip link set oxbr0 up
+    4. libvirt'e bridge network tanımla (forward mode=bridge)
+    """
+    errors = []
+    steps  = []
+
+    # 1. Bridge oluştur (varsa atla)
+    r = subprocess.run(["ip", "link", "show", bridge_name], capture_output=True)
+    if r.returncode != 0:
+        r2 = subprocess.run(
+            ["ip", "link", "add", bridge_name, "type", "bridge"],
+            capture_output=True, text=True
+        )
+        if r2.returncode == 0:
+            steps.append(f"Bridge oluşturuldu: {bridge_name}")
+        else:
+            errors.append(f"Bridge oluşturulamadı: {r2.stderr.strip()}")
+    else:
+        steps.append(f"Bridge zaten var: {bridge_name}")
+
+    # 2. Fiziksel NIC'i bridge'e ekle
+    r3 = subprocess.run(
+        ["ip", "link", "set", physical_iface, "master", bridge_name],
+        capture_output=True, text=True
+    )
+    if r3.returncode == 0:
+        steps.append(f"{physical_iface} → {bridge_name}")
+    else:
+        errors.append(f"NIC bridge'e eklenemedi: {r3.stderr.strip()}")
+
+    # 3. Bridge'i aktif et
+    subprocess.run(["ip", "link", "set", bridge_name, "up"], capture_output=True)
+    steps.append(f"{bridge_name} UP")
+
+    # 4. Libvirt bridge network tanımla
+    xml = f"""<network>
+  <name>{libvirt_net_name}</name>
+  <forward mode='bridge'/>
+  <bridge name='{bridge_name}'/>
+</network>"""
+
+    try:
+        conn = _connect()
+        try:
+            # Varsa önce sil
+            try:
+                existing = conn.networkLookupByName(libvirt_net_name)
+                if existing.isActive():
+                    existing.destroy()
+                existing.undefine()
+            except Exception:
+                pass
+
+            net = conn.networkDefineXML(xml)
+            net.setAutostart(1)
+            net.create()
+            steps.append(f"Libvirt network tanımlandı: {libvirt_net_name}")
+        finally:
+            conn.close()
+    except Exception as e:
+        errors.append(f"Libvirt network hatası: {e}")
+
+    return {
+        "ok": len(errors) == 0,
+        "bridge": bridge_name,
+        "physical_iface": physical_iface,
+        "libvirt_network": libvirt_net_name,
+        "steps": steps,
+        "errors": errors,
+        "info": (
+            "VMs bu ağda oluşturulduğunda fiziksel NIC üzerinden doğrudan IP alır. "
+            "Upstream DHCP veya cloud-init static IP kullanın."
+        ),
+    }
+
+
+def list_host_bridges() -> list:
+    """Host üzerindeki Linux bridge listesi."""
+    result = subprocess.run(
+        ["ip", "-j", "link", "show", "type", "bridge"],
+        capture_output=True, text=True
+    )
+    bridges = []
+    try:
+        import json as _json
+        data = _json.loads(result.stdout)
+        for item in data:
+            name = item.get("ifname", "")
+            state = item.get("operstate", "UNKNOWN").lower()
+            # Üyeleri bul
+            r2 = subprocess.run(
+                ["ip", "link", "show", "master", name],
+                capture_output=True, text=True
+            )
+            members = []
+            for line in r2.stdout.splitlines():
+                parts = line.split(":")
+                if len(parts) >= 2:
+                    iface = parts[1].strip().split("@")[0].strip()
+                    if iface and iface != name:
+                        members.append(iface)
+            bridges.append({"name": name, "state": state, "members": members})
+    except Exception:
+        pass
+    return bridges
 
 
 def get_host_interfaces():

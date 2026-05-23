@@ -3,8 +3,42 @@ import subprocess
 import platform
 import os
 import time
+import threading
 import libvirt
 import config
+
+_STATS_CACHE = {"data": None, "ts": 0.0}
+
+
+def _cache_warmer():
+    psutil.cpu_percent(interval=None)
+    while True:
+        time.sleep(5)
+        try:
+            psutil.cpu_percent(interval=None)
+            data = _compute_stats()
+            _STATS_CACHE["data"] = data
+            _STATS_CACHE["ts"] = time.time()
+        except Exception:
+            pass
+
+
+threading.Thread(target=_cache_warmer, daemon=True).start()
+
+
+def get_distro_name():
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("NAME="):
+                    return line.split("=", 1)[1].strip().strip('"')
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("ID="):
+                    return line.split("=", 1)[1].strip().strip('"')
+    except Exception:
+        pass
+    return "Linux"
 
 
 def get_host_info():
@@ -40,11 +74,12 @@ def get_host_info():
         "uptime": f"{days}d {hours}h {mins}m",
         "uptime_seconds": int(uptime_secs),
         "boot_time": psutil.boot_time(),
+        "distro": get_distro_name(),
     }
 
 
-def get_system_stats():
-    cpu_percent = psutil.cpu_percent(interval=0.5)
+def _compute_stats():
+    cpu_percent = psutil.cpu_percent(interval=None)
     cpu_per_core = psutil.cpu_percent(interval=None, percpu=True)
     cpu_freq = psutil.cpu_freq()
 
@@ -104,6 +139,15 @@ def get_system_stats():
         },
         "timestamp": time.time(),
     }
+
+
+def get_system_stats():
+    if _STATS_CACHE["data"] is not None and (time.time() - _STATS_CACHE["ts"]) < 6:
+        return _STATS_CACHE["data"]
+    data = _compute_stats()
+    _STATS_CACHE["data"] = data
+    _STATS_CACHE["ts"] = time.time()
+    return data
 
 
 def get_process_list(limit=20):

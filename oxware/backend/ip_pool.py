@@ -1,8 +1,8 @@
 """
-AdaOS IP Havuzu Yöneticisi
+OXware IP Havuzu Yöneticisi
 ─────────────────────────
 IP aralığı tanımlayın, VM'lere otomatik IP atayın.
-Veri: /var/lib/adaos/ip_pool.json
+Veri: /var/lib/oxware/ip_pool.json
 """
 
 import os

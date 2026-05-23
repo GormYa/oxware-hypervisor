@@ -1128,14 +1128,35 @@ def api_create_vm():
             if app_script:
                 ci_userdata = (ci_userdata + "\n" + app_script).strip() if ci_userdata else app_script
 
+        # Statik IP (bridge/passthrough ağ için — cloud-init network-config'e yazılır)
+        static_ip  = security.sanitize_str(data.get("static_ip", ""), 48)
+        vm_gateway = security.sanitize_str(data.get("gateway", ""), 48)
+        vm_netmask = security.sanitize_str(data.get("netmask", "255.255.255.0"), 48)
+        vm_dns     = data.get("dns", ["8.8.8.8", "1.1.1.1"])
+        if isinstance(vm_dns, str):
+            vm_dns = [d.strip() for d in vm_dns.split(",") if d.strip()]
+        # Validate static_ip + gateway
+        try:
+            if static_ip:
+                ipaddress.IPv4Address(static_ip)
+            if vm_gateway:
+                ipaddress.IPv4Address(vm_gateway)
+        except ValueError:
+            static_ip = ""
+            vm_gateway = ""
+
         cloud_init = None
-        if any([ci_user, ci_password, ci_ssh_key, ci_hostname, ci_userdata]):
+        if any([ci_user, ci_password, ci_ssh_key, ci_hostname, ci_userdata, static_ip]):
             cloud_init = {
                 "user":      ci_user or None,
                 "password":  ci_password or None,
                 "ssh_key":   ci_ssh_key or None,
                 "hostname":  ci_hostname or name,
                 "user_data": ci_userdata or None,
+                "static_ip": static_ip or None,
+                "gateway":   vm_gateway or None,
+                "netmask":   vm_netmask or None,
+                "dns":       vm_dns,
             }
 
         create_kwargs = dict(
@@ -1201,11 +1222,16 @@ def api_create_vm():
                 result["auto_ip_error"] = str(_ip_e)
 
         ev.vm_event(f"VM oluşturuldu: {name}", vm_id, level="INFO")
+        if static_ip:
+            ev.vm_event(f"Statik IP atandı: {static_ip} (cloud-init)", vm_id, level="INFO")
         if app_install:
             ev.vm_event(f"App kurulum planlandı: {app_install}", vm_id, level="INFO")
         if webhook_mgr: webhook_mgr.trigger("vm.created", {"vm_id": vm_id, "vm_name": name})
         if resource_quota: resource_quota.check_quota(get_jwt_identity(), vcpus, memory_mb)
         resp = dict(result)
+        if static_ip:
+            resp["static_ip"] = static_ip
+            resp["gateway"]   = vm_gateway
         if app_install:
             resp["app_install"] = app_install
             resp["app_script"]  = _get_app_install_script(app_install)
@@ -1547,6 +1573,127 @@ def api_vm_nested_virt(vm_id):
         return ok(**result)
     except Exception as e:
         return err(e, 500)
+
+@app.route("/api/vms/<vm_id>/hardware/sound", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_sound(vm_id):
+    """Ses kartı ekle/kaldır. model='' → kaldır."""
+    data  = request.get_json() or {}
+    model = data.get("model", "")
+    _VALID = {"", "ich9", "ich6", "ac97", "usb-audio"}
+    if model not in _VALID:
+        return err(f"Geçersiz ses modeli: {model}", 400)
+    try:
+        conn   = vm_manager._libvirt_conn()
+        domain = conn.lookupByName(vm_id)
+        desc   = domain.XMLDesc()
+        import xml.etree.ElementTree as _ET
+        root = _ET.fromstring(desc)
+        devices = root.find("devices")
+        # Remove existing sound cards
+        for s in devices.findall("sound"):
+            devices.remove(s)
+        if model:
+            s_el = _ET.SubElement(devices, "sound")
+            s_el.set("model", model)
+        # Redefine (offline edit)
+        new_xml = _ET.tostring(root, encoding="unicode")
+        conn.defineXML(new_xml)
+        conn.close()
+        ev.info(f"Ses kartı güncellendi: {vm_id} model={model or 'kaldırıldı'}", category="vm")
+        return ok(model=model, message="Ses kartı güncellendi. VM yeniden başlatılmalı.")
+    except Exception as e:
+        return err(e, 500)
+
+@app.route("/api/vms/<vm_id>/hardware/video", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_video(vm_id):
+    """Sanal GPU/video adaptörünü güncelle."""
+    data  = request.get_json() or {}
+    model = data.get("model", "virtio")
+    _VALID = {"virtio", "qxl", "vga", "cirrus", "vmvga"}
+    if model not in _VALID:
+        return err(f"Geçersiz video modeli: {model}", 400)
+    try:
+        conn   = vm_manager._libvirt_conn()
+        domain = conn.lookupByName(vm_id)
+        desc   = domain.XMLDesc()
+        import xml.etree.ElementTree as _ET
+        root = _ET.fromstring(desc)
+        devices = root.find("devices")
+        for v in devices.findall("video"):
+            devices.remove(v)
+        v_el = _ET.SubElement(devices, "video")
+        m_el = _ET.SubElement(v_el, "model")
+        m_el.set("type", model)
+        m_el.set("vram", "16384")
+        m_el.set("heads", "1")
+        new_xml = _ET.tostring(root, encoding="unicode")
+        conn.defineXML(new_xml)
+        conn.close()
+        ev.info(f"Video adapter güncellendi: {vm_id} model={model}", category="vm")
+        return ok(model=model, message="Video adapter güncellendi.")
+    except Exception as e:
+        return err(e, 500)
+
+@app.route("/api/vms/<vm_id>/hardware/gpu-passthrough", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_gpu_passthrough(vm_id):
+    """PCI GPU passthrough ekle (IOMMU/VFIO gerekli)."""
+    data = request.get_json() or {}
+    pci  = data.get("pci_address", "")  # e.g. "0000:01:00.0"
+    if not pci:
+        return err("pci_address gerekli", 400)
+    try:
+        # Validate PCI address format
+        import re as _re_pci
+        if not _re_pci.match(r'^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$', pci):
+            return err("Geçersiz PCI adresi formatı (beklenen: DDDD:BB:DD.F)", 400)
+        domain_part, bus, slot_fn = pci.split(":")
+        slot, fn = slot_fn.split(".")
+        conn   = vm_manager._libvirt_conn()
+        domain = conn.lookupByName(vm_id)
+        import xml.etree.ElementTree as _ET
+        root = _ET.fromstring(domain.XMLDesc())
+        devices = root.find("devices")
+        h_el = _ET.SubElement(devices, "hostdev")
+        h_el.set("mode", "subsystem"); h_el.set("type", "pci"); h_el.set("managed", "yes")
+        src = _ET.SubElement(h_el, "source")
+        addr = _ET.SubElement(src, "address")
+        addr.set("type", "pci")
+        addr.set("domain", "0x" + domain_part)
+        addr.set("bus", "0x" + bus)
+        addr.set("slot", "0x" + slot)
+        addr.set("function", "0x" + fn)
+        conn.defineXML(_ET.tostring(root, encoding="unicode"))
+        conn.close()
+        ev.info(f"GPU passthrough eklendi: {vm_id} pci={pci}", category="vm")
+        return ok(pci=pci, message="GPU passthrough eklendi. IOMMU ve VFIO aktif olmalı.")
+    except Exception as e:
+        return err(e, 500)
+
+@app.route("/api/system/gpus")
+@require_auth
+def api_system_gpus():
+    """Host üzerindeki GPU'ları listele (lspci)."""
+    try:
+        r = subprocess.run(
+            ["lspci", "-D"],
+            capture_output=True, text=True, timeout=10
+        )
+        gpus = []
+        for line in r.stdout.splitlines():
+            if any(x in line.lower() for x in ["vga", "3d controller", "display controller", "nvidia", "amd/ati", "radeon"]):
+                parts = line.split(" ", 1)
+                pci   = parts[0].strip()
+                name  = parts[1].strip() if len(parts) > 1 else line
+                gpus.append({"pci": pci, "name": name})
+        return ok(gpus=gpus)
+    except Exception as e:
+        return ok(gpus=[], error=str(e))
 
 @app.route("/api/vms/<vm_id>/hardware/disk/attach", methods=["POST"])
 @require_auth
@@ -2094,10 +2241,64 @@ def api_get_network(net_uuid):
     except Exception as e:
         return err(e, 500)
 
+@app.route("/api/networks/<net_uuid>/update", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_update_network(net_uuid):
+    """Update network DHCP/IP config. Stops + redefines + restarts network."""
+    d = request.get_json() or {}
+    dhcp_start = d.get("dhcp_start") or None
+    dhcp_end   = d.get("dhcp_end") or None
+    ip_address = d.get("ip_address") or None
+    netmask    = d.get("netmask") or None
+    try:
+        result = network_manager.update_network(
+            net_uuid,
+            dhcp_start=dhcp_start,
+            dhcp_end=dhcp_end,
+            ip_address=ip_address,
+            netmask=netmask,
+        )
+        ev.info(f"Ağ güncellendi: {net_uuid} dhcp={dhcp_start}-{dhcp_end}", category="network")
+        return ok(**result)
+    except Exception as e:
+        return err(str(e), 500)
+
 @app.route("/api/networks/host-interfaces")
 @require_auth
 def api_host_interfaces():
     return ok(interfaces=network_manager.get_host_interfaces())
+
+
+@app.route("/api/networks/bridges")
+@require_auth
+def api_host_bridges():
+    """Host üzerindeki Linux bridge listesi."""
+    try:
+        return ok(bridges=network_manager.list_host_bridges())
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/networks/bridge/setup", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_setup_bridge():
+    """
+    Host NIC üzerinde Linux bridge + libvirt bridge network kur.
+    Body: {bridge_name, physical_iface, libvirt_net_name}
+    Sonuç: VMs bu ağda gerçek, bağımsız IP adresiyle çalışır (host IP'sini paylaşmaz).
+    """
+    data = request.get_json() or {}
+    bridge_name     = security.sanitize_str(data.get("bridge_name", "oxbr0"), 32)
+    physical_iface  = security.sanitize_str(data.get("physical_iface", "enp1s0"), 32)
+    libvirt_net     = security.sanitize_str(data.get("libvirt_net_name", "oxbridge"), 64)
+    try:
+        result = network_manager.setup_host_bridge(bridge_name, physical_iface, libvirt_net)
+        ev.info(f"Bridge kurulumu: {bridge_name} ← {physical_iface}", category="network")
+        return ok(**result)
+    except Exception as e:
+        return err(str(e), 500)
 
 
 @app.route("/api/system/routes")
@@ -3131,7 +3332,8 @@ def api_system_info():
 @app.route("/api/system/stats")
 @require_auth
 def api_system_stats():
-    return ok(stats=system_monitor.get_system_stats())
+    stats = system_monitor._STATS_CACHE["data"] or system_monitor.get_system_stats()
+    return ok(stats=stats)
 
 @app.route("/api/system/processes")
 @require_auth
@@ -3492,15 +3694,24 @@ def on_subscribe_vm_metrics(data):
 
 @sock.on("subscribe_stats")
 def on_subscribe_stats(data):
+    sid = request.sid
+
     def push():
-        while True:
+        for _ in range(720):
             try:
-                stats = system_monitor.get_system_stats()
+                stats = system_monitor._STATS_CACHE["data"] or system_monitor.get_system_stats()
                 vm_sum = system_monitor.get_vm_summary()
-                emit("stats_update", {"stats": stats, "vms": vm_sum})
+                sock.emit("stats_update", {"stats": stats, "vms": vm_sum}, to=sid, namespace="/")
             except Exception:
-                pass
-            time.sleep(3)
+                break
+            time.sleep(5)
+
+    try:
+        stats = system_monitor._STATS_CACHE["data"] or system_monitor.get_system_stats()
+        vm_sum = system_monitor.get_vm_summary()
+        emit("stats_update", {"stats": stats, "vms": vm_sum})
+    except Exception:
+        pass
     threading.Thread(target=push, daemon=True).start()
 
 # ── PTY Shell WebSocket ────────────────────────────────────────────────────────
@@ -4119,6 +4330,20 @@ def api_backup_disk_delete(disk_id):
     ev.info(f"Yedekleme diski silindi: {path}", category="backup")
     return ok({"deleted": disk_id})
 
+def _sftp_connect(host, port, user, key, pwd, timeout=15):
+    """paramiko SSH/SFTP bağlantısı kur. (sftp, ssh) döner."""
+    import paramiko
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kwargs = {"hostname": host, "port": int(port or 22), "username": user, "timeout": timeout}
+    if key:
+        kwargs["key_filename"] = key
+    elif pwd:
+        kwargs["password"] = pwd
+    ssh.connect(**kwargs)
+    return ssh.open_sftp(), ssh
+
+
 @app.route("/api/backup/sftp-test", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator")
@@ -4134,27 +4359,254 @@ def api_backup_sftp_test():
     if not host or not user:
         return err("host ve username gerekli", 400)
     try:
-        import paramiko, io
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        kwargs = {"hostname": host, "port": port, "username": user, "timeout": 10}
-        if key:
-            kwargs["key_filename"] = key
-        elif pwd:
-            kwargs["password"] = pwd
-        ssh.connect(**kwargs)
-        sftp = ssh.open_sftp()
+        sftp, ssh = _sftp_connect(host, port, user, key, pwd)
         try:
-            sftp.stat(rdir)
-        except FileNotFoundError:
-            sftp.mkdir(rdir)
-        sftp.close()
-        ssh.close()
-        return ok({"success": True, "message": f"SFTP {host}:{port} bağlantısı başarılı"})
+            try:
+                sftp.stat(rdir)
+            except FileNotFoundError:
+                try:
+                    sftp.mkdir(rdir)
+                except Exception:
+                    pass
+        finally:
+            sftp.close(); ssh.close()
+        return ok(success=True, message=f"SFTP {host}:{port} bağlantısı başarılı")
     except ImportError:
-        return ok({"success": False, "error": "paramiko kurulu değil: pip install paramiko"})
+        return ok(success=False, error="paramiko kurulu değil: pip install paramiko")
     except Exception as e:
-        return ok({"success": False, "error": str(e)})
+        return ok(success=False, error=str(e))
+
+
+@app.route("/api/backup/sftp-list", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_backup_sftp_list():
+    """Uzak SFTP dizinindeki dosyaları listele (ESXi VMDK tarama için)."""
+    d    = request.get_json() or {}
+    host = d.get("host", "")
+    port = int(d.get("port", 22))
+    user = d.get("username", "")
+    key  = d.get("private_key_path", "")
+    pwd  = d.get("password", "")
+    rdir = security.sanitize_str(d.get("remote_dir", "/vmfs/volumes"), 512)
+    if not host or not user:
+        return err("host ve username gerekli", 400)
+    try:
+        sftp, ssh = _sftp_connect(host, port, user, key, pwd)
+        try:
+            items = []
+            _VMDK_EXTS = (".vmdk", ".qcow2", ".ova", ".ovf", ".zip", ".vhd", ".vhdx", ".raw", ".img")
+            try:
+                for attr in sftp.listdir_attr(rdir):
+                    import stat as _stat_mod
+                    is_dir = _stat_mod.S_ISDIR(attr.st_mode or 0)
+                    name = attr.filename or ""
+                    if is_dir or any(name.lower().endswith(e) for e in _VMDK_EXTS):
+                        items.append({
+                            "name": name,
+                            "path": rdir.rstrip("/") + "/" + name,
+                            "is_dir": is_dir,
+                            "size": attr.st_size or 0,
+                            "size_mb": round((attr.st_size or 0) / 1048576, 1),
+                        })
+            except Exception as _le:
+                return ok(success=False, error=f"Dizin listelenemedi: {_le}", files=[])
+        finally:
+            sftp.close(); ssh.close()
+        items.sort(key=lambda x: (not x["is_dir"], x["name"]))
+        return ok(success=True, files=items, remote_dir=rdir)
+    except ImportError:
+        return ok(success=False, error="paramiko kurulu değil: pip install paramiko", files=[])
+    except Exception as e:
+        return ok(success=False, error=str(e), files=[])
+
+
+@app.route("/api/backup/sftp-download", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_backup_sftp_download():
+    """
+    Uzak SFTP sunucusundan dosyayı indir → import kuyruğuna ekle.
+    ESXi VMDK → OXware import için kullanılır.
+    """
+    d         = request.get_json() or {}
+    host      = d.get("host", "")
+    port      = int(d.get("port", 22))
+    user      = d.get("username", "")
+    key       = d.get("private_key_path", "")
+    pwd       = d.get("password", "")
+    rem_path  = d.get("remote_path", "")   # full remote path e.g. /vmfs/volumes/ds1/vm/vm.vmdk
+    _sftp_import_network = (d.get("network") or "default").strip() or "default"
+    if not host or not user or not rem_path:
+        return err("host, username ve remote_path gerekli", 400)
+    # Security: remote_path içinde traversal yok
+    if ".." in rem_path or not rem_path.startswith("/"):
+        return err("Geçersiz remote_path", 400)
+    import uuid as _uuid2, pathlib as _pl2
+    fname = _pl2.Path(rem_path).name or "import.vmdk"
+    _ALLOWED_IMPORT_EXTS2 = (".vmdk", ".qcow2", ".ova", ".ovf", ".zip", ".vhd", ".vhdx", ".raw", ".img")
+    if not any(fname.lower().endswith(e) for e in _ALLOWED_IMPORT_EXTS2):
+        return err("Desteklenmeyen dosya formatı", 400)
+
+    job_id   = _uuid2.uuid4().hex[:8]
+    save_dir = _pl2.Path("/var/lib/oxware/imports")
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / fname
+
+    with _import_jobs_lock:
+        _import_jobs[job_id] = {
+            "id": job_id, "filename": fname, "vm_name": "",
+            "status": "running", "step": "SFTP indirme başlıyor",
+            "percent": 2, "started": time.time(), "finished": None, "message": "",
+        }
+
+    def _do_sftp_download():
+        try:
+            _import_job_update(job_id, step=f"SFTP bağlanılıyor {host}:{port}", percent=5)
+            sftp, ssh = _sftp_connect(host, port, user, key, pwd, timeout=30)
+            try:
+                remote_size = sftp.stat(rem_path).st_size or 1
+                downloaded  = [0]
+
+                def _progress_cb(transferred, total):
+                    downloaded[0] = transferred
+                    pct = min(88, int(5 + 83 * transferred / max(total, 1)))
+                    mb  = round(transferred / 1048576, 1)
+                    tot_mb = round(total / 1048576, 1)
+                    _import_job_update(job_id,
+                                       step=f"İndiriliyor: {mb}/{tot_mb} MB",
+                                       percent=pct)
+
+                _import_job_update(job_id,
+                                   step=f"İndiriliyor: {fname} ({round(remote_size/1048576,1)} MB)",
+                                   percent=8)
+                sftp.get(rem_path, str(save_path), callback=_progress_cb)
+            finally:
+                sftp.close(); ssh.close()
+
+            _import_job_update(job_id, step="İndirme tamamlandı — import başlıyor", percent=90)
+            log.info("SFTP download tamamlandı: %s → %s", rem_path, save_path)
+            ev.info(f"SFTP download: {host}:{rem_path} → {save_path}", category="vm")
+
+            # ── Trigger full import pipeline inline ────────────────────────────
+            try:
+                import tarfile as _tar2, zipfile as _zip2, shutil as _sh2
+                extract_dir2 = save_dir / (fname + "_extracted")
+                extract_dir2.mkdir(exist_ok=True)
+                _fl2 = fname.lower()
+                if _fl2.endswith((".ova", ".tar", ".tar.gz")):
+                    with _tar2.open(str(save_path)) as tf2:
+                        tf2.extractall(str(extract_dir2))
+                elif _fl2.endswith(".zip"):
+                    with _zip2.ZipFile(str(save_path)) as zf2:
+                        zf2.extractall(str(extract_dir2))
+                else:
+                    _sh2.copy(str(save_path), str(extract_dir2 / fname))
+
+                disk_files2 = []
+                ovf2 = vmx2 = None
+                for fp2 in extract_dir2.rglob("*"):
+                    if not fp2.is_file(): continue
+                    s2 = fp2.suffix.lower()
+                    if s2 == ".ovf": ovf2 = fp2
+                    elif s2 == ".vmx": vmx2 = fp2
+                    elif s2 in (".vmdk",".qcow2",".img",".raw",".vhd",".vhdx"):
+                        if not (fp2.name.lower().endswith("-flat.vmdk") or _re_vmdk_extent.search(fp2.name.lower())):
+                            disk_files2.append(fp2)
+
+                if not disk_files2:
+                    _import_job_update(job_id, status="error",
+                                       step="Hata: disk bulunamadı",
+                                       percent=0, message="SFTP import: disk yok", finished=time.time())
+                    return
+
+                vm_name2 = fname
+                for _e in (".tar.gz",".ova",".ovf",".tar",".vmdk",".qcow2",".raw",".img",".vhd",".vhdx",".zip"):
+                    if vm_name2.lower().endswith(_e):
+                        vm_name2 = vm_name2[:-len(_e)]; break
+                vm_name2 = vm_name2.replace(" ","_").replace(".","_") or "imported-vm"
+                # Name conflict dedup
+                import libvirt as _lv_imp2
+                _conn_chk2 = _lv_imp2.open(config.LIBVIRT_URI)
+                try:
+                    _chk_sfx2 = 0; _base2 = vm_name2
+                    while True:
+                        try:
+                            _conn_chk2.lookupByName(vm_name2)
+                            _chk_sfx2 += 1; vm_name2 = f"{_base2}-{_chk_sfx2}"
+                        except _lv_imp2.libvirtError:
+                            break
+                finally:
+                    _conn_chk2.close()
+
+                specs2 = {"vcpus":2,"ram_mb":4096,"os_type":"unknown","firmware":"bios"}
+                if vmx2:
+                    vmx_s2 = _parse_vmx(vmx2)
+                    specs2.update({k:v for k,v in vmx_s2.items() if v not in (None,"unknown")})
+                if ovf2:
+                    ovf_s2 = _parse_ovf(ovf2)
+                    if not vmx2:
+                        specs2["vcpus"] = ovf_s2["vcpus"]; specs2["ram_mb"] = ovf_s2["ram_mb"]
+                    if ovf_s2.get("firmware")=="efi": specs2["firmware"]="efi"
+                    if ovf_s2.get("os_type")!="unknown" and specs2["os_type"]=="unknown":
+                        specs2["os_type"] = ovf_s2["os_type"]
+                if specs2["os_type"]=="unknown":
+                    specs2["os_type"] = _detect_os_from_name(fname)
+
+                disk_path2 = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name2}.qcow2"
+                src2 = disk_files2[0]; src_sz2 = max(src2.stat().st_size,1)
+                _fmt2 = {".vmdk":"vmdk",".vhd":"vpc",".vhdx":"vhdx",".qcow2":"qcow2",".raw":"raw",".img":"raw"}
+                _sf2 = _fmt2.get(src2.suffix.lower(),"")
+                _cmd2 = ["qemu-img","convert","-p","-O","qcow2"]
+                if _sf2: _cmd2 += ["-f",_sf2]
+                _cmd2 += [str(src2), str(disk_path2)]
+
+                _import_job_update(job_id, step=f"Disk dönüştürülüyor ({specs2['os_type']})", percent=92)
+                proc2 = subprocess.Popen(_cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                while proc2.poll() is None:
+                    time.sleep(1.5)
+                    try:
+                        out_sz2 = disk_path2.stat().st_size if disk_path2.exists() else 0
+                        _import_job_update(job_id, percent=min(97, 92+int(5*out_sz2/src_sz2)))
+                    except Exception: pass
+                proc2.wait()
+                if proc2.returncode != 0:
+                    err2 = (proc2.stderr.read() or b"").decode(errors="ignore").strip()
+                    _import_job_update(job_id, status="error",
+                                       step="Hata: disk dönüştürme başarısız",
+                                       message=err2[:200], finished=time.time())
+                    return
+
+                xml2 = _build_import_xml(vm_name2, disk_path2, specs2["vcpus"],
+                                         specs2["ram_mb"], specs2["os_type"],
+                                         specs2["firmware"], network=_sftp_import_network)
+                import tempfile as _tmp4
+                with _tmp4.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as xf2:
+                    xf2.write(xml2); xml_path2 = xf2.name
+                r_def2 = subprocess.run(["virsh","define",xml_path2], capture_output=True, text=True)
+                os.unlink(xml_path2)
+                if r_def2.returncode == 0:
+                    _import_job_update(job_id, status="done", vm_name=vm_name2,
+                                       step=f"Tamamlandı — {vm_name2} ({specs2['os_type']}, {specs2['vcpus']} vCPU, {specs2['ram_mb']} MB)",
+                                       percent=100, finished=time.time())
+                    ev.info(f"SFTP import tamamlandı: {vm_name2}", category="vm")
+                else:
+                    _import_job_update(job_id, status="error",
+                                       step="virsh define hatası",
+                                       message=r_def2.stderr[:200], finished=time.time())
+            except Exception as imp_ex:
+                _import_job_update(job_id, status="error",
+                                   step="Import hatası",
+                                   message=str(imp_ex)[:200], finished=time.time())
+        except Exception as ex:
+            _import_job_update(job_id, status="error", step="SFTP indirme hatası",
+                               message=str(ex)[:200], finished=time.time())
+            ev.warn(f"SFTP download hatası: {ex}", category="vm")
+
+    threading.Thread(target=_do_sftp_download, daemon=True,
+                     name=f"sftp-dl-{job_id}").start()
+    return ok(ok=True, job_id=job_id, filename=fname,
+              message=f"SFTP indirme başladı: {fname}")
 
 
 # ── Auto-Snapshot ─────────────────────────────────────────────────────────────
@@ -5488,7 +5940,21 @@ def api_ai_suggest_vm(vm_id):
 def api_ai_nl():
     if not ai_planner: return err("AI modülü yüklenemedi")
     username = get_jwt_identity()
-    cmd = (request.json or {}).get("command", "")
+    body = request.json or {}
+    cmd  = body.get("command", "")
+    force_execute = bool(body.get("force_execute", False))
+    if force_execute:
+        # Direct execution of confirmed action — bypass NL parsing
+        action = body.get("action", "unknown")
+        params = body.get("params", {})
+        if action and action != "unknown":
+            try:
+                result = ai_planner.execute_nl_action(action, params)
+                return ok({"action": action, "execution_result": result,
+                           "human_response": "Komut çalıştırıldı."})
+            except Exception as _ex:
+                return err(f"Çalıştırma hatası: {_ex}")
+        # fallback: re-process normally
     return ok(ai_planner.process_natural_language(cmd, username))
 
 # ── Anomaly Detector ──────────────────────────────────────────────────────────
@@ -6385,6 +6851,7 @@ def api_ip_allowlist_get():
 
 @app.route("/api/settings/ip-allowlist", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator")
 def api_ip_allowlist_set():
     d       = request.get_json() or {}
     enabled = bool(d.get("enabled", False))
@@ -6556,6 +7023,7 @@ pentest = _safe_import("pentest")
 
 @app.route("/api/pentest/run", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator")
 def api_pentest_run():
     if not pentest:
         return err("pentest modülü yüklenemedi")
@@ -6571,6 +7039,7 @@ def api_pentest_run():
 
 @app.route("/api/pentest/result", methods=["GET"])
 @require_auth
+@require_role("admin", "administrator")
 def api_pentest_result():
     if not pentest:
         return err("pentest modülü yüklenemedi")
@@ -6581,6 +7050,7 @@ def api_pentest_result():
 
 @app.route("/api/pentest/history", methods=["GET"])
 @require_auth
+@require_role("admin", "administrator")
 def api_pentest_history():
     if not pentest:
         return err("pentest modülü yüklenemedi")
@@ -6590,6 +7060,7 @@ def api_pentest_history():
 
 @app.route("/api/pentest/export", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator")
 def api_pentest_export():
     if not pentest:
         return err("pentest modülü yüklenemedi")
@@ -7848,10 +8319,14 @@ def _detect_os_from_name(name: str) -> str:
 
 
 def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int,
-                      os_type: str, firmware: str = "bios") -> str:
+                      os_type: str, firmware: str = "bios",
+                      network: str = "default") -> str:
     """Return OS-optimised libvirt domain XML for imported VM."""
     dp  = str(disk_path)
     efi = firmware.lower() == "efi"
+    # Sanitize network name: only alnum, dash, underscore, dot
+    import re as _re_net
+    network = _re_net.sub(r'[^a-zA-Z0-9_\-\.]', '', network) or "default"
 
     # EFI os block — libvirt auto-selects OVMF (requires libvirt ≥6.0)
     # secure-boot disabled: imported VMs don't have enrolled SB keys
@@ -7900,7 +8375,7 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int,
     </disk>
     <controller type='sata' index='0'/>
     <interface type='network'>
-      <source network='default'/>
+      <source network='{network}'/>
       <model type='e1000'/>
     </interface>
     <input type='tablet' bus='usb'/>
@@ -7932,7 +8407,7 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int,
     </disk>
     <controller type='sata' index='0'/>
     <interface type='network'>
-      <source network='default'/>
+      <source network='{network}'/>
       <model type='virtio'/>
     </interface>
     <input type='tablet' bus='usb'/>
@@ -7964,7 +8439,7 @@ def _build_import_xml(vm_name: str, disk_path, vcpus: int, ram_mb: int,
     </disk>
     <controller type='sata' index='0'/>
     <interface type='network'>
-      <source network='default'/>
+      <source network='{network}'/>
       <model type='e1000'/>
     </interface>
     <input type='tablet' bus='usb'/>
@@ -7983,6 +8458,8 @@ def api_import_ova():
         return jsonify({"error": "file alanı gerekli"}), 400
     f = request.files["file"]
     fname = f.filename or "import.ova"
+    # Optional: connect imported VM to a specific libvirt network (default: 'default')
+    _import_network = (request.form.get("network") or "default").strip() or "default"
     _ALLOWED_IMPORT_EXTS = (
         ".ova", ".ovf", ".tar", ".tar.gz",
         ".vmdk", ".qcow2", ".raw", ".img",
@@ -8117,6 +8594,26 @@ def api_import_ova():
                                     f"{fw_label} | {vcpus} vCPU {ram_mb} MB",
                                percent=22)
 
+            # ── Name conflict dedup ──────────────────────────────────────────
+            import libvirt as _lv_imp
+            _conn_chk = _lv_imp.open(config.LIBVIRT_URI)
+            try:
+                _chk_suffix = 0
+                _base_name  = vm_name
+                while True:
+                    try:
+                        _conn_chk.lookupByName(vm_name)
+                        # Name taken → try vm_name-1, -2, …
+                        _chk_suffix += 1
+                        vm_name = f"{_base_name}-{_chk_suffix}"
+                    except _lv_imp.libvirtError:
+                        break  # name available
+            finally:
+                _conn_chk.close()
+            if vm_name != _base_name:
+                _import_job_update(job_id, vm_name=vm_name,
+                                   step=f"İsim çakışması → yeni isim: {vm_name}")
+
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
             src_disk  = disk_files[0]
             src_size  = max(src_disk.stat().st_size, 1)
@@ -8168,7 +8665,8 @@ def api_import_ova():
                                step=f"libvirt'e kaydediliyor ({os_type}, {fw_label}, "
                                     f"{vcpus} vCPU, {ram_mb} MB)",
                                percent=92)
-            xml = _build_import_xml(vm_name, disk_path, vcpus, ram_mb, os_type, firmware)
+            xml = _build_import_xml(vm_name, disk_path, vcpus, ram_mb, os_type, firmware,
+                                    network=_import_network)
 
             import tempfile as _tmp3
             with _tmp3.NamedTemporaryFile(mode="w", suffix=".xml", delete=False) as xf:

@@ -1,5 +1,5 @@
 """
-AdaOS Topoloji Haritası Veri Toplayıcı
+OXware Topoloji Haritası Veri Toplayıcı
 Hypervisor → Ağlar → VM'ler hiyerarşik yapısını döndürür.
 """
 
@@ -140,7 +140,7 @@ def get_topology() -> dict:
     node = {
         "type":     "hypervisor",
         "id":       "host",
-        "name":     host.get("hostname", "adaos-host"),
+        "name":     host.get("hostname", "oxware-host"),
         "ip":       host_ip,
         "os":       host.get("os", ""),
         "cpu_pct":  stats["cpu"]["percent"],
