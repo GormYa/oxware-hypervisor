@@ -3317,6 +3317,17 @@
         <div class="page" id="page-tab-settings">
           <div class="section-header"><h2><i class="fa-solid fa-gear" style="margin-right:8px;color:var(--accent-lt)"></i>Sistem Ayarları</h2></div>
 
+          <!-- Settings Sub-Tabs -->
+          <div class="sub-tabs" id="cfg-tabs" style="margin-bottom:14px">
+            <div class="sub-tab active" onclick="cfgTab('general')" id="cfg-tab-general">⚙️ Genel</div>
+            <div class="sub-tab" onclick="cfgTab('resources')" id="cfg-tab-resources">🗂️ Kaynaklar</div>
+            <div class="sub-tab" onclick="cfgTab('schedule')" id="cfg-tab-schedule">📅 Zamanlama</div>
+            <div class="sub-tab" onclick="cfgTab('network')" id="cfg-tab-network">🔀 Ağ / Bağlantı</div>
+          </div>
+
+          <!-- ── General pane ── -->
+          <div id="cfg-pane-general">
+
           <!-- Oturum Güvenlik Ayarları -->
           <div class="card" style="margin-bottom:14px">
             <div class="card-title"><i class="fa-solid fa-user-clock" style="color:var(--accent-lt);margin-right:6px"></i>Oturum Güvenlik Ayarları</div>
@@ -3360,6 +3371,10 @@
               </div>
             </div>
           </div>
+          </div><!-- /cfg-pane-general -->
+
+          <!-- ── Resources pane ── -->
+          <div id="cfg-pane-resources" style="display:none">
 
           <!-- Resource Pools -->
           <div class="card" style="margin-bottom:14px">
@@ -3373,6 +3388,31 @@
               <div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>
             </div>
           </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card">
+              <div class="card-title">Auto-Scaler Politikaları</div>
+              <div class="table-wrap" style="margin-bottom:10px">
+                <table>
+                  <thead><tr><th>VM</th><th>CPU Eşiği</th><th>vCPU Aralığı</th><th>RAM Aralığı</th><th>Durum</th><th>Sil</th></tr></thead>
+                  <tbody id="scalerPoliciesTbody"><tr><td colspan="6" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Kaynak Kotaları</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>VM</th><th>Max vCPU</th><th>Max RAM</th><th>Sil</th></tr></thead>
+                  <tbody id="quotasTbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          </div><!-- /cfg-pane-resources -->
+
+          <!-- ── Schedule pane ── -->
+          <div id="cfg-pane-schedule" style="display:none">
 
           <!-- VM Zamanlaması -->
           <div class="card" style="margin-bottom:14px">
@@ -3393,6 +3433,10 @@
               </table>
             </div>
           </div>
+          </div><!-- /cfg-pane-schedule -->
+
+          <!-- ── Network pane ── -->
+          <div id="cfg-pane-network" style="display:none">
 
           <!-- BGP Ayarları -->
           <div class="card" style="margin-bottom:14px">
@@ -3429,27 +3473,8 @@
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-            <div class="card">
-              <div class="card-title">Auto-Scaler Politikaları</div>
-              <div class="table-wrap" style="margin-bottom:10px">
-                <table>
-                  <thead><tr><th>VM</th><th>CPU Eşiği</th><th>vCPU Aralığı</th><th>RAM Aralığı</th><th>Durum</th><th>Sil</th></tr></thead>
-                  <tbody id="scalerPoliciesTbody"><tr><td colspan="6" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
-                </table>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-title">Kaynak Kotaları</div>
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th>VM</th><th>Max vCPU</th><th>Max RAM</th><th>Sil</th></tr></thead>
-                  <tbody id="quotasTbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+          </div><!-- /cfg-pane-network -->
+        </div><!-- /page-tab-settings -->
 
       </div><!-- /content -->
     </div><!-- /content-area -->
@@ -6957,6 +6982,21 @@ async function loadVMDetail(vmId) {
   } catch (e) {
     toast("VM detayı alınamadı: " + e.message, "error");
   }
+}
+
+// ── Settings Sub-Tab Switch ────────────────────────────────────────────────────
+const _cfgPanes = ['general','resources','schedule','network'];
+function cfgTab(name) {
+  _cfgPanes.forEach(p => {
+    const pane = document.getElementById(`cfg-pane-${p}`);
+    const tab  = document.getElementById(`cfg-tab-${p}`);
+    if (pane) pane.style.display = p === name ? '' : 'none';
+    if (tab)  tab.classList.toggle('active', p === name);
+  });
+  // Lazy-load when switching to a pane
+  if (name === 'resources') { loadScalerPolicies(); loadQuotas(); loadResourcePools(); }
+  if (name === 'schedule')  loadVmSchedules();
+  if (name === 'network')   loadBgpSettings();
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
@@ -10572,7 +10612,7 @@ async function loadTabData(tabId) {
     case 'tab-monitoring':   loadPerfHistory('1h'); loadSmartData(); loadUptimes(); loadIdsStatus(); loadTrendAnalysis(); loadHAStatus(); loadAlertRules(); loadCostEstimate(); loadAlertHistory(); loadNetworkQos(); loadStorageMigrations(); break;
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
-    case 'tab-settings':     loadSdnStatus(); loadSslStatus(); loadScalerPolicies(); loadQuotas(); loadVmSchedules(); loadResourcePools(); _initSmigVmSel(); loadBgpSettings(); break;
+    case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
   }
 }
