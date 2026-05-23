@@ -173,37 +173,119 @@ def get_network_info(net_uuid):
         conn.close()
 
 
+def _read_sys(path: str, default="") -> str:
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except Exception:
+        return default
+
+
+def _parse_proc_net_dev() -> dict:
+    """Parse /proc/net/dev → {iface: {rx_bytes, tx_bytes, rx_packets, tx_packets}}"""
+    stats = {}
+    try:
+        with open("/proc/net/dev") as f:
+            for line in f:
+                parts = line.split()
+                if ":" not in parts[0]:
+                    continue
+                iface = parts[0].rstrip(":")
+                # columns: iface rx_bytes rx_packets rx_errs rx_drop ... tx_bytes ...
+                stats[iface] = {
+                    "rx_bytes":   int(parts[1]),
+                    "rx_packets": int(parts[2]),
+                    "tx_bytes":   int(parts[9]),
+                    "tx_packets": int(parts[10]),
+                }
+    except Exception:
+        pass
+    return stats
+
+
+def _iface_type(name: str) -> str:
+    """Classify interface type from name and sysfs."""
+    if name == "lo":
+        return "loopback"
+    if name.startswith("br") or name.startswith("virbr"):
+        return "bridge"
+    if name.startswith("vnet") or name.startswith("vif") or name.startswith("tap"):
+        return "virtual"
+    if name.startswith("bond"):
+        return "bond"
+    if "." in name:
+        return "vlan"
+    if name.startswith("wl"):
+        return "wifi"
+    if name.startswith("tun") or name.startswith("wg"):
+        return "tunnel"
+    return "ethernet"
+
+
 def get_host_interfaces():
     result = subprocess.run(
         ["ip", "-j", "addr"],
         capture_output=True, text=True
     )
     interfaces = []
+    _stats = _parse_proc_net_dev()
     try:
         import json
         ifaces = json.loads(result.stdout)
         for iface in ifaces:
-            addrs = [
+            ifname = iface.get("ifname", "")
+            addrs  = [
                 a["local"]
                 for a in iface.get("addr_info", [])
                 if a.get("family") == "inet"
             ]
+            addrs6 = [
+                a["local"]
+                for a in iface.get("addr_info", [])
+                if a.get("family") == "inet6" and not a["local"].startswith("fe80")
+            ]
             flags     = iface.get("flags", [])
             operstate = iface.get("operstate", "UNKNOWN").lower()
             # UNKNOWN operstate: VMware/virtual NICs report UNKNOWN even when active.
-            # Use "UP" flag as ground truth instead.
             if operstate in ("unknown", "") and "UP" in flags:
                 operstate = "up"
             # Fallback: if has IP addresses, must be up
             if operstate not in ("up", "down") and addrs:
                 operstate = "up"
+
+            # Speed from sysfs (Mbps; -1 = unknown/virtual)
+            speed_raw = _read_sys(f"/sys/class/net/{ifname}/speed")
+            try:
+                speed_mbps = int(speed_raw)
+            except (ValueError, TypeError):
+                speed_mbps = -1
+
+            # Duplex
+            duplex = _read_sys(f"/sys/class/net/{ifname}/duplex")
+
+            # Driver via ethtool module path
+            driver = _read_sys(f"/sys/class/net/{ifname}/device/driver/module/srcversion",
+                               _read_sys(f"/sys/class/net/{ifname}/device/uevent", ""))
+            # Simpler driver: just use modalias or skip
+            driver = ""
+
+            net_stats = _stats.get(ifname, {})
+
             interfaces.append({
-                "name":      iface.get("ifname", ""),
-                "state":     operstate,
-                "mac":       iface.get("address", ""),
-                "addresses": addrs,
-                "flags":     flags,
-                "mtu":       iface.get("mtu", 1500),
+                "name":       ifname,
+                "state":      operstate,
+                "mac":        iface.get("address", ""),
+                "addresses":  addrs,
+                "addresses6": addrs6,
+                "flags":      flags,
+                "mtu":        iface.get("mtu", 1500),
+                "type":       _iface_type(ifname),
+                "speed_mbps": speed_mbps if speed_mbps > 0 else None,
+                "duplex":     duplex or None,
+                "rx_bytes":   net_stats.get("rx_bytes", 0),
+                "tx_bytes":   net_stats.get("tx_bytes", 0),
+                "rx_packets": net_stats.get("rx_packets", 0),
+                "tx_packets": net_stats.get("tx_packets", 0),
             })
     except Exception:
         pass

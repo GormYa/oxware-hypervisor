@@ -2099,6 +2099,31 @@ def api_get_network(net_uuid):
 def api_host_interfaces():
     return ok(interfaces=network_manager.get_host_interfaces())
 
+
+@app.route("/api/system/routes")
+@require_auth
+def api_system_routes():
+    """Return kernel routing table via `ip -j route`."""
+    try:
+        r = subprocess.run(["ip", "-j", "route"], capture_output=True, text=True, timeout=5)
+        import json as _json2
+        raw_routes = _json2.loads(r.stdout) if r.returncode == 0 else []
+        routes = []
+        for rt in raw_routes:
+            routes.append({
+                "dst":      rt.get("dst", "default"),
+                "gateway":  rt.get("gateway", ""),
+                "dev":      rt.get("dev", ""),
+                "protocol": rt.get("protocol", ""),
+                "metric":   rt.get("metric"),
+                "scope":    rt.get("scope", ""),
+                "type":     rt.get("type", ""),
+            })
+        return ok(routes=routes)
+    except Exception as e:
+        return err(str(e), 500)
+
+
 # ── Storage ───────────────────────────────────────────────────────────────────
 @app.route("/api/storage/pools")
 @require_auth

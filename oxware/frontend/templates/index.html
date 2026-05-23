@@ -1688,23 +1688,72 @@
         <!-- ─────── Networks Page ─────── -->
         <div class="page" id="page-networks">
           <div class="section-header">
-            <h2>Ağ Yönetimi</h2>
+            <h2><i class="fa-solid fa-network-wired" style="margin-right:8px;color:var(--accent-lt)"></i>Ağ Yönetimi</h2>
             <div class="spacer"></div>
-            <button class="btn" onclick="loadNetworks()">↻ Yenile</button>
+            <button class="btn" onclick="loadNetworks()"><i class="fa-solid fa-rotate-right"></i> Yenile</button>
             <button class="btn primary" onclick="openCreateNetworkModal()">+ Yeni Ağ</button>
           </div>
-          <div class="table-wrap" style="margin-bottom:14px">
-            <table>
-              <thead><tr><th>Ad</th><th>Durum</th><th>Yönlendirme</th><th>IP Adresi</th><th>Köprü</th><th>DHCP</th><th>İşlemler</th></tr></thead>
-              <tbody id="net-tbody"><tr><td colspan="7"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
-            </table>
+
+          <!-- Overview stat cards -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px" id="net-stat-cards">
+            <div class="stat-card"><div class="stat-label">Sanal Ağlar</div><div class="stat-value" id="net-stat-total">—</div></div>
+            <div class="stat-card"><div class="stat-label">Aktif Ağlar</div><div class="stat-value" id="net-stat-active">—</div></div>
+            <div class="stat-card"><div class="stat-label">Host Arayüzleri</div><div class="stat-value" id="net-stat-ifaces">—</div></div>
+            <div class="stat-card"><div class="stat-label">Aktif Arayüzler</div><div class="stat-value" id="net-stat-ifaces-up">—</div></div>
           </div>
-          <div class="section-header"><h2>Host Arayüzleri</h2></div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Arayüz</th><th>Durum</th><th>MAC</th><th>IP Adresleri</th><th>MTU</th></tr></thead>
-              <tbody id="iface-tbody"><tr><td colspan="5"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
-            </table>
+
+          <!-- Network sub-tabs -->
+          <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
+            <button class="settings-tab active" data-ntab="vnets" onclick="switchNetTab('vnets',this)"><i class="fa-solid fa-diagram-project"></i> Sanal Ağlar</button>
+            <button class="settings-tab" data-ntab="ifaces" onclick="switchNetTab('ifaces',this)"><i class="fa-solid fa-ethernet"></i> Host Arayüzleri</button>
+            <button class="settings-tab" data-ntab="leases" onclick="switchNetTab('leases',this)"><i class="fa-solid fa-list-ul"></i> DHCP Kiraları</button>
+            <button class="settings-tab" data-ntab="routes" onclick="switchNetTab('routes',this)"><i class="fa-solid fa-route"></i> Yönlendirme</button>
+          </div>
+
+          <!-- Virtual Networks -->
+          <div id="net-tab-vnets">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Durum</th><th>Mod</th><th>Ağ / Gateway</th><th>Köprü</th><th>DHCP Aralığı</th><th>Bağlı VM</th><th>İşlemler</th></tr></thead>
+                <tbody id="net-tbody"><tr><td colspan="8"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Host Interfaces -->
+          <div id="net-tab-ifaces" style="display:none">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Arayüz</th><th>Tür</th><th>Durum</th><th>MAC</th><th>IP Adresleri</th><th>Hız</th><th>MTU</th><th>RX</th><th>TX</th></tr></thead>
+                <tbody id="iface-tbody"><tr><td colspan="9"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- DHCP Leases -->
+          <div id="net-tab-leases" style="display:none">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+              <button class="btn sm" onclick="loadDhcpLeasesNet()">↻ Yenile</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>IP</th><th>MAC</th><th>Hostname</th><th>Ağ</th><th>Bitiş</th></tr></thead>
+                <tbody id="net-leases-tbody"><tr><td colspan="5"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Routing Table -->
+          <div id="net-tab-routes" style="display:none">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+              <button class="btn sm" onclick="loadRoutingTable()">↻ Yenile</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Hedef</th><th>Ağ Geçidi</th><th>Arayüz</th><th>Protokol</th><th>Metric</th></tr></thead>
+                <tbody id="net-routes-tbody"><tr><td colspan="5"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -8925,37 +8974,142 @@ async function _initVNC(vmId) {
 
 /* ══════════════════ Networks ══════════════════ */
 
+function switchNetTab(tab, btn) {
+  ['vnets','ifaces','leases','routes'].forEach(t => {
+    const el = document.getElementById('net-tab-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('[data-ntab]').forEach(b => b.classList.toggle('active', b.dataset.ntab === tab));
+  if (tab === 'leases') loadDhcpLeasesNet();
+  if (tab === 'routes') loadRoutingTable();
+}
+
+function _fmtBytes(bytes) {
+  if (!bytes && bytes !== 0) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  const k = 1024, sizes = ['B','KB','MB','GB','TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
 async function loadNetworks() {
   try {
-    const data = await api("/networks");
-    const nets = data.networks || [];
+    const [data, ifaceData] = await Promise.all([
+      api("/networks"),
+      api("/networks/host-interfaces")
+    ]);
+    const nets   = data.networks || [];
+    const ifaces = ifaceData.interfaces || [];
+
+    // Stats
+    const active   = nets.filter(n => n.active).length;
+    const ifUp     = ifaces.filter(i => i.state === 'up').length;
+    const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    _s('net-stat-total',     nets.length);
+    _s('net-stat-active',    active);
+    _s('net-stat-ifaces',    ifaces.length);
+    _s('net-stat-ifaces-up', ifUp);
+
+    // Virtual Networks table
+    const _modeBadge = m => {
+      const colors = { nat:'var(--accent)', bridge:'var(--green-lt)', isolated:'var(--orange)', route:'#a78bfa' };
+      return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${colors[m]||'var(--surface2)'};color:#fff;font-weight:600">${escHtml(m||'nat').toUpperCase()}</span>`;
+    };
     document.getElementById("net-tbody").innerHTML = nets.length ? nets.map(n => `<tr>
-      <td><strong>${escHtml(n.name)}</strong></td>
+      <td>
+        <strong>${escHtml(n.name)}</strong>
+        ${n.autostart ? '<span style="font-size:10px;color:var(--text-muted)"> ⚡auto</span>' : ''}
+      </td>
       <td>${n.active ? '<span class="badge active"><span class="badge-dot"></span>Aktif</span>' : '<span class="badge inactive">Pasif</span>'}</td>
-      <td>${escHtml(n.forward_mode || n.mode || "nat")}</td>
-      <td>${escHtml(n.ip || n.gateway || "—")}/${escHtml(n.netmask || "—")}</td>
-      <td><code>${escHtml(n.bridge || "—")}</code></td>
-      <td>${n.dhcp ? `${n.dhcp.start}–${n.dhcp.end}` : "—"}</td>
+      <td>${_modeBadge(n.forward_mode || n.mode)}</td>
+      <td>
+        <code>${escHtml(n.ip || n.gateway || '—')}</code>
+        ${n.netmask ? `<span style="color:var(--text-muted);font-size:11px"> /${n.netmask}</span>` : ''}
+      </td>
+      <td><code>${escHtml(n.bridge || '—')}</code></td>
+      <td style="font-size:11px">${n.dhcp ? `<span style="color:var(--green-lt)">${escHtml(n.dhcp.start)}<br>→ ${escHtml(n.dhcp.end)}</span>` : '<span class="text-muted">DHCP yok</span>'}</td>
+      <td>
+        <span id="net-vm-count-${n.uuid}" style="font-size:11px;color:var(--text-muted)">—</span>
+      </td>
       <td>
         <div class="action-btns">
           <button class="btn sm" onclick="openEditNetwork('${n.uuid}','${escHtml(n.name)}')">✏</button>
           ${n.active
-            ? `<button class="btn sm" onclick="netAction('${n.uuid}','stop')">■</button>`
-            : `<button class="btn sm success" onclick="netAction('${n.uuid}','start')">▶</button>`}
+            ? `<button class="btn sm" onclick="netAction('${n.uuid}','stop')">■ Durdur</button>`
+            : `<button class="btn sm success" onclick="netAction('${n.uuid}','start')">▶ Başlat</button>`}
           <button class="btn sm danger" onclick="deleteNetwork('${n.uuid}','${escHtml(n.name)}')">✕</button>
         </div>
       </td>
-    </tr>`).join("") : `<tr><td colspan="7"><div class="empty-state"><div class="icon">🌐</div><h3>Ağ yok</h3></div></td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="8"><div class="empty-state"><div class="icon">🌐</div><h3>Ağ yok</h3></div></td></tr>`;
 
-    const ifaceData = await api("/networks/host-interfaces");
-    document.getElementById("iface-tbody").innerHTML = (ifaceData.interfaces || []).map(i => `<tr>
-      <td><code>${escHtml(i.name)}</code></td>
-      <td>${i.state === 'up' ? '<span class="badge active"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive">' + (i.state || 'DOWN').toUpperCase() + '</span>'}</td>
-      <td><code>${escHtml(i.mac || "—")}</code></td>
-      <td>${(i.addresses || []).map(a => `<code>${escHtml(a)}</code>`).join(" ") || "—"}</td>
-      <td>${i.mtu || "—"}</td>
-    </tr>`).join("");
+    // Host Interfaces — detailed
+    const _ifTypeBadge = t => {
+      const map = { ethernet:'#3b82f6', bridge:'#22c55e', virtual:'#a78bfa', bond:'#f59e0b', vlan:'#06b6d4', loopback:'#6b7280', wifi:'#ec4899', tunnel:'#f97316' };
+      return `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${map[t]||'var(--surface2)'};color:#fff">${escHtml(t||'eth')}</span>`;
+    };
+    document.getElementById("iface-tbody").innerHTML = ifaces.map(i => `<tr>
+      <td>
+        <code style="font-weight:700">${escHtml(i.name)}</code>
+        ${i.duplex ? `<span style="font-size:10px;color:var(--text-muted)"> ${i.duplex}</span>` : ''}
+      </td>
+      <td>${_ifTypeBadge(i.type)}</td>
+      <td>${i.state === 'up' ? '<span class="badge active"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive">' + (i.state||'DOWN').toUpperCase() + '</span>'}</td>
+      <td><code style="font-size:11px">${escHtml(i.mac || '—')}</code></td>
+      <td>
+        ${(i.addresses||[]).map(a => `<code style="font-size:11px">${escHtml(a)}</code>`).join('<br>') || '—'}
+        ${(i.addresses6||[]).map(a => `<br><code style="font-size:10px;color:var(--text-muted)">${escHtml(a)}</code>`).join('') || ''}
+      </td>
+      <td style="font-size:11px">${i.speed_mbps ? (i.speed_mbps >= 1000 ? (i.speed_mbps/1000).toFixed(1) + ' Gbps' : i.speed_mbps + ' Mbps') : '—'}</td>
+      <td style="font-size:11px">${i.mtu || '—'}</td>
+      <td style="font-size:11px;color:var(--green-lt)">${_fmtBytes(i.rx_bytes)}<br><span style="font-size:10px;color:var(--text-muted)">${i.rx_packets||0} pkt</span></td>
+      <td style="font-size:11px;color:var(--accent-lt)">${_fmtBytes(i.tx_bytes)}<br><span style="font-size:10px;color:var(--text-muted)">${i.tx_packets||0} pkt</span></td>
+    </tr>`).join("") || `<tr><td colspan="9" class="text-center text-muted" style="padding:14px">Arayüz bulunamadı</td></tr>`;
+
   } catch (e) { toast("Ağ alınamadı: " + e.message, "error"); }
+}
+
+async function loadDhcpLeasesNet() {
+  const tbody = document.getElementById('net-leases-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor…</td></tr>';
+  try {
+    const d = await api('/dns/leases');
+    const leases = d.leases || [];
+    tbody.innerHTML = leases.length ? leases.map(l => {
+      const exp = l.expires ? new Date(l.expires * 1000).toLocaleString() : '—';
+      return `<tr>
+        <td><code>${escHtml(l.ip||'—')}</code></td>
+        <td><code style="font-size:11px">${escHtml(l.mac||'—')}</code></td>
+        <td>${escHtml(l.hostname||'—')}</td>
+        <td>${escHtml(l.network||'—')}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${exp}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" class="text-center text-muted" style="padding:14px">DHCP kirası yok</td></tr>`;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Yüklenemedi: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function loadRoutingTable() {
+  const tbody = document.getElementById('net-routes-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor…</td></tr>';
+  try {
+    const r = await fetch('/api/system/routes', {
+      headers: { Authorization: 'Bearer ' + TOKEN() }
+    });
+    const d = await r.json().catch(() => ({}));
+    const routes = d.routes || [];
+    tbody.innerHTML = routes.length ? routes.map(rt => `<tr>
+      <td><code>${escHtml(rt.dst||'default')}</code></td>
+      <td><code>${escHtml(rt.gateway||'—')}</code></td>
+      <td><code>${escHtml(rt.dev||'—')}</code></td>
+      <td style="font-size:11px">${escHtml(rt.protocol||'—')}</td>
+      <td style="font-size:11px">${rt.metric != null ? rt.metric : '—'}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yönlendirme bilgisi alınamadı</td></tr>`;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Yüklenemedi: ${escHtml(e.message)}</td></tr>`;
+  }
 }
 
 async function createNetwork() {
