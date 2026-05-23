@@ -249,6 +249,8 @@ apt-get install -y -qq --no-install-recommends \
     udisks2 \
     xserver-xorg-video-qxl \
     xserver-xorg-video-vmware \
+    xserver-xorg-video-fbdev \
+    xserver-xorg-video-vesa \
     spice-vdagent \
     libqt5network5 \
     libqt5svg5 \
@@ -334,13 +336,14 @@ fi
     cp "$REPO_ROOT/oxware/frontend/static/img/sadeceikon.png" \
        "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware/oxware_icon.png"
 
-# Xorg minimal config (modesetting, sanal ortam dahil)
+# Xorg minimal config (driver otomatik — KVM, VMware, nomodeset destekli)
 mkdir -p "$SQUASHFS_ROOT/etc/X11/xorg.conf.d"
 cat > "$SQUASHFS_ROOT/etc/X11/xorg.conf.d/10-oxware.conf" << 'XORGCONF'
+# OXware Display — Driver AÇIKÇA belirtilmedi: Xorg otomatik seçer
+# KVM/QEMU (qxl, cirrus, vga), VMware (vmware), nomodeset (fbdev/vesa)
+# modesetting belirtmek → DRM olmayan VM'lerde (nomodeset, basic VGA) SIYAH EKRAN
 Section "Device"
     Identifier "OXware-Display"
-    Driver     "modesetting"
-    # SWcursor: X imleci framebuffer'a çizer → VNC/noVNC her zaman görür
     Option     "SWcursor" "true"
 EndSection
 
@@ -417,7 +420,24 @@ GETTY
 cat > "$SQUASHFS_ROOT/root/.bash_profile" << 'BASHPROF'
 # OXware Installer: tty1'de otomatik X başlat
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
-    exec startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1
+    # exec kullanma — hata durumunda loglara bakabilmek için
+    startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1 \
+        2>/tmp/startx-error.log
+    _EC=$?
+    if [ "$_EC" -ne 0 ]; then
+        echo ""
+        echo "============================================"
+        echo "  X BAŞLATMA HATASI (kod: $_EC)"
+        echo "============================================"
+        echo "--- /tmp/startx-error.log (son 30 satır) ---"
+        tail -30 /tmp/startx-error.log 2>/dev/null || echo "(log yok)"
+        echo "--- /tmp/Xorg.0.log (son 20 satır) ---"
+        tail -20 /tmp/Xorg.0.log 2>/dev/null || echo "(log yok)"
+        echo ""
+        echo "Yeniden denemek için Enter'a basın (Ctrl+C ile çıkabilirsiniz)..."
+        read -r _DUMMY
+        exec bash
+    fi
 fi
 BASHPROF
 
@@ -427,9 +447,20 @@ cat > "$SQUASHFS_ROOT/etc/profile.d/oxware-installer.sh" << 'PROFILED'
 # OXware Installer: tty1'de otomatik X başlat (root veya user)
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
     if [ "$(id -u)" -eq 0 ]; then
-        exec startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1
+        startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1 \
+            2>/tmp/startx-error.log
+        _EC=$?
+        if [ "$_EC" -ne 0 ]; then
+            echo "X HATASI (kod: $_EC) — /tmp/startx-error.log ve /tmp/Xorg.0.log inceleyin"
+            tail -20 /tmp/startx-error.log 2>/dev/null || true
+            tail -15 /tmp/Xorg.0.log 2>/dev/null || true
+            echo "Enter ile devam..."
+            read -r _D
+        fi
     else
-        exec sudo -n startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1
+        sudo -n startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1 \
+            2>/tmp/startx-error.log || \
+            echo "X başlatılamadı — /tmp/startx-error.log inceleyin"
     fi
 fi
 PROFILED
@@ -609,17 +640,17 @@ terminal_output gfxterm
 background_color 10,23,40
 
 menuentry "OXware Hypervisor ${OXWARE_VERSION} — Install" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components quiet splash vga=791 loglevel=0 live-config.noautologin ---
+    linux   ${VMLINUZ_PATH} boot=live components loglevel=3 live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 
 menuentry "OXware Hypervisor ${OXWARE_VERSION} — Install (nomodeset)" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components quiet nomodeset vga=normal loglevel=0 live-config.noautologin ---
+    linux   ${VMLINUZ_PATH} boot=live components nomodeset vga=normal loglevel=3 live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 
 menuentry "OXware Installer — Debug (verbose)" --class oxware {
-    linux   ${VMLINUZ_PATH} boot=live components live-config.noautologin ---
+    linux   ${VMLINUZ_PATH} boot=live components loglevel=7 live-config.noautologin ---
     initrd  ${INITRD_PATH}
 }
 GRUBEOF
