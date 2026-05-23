@@ -1195,6 +1195,7 @@
             <div class="sub-tab" onclick="vdTab('monitor')" id="vd-tab-monitor">📊 İzleme</div>
             <div class="sub-tab" onclick="vdTab('snap')" id="vd-tab-snap">📸 Snapshot'lar</div>
             <div class="sub-tab" onclick="vdTab('fw')" id="vd-tab-fw">🛡 Güvenlik Duvarı</div>
+            <div class="sub-tab" onclick="vdTab('format')" id="vd-tab-format">🧹 Format</div>
           </div>
 
           <!-- ══ Genel Bakış Pane ══ -->
@@ -1446,6 +1447,54 @@
                   <thead><tr><th>Yön</th><th>Protokol</th><th>Port</th><th>Kaynak IP</th><th>Eylem</th><th>İşlem</th></tr></thead>
                   <tbody id="vd-fw-tbody"><tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text-muted)">Yükleniyor...</td></tr></tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Format Pane ══ -->
+          <div id="vd-pane-format" style="display:none">
+            <!-- Disk Backup -->
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title">💾 Disk Yedeği Al</div>
+              <div class="hw-section-body" style="padding:14px;display:flex;flex-direction:column;gap:12px">
+                <p style="font-size:12px;color:var(--text-muted);margin:0">
+                  VM durdurulmadan önce anlık görüntü (snapshot) alınır, ardından disk klonlanır.
+                </p>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <label style="font-size:12px;min-width:90px">Disk Aygıtı</label>
+                  <select id="fmt-backup-dev" class="hw-input" style="flex:1">
+                    <option value="vda">vda (ana disk)</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <label style="font-size:12px;min-width:90px">Hedef Yol</label>
+                  <input id="fmt-backup-dest" class="hw-input" style="flex:1" placeholder="/var/lib/libvirt/images/backup-vm-vda.qcow2">
+                </div>
+                <button class="btn-primary" style="align-self:flex-start" onclick="fmtBackupDisk()">💾 Yedek Al</button>
+                <div id="fmt-backup-status" style="font-size:12px;display:none"></div>
+              </div>
+            </div>
+
+            <!-- Disk Wipe -->
+            <div class="hw-section" style="margin-top:12px;border:1px solid rgba(239,68,68,.3)">
+              <div class="hw-section-title" style="color:#f87171">⚠️ Disk Sil ve Sıfırla</div>
+              <div class="hw-section-body" style="padding:14px;display:flex;flex-direction:column;gap:12px">
+                <p style="font-size:12px;color:#fca5a5;margin:0">
+                  <strong>Geri alınamaz!</strong> Seçilen disk sıfırlanır (dd ile üzerine yazılır) ve VM'den çıkarılır.
+                  Ana disk (vda/sda) silinemez.
+                </p>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <label style="font-size:12px;min-width:90px">Disk Aygıtı</label>
+                  <select id="fmt-wipe-dev" class="hw-input" style="flex:1">
+                    <option value="">— seçin —</option>
+                  </select>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <label style="font-size:12px;min-width:90px">Onay</label>
+                  <input id="fmt-wipe-confirm" class="hw-input" style="flex:1" placeholder='Silmek için "SİL" yazın'>
+                </div>
+                <button class="btn danger" style="align-self:flex-start" onclick="fmtWipeDisk()">🗑 Diski Sil ve Sıfırla</button>
+                <div id="fmt-wipe-status" style="font-size:12px;display:none"></div>
               </div>
             </div>
           </div>
@@ -3297,6 +3346,13 @@
             <div class="card">
               <div class="card-title">SSL Sertifika Yönetimi</div>
               <div id="sslStatusCard" style="margin-bottom:12px"></div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px;background:var(--surface2);border-radius:6px">
+                <label style="font-size:12px;color:var(--text-muted);flex:1">HTTPS Zorla (HTTP→HTTPS Yönlendirme)</label>
+                <label class="toggle-label" style="cursor:pointer;display:flex;align-items:center;gap:6px">
+                  <input type="checkbox" id="https-enforce-cb" onchange="toggleHttpsEnforce(this.checked)">
+                  <span id="https-enforce-status" style="font-size:11px;color:var(--text-muted)">—</span>
+                </label>
+              </div>
               <div style="border-top:1px solid var(--border);padding-top:12px">
                 <div class="form-row"><label>Let's Encrypt Domain</label><input id="leDomain" type="text" class="form-control" placeholder="oxware.example.com"></div>
                 <div class="form-row"><label>E-posta</label><input id="leEmail" type="text" class="form-control" placeholder="admin@example.com"></div>
@@ -3335,6 +3391,41 @@
                 <thead><tr><th>VM</th><th>İşlem</th><th>Saat</th><th>Günler</th><th>Durum</th><th>Sil</th></tr></thead>
                 <tbody id="vm-sched-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- BGP Ayarları -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              🔀 BGP Yönlendirme
+              <span id="bgp-backend-badge" style="margin-left:auto;font-size:10px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text-muted)">Yükleniyor...</span>
+            </div>
+            <div id="bgp-status-card" style="font-size:12px;color:var(--text-muted);padding:6px 0">Yükleniyor...</div>
+            <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input id="bgp-local-asn" class="form-control" style="width:100px" type="number" placeholder="Local ASN" min="1" max="4294967295">
+                <input id="bgp-peer-ip" class="form-control" style="width:140px" type="text" placeholder="Peer IP">
+                <input id="bgp-peer-asn" class="form-control" style="width:100px" type="number" placeholder="Peer ASN">
+                <button class="btn sm" onclick="bgpAddPeer()">+ Peer Ekle</button>
+              </div>
+              <div id="bgp-peers-list" style="margin-top:10px"></div>
+            </div>
+          </div>
+
+          <!-- SFTP Uzak Yedekleme -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title">📤 SFTP / SSH Uzak Yedekleme</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Backup sekmesinde zamanlama oluştururken SFTP/SSH hedefi seçebilirsiniz. Bağlantı testi burada yapın.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Host</label><input id="sftp-host" class="form-control" placeholder="backup.example.com"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Port</label><input id="sftp-port" class="form-control" value="22" style="width:80px"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Kullanıcı</label><input id="sftp-user" class="form-control" placeholder="backup"></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Key Yolu</label><input id="sftp-key" class="form-control" placeholder="/root/.ssh/id_rsa"></div>
+              <div class="form-row" style="margin:0;grid-column:1/-1"><label style="font-size:11px">Uzak Dizin</label><input id="sftp-dir" class="form-control" placeholder="/backups/oxware"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn sm" onclick="sftpTestConnection()">🔌 Bağlantı Test Et</button>
+              <span id="sftp-test-result" style="font-size:11px;align-self:center"></span>
             </div>
           </div>
 
@@ -6842,11 +6933,13 @@ async function loadVMDetail(vmId) {
     document.getElementById("con-state").textContent = v.state || "—";
 
     // Hide restricted tabs + actions for vm-user
-    const isVmUser = _currentRole() === "vm-user";
-    const hwTab    = document.getElementById("vd-tab-hw");
-    const fwTab    = document.getElementById("vd-tab-fw");
-    if (hwTab) hwTab.style.display = isVmUser ? "none" : "";
-    if (fwTab) fwTab.style.display = isVmUser ? "none" : "";
+    const isVmUser  = _currentRole() === "vm-user";
+    const hwTab     = document.getElementById("vd-tab-hw");
+    const fwTab     = document.getElementById("vd-tab-fw");
+    const fmtTab    = document.getElementById("vd-tab-format");
+    if (hwTab)  hwTab.style.display  = isVmUser ? "none" : "";
+    if (fwTab)  fwTab.style.display  = isVmUser ? "none" : "";
+    if (fmtTab) fmtTab.style.display = isVmUser ? "none" : "";
 
     // Autostart in hardware tab
     const autostartCb = document.getElementById("hw-autostart");
@@ -6867,7 +6960,7 @@ async function loadVMDetail(vmId) {
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
-const _vdPanes = ['overview','console','hw','monitor','snap','fw'];
+const _vdPanes = ['overview','console','hw','monitor','snap','fw','format'];
 
 function vdTab(name) {
   _vdPanes.forEach(p => {
@@ -6879,6 +6972,7 @@ function vdTab(name) {
   if (name === 'monitor' && currentVmId) refreshVdMetrics();
   if (name === 'fw'      && currentVmId) loadVdFirewall(currentVmId);
   if (name === 'snap'    && currentVmId) _loadVdSnapshots(currentVmId);
+  if (name === 'format'  && currentVmId) _loadFmtDiskOptions(currentVmId);
 }
 
 // ── Live Metrics Polling ──────────────────────────────────────────────────────
@@ -7107,6 +7201,73 @@ async function deleteFwRule(vmId, idx) {
     toast("Kural silindi", "success");
     loadVdFirewall(vmId);
   } catch(e) { toast("Silinemedi: " + e.message, "error"); }
+}
+
+// ── Format Tab ────────────────────────────────────────────────────────────────
+async function _loadFmtDiskOptions(vmId) {
+  try {
+    const d = await api(`/vms/${vmId}/hardware`);
+    const disks = (d.hardware?.disks || []).filter(dk => !['cdrom','vda','sda'].includes(dk.device_type) || (dk.target !== 'vda' && dk.target !== 'sda'));
+    const allDisks = d.hardware?.disks || [];
+    // Backup: all non-cdrom disks
+    const backupSel = document.getElementById('fmt-backup-dev');
+    if (backupSel) {
+      backupSel.innerHTML = allDisks.filter(dk => dk.device_type !== 'cdrom').map(dk =>
+        `<option value="${escHtml(dk.target)}">${escHtml(dk.target)} (${dk.capacity_gb ? dk.capacity_gb.toFixed(0)+'GB' : '?'})</option>`
+      ).join('') || '<option>Disk yok</option>';
+    }
+    // Wipe: secondary disks only (not vda/sda)
+    const wipeSel = document.getElementById('fmt-wipe-dev');
+    if (wipeSel) {
+      const secondary = allDisks.filter(dk => dk.device_type !== 'cdrom' && dk.target !== 'vda' && dk.target !== 'sda');
+      wipeSel.innerHTML = '<option value="">— seçin —</option>' + secondary.map(dk =>
+        `<option value="${escHtml(dk.target)}">${escHtml(dk.target)} (${dk.capacity_gb ? dk.capacity_gb.toFixed(0)+'GB' : '?'}) — ${escHtml(dk.path || '')}</option>`
+      ).join('');
+    }
+  } catch(e) { /* silent */ }
+}
+
+async function fmtBackupDisk() {
+  const dev  = document.getElementById('fmt-backup-dev')?.value;
+  const dest = document.getElementById('fmt-backup-dest')?.value?.trim();
+  const st   = document.getElementById('fmt-backup-status');
+  if (!dev)  { toast('Disk seçin', 'error'); return; }
+  if (!dest) { toast('Hedef yol girin', 'error'); return; }
+  st.style.display = '';
+  st.style.color = 'var(--text-muted)';
+  st.textContent = '⏳ Yedek alınıyor...';
+  try {
+    const r = await api(`/vms/${currentVmId}/disk-backup`, { method:'POST', body:{ device:dev, dest_path:dest } });
+    st.style.color = 'var(--success)';
+    st.textContent = '✅ Yedek alındı: ' + (r.dest || dest);
+    toast('Disk yedeği alındı', 'success');
+  } catch(e) {
+    st.style.color = '#f87171';
+    st.textContent = '✕ Hata: ' + e.message;
+  }
+}
+
+async function fmtWipeDisk() {
+  const dev     = document.getElementById('fmt-wipe-dev')?.value;
+  const confirm = document.getElementById('fmt-wipe-confirm')?.value?.trim();
+  const st      = document.getElementById('fmt-wipe-status');
+  if (!dev)           { toast('Disk seçin', 'error'); return; }
+  if (confirm !== 'SİL') { toast('Onay için "SİL" yazın', 'error'); return; }
+  if (!await showConfirm(`"${dev}" diski kalıcı olarak silinip sıfırlanacak. Bu işlem GERİ ALINAMAZ.`, 'Diski Sil', true)) return;
+  st.style.display = '';
+  st.style.color = 'var(--text-muted)';
+  st.textContent = '⏳ Siliniyor...';
+  try {
+    await api(`/vms/${currentVmId}/disk-wipe`, { method:'POST', body:{ device:dev } });
+    st.style.color = 'var(--success)';
+    st.textContent = '✅ Disk silindi ve çıkarıldı.';
+    document.getElementById('fmt-wipe-confirm').value = '';
+    toast('Disk silindi', 'success');
+    setTimeout(() => _loadFmtDiskOptions(currentVmId), 1000);
+  } catch(e) {
+    st.style.color = '#f87171';
+    st.textContent = '✕ Hata: ' + e.message;
+  }
 }
 
 // ── Autostart toggle ──────────────────────────────────────────────────────────
@@ -8360,7 +8521,7 @@ async function loadNetworks() {
     const ifaceData = await api("/networks/host-interfaces");
     document.getElementById("iface-tbody").innerHTML = (ifaceData.interfaces || []).map(i => `<tr>
       <td><code>${escHtml(i.name)}</code></td>
-      <td>${i.up ? '<span class="badge active"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive">DOWN</span>'}</td>
+      <td>${i.state === 'up' ? '<span class="badge active"><span class="badge-dot"></span>UP</span>' : '<span class="badge inactive">' + (i.state || 'DOWN').toUpperCase() + '</span>'}</td>
       <td><code>${escHtml(i.mac || "—")}</code></td>
       <td>${(i.addresses || []).map(a => `<code>${escHtml(a)}</code>`).join(" ") || "—"}</td>
       <td>${i.mtu || "—"}</td>
@@ -10411,7 +10572,7 @@ async function loadTabData(tabId) {
     case 'tab-monitoring':   loadPerfHistory('1h'); loadSmartData(); loadUptimes(); loadIdsStatus(); loadTrendAnalysis(); loadHAStatus(); loadAlertRules(); loadCostEstimate(); loadAlertHistory(); loadNetworkQos(); loadStorageMigrations(); break;
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
-    case 'tab-settings':     loadSdnStatus(); loadSslStatus(); loadScalerPolicies(); loadQuotas(); loadVmSchedules(); loadResourcePools(); _initSmigVmSel(); break;
+    case 'tab-settings':     loadSdnStatus(); loadSslStatus(); loadScalerPolicies(); loadQuotas(); loadVmSchedules(); loadResourcePools(); _initSmigVmSel(); loadBgpSettings(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
   }
 }
@@ -11472,6 +11633,87 @@ async function deleteVlan(id) {
 }
 
 /* ══════════════════ SSL ══════════════════ */
+async function toggleHttpsEnforce(enabled) {
+  try {
+    await _api('/api/ssl/enforce-https', 'POST', { enabled });
+    document.getElementById('https-enforce-status').textContent = enabled ? '✅ Aktif' : '⬜ Pasif';
+    toast('HTTPS zorlaması ' + (enabled ? 'etkinleştirildi' : 'devre dışı bırakıldı'), 'success');
+  } catch(e) { toast('Hata: ' + e.message, 'error'); }
+}
+
+async function loadBgpSettings() {
+  const badge = document.getElementById('bgp-backend-badge');
+  const card  = document.getElementById('bgp-status-card');
+  const list  = document.getElementById('bgp-peers-list');
+  try {
+    const d = await _api('/api/bgp/status');
+    if (badge) badge.textContent = d.backend || 'unknown';
+    if (badge) badge.style.color = d.available ? '#22c55e' : '#f87171';
+    const peers = d.peers || [];
+    const sessions = d.sessions || [];
+    const sessionMap = {};
+    sessions.forEach(s => { if (s.peer) sessionMap[s.peer] = s; });
+    if (card) card.innerHTML = `<span style="color:var(--text-muted)">Backend: </span>${escHtml(d.backend)} | <span style="color:var(--text-muted)">Peer sayısı: </span>${peers.length}`;
+    if (list) list.innerHTML = peers.length ? `<table style="width:100%;font-size:11px;border-collapse:collapse">
+      <thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:3px 6px">Peer IP</th><th>Peer ASN</th><th>Local ASN</th><th>Durum</th><th></th></tr></thead>
+      <tbody>${peers.map(p => {
+        const s = sessionMap[p.peer_ip] || {};
+        return `<tr>
+          <td style="padding:3px 6px;font-family:monospace">${escHtml(p.peer_ip)}</td>
+          <td style="padding:3px 6px">AS${p.peer_asn}</td>
+          <td style="padding:3px 6px">AS${p.local_asn}</td>
+          <td style="padding:3px 6px"><span style="color:${s.state==='Established'?'#22c55e':'#f87171'}">${escHtml(s.state||'—')}</span></td>
+          <td style="padding:3px 6px"><button class="btn sm danger" onclick="bgpRemovePeer('${escHtml(p.peer_ip)}',${p.local_asn})">✕</button></td>
+        </tr>`;
+      }).join('')}</tbody></table>`
+    : `<div style="color:var(--text-muted);font-size:11px">Peer yok</div>`;
+  } catch(e) {
+    if (badge) badge.textContent = 'Hata';
+    if (card) card.textContent = 'BGP durumu alınamadı: ' + e.message;
+  }
+}
+
+async function bgpAddPeer() {
+  const localAsn = parseInt(document.getElementById('bgp-local-asn').value);
+  const peerIp   = document.getElementById('bgp-peer-ip').value.trim();
+  const peerAsn  = parseInt(document.getElementById('bgp-peer-asn').value);
+  if (!localAsn || !peerIp || !peerAsn) { toast('Tüm BGP alanlarını doldurun', 'error'); return; }
+  try {
+    const d = await _api('/api/bgp/peers', 'POST', { peer_ip:peerIp, peer_asn:peerAsn, local_asn:localAsn });
+    toast(d.message || 'Peer eklendi', d.success ? 'success' : 'error');
+    loadBgpSettings();
+  } catch(e) { toast('Hata: ' + e.message, 'error'); }
+}
+
+async function bgpRemovePeer(peerIp, localAsn) {
+  if (!await showConfirm(`BGP peer ${peerIp} kaldırılacak.`, 'Peer Sil', true)) return;
+  try {
+    const d = await _api(`/api/bgp/peers/${encodeURIComponent(peerIp)}`, 'DELETE', { local_asn: localAsn });
+    toast(d.message || 'Peer kaldırıldı', d.success ? 'success' : 'error');
+    loadBgpSettings();
+  } catch(e) { toast('Hata: ' + e.message, 'error'); }
+}
+
+async function sftpTestConnection() {
+  const host = document.getElementById('sftp-host').value.trim();
+  const port = parseInt(document.getElementById('sftp-port').value) || 22;
+  const user = document.getElementById('sftp-user').value.trim();
+  const key  = document.getElementById('sftp-key').value.trim();
+  const dir  = document.getElementById('sftp-dir').value.trim();
+  const st   = document.getElementById('sftp-test-result');
+  if (!host || !user) { toast('Host ve kullanıcı gerekli', 'error'); return; }
+  st.textContent = '⏳ Test ediliyor...';
+  st.style.color = 'var(--text-muted)';
+  try {
+    const d = await _api('/api/backup/sftp-test', 'POST', { host, port, username: user, private_key_path: key || undefined, remote_dir: dir || '/backups' });
+    st.textContent = d.success ? '✅ Bağlantı başarılı' : ('✕ ' + (d.error || 'Bağlantı hatası'));
+    st.style.color = d.success ? '#22c55e' : '#f87171';
+  } catch(e) {
+    st.textContent = '✕ ' + e.message;
+    st.style.color = '#f87171';
+  }
+}
+
 async function loadSslStatus() {
   const d = await _api('/api/ssl/status');
   const el = document.getElementById('sslStatusCard');
@@ -11495,6 +11737,14 @@ async function loadSslStatus() {
     ${timerHtml}
     ${d.cert_exists ? `<div style="margin-top:8px"><button class="btn sm" onclick="manualRenewCert()">↻ Manuel Yenile</button></div>` : ''}
   `;
+  // Load HTTPS enforce status
+  try {
+    const fs = await _api('/api/ssl/full-status');
+    const cb = document.getElementById('https-enforce-cb');
+    const st = document.getElementById('https-enforce-status');
+    if (cb) cb.checked = !!fs.https_enforced;
+    if (st) st.textContent = fs.https_enforced ? '✅ Aktif' : '⬜ Pasif';
+  } catch(_) {}
 }
 
 async function manualRenewCert() {

@@ -1574,6 +1574,81 @@ def api_vm_disk_detach(vm_id, target_dev):
     except Exception as e:
         return err(e, 500)
 
+@app.route("/api/vms/<vm_id>/disk-backup", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_disk_backup(vm_id):
+    """Clone a VM disk to a destination path using qemu-img convert."""
+    data      = request.get_json() or {}
+    device    = data.get("device", "vda")
+    dest_path = data.get("dest_path", "")
+    if not dest_path:
+        return err("dest_path gerekli", 400)
+    try:
+        import subprocess, xml.etree.ElementTree as ET
+        conn = vm_manager._connect()
+        dom  = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc(0))
+        src  = None
+        for disk in root.findall(".//disk[@type='file']"):
+            tgt = disk.find("target")
+            src_el = disk.find("source")
+            if tgt is not None and tgt.get("dev") == device and src_el is not None:
+                src = src_el.get("file")
+                break
+        conn.close()
+        if not src:
+            return err(f"Disk bulunamadı: {device}", 404)
+        import os
+        os.makedirs(os.path.dirname(dest_path) or "/", exist_ok=True)
+        r = subprocess.run(
+            ["qemu-img", "convert", "-O", "qcow2", src, dest_path],
+            capture_output=True, text=True, timeout=3600
+        )
+        if r.returncode != 0:
+            return err(r.stderr or "qemu-img hatası", 500)
+        ev.info(f"Disk yedeği: {vm_id}/{device} → {dest_path}", category="vm")
+        return ok(dest=dest_path, source=src)
+    except Exception as e:
+        return err(e, 500)
+
+
+@app.route("/api/vms/<vm_id>/disk-wipe", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_disk_wipe(vm_id):
+    """Detach a secondary disk and zero-fill it, then delete the image file."""
+    data   = request.get_json() or {}
+    device = data.get("device", "")
+    if not device or device in ("vda", "sda", "hda"):
+        return err("Ana disk silinemez", 400)
+    try:
+        import subprocess, xml.etree.ElementTree as ET, os
+        conn = vm_manager._connect()
+        dom  = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc(0))
+        src  = None
+        for disk in root.findall(".//disk[@type='file']"):
+            tgt = disk.find("target")
+            src_el = disk.find("source")
+            if tgt is not None and tgt.get("dev") == device and src_el is not None:
+                src = src_el.get("file")
+                break
+        conn.close()
+        if not src:
+            return err(f"Disk bulunamadı: {device}", 404)
+        # Detach first
+        vm_manager.hot_detach_disk(vm_id, device)
+        # Zero-fill then remove
+        subprocess.run(["dd", "if=/dev/zero", f"of={src}", "bs=1M"], capture_output=True, timeout=300)
+        if os.path.exists(src):
+            os.remove(src)
+        ev.info(f"Disk silindi: {vm_id}/{device} ({src})", category="vm")
+        return ok(deleted=src)
+    except Exception as e:
+        return err(e, 500)
+
+
 @app.route("/api/vms/<vm_id>/hardware/nic/attach", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
@@ -3855,6 +3930,44 @@ def api_backup_disk_delete(disk_id):
     ev.info(f"Yedekleme diski silindi: {path}", category="backup")
     return ok({"deleted": disk_id})
 
+@app.route("/api/backup/sftp-test", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_backup_sftp_test():
+    """SFTP bağlantısını test et."""
+    d    = request.get_json() or {}
+    host = d.get("host", "")
+    port = int(d.get("port", 22))
+    user = d.get("username", "")
+    key  = d.get("private_key_path", "")
+    pwd  = d.get("password", "")
+    rdir = d.get("remote_dir", "/backups")
+    if not host or not user:
+        return err("host ve username gerekli", 400)
+    try:
+        import paramiko, io
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        kwargs = {"hostname": host, "port": port, "username": user, "timeout": 10}
+        if key:
+            kwargs["key_filename"] = key
+        elif pwd:
+            kwargs["password"] = pwd
+        ssh.connect(**kwargs)
+        sftp = ssh.open_sftp()
+        try:
+            sftp.stat(rdir)
+        except FileNotFoundError:
+            sftp.mkdir(rdir)
+        sftp.close()
+        ssh.close()
+        return ok({"success": True, "message": f"SFTP {host}:{port} bağlantısı başarılı"})
+    except ImportError:
+        return ok({"success": False, "error": "paramiko kurulu değil: pip install paramiko"})
+    except Exception as e:
+        return ok({"success": False, "error": str(e)})
+
+
 # ── Auto-Snapshot ─────────────────────────────────────────────────────────────
 @app.route("/api/auto-snapshot/config", methods=["GET"])
 @require_auth
@@ -4103,8 +4216,39 @@ def api_dns_del_host(hostname):
 @app.route("/api/dns/leases", methods=["GET"])
 @require_auth
 def api_dns_leases():
-    if not dns_mgr: return ok({"leases": []})
-    return ok({"leases": dns_mgr.list_leases()})
+    leases = []
+    if dns_mgr:
+        leases = dns_mgr.list_leases()
+    # Fallback: libvirt dnsmasq lease files (covers default/NAT networks)
+    if not leases:
+        try:
+            import glob as _g
+            for pattern in [
+                "/var/lib/libvirt/dnsmasq/*.leases",
+                "/var/lib/misc/dnsmasq.leases",
+                "/var/lib/dnsmasq/*.leases",
+            ]:
+                for lf in _g.glob(pattern):
+                    try:
+                        with open(lf) as f:
+                            for line in f:
+                                parts = line.strip().split()
+                                if len(parts) >= 4:
+                                    leases.append({
+                                        "expires": int(parts[0]) if parts[0].isdigit() else 0,
+                                        "mac":      parts[1],
+                                        "ip":       parts[2],
+                                        "hostname": parts[3] if parts[3] != "*" else "",
+                                        "client_id": parts[4] if len(parts) > 4 else "",
+                                        "source":   lf,
+                                    })
+                    except Exception:
+                        pass
+                if leases:
+                    break
+        except Exception as e:
+            log.warning("DNS leases fallback: %s", e)
+    return ok({"leases": leases})
 
 # ── IPAM ─────────────────────────────────────────────────────────────────────
 import glob as _glob
