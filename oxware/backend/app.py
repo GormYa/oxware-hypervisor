@@ -6748,38 +6748,8 @@ def api_session_revoke(session_id):
         return ok({"revoked": True})
     return err("Oturum bulunamadı", 404)
 
-# ── Let's Encrypt ─────────────────────────────────────────────────────────────
-@app.route("/api/ssl/letsencrypt", methods=["POST"])
-@require_auth
-def api_letsencrypt():
-    d      = request.get_json() or {}
-    domain = d.get("domain", "").strip()
-    email  = d.get("email", "").strip()
-    if not domain:
-        return err("Domain gerekli")
-    import subprocess as _sp
-    try:
-        result = _sp.run(
-            ["certbot", "certonly", "--standalone", "--non-interactive",
-             "--agree-tos", "-m", email or "admin@" + domain,
-             "-d", domain],
-            capture_output=True, text=True, timeout=120
-        )
-        if result.returncode == 0:
-            import shutil
-            cert_dir = f"/etc/letsencrypt/live/{domain}"
-            if os.path.exists(cert_dir):
-                os.makedirs("/etc/oxware/ssl", exist_ok=True)
-                shutil.copy2(f"{cert_dir}/fullchain.pem", "/etc/oxware/ssl/oxware.crt")
-                shutil.copy2(f"{cert_dir}/privkey.pem",   "/etc/oxware/ssl/oxware.key")
-                os.chmod("/etc/oxware/ssl/oxware.key", 0o600)
-            ev.info(f"Let's Encrypt sertifikası alındı: {domain}", category="system")
-            return ok({"success": True, "domain": domain, "output": result.stdout[-500:]})
-        return err(f"certbot hatası: {result.stderr[-400:]}")
-    except FileNotFoundError:
-        return err("certbot kurulu değil: apt install certbot")
-    except Exception as e:
-        return err(str(e))
+# NOTE: POST /api/ssl/letsencrypt is handled by api_ssl_letsencrypt() via ssl_mgr (~line 5291).
+# Duplicate standalone certbot route removed — use ssl_mgr for proper cert management.
 
 # ── VM Ağ Trafiği ─────────────────────────────────────────────────────────────
 @app.route("/api/vms/<vm_id>/network-stats")
@@ -9659,13 +9629,8 @@ def api_network_add_ipv6(net_uuid):
     except Exception as e:
         return err(str(e), 500)
 
-@app.route("/api/networks", methods=["POST"])
-@require_auth
-@require_role("admin", "administrator", "operator")
-def api_create_network_v2():
-    """Create network — extended with IPv6 support. Replaces existing POST /api/networks if needed."""
-    # This route conflicts with existing — skip if existing handles it
-    return err("Use existing /api/networks POST endpoint", 405)
+# NOTE: POST /api/networks is handled by api_create_network() above (line ~2177).
+# Duplicate stub removed.
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
