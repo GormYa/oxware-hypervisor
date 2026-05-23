@@ -9063,14 +9063,39 @@ def api_hosting_download(module_name):
     paths = {
         "whmcs":  base / "whmcs" / "servers" / "oxware" / "oxware.php",
         "wisecp": base / "wisecp" / "oxware" / "oxware.php",
+        "diyocp": base / "diyocp" / "servers" / "oxware" / "oxware.php",
     }
     path = paths.get(module_name)
     if not path or not path.exists():
-        return err("Modül bulunamadı", 404)
+        return err("Modül bulunamadı veya henüz hazır değil", 404)
     from flask import send_file
     return send_file(str(path), as_attachment=True,
                      download_name=f"oxware_{module_name}.php",
                      mimetype="text/plain")
+
+
+@app.route("/api/hosting/diyocp/test", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_diyocp_test():
+    """DiyoCP API bağlantı testi."""
+    import urllib.request as _ur
+    data = request.get_json() or {}
+    url = (data.get("url") or "").rstrip("/")
+    api_key = data.get("api_key") or ""
+    if not url or not api_key:
+        return err("url ve api_key zorunlu")
+    try:
+        req = _ur.Request(
+            f"{url}/api/server/status",
+            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+            method="GET"
+        )
+        with _ur.urlopen(req, timeout=8) as resp:
+            body = resp.read(4096)
+            return ok(status="ok", http_code=resp.status, body_preview=body[:200].decode("utf-8", errors="replace"))
+    except Exception as e:
+        return err(f"DiyoCP bağlantı hatası: {e}")
 
 
 # ── Provisioning API (WiseCP / WHMCS / Billing entegrasyonu) ─────────────────
@@ -9286,6 +9311,1265 @@ def _ensure_ssl_cert(cert_path: str, key_path: str) -> bool:
     except Exception as _ssl_e:
         log.error("SSL sertifikası oluşturma hatası: %s", _ssl_e)
         return False
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# vTPM (Virtual Trusted Platform Module)
+# ═══════════════════════════════════════════════════════════════════════════════
+vtpm_mgr = _safe_import("vtpm_manager")
+
+@app.route("/api/vms/<vm_id>/vtpm", methods=["GET"])
+@require_auth
+def api_get_vtpm(vm_id):
+    if not vtpm_mgr: return err("vtpm_manager modülü yüklenemedi")
+    return ok(**vtpm_mgr.list_vm_tpm(vm_id))
+
+@app.route("/api/vms/<vm_id>/vtpm", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_add_vtpm(vm_id):
+    if not vtpm_mgr: return err("vtpm_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    result = vtpm_mgr.add_vtpm(vm_id, model=d.get("model", "tpm-tis"), version=d.get("version", "2.0"))
+    ev.info(f"vTPM eklendi: {vm_id}", category="vm")
+    return ok(**result)
+
+@app.route("/api/vms/<vm_id>/vtpm", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_remove_vtpm(vm_id):
+    if not vtpm_mgr: return err("vtpm_manager modülü yüklenemedi")
+    result = vtpm_mgr.remove_vtpm(vm_id)
+    ev.info(f"vTPM kaldırıldı: {vm_id}", category="vm")
+    return ok(**result)
+
+@app.route("/api/system/swtpm-check")
+@require_auth
+def api_swtpm_check():
+    if not vtpm_mgr: return err("vtpm_manager modülü yüklenemedi")
+    return ok(**vtpm_mgr.check_swtpm())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PCI Passthrough UI (tüm PCI cihazlar, sadece GPU değil)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/system/pci-devices")
+@require_auth
+@require_role("admin", "administrator")
+def api_list_pci_devices():
+    """Tüm PCI cihazları listele (IOMMU gruplarıyla birlikte)."""
+    try:
+        r = subprocess.run(["lspci", "-Dmmnn"], capture_output=True, text=True, timeout=10)
+        devices = []
+        for line in r.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                pci_addr = parts[0].strip()
+                class_name = parts[1].strip()
+                vendor_device = parts[2].strip()
+                # Get IOMMU group
+                iommu_path = f"/sys/bus/pci/devices/{pci_addr}/iommu_group"
+                iommu_group = ""
+                if os.path.exists(iommu_path):
+                    try:
+                        iommu_group = os.path.basename(os.readlink(iommu_path))
+                    except Exception:
+                        pass
+                # Check if bound to vfio-pci
+                driver_path = f"/sys/bus/pci/devices/{pci_addr}/driver"
+                driver = ""
+                if os.path.exists(driver_path):
+                    try:
+                        driver = os.path.basename(os.readlink(driver_path))
+                    except Exception:
+                        pass
+                devices.append({
+                    "pci": pci_addr,
+                    "class": class_name,
+                    "name": vendor_device,
+                    "iommu_group": iommu_group,
+                    "driver": driver,
+                    "vfio_ready": driver == "vfio-pci",
+                })
+        return ok(devices=devices)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/pci-passthrough", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_pci_passthrough(vm_id):
+    """Generic PCI passthrough (any device, not just GPU)."""
+    data = request.get_json() or {}
+    pci = data.get("pci_address", "").strip()
+    if not pci:
+        return err("pci_address gerekli", 400)
+    import re as _re_pci
+    if not _re_pci.match(r'^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$', pci):
+        return err("Geçersiz PCI adresi (beklenen: DDDD:BB:DD.F)", 400)
+    try:
+        domain_part, bus, slot_fn = pci.split(":")
+        slot, fn = slot_fn.split(".")
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = root.find("devices")
+        # Check not already added
+        for h in devices.findall("hostdev"):
+            src = h.find("source/address")
+            if src is not None:
+                existing = f"{src.get('domain','')[2:]}:{src.get('bus','')[2:]}:{src.get('slot','')[2:]}.{src.get('function','')[2:]}"
+                if existing.upper() == pci.upper():
+                    return err("Bu PCI cihaz zaten eklenmiş", 409)
+        h_el = ET.SubElement(devices, "hostdev")
+        h_el.set("mode", "subsystem"); h_el.set("type", "pci"); h_el.set("managed", "yes")
+        src = ET.SubElement(h_el, "source")
+        addr = ET.SubElement(src, "address")
+        addr.set("type", "pci")
+        addr.set("domain", f"0x{domain_part}")
+        addr.set("bus", f"0x{bus}")
+        addr.set("slot", f"0x{slot}")
+        addr.set("function", f"0x{fn}")
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        ev.info(f"PCI passthrough eklendi: {vm_id} pci={pci}", category="vm")
+        return ok(pci=pci, message="PCI cihaz eklendi. IOMMU ve VFIO aktif olmalı.")
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/pci-passthrough/<path:pci>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_pci_remove(vm_id, pci):
+    """Remove PCI passthrough device from VM."""
+    try:
+        pci = pci.replace("_", ":")
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = root.find("devices")
+        removed = 0
+        for h in list(devices.findall("hostdev")):
+            if h.get("type") == "pci":
+                src = h.find("source/address")
+                if src is not None:
+                    d = src.get("domain","0x0000")[2:]
+                    b = src.get("bus","0x00")[2:]
+                    s = src.get("slot","0x00")[2:]
+                    f = src.get("function","0x0")[2:]
+                    addr_str = f"{d}:{b}:{s}.{f}"
+                    if addr_str.lower() == pci.lower() or pci.lower() in addr_str.lower():
+                        devices.remove(h)
+                        removed += 1
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        return ok(removed=removed)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/pci-devices", methods=["GET"])
+@require_auth
+def api_vm_pci_list(vm_id):
+    """List PCI passthrough devices on a VM."""
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = []
+        for h in root.findall(".//hostdev[@type='pci']"):
+            src = h.find("source/address")
+            if src is not None:
+                d = src.get("domain","0x0000")[2:]
+                b = src.get("bus","0x00")[2:]
+                s = src.get("slot","0x00")[2:]
+                f = src.get("function","0x0")[2:]
+                devices.append({"pci": f"{d}:{b}:{s}.{f}", "managed": h.get("managed","yes")})
+        conn.close()
+        return ok(devices=devices)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# USB Passthrough UI
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/system/usb-devices")
+@require_auth
+@require_role("admin", "administrator")
+def api_list_usb_devices():
+    """Tüm USB cihazları listele."""
+    try:
+        r = subprocess.run(["lsusb"], capture_output=True, text=True, timeout=10)
+        devices = []
+        for line in r.stdout.splitlines():
+            # Bus 001 Device 002: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
+            parts = line.split()
+            if len(parts) >= 6:
+                bus = parts[1]
+                dev = parts[3].rstrip(":")
+                vid_pid = parts[5]
+                name = " ".join(parts[6:])
+                vid, pid = vid_pid.split(":") if ":" in vid_pid else (vid_pid, "0000")
+                devices.append({
+                    "bus": bus, "device": dev,
+                    "vendor_id": vid, "product_id": pid,
+                    "name": name,
+                    "id": f"{bus}:{dev}",
+                })
+        return ok(devices=devices)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/usb-passthrough", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_usb_passthrough(vm_id):
+    """Attach USB device to VM by vendor_id:product_id."""
+    data = request.get_json() or {}
+    vendor_id = data.get("vendor_id", "").strip().lower()
+    product_id = data.get("product_id", "").strip().lower()
+    if not vendor_id or not product_id:
+        return err("vendor_id ve product_id gerekli", 400)
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = root.find("devices")
+        h_el = ET.SubElement(devices, "hostdev")
+        h_el.set("mode", "subsystem"); h_el.set("type", "usb"); h_el.set("managed", "yes")
+        src = ET.SubElement(h_el, "source")
+        v_el = ET.SubElement(src, "vendor"); v_el.set("id", f"0x{vendor_id}")
+        p_el = ET.SubElement(src, "product"); p_el.set("id", f"0x{product_id}")
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        ev.info(f"USB passthrough eklendi: {vm_id} usb={vendor_id}:{product_id}", category="vm")
+        return ok(vendor_id=vendor_id, product_id=product_id, message="USB cihaz eklendi.")
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/usb-devices", methods=["GET"])
+@require_auth
+def api_vm_usb_list(vm_id):
+    """List USB passthrough devices on a VM."""
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = []
+        for h in root.findall(".//hostdev[@type='usb']"):
+            src = h.find("source")
+            vendor = src.find("vendor").get("id","") if src is not None and src.find("vendor") is not None else ""
+            product = src.find("product").get("id","") if src is not None and src.find("product") is not None else ""
+            devices.append({"vendor_id": vendor, "product_id": product})
+        conn.close()
+        return ok(devices=devices)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/usb-passthrough/<vendor_id>/<product_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_usb_remove(vm_id, vendor_id, product_id):
+    """Remove USB passthrough device."""
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc())
+        devices = root.find("devices")
+        removed = 0
+        for h in list(devices.findall("hostdev")):
+            if h.get("type") == "usb":
+                src = h.find("source")
+                if src is not None:
+                    v = src.find("vendor")
+                    p = src.find("product")
+                    if v is not None and p is not None:
+                        if vendor_id.lower() in v.get("id","").lower() and product_id.lower() in p.get("id","").lower():
+                            devices.remove(h); removed += 1
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        return ok(removed=removed)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IPv6 Network Support
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/networks/<net_uuid>/ipv6", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_network_add_ipv6(net_uuid):
+    """Add IPv6 address to existing libvirt network."""
+    d = request.get_json() or {}
+    ip6_addr = d.get("address", "fd00::1")
+    prefix = int(d.get("prefix", 64))
+    dhcp6_start = d.get("dhcp_start", "")
+    dhcp6_end = d.get("dhcp_end", "")
+    try:
+        import libvirt as _lv
+        conn = network_manager._connect()
+        try:
+            net = conn.networkLookupByUUIDString(net_uuid)
+            was_active = bool(net.isActive())
+            was_autostart = bool(net.autostart())
+            root = ET.fromstring(net.XMLDesc(0))
+            # Remove existing ipv6
+            for ip in root.findall("ip"):
+                if ip.get("family") == "ipv6":
+                    root.remove(ip)
+            # Add new ipv6
+            ip6_el = ET.SubElement(root, "ip")
+            ip6_el.set("family", "ipv6")
+            ip6_el.set("address", ip6_addr)
+            ip6_el.set("prefix", str(prefix))
+            if dhcp6_start and dhcp6_end:
+                dhcp_el = ET.SubElement(ip6_el, "dhcp")
+                range_el = ET.SubElement(dhcp_el, "range")
+                range_el.set("start", dhcp6_start)
+                range_el.set("end", dhcp6_end)
+            new_xml = ET.tostring(root, encoding="unicode")
+            if was_active:
+                net.destroy()
+            net.undefine()
+            new_net = conn.networkDefineXML(new_xml)
+            new_net.setAutostart(1 if was_autostart else 0)
+            if was_active:
+                new_net.create()
+            # Enable IPv6 forwarding on host
+            subprocess.run(["sysctl", "-w", "net.ipv6.conf.all.forwarding=1"], capture_output=True)
+            subprocess.run(["sysctl", "-w", "net.ipv6.conf.all.accept_ra=2"], capture_output=True)
+            # Persist
+            sysctl_line = "net.ipv6.conf.all.forwarding=1\n"
+            sysctl_path = "/etc/sysctl.d/99-oxware-ipv6.conf"
+            if not os.path.exists(sysctl_path) or sysctl_line not in open(sysctl_path).read():
+                with open(sysctl_path, "a") as f:
+                    f.write(sysctl_line)
+                    f.write("net.ipv6.conf.all.accept_ra=2\n")
+            ev.info(f"IPv6 eklendi: network={net_uuid} addr={ip6_addr}/{prefix}", category="network")
+            return ok(ok=True, address=ip6_addr, prefix=prefix)
+        finally:
+            conn.close()
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/networks", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_create_network_v2():
+    """Create network — extended with IPv6 support. Replaces existing POST /api/networks if needed."""
+    # This route conflicts with existing — skip if existing handles it
+    return err("Use existing /api/networks POST endpoint", 405)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Memory Hot-Unplug
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/<vm_id>/hardware/memory/hotunplug", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_memory_hotunplug(vm_id):
+    """
+    Hot-unplug memory from running VM via balloon device.
+    Balloon driver must be installed in guest.
+    """
+    data = request.get_json() or {}
+    target_mb = int(data.get("target_mb", 0))
+    if target_mb <= 0:
+        return err("target_mb gerekli (hedef RAM MB)", 400)
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        if not dom.isActive():
+            return err("VM çalışmıyor. Balloon hot-unplug için VM aktif olmalı.", 400)
+        target_kib = target_mb * 1024
+        dom.setMemory(target_kib)
+        ev.info(f"Memory hot-unplug: {vm_id} → {target_mb}MB", category="vm")
+        conn.close()
+        return ok(target_mb=target_mb, message="Balloon bellek azaltıldı. Guest balloon driver gerekli.")
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Bulk Snapshot
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/snapshots/bulk", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_bulk_snapshot():
+    """Create snapshot for multiple VMs at once."""
+    data = request.get_json() or {}
+    vm_ids = data.get("vm_ids", [])
+    snap_name = data.get("name", "")
+    description = data.get("description", "Bulk snapshot")
+    if not vm_ids:
+        return err("vm_ids listesi gerekli", 400)
+    import re as _re_snap
+    if snap_name and not _re_snap.match(r'^[a-zA-Z0-9_\-\.]+$', snap_name):
+        return err("snap_name sadece harf/rakam/tire/nokta içerebilir", 400)
+    results = {}
+    for vm_id in vm_ids[:50]:  # max 50
+        try:
+            name = snap_name or f"bulk-{__import__('datetime').datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            snap = vm_manager.create_snapshot(vm_id, name, description)
+            results[vm_id] = {"ok": True, "snap": snap}
+            ev.info(f"Bulk snapshot: {vm_id} → {name}", category="vm")
+        except Exception as e:
+            results[vm_id] = {"ok": False, "error": str(e)}
+    success = sum(1 for r in results.values() if r.get("ok"))
+    return ok(results=results, total=len(vm_ids), success=success, failed=len(vm_ids)-success)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARM / RISC-V VM Architecture Support
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/system/architectures")
+@require_auth
+def api_list_architectures():
+    """List QEMU-supported architectures on this host."""
+    try:
+        archs = []
+        qemu_bins = [
+            ("x86_64", "/usr/bin/qemu-system-x86_64"),
+            ("aarch64", "/usr/bin/qemu-system-aarch64"),
+            ("arm", "/usr/bin/qemu-system-arm"),
+            ("riscv64", "/usr/bin/qemu-system-riscv64"),
+            ("riscv32", "/usr/bin/qemu-system-riscv32"),
+            ("ppc64", "/usr/bin/qemu-system-ppc64"),
+            ("s390x", "/usr/bin/qemu-system-s390x"),
+            ("mips64", "/usr/bin/qemu-system-mips64"),
+        ]
+        for arch, path in qemu_bins:
+            if os.path.exists(path):
+                archs.append({"arch": arch, "binary": path, "available": True})
+        return ok(architectures=archs)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/arch", methods=["GET"])
+@require_auth
+def api_vm_get_arch(vm_id):
+    """Get VM architecture."""
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc(0))
+        os_el = root.find("os")
+        type_el = os_el.find("type") if os_el else None
+        conn.close()
+        return ok(
+            arch=type_el.get("arch","x86_64") if type_el is not None else "x86_64",
+            machine=type_el.get("machine","pc") if type_el is not None else "pc",
+        )
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SPICE + Audio Support
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/<vm_id>/hardware/spice", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_enable_spice(vm_id):
+    """Enable SPICE display with optional audio for a VM (must be stopped)."""
+    data = request.get_json() or {}
+    port = int(data.get("port", 5910))
+    enable_audio = bool(data.get("audio", True))
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        if dom.isActive():
+            return err("VM çalışıyor. SPICE eklemek için VM'i durdurun.", 400)
+        root = ET.fromstring(dom.XMLDesc(0))
+        devices = root.find("devices")
+        # Remove existing graphics
+        for g in devices.findall("graphics"):
+            devices.remove(g)
+        # Add SPICE
+        g_el = ET.SubElement(devices, "graphics")
+        g_el.set("type", "spice")
+        g_el.set("port", str(port))
+        g_el.set("autoport", "yes")
+        g_el.set("listen", "0.0.0.0")
+        listen_el = ET.SubElement(g_el, "listen")
+        listen_el.set("type", "address")
+        listen_el.set("address", "0.0.0.0")
+        # Add video QXL
+        for v in devices.findall("video"):
+            devices.remove(v)
+        vid_el = ET.SubElement(devices, "video")
+        model = ET.SubElement(vid_el, "model")
+        model.set("type", "qxl")
+        model.set("ram", "65536")
+        model.set("vram", "65536")
+        # Add audio if requested
+        if enable_audio:
+            for s in devices.findall("sound"):
+                devices.remove(s)
+            snd_el = ET.SubElement(devices, "sound")
+            snd_el.set("model", "ich9")
+            # Add audio backend
+            for a in root.findall("devices/audio"):
+                devices.remove(a)
+            audio_el = ET.SubElement(devices, "audio")
+            audio_el.set("id", "1")
+            audio_el.set("type", "spice")
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        ev.info(f"SPICE+Audio etkinleştirildi: {vm_id} port={port}", category="vm")
+        return ok(port=port, audio=enable_audio, message="SPICE etkinleştirildi. VM'i başlatın.")
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# iPXE / Network Boot Order
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/<vm_id>/hardware/boot-order", methods=["GET"])
+@require_auth
+def api_vm_get_boot_order(vm_id):
+    """Get current VM boot order."""
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc(0))
+        os_el = root.find("os")
+        boots = [b.get("dev") for b in os_el.findall("boot")] if os_el else []
+        # Also check per-device boot order
+        conn.close()
+        return ok(boot_order=boots)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/hardware/boot-order", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_set_boot_order(vm_id):
+    """
+    Set VM boot order. boot_order: list of 'hd', 'cdrom', 'network', 'fd'.
+    network = PXE/iPXE boot.
+    """
+    data = request.get_json() or {}
+    boot_order = data.get("boot_order", ["hd"])
+    valid_devs = {"hd", "cdrom", "network", "fd"}
+    for d in boot_order:
+        if d not in valid_devs:
+            return err(f"Geçersiz boot device: {d}. Geçerli: {valid_devs}", 400)
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        root = ET.fromstring(dom.XMLDesc(0))
+        os_el = root.find("os")
+        if os_el is None:
+            return err("OS elementi bulunamadı", 500)
+        # Remove existing boot elements
+        for b in os_el.findall("boot"):
+            os_el.remove(b)
+        # Add new boot order
+        for dev in boot_order:
+            b_el = ET.SubElement(os_el, "boot")
+            b_el.set("dev", dev)
+        # Enable network boot (iPXE) if requested
+        if "network" in boot_order:
+            # Add BIOS bootmenu
+            bootmenu = os_el.find("bootmenu")
+            if bootmenu is None:
+                bootmenu = ET.SubElement(os_el, "bootmenu")
+            bootmenu.set("enable", "yes")
+            bootmenu.set("timeout", "3000")
+        conn.defineXML(ET.tostring(root, encoding="unicode"))
+        conn.close()
+        ev.info(f"Boot order güncellendi: {vm_id} → {boot_order}", category="vm")
+        return ok(boot_order=boot_order)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Guest File Browser (QEMU Guest Agent)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/<vm_id>/files", methods=["GET"])
+@require_auth
+def api_vm_file_list(vm_id):
+    """List files in guest via QEMU Guest Agent."""
+    path = request.args.get("path", "/")
+    # Sanitize path
+    import posixpath
+    path = posixpath.normpath("/" + path.lstrip("/"))
+    try:
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        if not dom.isActive():
+            return err("VM çalışmıyor", 400)
+        # Use guest-agent exec to list files
+        import json as _json
+        cmd_json = _json.dumps({
+            "execute": "guest-exec",
+            "arguments": {
+                "path": "/bin/ls",
+                "arg": ["-la", "--time-style=+%Y-%m-%d %H:%M", path],
+                "capture-output": True,
+            }
+        })
+        result = dom.qemuAgentCommand(cmd_json, 10, 0)
+        result_data = _json.loads(result)
+        pid = result_data.get("return", {}).get("pid")
+        if pid is None:
+            return err("Guest agent komutu başlatılamadı", 500)
+        # Wait for result
+        import time; time.sleep(0.5)
+        status_json = _json.dumps({
+            "execute": "guest-exec-status",
+            "arguments": {"pid": pid}
+        })
+        status = _json.loads(dom.qemuAgentCommand(status_json, 10, 0))
+        ret = status.get("return", {})
+        import base64
+        stdout = base64.b64decode(ret.get("out-data","")).decode("utf-8","replace") if ret.get("out-data") else ""
+        conn.close()
+        # Parse ls output
+        files = []
+        for line in stdout.splitlines()[1:]:  # skip "total N"
+            parts = line.split()
+            if len(parts) >= 9:
+                perms = parts[0]; links = parts[1]; owner = parts[2]; group = parts[3]
+                size = parts[4]; date = parts[5]; time_str = parts[6]; name = " ".join(parts[7:])
+                if name in (".", ".."):
+                    continue
+                files.append({
+                    "name": name, "perms": perms, "size": size,
+                    "date": f"{date} {time_str}", "owner": owner,
+                    "is_dir": perms.startswith("d"),
+                    "path": f"{path.rstrip('/')}/{name}",
+                })
+        return ok(path=path, files=files)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/files/exec", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_exec(vm_id):
+    """Execute command in guest via QEMU Guest Agent."""
+    data = request.get_json() or {}
+    cmd = data.get("command", "")
+    args = data.get("args", [])
+    if not cmd:
+        return err("command gerekli", 400)
+    # Block dangerous commands
+    dangerous = {"rm", "dd", "mkfs", "fdisk", "shred", "wipefs"}
+    if cmd.split("/")[-1] in dangerous and not data.get("force"):
+        return err(f"Tehlikeli komut engellendi: {cmd}. force=true ile gönder.", 400)
+    try:
+        import json as _json, base64
+        conn = vm_manager._libvirt_conn()
+        dom = conn.lookupByName(vm_id)
+        cmd_json = _json.dumps({
+            "execute": "guest-exec",
+            "arguments": {"path": cmd, "arg": args, "capture-output": True}
+        })
+        result = dom.qemuAgentCommand(cmd_json, 30, 0)
+        pid = _json.loads(result).get("return", {}).get("pid")
+        import time; time.sleep(1)
+        status_json = _json.dumps({"execute": "guest-exec-status", "arguments": {"pid": pid}})
+        status = _json.loads(dom.qemuAgentCommand(status_json, 30, 0))
+        ret = status.get("return", {})
+        stdout = base64.b64decode(ret.get("out-data","")).decode("utf-8","replace") if ret.get("out-data") else ""
+        stderr = base64.b64decode(ret.get("err-data","")).decode("utf-8","replace") if ret.get("err-data") else ""
+        conn.close()
+        ev.info(f"Guest exec: {vm_id} cmd={cmd}", category="vm")
+        return ok(stdout=stdout, stderr=stderr, exitcode=ret.get("exitcode",0))
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NUMA Topology
+# ═══════════════════════════════════════════════════════════════════════════════
+numa_mgr = _safe_import("numa_manager")
+
+@app.route("/api/system/numa")
+@require_auth
+def api_host_numa():
+    if not numa_mgr: return ok({"nodes": [], "raw": "numa_manager modülü yüklenemedi"})
+    return ok(**numa_mgr.get_host_numa())
+
+@app.route("/api/vms/<vm_id>/numa", methods=["GET"])
+@require_auth
+def api_vm_numa_get(vm_id):
+    if not numa_mgr: return err("numa_manager modülü yüklenemedi")
+    return ok(**numa_mgr.get_vm_numa(vm_id))
+
+@app.route("/api/vms/<vm_id>/numa", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_numa_set(vm_id):
+    if not numa_mgr: return err("numa_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    cells = d.get("cells", [])
+    if not cells:
+        return err("cells listesi gerekli", 400)
+    result = numa_mgr.set_vm_numa(vm_id, cells)
+    ev.info(f"NUMA topology ayarlandı: {vm_id}", category="vm")
+    return ok(**result)
+
+@app.route("/api/vms/<vm_id>/numa", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_numa_remove(vm_id):
+    if not numa_mgr: return err("numa_manager modülü yüklenemedi")
+    return ok(**numa_mgr.remove_vm_numa(vm_id))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Container Management (Docker + LXC)
+# ═══════════════════════════════════════════════════════════════════════════════
+container_mgr = _safe_import("container_manager")
+
+@app.route("/api/containers")
+@require_auth
+def api_containers_list():
+    if not container_mgr: return ok(containers=[], docker=False, lxc=False)
+    docker_available = container_mgr.docker_available()
+    lxc_available = container_mgr.lxc_available()
+    containers = []
+    if docker_available:
+        containers += container_mgr.list_docker_containers()
+    if lxc_available:
+        containers += container_mgr.list_lxc_containers()
+    return ok(containers=containers, docker=docker_available, lxc=lxc_available)
+
+@app.route("/api/containers/docker", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_docker_create():
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    name = d.get("name",""); image = d.get("image","")
+    if not name or not image:
+        return err("name ve image gerekli", 400)
+    result = container_mgr.create_docker_container(
+        name=name, image=image,
+        ports=d.get("ports",""), env=d.get("env",[]),
+        volumes=d.get("volumes",""), restart=d.get("restart","unless-stopped"),
+        memory=d.get("memory",""), cpus=d.get("cpus",""),
+    )
+    ev.info(f"Docker container oluşturuldu: {name} ({image})", category="container")
+    return ok(**result)
+
+@app.route("/api/containers/docker/<container_id>/action", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_docker_action(container_id):
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    action = d.get("action","")
+    result = container_mgr.docker_action(container_id, action)
+    ev.info(f"Docker action: {container_id} → {action}", category="container")
+    return ok(**result)
+
+@app.route("/api/containers/docker/<container_id>/logs")
+@require_auth
+def api_docker_logs(container_id):
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    lines = int(request.args.get("lines", 100))
+    return ok(logs=container_mgr.docker_logs(container_id, lines))
+
+@app.route("/api/containers/docker/images")
+@require_auth
+def api_docker_images():
+    if not container_mgr: return ok(images=[])
+    return ok(images=container_mgr.list_docker_images())
+
+@app.route("/api/containers/docker/images/pull", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_docker_pull():
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    image = d.get("image","")
+    if not image:
+        return err("image gerekli", 400)
+    result = container_mgr.pull_docker_image(image)
+    return ok(**result)
+
+@app.route("/api/containers/lxc", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_lxc_create():
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    result = container_mgr.create_lxc_container(
+        name=d.get("name",""), template=d.get("template","ubuntu"),
+        release=d.get("release","22.04"),
+    )
+    ev.info(f"LXC container oluşturuldu: {d.get('name')}", category="container")
+    return ok(**result)
+
+@app.route("/api/containers/lxc/<name>/action", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_lxc_action(name):
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    return ok(**container_mgr.lxc_action(name, d.get("action","")))
+
+@app.route("/api/containers/lxc/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_lxc_destroy(name):
+    if not container_mgr: return err("container_manager modülü yüklenemedi")
+    return ok(**container_mgr.destroy_lxc_container(name))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cloudflare Tunnel per VM
+# ═══════════════════════════════════════════════════════════════════════════════
+cf_tunnel_mgr = _safe_import("cloudflare_tunnel_manager")
+
+@app.route("/api/cf-tunnels")
+@require_auth
+@require_role("admin", "administrator")
+def api_cf_tunnel_list():
+    if not cf_tunnel_mgr: return ok(tunnels=[], available=False)
+    return ok(tunnels=cf_tunnel_mgr.list_tunnels(),
+              available=cf_tunnel_mgr.cloudflared_available())
+
+@app.route("/api/cf-tunnels", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cf_tunnel_create():
+    if not cf_tunnel_mgr: return err("cloudflare_tunnel_manager modülü yüklenemedi")
+    d = request.get_json() or {}
+    required = ["vm_id", "hostname", "target_ip", "target_port"]
+    missing = [f for f in required if not d.get(f)]
+    if missing:
+        return err(f"Eksik alanlar: {missing}", 400)
+    result = cf_tunnel_mgr.create_tunnel(
+        vm_id=d["vm_id"], vm_name=d.get("vm_name", d["vm_id"]),
+        hostname=d["hostname"], target_ip=d["target_ip"],
+        target_port=int(d["target_port"]), protocol=d.get("protocol","http"),
+    )
+    ev.info(f"CF tunnel oluşturuldu: {d['vm_id']} → {d['hostname']}", category="network")
+    return ok(**result)
+
+@app.route("/api/cf-tunnels/<vm_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cf_tunnel_delete(vm_id):
+    if not cf_tunnel_mgr: return err("cloudflare_tunnel_manager modülü yüklenemedi")
+    return ok(**cf_tunnel_mgr.delete_tunnel(vm_id))
+
+@app.route("/api/cf-tunnels/<vm_id>/status")
+@require_auth
+def api_cf_tunnel_status(vm_id):
+    if not cf_tunnel_mgr: return err("cloudflare_tunnel_manager modülü yüklenemedi")
+    return ok(**cf_tunnel_mgr.tunnel_status(vm_id))
+
+@app.route("/api/cf-tunnels/<vm_id>/start", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cf_tunnel_start(vm_id):
+    if not cf_tunnel_mgr: return err("cloudflare_tunnel_manager modülü yüklenemedi")
+    return ok(**cf_tunnel_mgr.start_tunnel(vm_id))
+
+@app.route("/api/cf-tunnels/<vm_id>/stop", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cf_tunnel_stop(vm_id):
+    if not cf_tunnel_mgr: return err("cloudflare_tunnel_manager modülü yüklenemedi")
+    return ok(**cf_tunnel_mgr.stop_tunnel(vm_id))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NFS / Ceph Storage Pool UI
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/storage/pools/nfs", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_create_nfs_pool():
+    """Create NFS-backed libvirt storage pool."""
+    d = request.get_json() or {}
+    name = d.get("name","")
+    host = d.get("host","")
+    source_path = d.get("source_path","")
+    target_path = d.get("target_path","")
+    if not all([name, host, source_path, target_path]):
+        return err("name, host, source_path, target_path gerekli", 400)
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9_\-]+$', name):
+        return err("Geçersiz pool adı", 400)
+    xml = f"""<pool type='netfs'>
+  <name>{name}</name>
+  <source>
+    <host name='{host}'/>
+    <dir path='{source_path}'/>
+    <format type='nfs'/>
+  </source>
+  <target>
+    <path>{target_path}</path>
+    <permissions>
+      <mode>0755</mode>
+    </permissions>
+  </target>
+</pool>"""
+    try:
+        import libvirt as _lv
+        conn = libvirt.open(config.LIBVIRT_URI)
+        pool = conn.storagePoolDefineXML(xml, 0)
+        os.makedirs(target_path, exist_ok=True)
+        pool.setAutostart(1)
+        pool.build()
+        pool.create()
+        conn.close()
+        ev.info(f"NFS pool oluşturuldu: {name} ({host}:{source_path})", category="storage")
+        return ok(name=name, uuid=pool.UUIDString(), type="nfs")
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/storage/pools/ceph", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_create_ceph_pool():
+    """Create Ceph RBD-backed libvirt storage pool."""
+    d = request.get_json() or {}
+    name = d.get("name","")
+    hosts = d.get("hosts",[])  # list of mon hosts
+    ceph_pool = d.get("ceph_pool","vms")
+    auth_username = d.get("auth_username","admin")
+    auth_uuid = d.get("auth_uuid","")  # libvirt secret UUID for ceph key
+    if not name or not hosts:
+        return err("name ve hosts gerekli", 400)
+    hosts_xml = "\n".join([f"    <host name='{h}' port='6789'/>" for h in hosts])
+    xml = f"""<pool type='rbd'>
+  <name>{name}</name>
+  <source>
+{hosts_xml}
+    <name>{ceph_pool}</name>
+    <auth type='ceph' username='{auth_username}'>
+      <secret uuid='{auth_uuid}'/>
+    </auth>
+  </source>
+</pool>"""
+    try:
+        conn = libvirt.open(config.LIBVIRT_URI)
+        pool = conn.storagePoolDefineXML(xml, 0)
+        pool.setAutostart(1)
+        pool.create()
+        conn.close()
+        ev.info(f"Ceph pool oluşturuldu: {name}", category="storage")
+        return ok(name=name, uuid=pool.UUIDString(), type="ceph_rbd")
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/storage/ceph/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_ceph_status():
+    """Get Ceph cluster status from host (requires ceph client tools)."""
+    try:
+        r = subprocess.run(["ceph", "status", "-f", "json"], capture_output=True, text=True, timeout=10)
+        r2 = subprocess.run(["ceph", "df", "-f", "json"], capture_output=True, text=True, timeout=10)
+        r3 = subprocess.run(["ceph", "osd", "stat", "-f", "json"], capture_output=True, text=True, timeout=10)
+        status = json.loads(r.stdout) if r.returncode == 0 else {}
+        df = json.loads(r2.stdout) if r2.returncode == 0 else {}
+        osd_stat = json.loads(r3.stdout) if r3.returncode == 0 else {}
+        return ok(status=status, df=df, osd_stat=osd_stat, available=r.returncode == 0)
+    except Exception as e:
+        return ok(available=False, error=str(e), status={}, df={}, osd_stat={})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DRS (Distributed Resource Scheduler) — Basic VM rebalancing
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/drs/analyze")
+@require_auth
+@require_role("admin", "administrator")
+def api_drs_analyze():
+    """Analyze resource distribution and recommend VM migrations."""
+    try:
+        vms = vm_manager.list_vms()
+        running = [v for v in vms if v.get("state") == "running"]
+        total_cpu = sum(v.get("cpu_percent", 0) for v in running)
+        total_mem = sum(v.get("memory_mb", 0) for v in running)
+        avg_cpu = total_cpu / len(running) if running else 0
+        # Find over-utilized VMs
+        hot_vms = [v for v in running if v.get("cpu_percent",0) > 80]
+        cold_vms = [v for v in running if v.get("cpu_percent",0) < 10]
+        recommendations = []
+        for vm in hot_vms:
+            recommendations.append({
+                "vm_id": vm["id"],
+                "vm_name": vm.get("name",""),
+                "reason": f"CPU {vm.get('cpu_percent',0):.1f}% — yüksek kullanım",
+                "action": "scale_cpu",
+                "suggested_vcpus": min(int(vm.get("vcpus",1)) * 2, 32),
+            })
+        return ok(
+            total_vms=len(vms), running=len(running),
+            avg_cpu=round(avg_cpu,1), total_mem_mb=total_mem,
+            hot_vms=len(hot_vms), cold_vms=len(cold_vms),
+            recommendations=recommendations,
+            note="Multi-node DRS: cluster kurulumu gerektirir. Şu an tek-node öneriler."
+        )
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RBAC Fine-Grained (per-storage, per-network resource permissions)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_RESOURCE_PERMS_FILE = "/etc/oxware/resource_permissions.json"
+
+def _load_resource_perms():
+    if os.path.exists(_RESOURCE_PERMS_FILE):
+        try:
+            with open(_RESOURCE_PERMS_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_resource_perms(perms):
+    os.makedirs(os.path.dirname(_RESOURCE_PERMS_FILE), exist_ok=True)
+    with open(_RESOURCE_PERMS_FILE, "w") as f:
+        json.dump(perms, f, indent=2)
+
+@app.route("/api/rbac/resources")
+@require_auth
+@require_role("admin", "administrator")
+def api_rbac_resources():
+    """List all resource-level permissions."""
+    return ok(permissions=_load_resource_perms())
+
+@app.route("/api/rbac/resources", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_rbac_set_resource():
+    """Grant/revoke permission for user on specific resource."""
+    d = request.get_json() or {}
+    username = d.get("username","")
+    resource_type = d.get("resource_type","")  # vm, storage, network
+    resource_id = d.get("resource_id","")
+    permissions = d.get("permissions", [])  # ["read","write","exec","delete"]
+    if not all([username, resource_type, resource_id]):
+        return err("username, resource_type, resource_id gerekli", 400)
+    perms = _load_resource_perms()
+    key = f"{resource_type}:{resource_id}"
+    if key not in perms:
+        perms[key] = {}
+    perms[key][username] = permissions
+    _save_resource_perms(perms)
+    ev.info(f"RBAC resource permission: {username} on {key} = {permissions}", category="security")
+    return ok(key=key, username=username, permissions=permissions)
+
+@app.route("/api/rbac/resources/<resource_type>/<resource_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_rbac_remove_resource(resource_type, resource_id):
+    perms = _load_resource_perms()
+    key = f"{resource_type}:{resource_id}"
+    d = request.get_json() or {}
+    username = d.get("username","")
+    if username:
+        if key in perms and username in perms[key]:
+            del perms[key][username]
+    else:
+        perms.pop(key, None)
+    _save_resource_perms(perms)
+    return ok(removed=key)
+
+@app.route("/api/rbac/check", methods=["POST"])
+@require_auth
+def api_rbac_check():
+    """Check if current user has permission on a resource."""
+    from flask_jwt_extended import get_jwt_identity
+    username = get_jwt_identity()
+    d = request.get_json() or {}
+    resource_type = d.get("resource_type","")
+    resource_id = d.get("resource_id","")
+    permission = d.get("permission","read")
+    perms = _load_resource_perms()
+    key = f"{resource_type}:{resource_id}"
+    user_perms = perms.get(key, {}).get(username, [])
+    # Admins have all permissions
+    role = cred_mgr.get_role(username) if hasattr(cred_mgr, "get_role") else "viewer"
+    if role in ("admin", "administrator"):
+        return ok(allowed=True, role=role)
+    allowed = permission in user_perms
+    return ok(allowed=allowed, permissions=user_perms)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Advanced VM Search & Filtering
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/vms/search")
+@require_auth
+def api_vm_search():
+    """Advanced VM search with filtering by tag, state, arch, resource thresholds."""
+    q = request.args.get("q","").strip().lower()
+    state = request.args.get("state","")
+    tag = request.args.get("tag","")
+    min_cpu = request.args.get("min_cpu", type=float)
+    max_cpu = request.args.get("max_cpu", type=float)
+    min_ram = request.args.get("min_ram", type=int)  # MB
+    max_ram = request.args.get("max_ram", type=int)  # MB
+    try:
+        vms = vm_manager.list_vms()
+        results = []
+        for vm in vms:
+            # Text search: name, id
+            if q and q not in vm.get("name","").lower() and q not in vm.get("id","").lower():
+                continue
+            # State filter
+            if state and vm.get("state","") != state:
+                continue
+            # CPU filter
+            cpu_pct = vm.get("cpu_percent", 0)
+            if min_cpu is not None and cpu_pct < min_cpu:
+                continue
+            if max_cpu is not None and cpu_pct > max_cpu:
+                continue
+            # RAM filter
+            ram = vm.get("memory_mb", 0)
+            if min_ram is not None and ram < min_ram:
+                continue
+            if max_ram is not None and ram > max_ram:
+                continue
+            # Tag filter (check tag_manager)
+            if tag:
+                try:
+                    vm_tags = tag_mgr.get_vm_tags(vm["id"]) if tag_mgr else []
+                    if tag not in vm_tags:
+                        continue
+                except Exception:
+                    pass
+            results.append(vm)
+        return ok(vms=results, count=len(results), query={
+            "q": q, "state": state, "tag": tag,
+            "min_cpu": min_cpu, "max_cpu": max_cpu,
+            "min_ram": min_ram, "max_ram": max_ram,
+        })
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HA / Clustering Framework (stub + libvirt remote connection)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HA_NODES_FILE = "/etc/oxware/ha_nodes.json"
+
+@app.route("/api/ha/nodes")
+@require_auth
+@require_role("admin", "administrator")
+def api_ha_nodes():
+    """List configured HA cluster nodes."""
+    nodes = []
+    if os.path.exists(_HA_NODES_FILE):
+        try:
+            with open(_HA_NODES_FILE) as f:
+                nodes = json.load(f)
+        except Exception:
+            pass
+    # Probe each node
+    for node in nodes:
+        ip = node.get("ip","")
+        r = subprocess.run(["ping","-c","1","-W","2",ip], capture_output=True, timeout=5)
+        node["online"] = r.returncode == 0
+        # Try libvirt connection
+        try:
+            import libvirt as _lv
+            uri = f"qemu+ssh://{ip}/system"
+            c = _lv.openReadOnly(uri)
+            node["vms"] = len(c.listAllDomains())
+            node["libvirt"] = True
+            c.close()
+        except Exception:
+            node["libvirt"] = False
+            node["vms"] = 0
+    return ok(nodes=nodes, count=len(nodes))
+
+@app.route("/api/ha/nodes", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ha_add_node():
+    """Add a node to the HA cluster config."""
+    d = request.get_json() or {}
+    ip = d.get("ip",""); name = d.get("name","")
+    if not ip:
+        return err("ip gerekli", 400)
+    nodes = []
+    if os.path.exists(_HA_NODES_FILE):
+        try:
+            with open(_HA_NODES_FILE) as f:
+                nodes = json.load(f)
+        except Exception:
+            pass
+    if any(n.get("ip") == ip for n in nodes):
+        return err("Bu node zaten ekli", 409)
+    nodes.append({"ip": ip, "name": name or ip, "role": d.get("role","secondary")})
+    os.makedirs(os.path.dirname(_HA_NODES_FILE), exist_ok=True)
+    with open(_HA_NODES_FILE, "w") as f:
+        json.dump(nodes, f, indent=2)
+    ev.info(f"HA node eklendi: {ip}", category="cluster")
+    return ok(ip=ip, name=name)
+
+@app.route("/api/ha/nodes/<path:node_ip>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ha_remove_node(node_ip):
+    nodes = []
+    if os.path.exists(_HA_NODES_FILE):
+        try:
+            with open(_HA_NODES_FILE) as f:
+                nodes = json.load(f)
+        except Exception:
+            pass
+    nodes = [n for n in nodes if n.get("ip") != node_ip]
+    with open(_HA_NODES_FILE, "w") as f:
+        json.dump(nodes, f, indent=2)
+    return ok(removed=node_ip)
+
+@app.route("/api/ha/migrate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ha_migrate():
+    """Live migrate VM to another node via libvirt."""
+    d = request.get_json() or {}
+    vm_id = d.get("vm_id","")
+    target_ip = d.get("target_ip","")
+    if not vm_id or not target_ip:
+        return err("vm_id ve target_ip gerekli", 400)
+    try:
+        src_conn = libvirt.open(config.LIBVIRT_URI)
+        dst_conn = libvirt.open(f"qemu+ssh://{target_ip}/system")
+        dom = src_conn.lookupByName(vm_id)
+        flags = libvirt.VIR_MIGRATE_LIVE | libvirt.VIR_MIGRATE_PEER2PEER | libvirt.VIR_MIGRATE_TUNNELLED
+        dom.migrate(dst_conn, flags, None, None, 0)
+        src_conn.close(); dst_conn.close()
+        ev.info(f"Live migration: {vm_id} → {target_ip}", category="cluster")
+        return ok(vm_id=vm_id, target=target_ip, status="migrated")
+    except Exception as e:
+        return err(str(e), 500)
 
 
 # ── Auto SSL cert — runs at import time (works with systemd/gunicorn too) ──────

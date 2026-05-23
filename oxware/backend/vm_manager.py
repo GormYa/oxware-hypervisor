@@ -738,7 +738,7 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
     <sound model='ich9'>
     </sound>
     <video>
-      <model type='virtio' heads='1' primary='yes'/>
+      <model type='vga' vram='16384' heads='1' primary='yes'/>
     </video>
     <memballoon model='virtio'>
     </memballoon>

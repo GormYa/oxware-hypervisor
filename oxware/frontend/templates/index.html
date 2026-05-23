@@ -1562,6 +1562,153 @@
               </div>
             </div>
 
+            <!-- vTPM (fTPM) -->
+            <div class="hw-section">
+              <div class="hw-section-title">
+                🔐 vTPM (fTPM 2.0)
+                <span id="hw-vtpm-status" style="margin-left:8px;font-size:11px;font-weight:400;color:var(--text-muted)">yükleniyor...</span>
+              </div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">TPM Durumu</div>
+                  <div class="hw-ctrl" id="hw-vtpm-ctrl">
+                    <span style="font-size:12px;color:var(--text-muted)">Kontrol ediliyor...</span>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Model</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-vtpm-model" class="hw-input" style="width:180px">
+                      <option value="tpm-tis">tpm-tis (önerilen)</option>
+                      <option value="tpm-crb">tpm-crb (CRB)</option>
+                    </select>
+                    <select id="hw-vtpm-version" class="hw-input" style="width:100px;margin-left:6px">
+                      <option value="2.0">TPM 2.0</option>
+                      <option value="1.2">TPM 1.2</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwAddVtpm()">+ Ekle</button>
+                    <button class="btn-sm btn-danger" onclick="hwRemoveVtpm()">✕ Kaldır</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);padding:0 12px 8px">swtpm emülatör gereklidir: <code>apt install swtpm swtpm-tools</code></div>
+              </div>
+            </div>
+
+            <!-- PCI Passthrough (All Devices) -->
+            <div class="hw-section">
+              <div class="hw-section-title">
+                🔌 PCI Passthrough
+                <button class="btn-sm" style="margin-left:auto" onclick="loadPciDevices()">↻ Tara</button>
+              </div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">PCI Cihaz</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-pci-sel" class="hw-input" style="width:320px">
+                      <option value="">— PCI Tara butonuna basın —</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwAddPciPassthrough()">▶ Bağla</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Bağlı PCI</div>
+                  <div id="hw-pci-attached" style="font-size:12px;color:var(--text-muted)">—</div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);padding:0 12px 8px">IOMMU ve VFIO sürücüsü gereklidir. <code>vfio_ready: true</code> olan cihazlar kullanıma hazır.</div>
+              </div>
+            </div>
+
+            <!-- USB Passthrough -->
+            <div class="hw-section">
+              <div class="hw-section-title">
+                🔗 USB Passthrough
+                <button class="btn-sm" style="margin-left:auto" onclick="loadUsbDevices()">↻ Tara</button>
+              </div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">USB Cihaz</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-usb-sel" class="hw-input" style="width:320px">
+                      <option value="">— USB Tara butonuna basın —</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwAddUsbPassthrough()">▶ Bağla</button>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Bağlı USB</div>
+                  <div id="hw-usb-attached" style="font-size:12px;color:var(--text-muted)">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SPICE Display + Audio -->
+            <div class="hw-section">
+              <div class="hw-section-title">🖥️ SPICE Ekran & Ses</div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">SPICE Port</div>
+                  <div class="hw-ctrl">
+                    <input id="hw-spice-port" type="number" class="hw-input" style="width:100px" value="5910" min="5900" max="5999">
+                    <label style="margin-left:10px;font-size:12px">
+                      <input type="checkbox" id="hw-spice-audio" checked> Ses Aktif
+                    </label>
+                    <button class="btn-sm" onclick="hwEnableSpice()" style="margin-left:8px">▶ SPICE Etkinleştir</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);padding:0 12px 8px">SPICE = QXL ekran + ses + clipboard. VM durdurulmuş olmalı. VirtViewer veya remote-viewer ile bağlanın.</div>
+              </div>
+            </div>
+
+            <!-- Boot Order Editor -->
+            <div class="hw-section">
+              <div class="hw-section-title">🚀 Açılış Sırası (Boot Order)</div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">Boot Sırası</div>
+                  <div class="hw-ctrl" style="flex-wrap:wrap;gap:6px">
+                    <label style="font-size:12px"><input type="checkbox" class="hw-boot-dev" value="hd" checked> 💾 Disk</label>
+                    <label style="font-size:12px"><input type="checkbox" class="hw-boot-dev" value="cdrom"> 💿 CD-ROM</label>
+                    <label style="font-size:12px"><input type="checkbox" class="hw-boot-dev" value="network"> 🌐 Ağ (iPXE)</label>
+                    <label style="font-size:12px"><input type="checkbox" class="hw-boot-dev" value="fd"> 💾 Disket</label>
+                    <button class="btn-sm" onclick="hwApplyBootOrder()" style="margin-left:10px">▶ Uygula</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Mevcut</div>
+                  <div style="font-size:12px;color:var(--text-muted)" id="hw-boot-order-info">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- NUMA Topology -->
+            <div class="hw-section">
+              <div class="hw-section-title">🧩 NUMA Topolojisi</div>
+              <div class="hw-section-body">
+                <div class="hw-row">
+                  <div class="hw-label">NUMA Durumu</div>
+                  <div id="hw-numa-status" style="font-size:12px;color:var(--text-muted)">—</div>
+                </div>
+                <div class="hw-row">
+                  <div class="hw-label">Hızlı Ayar</div>
+                  <div class="hw-ctrl">
+                    <select id="hw-numa-preset" class="hw-input" style="width:220px">
+                      <option value="">— Önayar seçin —</option>
+                      <option value="2node">2 NUMA Node (eşit bölüm)</option>
+                      <option value="4node">4 NUMA Node (eşit bölüm)</option>
+                    </select>
+                    <button class="btn-sm" onclick="hwApplyNumaPreset()">▶ Uygula</button>
+                    <button class="btn-sm btn-danger" onclick="hwRemoveNuma()">✕ Kaldır</button>
+                    <span class="hw-restart-badge">🔄 Restart</span>
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text-muted);padding:0 12px 8px">NUMA topolojisi VM durdurulmuşken ayarlanabilir. Memory-intensive workload'lar için performans artışı sağlar.</div>
+              </div>
+            </div>
+
             <!-- Boot & General -->
             <div class="hw-section">
               <div class="hw-section-title">⚙️ Genel Ayarlar</div>
@@ -1577,9 +1724,11 @@
                   </div>
                 </div>
                 <div class="hw-row">
-                  <div class="hw-label">Açılış Sırası</div>
+                  <div class="hw-label">Memory Hot-Unplug</div>
                   <div class="hw-ctrl">
-                    <span style="font-size:12px;color:var(--text-muted)" id="hw-boot-order-info">—</span>
+                    <input id="hw-mem-hotunplug-mb" type="number" class="hw-input" style="width:120px" placeholder="Hedef MB">
+                    <button class="btn-sm" onclick="hwMemHotUnplug()">▼ Küçült</button>
+                    <span style="font-size:11px;color:var(--text-muted);margin-left:6px">Balloon driver gerekli (çalışırken)</span>
                   </div>
                 </div>
               </div>
@@ -2052,6 +2201,130 @@
               </table>
             </div>
           </div>
+
+          <!-- ─────── Gelişmiş İzleme ─────── -->
+          <div style="margin-top:18px">
+            <div class="section-header" style="margin-top:8px">
+              <h2><i class="fa-solid fa-chart-area" style="margin-right:8px;color:var(--accent-lt)"></i>Gelişmiş İzleme</h2>
+            </div>
+
+            <div class="section-header"><h2>Performans Geçmişi</h2></div>
+            <div class="card" style="margin-bottom:14px">
+              <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+                <button class="btn sm" onclick="loadPerfHistory('1h')">1s</button>
+                <button class="btn sm" onclick="loadPerfHistory('6h')">6s</button>
+                <button class="btn sm" onclick="loadPerfHistory('24h')">24s</button>
+                <button class="btn sm" onclick="loadPerfHistory('7d')">7g</button>
+                <button class="btn sm" onclick="loadPerfHistory('30d')">30g</button>
+              </div>
+              <div style="height:200px;position:relative"><canvas id="perfHistoryChart"></canvas></div>
+            </div>
+
+            <!-- Trend Analysis -->
+            <div class="section-header" style="margin-top:14px">
+              <h2>Trend Analizi</h2>
+              <div class="spacer"></div>
+              <button class="btn sm" onclick="loadTrendAnalysis()">&#x21BB; Yükle</button>
+              <button class="btn sm" onclick="openModal('modal-backup-schedule')" style="margin-left:4px">&#x23F0; Yedekleme Planı</button>
+            </div>
+            <div id="trend-container" style="margin-bottom:14px">
+              <div class="card" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+                Trend analizini yüklemek için <strong>&#x21BB; Yükle</strong> butonuna tıklayın.
+                <br><small>7 günlük ve 30 günlük CPU/RAM verisini çeker.</small>
+              </div>
+            </div>
+
+            <!-- HA Status -->
+            <div class="section-header">
+              <h2>Yüksek Kullanılabilirlik (HA)</h2>
+              <div class="spacer"></div>
+              <button class="btn sm" onclick="loadHAStatus()">&#x21BB; Yenile</button>
+            </div>
+            <div id="ha-status-container" style="margin-bottom:14px">
+              <div class="empty-state" style="padding:20px"><p>— Yüklemek için &#x21BB; Yenile butonuna tıklayın —</p></div>
+            </div>
+
+            <div class="section-header">
+              <h2>SMART Disk Sağlığı</h2>
+              <div class="spacer"></div>
+              <button class="btn sm" onclick="loadSmartData()">&#x21BB; Yenile</button>
+            </div>
+            <div class="table-wrap" style="margin-bottom:14px">
+              <table>
+                <thead><tr><th>Aygıt</th><th>Model</th><th>Sıcaklık</th><th>Güç Saati</th><th>Sağlık</th></tr></thead>
+                <tbody id="smartDevicesTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">— Yüklemek için &#x21BB; Yenile tıklayın —</td></tr></tbody>
+              </table>
+            </div>
+
+            <div class="section-header">
+              <h2>VM Uptime</h2>
+              <div class="spacer"></div>
+              <button class="btn sm" onclick="loadUptimes()">&#x21BB; Yenile</button>
+            </div>
+            <div class="table-wrap" style="margin-bottom:14px">
+              <table>
+                <thead><tr><th>VM</th><th>Toplam Uptime</th><th>Kullanılabilirlik</th><th>Boot Sayısı</th><th>Durum</th></tr></thead>
+                <tbody id="uptimeTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">— Yüklemek için &#x21BB; Yenile tıklayın —</td></tr></tbody>
+              </table>
+            </div>
+
+            <div class="section-header">
+              <h2>IDS/IPS Uyarıları (Suricata)</h2>
+              <div class="spacer"></div>
+              <button class="btn sm" onclick="loadIdsStatus()">&#x21BB; Yenile</button>
+            </div>
+            <div id="idsStatusCard" class="card" style="margin-bottom:14px"></div>
+            <div class="table-wrap" style="margin-bottom:14px">
+              <table>
+                <thead><tr><th>Zaman</th><th>Kaynak IP</th><th>Hedef</th><th>İmza</th><th>Severity</th></tr></thead>
+                <tbody id="idsAlertsTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">— Yüklemek için &#x21BB; Yenile tıklayın —</td></tr></tbody>
+              </table>
+            </div>
+
+            <!-- Maliyet Tahmini -->
+            <div class="card" style="margin-top:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <span>&#x1F4B0;</span> Maliyet Tahmini
+                <button class="btn sm" onclick="openCostConfig()" style="margin-left:auto">&#x2699; Ayarlar</button>
+                <button class="btn sm" onclick="loadCostEstimate()">&#x21BB;</button>
+              </div>
+              <div id="cost-total-display" style="font-size:28px;font-weight:700;color:var(--accent-lt);margin:10px 0">—</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>VM</th><th>vCPU</th><th>RAM (MB)</th><th>Disk (GB)</th><th>Aylık Maliyet</th></tr></thead>
+                  <tbody id="cost-vm-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Yüklemek için &#x21BB; tıklayın —</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Network QoS -->
+            <div class="card" style="margin-top:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <span>&#x1F310;</span> Ağ Bant Genişliği (QoS)
+                <button class="btn sm" onclick="loadNetworkQos()" style="margin-left:auto">&#x21BB; Yükle</button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM başına NIC bant genişliği kısıtlaması. 0 = sınırsız. Yüklemek için &#x21BB; butonuna tıklayın.</div>
+              <div id="qos-vm-list" style="display:flex;flex-direction:column;gap:8px">
+                <div style="color:var(--text-muted);font-size:12px">— Yüklemek için &#x21BB; Yükle butonuna tıklayın —</div>
+              </div>
+            </div>
+
+            <!-- Storage Migration -->
+            <div class="card" style="margin-top:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <span>&#x1F4BD;</span> Canlı Disk Taşıma
+                <button class="btn sm" onclick="loadStorageMigrations()" style="margin-left:auto">&#x21BB; Yükle</button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM çalışırken disk başka depolama havuzuna taşınır (virsh blockcopy). Aktif işler için &#x21BB; Yükle tıklayın.</div>
+              <div class="smig-controls">
+                <select id="smig-vm-sel" style="flex:1;min-width:140px"><option>VM seç...</option></select>
+                <select id="smig-disk-sel" style="flex:1;min-width:100px"><option>Disk...</option></select>
+                <input id="smig-dest" type="text" placeholder="/var/lib/libvirt/images/new.qcow2" style="flex:2;min-width:200px">
+                <button class="btn-primary" onclick="startStorageMigration()">&#x1F4BD; Taşı</button>
+              </div>
+              <div id="smig-jobs-list" style="font-size:12px;color:var(--text-muted)">—</div>
+            </div>
+          </div>
         </div>
 
         <!-- ─────── Users Page ─────── -->
@@ -2104,12 +2377,130 @@
           </div>
         </div>
 
+        <!-- ─────── Containers Page ─────── -->
+        <div class="page" id="page-containers">
+          <div class="section-header">
+            <h2>🐳 Container Yönetimi</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadContainers()">↻ Yenile</button>
+            <button class="btn primary" onclick="openModal('modal-docker-create')">+ Docker</button>
+            <button class="btn primary" onclick="openModal('modal-lxc-create')">+ LXC</button>
+          </div>
+          <!-- Backend availability -->
+          <div id="containers-backend-status" style="margin-bottom:12px;font-size:12px;color:var(--text-muted)">Kontrol ediliyor...</div>
+          <!-- Tab bar -->
+          <div class="tab-bar" style="margin-bottom:14px">
+            <button class="tab-btn active" onclick="switchContainerTab('docker',this)">🐳 Docker</button>
+            <button class="tab-btn" onclick="switchContainerTab('lxc',this)">📦 LXC</button>
+            <button class="tab-btn" onclick="switchContainerTab('images',this)">🖼️ Images</button>
+          </div>
+          <!-- Docker containers -->
+          <div id="container-tab-docker">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Image</th><th>Durum</th><th>Port</th><th>Oluşturulma</th><th>İşlem</th></tr></thead>
+                <tbody id="docker-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- LXC containers -->
+          <div id="container-tab-lxc" style="display:none">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Durum</th><th>IP</th><th>Autostart</th><th>İşlem</th></tr></thead>
+                <tbody id="lxc-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Docker images -->
+          <div id="container-tab-images" style="display:none">
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <input id="docker-pull-input" type="text" placeholder="nginx:latest veya ubuntu:22.04" style="flex:1">
+              <button class="btn primary" onclick="dockerPullImage()">⬇ Pull</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Repository</th><th>Tag</th><th>Boyut</th><th>Oluşturulma</th></tr></thead>
+                <tbody id="docker-images-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────── HA Cluster Page ─────── -->
+        <div class="page" id="page-ha">
+          <div class="section-header">
+            <h2>🔗 HA Cluster Yönetimi</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadHaPage()">↻ Yenile</button>
+            <button class="btn primary" onclick="openModal('modal-ha-add-node')">+ Node Ekle</button>
+          </div>
+          <!-- DRS analyze -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title">📊 DRS — Kaynak Dağılım Analizi</div>
+            <div style="display:flex;gap:10px;align-items:center;padding:0 14px 10px">
+              <button class="btn" onclick="loadDrsAnalyze()">🔍 Analiz Et</button>
+              <span style="font-size:12px;color:var(--text-muted)">VM CPU/RAM kullanımını analiz eder, öneriler sunar</span>
+            </div>
+            <div id="drs-result" style="padding:0 14px 12px"></div>
+          </div>
+          <!-- Nodes list -->
+          <div class="card">
+            <div class="card-title">🖥️ Cluster Node'ları</div>
+            <div class="table-wrap" style="margin:0">
+              <table>
+                <thead><tr><th>Ad</th><th>IP</th><th>Rol</th><th>Durum</th><th>VM Sayısı</th><th>Libvirt</th><th>İşlem</th></tr></thead>
+                <tbody id="ha-nodes-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Live migration -->
+          <div class="card" style="margin-top:14px">
+            <div class="card-title">🚚 Live Migration</div>
+            <div style="display:flex;gap:10px;align-items:center;padding:0 14px 12px;flex-wrap:wrap">
+              <select id="ha-mig-vm" style="width:200px"><option value="">— VM seçin —</option></select>
+              <select id="ha-mig-target" style="width:200px"><option value="">— Hedef node IP —</option></select>
+              <button class="btn danger" onclick="doLiveMigration()">🚚 Migrate Et</button>
+              <span style="font-size:11px;color:var(--text-muted)">QEMU+SSH + paylaşımlı storage gerektirir</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────── Cloudflare Tunnels Page ─────── -->
+        <div class="page" id="page-cf-tunnels">
+          <div class="section-header">
+            <h2>☁️ Cloudflare Tunnel Yönetimi</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadCfTunnels()">↻ Yenile</button>
+            <button class="btn primary" onclick="openModal('modal-cf-create')">+ Tunnel Oluştur</button>
+          </div>
+          <div id="cf-available-banner" style="margin-bottom:12px;font-size:12px;color:var(--text-muted)">
+            cloudflared kurulumu kontrol ediliyor...
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>VM</th><th>Hostname</th><th>Hedef</th><th>Tunnel Adı</th><th>Durum</th><th>İşlem</th></tr></thead>
+              <tbody id="cf-tunnels-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card" style="margin-top:14px;font-size:12px;color:var(--text-muted)">
+            <div class="card-title">📋 Kurulum Adımları</div>
+            <ol style="padding:0 14px 12px;line-height:1.8">
+              <li><code>curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null</code></li>
+              <li><code>sudo apt install cloudflared</code></li>
+              <li><code>cloudflared tunnel login</code> (Cloudflare hesabı gerekli)</li>
+              <li>Yukarıdan tunnel oluştur → DNS otomatik yönetilir</li>
+            </ol>
+          </div>
+        </div>
+
         <!-- ─────── Snapshots Page ─────── -->
         <div class="page" id="page-snapshots">
           <div class="section-header">
             <h2>Snapshot Yönetimi</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadSnapshots()">↻ Yenile</button>
+            <button class="btn primary" onclick="openModal('modal-bulk-snapshot')">📷 Toplu Snapshot</button>
           </div>
           <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
             <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">VM Seç</label>
@@ -2880,162 +3271,6 @@
           </div>
         </div>
 
-        <!-- ─────── tab-monitoring ─────── -->
-        <div class="page" id="page-tab-monitoring">
-          <div class="section-header"><h2><i class="fa-solid fa-chart-area" style="margin-right:8px;color:var(--accent-lt)"></i>Gelişmiş İzleme</h2></div>
-
-          <div class="section-header"><h2>Performans Geçmişi</h2></div>
-          <div class="card" style="margin-bottom:14px">
-            <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-              <button class="btn sm" onclick="loadPerfHistory('1h')">1s</button>
-              <button class="btn sm" onclick="loadPerfHistory('6h')">6s</button>
-              <button class="btn sm" onclick="loadPerfHistory('24h')">24s</button>
-              <button class="btn sm" onclick="loadPerfHistory('7d')">7g</button>
-              <button class="btn sm" onclick="loadPerfHistory('30d')">30g</button>
-            </div>
-            <div style="height:200px;position:relative"><canvas id="perfHistoryChart"></canvas></div>
-          </div>
-
-          <!-- Trend Analysis -->
-          <div class="section-header" style="margin-top:14px">
-            <h2>📈 Trend Analizi</h2>
-            <div class="spacer"></div>
-            <button class="btn sm" onclick="loadTrendAnalysis()">↻ Yükle</button>
-            <button class="btn sm" onclick="openModal('modal-backup-schedule')" style="margin-left:4px">⏰ Yedekleme Planı</button>
-          </div>
-          <div id="trend-container" style="margin-bottom:14px">
-            <div class="card" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
-              Trend analizini yüklemek için <strong>↻ Yükle</strong> butonuna tıklayın.
-              <br><small>7 günlük ve 30 günlük CPU/RAM verisini çeker.</small>
-            </div>
-          </div>
-
-          <!-- HA Status -->
-          <div class="section-header"><h2>🔄 Yüksek Kullanılabilirlik (HA)</h2></div>
-          <div id="ha-status-container" style="margin-bottom:14px">
-            <div class="empty-state" style="padding:20px"><p>Yükleniyor...</p></div>
-          </div>
-
-          <div class="section-header"><h2>SMART Disk Sağlığı</h2></div>
-          <div class="table-wrap" style="margin-bottom:14px">
-            <table>
-              <thead><tr><th>Aygıt</th><th>Model</th><th>Sıcaklık</th><th>Güç Saati</th><th>Sağlık</th></tr></thead>
-              <tbody id="smartDevicesTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
-            </table>
-          </div>
-
-          <div class="section-header"><h2>VM Uptime</h2></div>
-          <div class="table-wrap" style="margin-bottom:14px">
-            <table>
-              <thead><tr><th>VM</th><th>Toplam Uptime</th><th>Kullanılabilirlik</th><th>Boot Sayısı</th><th>Durum</th></tr></thead>
-              <tbody id="uptimeTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
-            </table>
-          </div>
-
-          <div class="section-header"><h2>IDS/IPS Uyarıları (Suricata)</h2></div>
-          <div id="idsStatusCard" class="card" style="margin-bottom:14px"></div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Zaman</th><th>Kaynak IP</th><th>Hedef</th><th>İmza</th><th>Severity</th></tr></thead>
-              <tbody id="idsAlertsTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
-            </table>
-          </div>
-
-          <!-- ── Uyarı Kuralları ── -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title" style="display:flex;align-items:center;gap:8px">
-              <span>🔔</span> Uyarı Kuralları
-              <button class="btn sm" onclick="openAlertRuleModal()" style="margin-left:auto">+ Yeni Kural</button>
-              <button class="btn sm" onclick="loadAlertRules()">↻</button>
-            </div>
-            <div id="alert-rules-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-              <div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>
-            </div>
-            <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
-              <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-                Son Uyarılar
-                <button class="btn sm" onclick="loadAlertHistory()" style="font-size:10px;padding:2px 8px">↻</button>
-              </div>
-              <div id="alert-history-list" style="font-size:12px;color:var(--text-muted)">— Yüklemek için ↻ tıklayın —</div>
-            </div>
-          </div>
-
-          <!-- ── Maliyet Tahmini ── -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title" style="display:flex;align-items:center;gap:8px">
-              <span>💰</span> Maliyet Tahmini
-              <button class="btn sm" onclick="openCostConfig()" style="margin-left:auto">⚙ Ayarlar</button>
-              <button class="btn sm" onclick="loadCostEstimate()">↻</button>
-            </div>
-            <div id="cost-total-display" style="font-size:28px;font-weight:700;color:var(--accent-lt);margin:10px 0">—</div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>VM</th><th>vCPU</th><th>RAM (MB)</th><th>Disk (GB)</th><th>Aylık Maliyet</th></tr></thead>
-                <tbody id="cost-vm-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- ── Network QoS ── -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title" style="display:flex;align-items:center;gap:8px">
-              <span>🌐</span> Ağ Bant Genişliği (QoS)
-              <button class="btn sm" onclick="loadNetworkQos()" style="margin-left:auto">↻ Yükle</button>
-            </div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM başına NIC bant genişliği kısıtlaması. 0 = sınırsız. Yüklemek için ↻ butonuna tıklayın.</div>
-            <div id="qos-vm-list" style="display:flex;flex-direction:column;gap:8px">
-              <div style="color:var(--text-muted);font-size:12px">— Yüklemek için ↻ Yükle butonuna tıklayın —</div>
-            </div>
-          </div>
-
-          <!-- ── Storage Migration ── -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title" style="display:flex;align-items:center;gap:8px">
-              <span>💽</span> Canlı Disk Taşıma
-              <button class="btn sm" onclick="loadStorageMigrations()" style="margin-left:auto">↻ Yükle</button>
-            </div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">VM çalışırken disk başka depolama havuzuna taşınır (virsh blockcopy). Aktif işler için ↻ Yükle tıklayın.</div>
-            <div class="smig-controls">
-              <select id="smig-vm-sel" style="flex:1;min-width:140px"><option>VM seç...</option></select>
-              <select id="smig-disk-sel" style="flex:1;min-width:100px"><option>Disk...</option></select>
-              <input id="smig-dest" type="text" placeholder="/var/lib/libvirt/images/new.qcow2" style="flex:2;min-width:200px">
-              <button class="btn-primary" onclick="startStorageMigration()">💽 Taşı</button>
-            </div>
-            <div id="smig-jobs-list" style="font-size:12px;color:var(--text-muted)">—</div>
-          </div>
-
-          <!-- Speedtest (#39) -->
-          <div class="section-header" style="margin-top:14px">
-            <h2>🚀 Ağ Hız Testi</h2>
-            <div class="spacer"></div>
-            <button class="btn sm" onclick="loadSpeedtestServers()">↻ Sunucular</button>
-          </div>
-          <div class="card" style="margin-bottom:14px">
-            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px">
-              <div class="form-group" style="flex:1;min-width:200px">
-                <label style="font-size:11px;color:var(--text-muted)">Test Sunucusu</label>
-                <select id="speedtest-server-sel" style="width:100%">
-                  <option value="">— Yükleniyor —</option>
-                </select>
-              </div>
-              <div class="form-group" style="display:flex;align-items:center;gap:6px;margin-bottom:0">
-                <input type="checkbox" id="speedtest-dl-cb" checked>
-                <label for="speedtest-dl-cb" style="font-size:12px">İndirme testi</label>
-              </div>
-              <button class="btn primary" onclick="runSpeedtest()" id="speedtest-run-btn">▶ Testi Başlat</button>
-            </div>
-            <div id="speedtest-results">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px" id="speedtest-cards">
-                <div class="stat-card"><div class="stat-label">Gecikme (ms)</div><div class="stat-value" id="st-latency">—</div></div>
-                <div class="stat-card"><div class="stat-label">Paket Kaybı</div><div class="stat-value" id="st-loss">—</div></div>
-                <div class="stat-card"><div class="stat-label">İndirme (Mbps)</div><div class="stat-value" id="st-dl">—</div></div>
-                <div class="stat-card"><div class="stat-label">Test Süresi (s)</div><div class="stat-value" id="st-time">—</div></div>
-              </div>
-              <div id="speedtest-history" style="margin-top:12px;font-size:12px;color:var(--text-muted)"></div>
-            </div>
-          </div>
-        </div>
-
         <!-- ─────── tab-ai ─────── -->
         <div class="page" id="page-tab-ai">
           <div class="section-header">
@@ -3603,7 +3838,7 @@
           </div>
 
           <!-- Modül indirme -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px">
             <!-- WiseCP -->
             <div class="card">
               <div class="card-title" style="display:flex;align-items:center;gap:8px">
@@ -3637,6 +3872,32 @@
               </div>
               <button class="btn-primary" onclick="downloadModule('whmcs')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:12px;border:none;cursor:pointer">
                 <i class="fa-solid fa-download"></i> WHMCS Modülünü İndir
+              </button>
+            </div>
+
+            <!-- DiyoCP -->
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-box" style="color:#34d399"></i> DiyoCP Modülü
+              </div>
+              <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+                DiyoCP'de <strong>Sunucular → Yeni Sunucu → OXware</strong> seçin.<br>
+                Hostname = OXware URL, API Key alanına API anahtarını girin.
+              </p>
+              <div style="font-size:11px;margin-bottom:12px">
+                <div style="margin-bottom:4px;color:var(--text-dim)">Kurulum yolu:</div>
+                <code style="font-size:11px;background:#0d1117;padding:4px 8px;border-radius:4px;display:block">modules/servers/oxware/oxware.php</code>
+              </div>
+              <div id="diyocp-status" style="font-size:11px;margin-bottom:10px">
+                <div id="diyocp-test-result" style="display:none;padding:8px;border-radius:5px;font-size:11px"></div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                  <input id="diyocp-url" type="text" placeholder="https://diyocp.domain.com" style="flex:1;min-width:180px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+                  <input id="diyocp-apikey" type="password" placeholder="DiyoCP API Key" style="flex:1;min-width:140px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+                </div>
+                <button class="btn sm" onclick="testDiyoCPConnection()" style="margin-bottom:6px">Bağlantı Test Et</button>
+              </div>
+              <button class="btn-primary" onclick="downloadModule('diyocp')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:12px;border:none;cursor:pointer">
+                <i class="fa-solid fa-download"></i> DiyoCP Modülünü İndir
               </button>
             </div>
           </div>
@@ -5211,7 +5472,7 @@ const LANGS = {
     monitor:'Monitor', users:'Users', updates:'Updates', snapshots:'Snapshots',
     topology:'Topology', templates:'Templates', backup:'Backup',
     firewall:'Firewall', vpn:'VPN', dns:'DNS', proxy:'Proxy & LB',
-    monitoring:'Monitoring+', ai:'AI Assistant', security:'Security',
+    monitoring:'Monitoring', ai:'AI Assistant', security:'Security',
     integrations:'Integrations', settings:'System Settings',
     'shell console':'Shell Console','general':'General','virtualization':'Virtualization',
     'system':'System','management':'Management'
@@ -5221,7 +5482,7 @@ const LANGS = {
     monitor:'İzleme', users:'Kullanıcılar', updates:'Güncellemeler', snapshots:'Snapshot',
     topology:'Topoloji', templates:'Şablonlar', backup:'Yedekleme',
     firewall:'Güvenlik Duvarı', vpn:'VPN', dns:'DNS', proxy:'Proxy & LB',
-    monitoring:'İzleme+', ai:'AI Asistan', security:'Güvenlik',
+    monitoring:'İzleme', ai:'AI Asistan', security:'Güvenlik',
     integrations:'Entegrasyonlar', settings:'Sistem Ayarları',
     'shell console':'Shell Console','general':'Genel Bakış','virtualization':'Sanallaştırma',
     'system':'Sistem','management':'Yönetim'
@@ -5231,7 +5492,7 @@ const LANGS = {
     monitor:'Monitor', users:'Usuarios', updates:'Actualizaciones', snapshots:'Snapshots',
     topology:'Topología', templates:'Plantillas', backup:'Copia de seguridad',
     firewall:'Firewall', vpn:'VPN', dns:'DNS', proxy:'Proxy & LB',
-    monitoring:'Monitoreo+', ai:'Asistente IA', security:'Seguridad',
+    monitoring:'Monitoreo', ai:'Asistente IA', security:'Seguridad',
     integrations:'Integraciones', settings:'Config. Sistema',
     'shell console':'Consola Shell','general':'General','virtualization':'Virtualización',
     'system':'Sistema','management':'Gestión'
@@ -5241,7 +5502,7 @@ const LANGS = {
     monitor:'Monitor', users:'Benutzer', updates:'Updates', snapshots:'Snapshots',
     topology:'Topologie', templates:'Vorlagen', backup:'Backup',
     firewall:'Firewall', vpn:'VPN', dns:'DNS', proxy:'Proxy & LB',
-    monitoring:'Überwachung+', ai:'KI-Assistent', security:'Sicherheit',
+    monitoring:'Überwachung', ai:'KI-Assistent', security:'Sicherheit',
     integrations:'Integrationen', settings:'Systemeinstellungen',
     'shell console':'Shell-Konsole','general':'Überblick','virtualization':'Virtualisierung',
     'system':'System','management':'Verwaltung'
@@ -5251,7 +5512,7 @@ const LANGS = {
     monitor:'监控', users:'用户', updates:'更新', snapshots:'快照',
     topology:'拓扑', templates:'模板', backup:'备份',
     firewall:'防火墙', vpn:'VPN', dns:'DNS', proxy:'代理 & 负载均衡',
-    monitoring:'高级监控', ai:'AI助手', security:'安全',
+    monitoring:'监控', ai:'AI助手', security:'安全',
     integrations:'集成', settings:'系统设置',
     'shell console':'Shell控制台','general':'总览','virtualization':'虚拟化',
     'system':'系统','management':'管理'
@@ -6566,9 +6827,7 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="tab-proxy" onclick="navigate('tab-proxy');closeMobileNav()">
       <i class="fa-solid fa-arrows-left-right fa-fw"></i>${t('proxy')}
     </div>` : ''}
-    <div class="ctx-item" data-page="tab-monitoring" onclick="navigate('tab-monitoring');closeMobileNav()">
-      <i class="fa-solid fa-chart-area fa-fw"></i>${t('monitoring')}
-    </div>
+
     ${isOperator ? `<div class="ctx-item" data-page="tab-ai" onclick="navigate('tab-ai');closeMobileNav()">
       <i class="fa-solid fa-robot fa-fw"></i>${t('ai')}
     </div>` : ''}
@@ -8830,69 +9089,6 @@ async function loadHAStatus() {
   }
 }
 
-/* ══════════ Speedtest (#39) ══════════ */
-let _speedtestHistory = [];
-
-async function loadSpeedtestServers() {
-  const sel = document.getElementById('speedtest-server-sel');
-  if (!sel) return;
-  const d = await _api('/api/speedtest/servers');
-  const servers = d.servers || [];
-  sel.innerHTML = servers.map(s =>
-    `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`
-  ).join('');
-}
-
-async function runSpeedtest() {
-  const sel = document.getElementById('speedtest-server-sel');
-  const btn = document.getElementById('speedtest-run-btn');
-  const dlCb = document.getElementById('speedtest-dl-cb');
-  if (!sel || !sel.value) { toast('Sunucu seçin', 'warning'); return; }
-
-  btn.disabled = true; btn.textContent = '⏳ Test çalışıyor…';
-  ['st-latency','st-loss','st-dl','st-time'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '…';
-  });
-
-  try {
-    const d = await _api('/api/speedtest/run', 'POST', {
-      server_id: sel.value,
-      download: dlCb ? dlCb.checked : true
-    });
-
-    document.getElementById('st-latency').textContent =
-      d.latency_ms != null ? d.latency_ms.toFixed(1) : '⚠ ' + (d.ping_error || 'N/A');
-    document.getElementById('st-loss').textContent = d.packet_loss || '—';
-    document.getElementById('st-dl').textContent =
-      d.speed_mbps != null ? d.speed_mbps.toFixed(2) : (d.download_error ? '⚠ ' + d.download_error : '—');
-    document.getElementById('st-time').textContent =
-      d.download_time != null ? d.download_time.toFixed(1) : '—';
-
-    // History
-    _speedtestHistory.unshift({
-      server: d.server_name, latency: d.latency_ms, dl: d.speed_mbps,
-      ts: new Date().toLocaleTimeString()
-    });
-    if (_speedtestHistory.length > 10) _speedtestHistory.pop();
-    const hist = document.getElementById('speedtest-history');
-    if (hist) {
-      hist.innerHTML = '<div style="font-weight:600;margin-bottom:6px">Son testler:</div>' +
-        _speedtestHistory.map(h =>
-          `<div style="display:flex;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)">
-            <span style="flex:2">${escHtml(h.server)}</span>
-            <span style="flex:1">${h.latency != null ? h.latency.toFixed(1) + ' ms' : '—'}</span>
-            <span style="flex:1">${h.dl != null ? h.dl.toFixed(2) + ' Mbps' : '—'}</span>
-            <span style="color:var(--text-muted)">${escHtml(h.ts)}</span>
-          </div>`
-        ).join('');
-    }
-  } catch(e) {
-    toast('Speedtest hatası: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = '▶ Testi Başlat';
-  }
-}
-
 /* ══════════ Trend Analysis ══════════ */
 let _trendCharts = {};
 async function loadTrendAnalysis(periods=['7d','30d']) {
@@ -9489,6 +9685,15 @@ async function setupBridge() {
   const libNet = (document.getElementById('br-libvirt-net')?.value||'oxbridge').trim();
   const res    = document.getElementById('bridge-setup-result');
   if (!nic) { toast('Fiziksel NIC seçin', 'error'); return; }
+  // WARNING: Bridge kurulumu aktif ağ arayüzünü değiştirir. SSH üzerinden bağlıysanız bağlantı kopabilir!
+  const confirmed = await showConfirm(
+    '⚠️ DİKKAT: Bridge kurulumu ağ yapılandırmasını değiştirir.\n\n' +
+    'Eğer SSH veya tarayıcı üzerinden bağlıysanız, bağlantınız GEÇİCİ OLARAK KESİLEBİLİR.\n\n' +
+    'Sistem genellikle 30-60 saniye içinde yeni ağ yapılandırmasıyla tekrar erişilebilir olur.\n\n' +
+    'Bridge kurmak istediğinizden emin misiniz?',
+    'Bridge Kur — Bağlantı Kesilme Uyarısı', true
+  );
+  if (!confirmed) return;
   if (res) res.innerHTML = '<div style="color:var(--text-muted);font-size:12px">⏳ Bridge kuruluyor...</div>';
   try {
     const d = await _api('/api/networks/bridge/setup', 'POST', {
@@ -9998,6 +10203,8 @@ async function loadMonitor() {
     `;
     loadProcesses();
     loadDiskUsage();
+    // Load perf history chart (lightweight, uses backend cache)
+    loadPerfHistory('1h');
   } catch (e) { toast(e.message, "error"); }
 }
 
@@ -10528,6 +10735,28 @@ async function downloadModule(name) {
     URL.revokeObjectURL(url);
   } catch(e) {
     showToast('İndirme hatası: ' + e, 'error');
+  }
+}
+
+async function testDiyoCPConnection() {
+  const url = (document.getElementById('diyocp-url') || {}).value?.trim();
+  const key = (document.getElementById('diyocp-apikey') || {}).value?.trim();
+  const res = document.getElementById('diyocp-test-result');
+  if (!url || !key) { toast('URL ve API Key zorunlu', 'warning'); return; }
+  if (res) { res.style.display = 'block'; res.style.background = 'rgba(234,179,8,.08)'; res.style.border = '1px solid rgba(234,179,8,.25)'; res.textContent = '⏳ Test ediliyor...'; }
+  try {
+    const d = await _api('/api/hosting/diyocp/test', 'POST', { url, api_key: key });
+    if (res) {
+      if (d && d.status === 'ok') {
+        res.style.background = 'rgba(34,197,94,.08)'; res.style.border = '1px solid rgba(34,197,94,.25)';
+        res.textContent = '✅ Bağlantı başarılı! DiyoCP sunucusuna ulaşıldı.';
+      } else {
+        res.style.background = 'rgba(239,68,68,.08)'; res.style.border = '1px solid rgba(239,68,68,.25)';
+        res.textContent = '❌ Bağlantı başarısız: ' + (d?.error || 'Bilinmeyen hata');
+      }
+    }
+  } catch(e) {
+    if (res) { res.style.background = 'rgba(239,68,68,.08)'; res.style.border = '1px solid rgba(239,68,68,.25)'; res.textContent = '❌ Hata: ' + e.message; }
   }
 }
 
@@ -11748,30 +11977,7 @@ async function loadTabData(tabId) {
     case 'tab-dns':          loadDnsHosts(); loadDhcpLeases(); break;
     case 'tab-ipam':         loadIpamPage(); break;
     case 'tab-proxy':        loadNginxSites(); break;
-    case 'tab-monitoring': {
-      // #41/#46 CRITICAL FIX: stagger all calls, 2min cache for first load
-      const _now = Date.now();
-      const _skip = (window._monitorLoadedAt && (_now - window._monitorLoadedAt) < 120000);
-      if (!_skip) window._monitorLoadedAt = _now;
-
-      // Tier 1 — CPU/RAM chart only (immediate, uses backend cache → fast)
-      loadPerfHistory('1h');
-
-      if (!_skip) {
-        // Tier 2 — uptime + alert rules (lightweight, 800ms)
-        setTimeout(() => { loadUptimes(); loadAlertRules(); }, 800);
-        // Tier 3 — SMART, HA, IDS (moderate, 1800ms)
-        setTimeout(() => { loadSmartData(); loadHAStatus(); loadIdsStatus(); }, 1800);
-        // Tier 4 — cost estimate only (not QoS, not trend, not migration — too heavy)
-        setTimeout(() => loadCostEstimate(), 3000);
-        // Tier 5 — speedtest server list only (no test runs)
-        setTimeout(() => loadSpeedtestServers(), 4000);
-      }
-      // loadNetworkQos(), loadTrendAnalysis(), loadAlertHistory(), loadStorageMigrations()
-      // are NOT auto-loaded — they run only when user clicks the ↻ button
-      // This prevents N×libvirt calls from freezing the system
-      break;
-    }
+    case 'tab-monitoring': navigate('monitor'); break;
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
@@ -13247,15 +13453,18 @@ window.addEventListener("DOMContentLoaded", () => {
   checkLicenseStatus();
 
   // Skip all polling when tab is hidden (saves server load on background tabs)
+  // IMPORTANT: Keep interval long (30s) to avoid overloading server with concurrent API calls.
+  // Do NOT add more endpoints here — each tick fires multiple backend calls.
   let _treeRefreshCounter = 0;
   statsInterval = setInterval(() => {
     if (document.visibilityState === 'hidden') return;
     if (currentPage === "summary") loadNodeSummary();
     if (currentPage === "vm-detail" && currentVmId) loadVMDetail(currentVmId);
-    // Tree refresh every 2nd tick (16 s) — list_vms is cached 3 s anyway
+    // Tree refresh every 2nd tick (60 s) — list_vms is cached 3 s anyway
     if (++_treeRefreshCounter % 2 === 0) refreshTreeVMs();
-    if (currentPage === "topology") loadTopology();
-  }, 8000);
+    // Topology: manual refresh only (loadTopology runs virsh net-list + domain-list, expensive)
+    // if (currentPage === "topology") loadTopology();
+  }, 30000);
 
   // Event log every 30s (background fetch, ready for when user opens Events tab)
   setInterval(() => {
@@ -14645,6 +14854,547 @@ if (TOKEN()) {
   });
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   vTPM Hardware Functions
+══════════════════════════════════════════════════════════════════════════════ */
+async function hwLoadVtpm() {
+  if (!_hwVmId) return;
+  const ctrl = document.getElementById('hw-vtpm-ctrl');
+  const status = document.getElementById('hw-vtpm-status');
+  try {
+    const d = await _api(`/api/vms/${_hwVmId}/vtpm`);
+    if (d.has_tpm) {
+      if(ctrl) ctrl.innerHTML = `<span style="color:var(--green-lt)">✓ TPM Aktif</span> <code style="font-size:11px">${escHtml(d.model||'')} v${escHtml(d.version||'2.0')}</code>`;
+      if(status) status.textContent = `(${d.backend||'emulator'})`;
+    } else {
+      if(ctrl) ctrl.innerHTML = `<span style="color:var(--text-muted)">TPM yok</span>`;
+      if(status) status.textContent = '';
+    }
+  } catch(e) {
+    if(ctrl) ctrl.innerHTML = `<span style="color:var(--text-muted)">Kontrol edilemedi</span>`;
+  }
+}
+async function hwAddVtpm() {
+  const model = document.getElementById('hw-vtpm-model')?.value || 'tpm-tis';
+  const version = document.getElementById('hw-vtpm-version')?.value || '2.0';
+  const d = await _api(`/api/vms/${_hwVmId}/vtpm`, 'POST', {model, version});
+  if (d.ok) { toast('vTPM eklendi. VM restart gerekli.', 'success'); hwLoadVtpm(); }
+  else toast(d.error || 'vTPM eklenemedi', 'error');
+}
+async function hwRemoveVtpm() {
+  const d = await _api(`/api/vms/${_hwVmId}/vtpm`, 'DELETE');
+  if (d.ok) { toast('vTPM kaldırıldı.', 'success'); hwLoadVtpm(); }
+  else toast(d.error || 'vTPM kaldırılamadı', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   PCI Passthrough (All Devices)
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadPciDevices() {
+  const sel = document.getElementById('hw-pci-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option>Taranıyor...</option>';
+  try {
+    const d = await _api('/api/system/pci-devices');
+    const devs = d.devices || [];
+    sel.innerHTML = '<option value="">— Cihaz seçin —</option>' +
+      devs.map(dev => `<option value="${escHtml(dev.pci)}" data-vfio="${dev.vfio_ready}">[${escHtml(dev.pci)}] ${escHtml(dev.name||dev.class||'')}${dev.vfio_ready?' ✓ VFIO':''}</option>`).join('');
+    toast(`${devs.length} PCI cihaz bulundu`, 'info');
+    hwRefreshPciAttached();
+  } catch(e) {
+    sel.innerHTML = '<option value="">Tara butonuna basın</option>';
+    toast('PCI tarama hatası: ' + e.message, 'error');
+  }
+}
+async function hwRefreshPciAttached() {
+  if (!_hwVmId) return;
+  const el = document.getElementById('hw-pci-attached');
+  if (!el) return;
+  try {
+    const d = await _api(`/api/vms/${_hwVmId}/hardware/pci-devices`);
+    const devs = d.devices || [];
+    if (!devs.length) { el.textContent = '—'; return; }
+    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.pci)}</code> <button class="btn-sm btn-danger" onclick="hwRemovePci('${escHtml(dev.pci)}')">✕</button></span>`).join('');
+  } catch {}
+}
+async function hwAddPciPassthrough() {
+  const pci = document.getElementById('hw-pci-sel')?.value;
+  if (!pci) { toast('Cihaz seçin', 'error'); return; }
+  const d = await _api(`/api/vms/${_hwVmId}/hardware/pci-passthrough`, 'POST', {pci_address: pci});
+  if (d.pci || d.ok !== false) { toast('PCI cihaz eklendi. VFIO ve IOMMU aktif olmalı.', 'success'); hwRefreshPciAttached(); }
+  else toast(d.error || 'Eklenemedi', 'error');
+}
+async function hwRemovePci(pci) {
+  const safeAddr = pci.replace(/:/g,'_');
+  await _api(`/api/vms/${_hwVmId}/hardware/pci-passthrough/${safeAddr}`, 'DELETE');
+  toast('PCI cihaz kaldırıldı', 'success'); hwRefreshPciAttached();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   USB Passthrough
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadUsbDevices() {
+  const sel = document.getElementById('hw-usb-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option>Taranıyor...</option>';
+  try {
+    const d = await _api('/api/system/usb-devices');
+    const devs = d.devices || [];
+    sel.innerHTML = '<option value="">— USB cihaz seçin —</option>' +
+      devs.map(dev => `<option value="${escHtml(dev.vendor_id)}:${escHtml(dev.product_id)}">[${escHtml(dev.vendor_id)}:${escHtml(dev.product_id)}] ${escHtml(dev.name||'')}</option>`).join('');
+    toast(`${devs.length} USB cihaz bulundu`, 'info');
+    hwRefreshUsbAttached();
+  } catch(e) {
+    sel.innerHTML = '<option value="">Tara butonuna basın</option>';
+    toast('USB tarama hatası: ' + e.message, 'error');
+  }
+}
+async function hwRefreshUsbAttached() {
+  if (!_hwVmId) return;
+  const el = document.getElementById('hw-usb-attached');
+  if (!el) return;
+  try {
+    const d = await _api(`/api/vms/${_hwVmId}/hardware/usb-devices`);
+    const devs = d.devices || [];
+    if (!devs.length) { el.textContent = '—'; return; }
+    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.vendor_id)}:${escHtml(dev.product_id)}</code> <button class="btn-sm btn-danger" onclick="hwRemoveUsb('${escHtml(dev.vendor_id)}','${escHtml(dev.product_id)}')">✕</button></span>`).join('');
+  } catch {}
+}
+async function hwAddUsbPassthrough() {
+  const val = document.getElementById('hw-usb-sel')?.value;
+  if (!val || !val.includes(':')) { toast('USB cihaz seçin', 'error'); return; }
+  const [vendor_id, product_id] = val.split(':');
+  const d = await _api(`/api/vms/${_hwVmId}/hardware/usb-passthrough`, 'POST', {vendor_id, product_id});
+  if (d.vendor_id || d.ok !== false) { toast('USB cihaz eklendi', 'success'); hwRefreshUsbAttached(); }
+  else toast(d.error || 'Eklenemedi', 'error');
+}
+async function hwRemoveUsb(vendor_id, product_id) {
+  await _api(`/api/vms/${_hwVmId}/hardware/usb-passthrough/${vendor_id}/${product_id}`, 'DELETE');
+  toast('USB kaldırıldı', 'success'); hwRefreshUsbAttached();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SPICE Enable
+══════════════════════════════════════════════════════════════════════════════ */
+async function hwEnableSpice() {
+  const port = parseInt(document.getElementById('hw-spice-port')?.value || '5910');
+  const audio = document.getElementById('hw-spice-audio')?.checked ?? true;
+  const d = await _api(`/api/vms/${_hwVmId}/hardware/spice`, 'POST', {port, audio});
+  if (d.port) toast(`SPICE etkinleştirildi (port ${d.port}). VM başlatın.`, 'success');
+  else toast(d.error || 'SPICE etkinleştirilemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Boot Order
+══════════════════════════════════════════════════════════════════════════════ */
+async function hwLoadBootOrder() {
+  if (!_hwVmId) return;
+  try {
+    const d = await _api(`/api/vms/${_hwVmId}/hardware/boot-order`);
+    const order = d.boot_order || [];
+    const el = document.getElementById('hw-boot-order-info');
+    if (el) el.textContent = order.length ? order.join(' → ') : '—';
+    // Check appropriate checkboxes
+    document.querySelectorAll('.hw-boot-dev').forEach(cb => {
+      cb.checked = order.includes(cb.value);
+    });
+  } catch {}
+}
+async function hwApplyBootOrder() {
+  const order = [...document.querySelectorAll('.hw-boot-dev:checked')].map(c => c.value);
+  if (!order.length) { toast('En az bir boot cihaz seçin', 'error'); return; }
+  const d = await _api(`/api/vms/${_hwVmId}/hardware/boot-order`, 'POST', {boot_order: order});
+  if (d.boot_order) { toast('Boot order güncellendi. Restart gerekli.', 'success'); hwLoadBootOrder(); }
+  else toast(d.error || 'Güncellenemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Memory Hot-Unplug
+══════════════════════════════════════════════════════════════════════════════ */
+async function hwMemHotUnplug() {
+  const mb = parseInt(document.getElementById('hw-mem-hotunplug-mb')?.value || '0');
+  if (!mb) { toast('Hedef MB girin', 'error'); return; }
+  const d = await _api(`/api/vms/${_hwVmId}/hardware/memory/hotunplug`, 'POST', {target_mb: mb});
+  if (d.target_mb) toast(`Balloon küçültme yapıldı → ${mb}MB. Guest balloon driver gerekli.`, 'success');
+  else toast(d.error || 'İşlem başarısız', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NUMA
+══════════════════════════════════════════════════════════════════════════════ */
+async function hwLoadNuma() {
+  if (!_hwVmId) return;
+  const el = document.getElementById('hw-numa-status');
+  if (!el) return;
+  try {
+    const d = await _api(`/api/vms/${_hwVmId}/numa`);
+    if (d.has_numa) {
+      el.innerHTML = `<span style="color:var(--green-lt)">✓ NUMA Aktif</span> — ${(d.cells||[]).length} cell`;
+    } else {
+      el.innerHTML = `<span style="color:var(--text-muted)">NUMA yapılandırılmamış</span>`;
+    }
+  } catch {}
+}
+async function hwApplyNumaPreset() {
+  const preset = document.getElementById('hw-numa-preset')?.value;
+  if (!preset) { toast('Önayar seçin', 'error'); return; }
+  // Get current VM config
+  const hw = await _api(`/api/vms/${_hwVmId}/hardware`);
+  const vcpus = hw.vcpus || 4;
+  const memKib = (hw.memory_mb || 4096) * 1024;
+  let cells = [];
+  const count = preset === '4node' ? 4 : 2;
+  const cpusPerCell = Math.max(1, Math.floor(vcpus / count));
+  const memPerCell = Math.floor(memKib / count);
+  for (let i = 0; i < count; i++) {
+    const cpuStart = i * cpusPerCell;
+    const cpuEnd = (i === count-1) ? vcpus-1 : cpuStart + cpusPerCell - 1;
+    cells.push({id: i, cpus: `${cpuStart}-${cpuEnd}`, memory: memPerCell, unit: 'KiB'});
+  }
+  const d = await _api(`/api/vms/${_hwVmId}/numa`, 'POST', {cells});
+  if (d.ok) { toast(`NUMA ${count} node ayarlandı. Restart gerekli.`, 'success'); hwLoadNuma(); }
+  else toast(d.error || 'NUMA ayarlanamadı', 'error');
+}
+async function hwRemoveNuma() {
+  const d = await _api(`/api/vms/${_hwVmId}/numa`, 'DELETE');
+  if (d.ok) { toast('NUMA kaldırıldı.', 'success'); hwLoadNuma(); }
+  else toast(d.error || 'NUMA kaldırılamadı', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Container Management
+══════════════════════════════════════════════════════════════════════════════ */
+let _containerCache = [];
+function switchContainerTab(tab, btn) {
+  document.querySelectorAll('.container-tab').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('#page-containers .tab-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(`container-tab-${tab}`);
+  if (el) el.style.display = '';
+  if (btn) btn.classList.add('active');
+  if (tab === 'images') loadDockerImages();
+}
+async function loadContainers() {
+  const d = await _api('/api/containers');
+  const banner = document.getElementById('containers-backend-status');
+  if (banner) {
+    const parts = [];
+    if (d.docker) parts.push('🐳 Docker: aktif');
+    else parts.push('🐳 Docker: yok (apt install docker.io)');
+    if (d.lxc) parts.push('📦 LXC: aktif');
+    else parts.push('📦 LXC: yok (apt install lxc)');
+    banner.textContent = parts.join(' · ');
+  }
+  // Docker table
+  const dockerTbody = document.getElementById('docker-tbody');
+  if (dockerTbody) {
+    const docker = (d.containers || []).filter(c => c.type === 'docker');
+    dockerTbody.innerHTML = docker.length ? docker.map(c => `<tr>
+      <td><b>${escHtml(c.name||'')}</b></td>
+      <td style="font-size:11px;color:var(--text-muted)">${escHtml(c.image||'')}</td>
+      <td><span class="badge ${c.state==='running'?'badge-green':'badge-gray'}">${escHtml(c.state||c.status||'')}</span></td>
+      <td style="font-size:11px">${escHtml(c.ports||'—')}</td>
+      <td style="font-size:11px">${escHtml(c.created||'')}</td>
+      <td>
+        ${c.state==='running'
+          ? `<button class="btn-sm btn-danger" onclick="dockerAction('${escHtml(c.id)}','stop')">■ Durdur</button>`
+          : `<button class="btn-sm" onclick="dockerAction('${escHtml(c.id)}','start')">▶ Başlat</button>`}
+        <button class="btn-sm" onclick="dockerAction('${escHtml(c.id)}','restart')">↺</button>
+        <button class="btn-sm" onclick="showDockerLogs('${escHtml(c.id)}','${escHtml(c.name||'')}')">📜</button>
+        <button class="btn-sm btn-danger" onclick="dockerAction('${escHtml(c.id)}','rm')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" class="empty-state">Docker container yok</td></tr>';
+  }
+  // LXC table
+  const lxcTbody = document.getElementById('lxc-tbody');
+  if (lxcTbody) {
+    const lxc = (d.containers || []).filter(c => c.type === 'lxc');
+    lxcTbody.innerHTML = lxc.length ? lxc.map(c => `<tr>
+      <td><b>${escHtml(c.name||'')}</b></td>
+      <td><span class="badge ${c.state==='running'?'badge-green':'badge-gray'}">${escHtml(c.state||'')}</span></td>
+      <td style="font-size:11px">${escHtml(c.ip||'—')}</td>
+      <td style="font-size:11px">${escHtml(c.autostart||'—')}</td>
+      <td>
+        ${c.state==='running'
+          ? `<button class="btn-sm btn-danger" onclick="lxcAction('${escHtml(c.name)}','stop')">■</button>`
+          : `<button class="btn-sm" onclick="lxcAction('${escHtml(c.name)}','start')">▶</button>`}
+        <button class="btn-sm btn-danger" onclick="destroyLxc('${escHtml(c.name)}')">✕</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">LXC container yok</td></tr>';
+  }
+}
+async function dockerAction(id, action) {
+  const d = await _api(`/api/containers/docker/${id}/action`, 'POST', {action});
+  if (d.ok) { toast(`Docker ${action}: tamamlandı`, 'success'); loadContainers(); }
+  else toast(d.stderr || 'İşlem başarısız', 'error');
+}
+async function showDockerLogs(id, name) {
+  document.getElementById('docker-logs-name').textContent = name;
+  document.getElementById('docker-logs-content').textContent = 'Yükleniyor...';
+  openModal('modal-docker-logs');
+  const d = await _api(`/api/containers/docker/${id}/logs?lines=200`);
+  document.getElementById('docker-logs-content').textContent = d.logs || '(log yok)';
+}
+async function loadDockerImages() {
+  const tbody = document.getElementById('docker-images-tbody');
+  if (!tbody) return;
+  const d = await _api('/api/containers/docker/images');
+  const imgs = d.images || [];
+  tbody.innerHTML = imgs.length ? imgs.map(img => `<tr>
+    <td>${escHtml(img.Repository||'')}</td>
+    <td><code>${escHtml(img.Tag||'')}</code></td>
+    <td>${escHtml(img.Size||'')}</td>
+    <td style="font-size:11px">${escHtml(img.CreatedAt||'')}</td>
+  </tr>`).join('') : '<tr><td colspan="4" class="empty-state">Image yok</td></tr>';
+}
+async function dockerPullImage() {
+  const image = document.getElementById('docker-pull-input')?.value.trim();
+  if (!image) { toast('Image adı girin', 'error'); return; }
+  toast(`İndiriliyor: ${image}...`, 'info');
+  const d = await _api('/api/containers/docker/images/pull', 'POST', {image});
+  if (d.ok) { toast(`Pull tamamlandı: ${image}`, 'success'); loadDockerImages(); }
+  else toast(d.stderr || 'Pull başarısız', 'error');
+}
+async function doCreateDockerContainer() {
+  const d = await _api('/api/containers/docker', 'POST', {
+    name: document.getElementById('dc-name')?.value.trim(),
+    image: document.getElementById('dc-image')?.value.trim(),
+    ports: document.getElementById('dc-ports')?.value.trim(),
+    env: (document.getElementById('dc-env')?.value.trim()||'').split(',').filter(Boolean),
+    volumes: document.getElementById('dc-volumes')?.value.trim(),
+    memory: document.getElementById('dc-memory')?.value.trim(),
+    cpus: document.getElementById('dc-cpus')?.value.trim(),
+    restart: document.getElementById('dc-restart')?.value || 'unless-stopped',
+  });
+  if (d.ok) { toast('Container oluşturuldu', 'success'); closeModal('modal-docker-create'); loadContainers(); }
+  else toast(d.stderr || d.error || 'Oluşturulamadı', 'error');
+}
+async function doCreateLxcContainer() {
+  const d = await _api('/api/containers/lxc', 'POST', {
+    name: document.getElementById('lxc-name')?.value.trim(),
+    template: document.getElementById('lxc-template')?.value || 'ubuntu',
+    release: document.getElementById('lxc-release')?.value.trim() || '22.04',
+  });
+  if (d.ok) { toast('LXC container oluşturuldu', 'success'); closeModal('modal-lxc-create'); loadContainers(); }
+  else toast(d.stderr || d.error || 'Oluşturulamadı', 'error');
+}
+async function lxcAction(name, action) {
+  const d = await _api(`/api/containers/lxc/${name}/action`, 'POST', {action});
+  if (d.ok) { toast(`LXC ${action}: tamamlandı`, 'success'); loadContainers(); }
+  else toast(d.stderr || 'Başarısız', 'error');
+}
+async function destroyLxc(name) {
+  if (!confirm(`"${name}" LXC container silinecek. Emin misin?`)) return;
+  const d = await _api(`/api/containers/lxc/${name}`, 'DELETE');
+  if (d.ok) { toast('LXC silindi', 'success'); loadContainers(); }
+  else toast(d.stderr || 'Silinemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Cloudflare Tunnels
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadCfTunnels() {
+  const d = await _api('/api/cf-tunnels');
+  const banner = document.getElementById('cf-available-banner');
+  if (banner) banner.textContent = d.available ? '✓ cloudflared kurulu' : '⚠️ cloudflared bulunamadı — apt install cloudflared';
+  const tbody = document.getElementById('cf-tunnels-tbody');
+  if (!tbody) return;
+  const tunnels = d.tunnels || [];
+  tbody.innerHTML = tunnels.length ? tunnels.map(t => `<tr>
+    <td>${escHtml(t.vm_name||t.vm_id||'')}</td>
+    <td><a href="https://${escHtml(t.hostname||'')}" target="_blank" style="color:var(--accent-lt)">${escHtml(t.hostname||'—')}</a></td>
+    <td style="font-size:11px">${escHtml(t.target||'')}</td>
+    <td style="font-size:11px"><code>${escHtml(t.tunnel_name||'')}</code></td>
+    <td><span class="badge ${t.status==='active'?'badge-green':'badge-gray'}">${escHtml(t.status||'—')}</span></td>
+    <td>
+      ${t.status==='active'
+        ? `<button class="btn-sm btn-danger" onclick="cfTunnelAction('${escHtml(t.vm_id)}','stop')">■</button>`
+        : `<button class="btn-sm" onclick="cfTunnelAction('${escHtml(t.vm_id)}','start')">▶</button>`}
+      <button class="btn-sm btn-danger" onclick="cfTunnelDelete('${escHtml(t.vm_id)}')">✕</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="6" class="empty-state">Tunnel yok</td></tr>';
+}
+async function _fillCfVmSelect(sel) {
+  const d = await _api('/vms');
+  sel.innerHTML = '<option value="">— VM seçin —</option>' +
+    (d.vms||[]).map(v => `<option value="${escHtml(v.id)}" data-name="${escHtml(v.name||v.id)}">${escHtml(v.name||v.id)}</option>`).join('');
+}
+async function doCreateCfTunnel() {
+  const vmSel = document.getElementById('cf-vm-sel');
+  const vm_id = vmSel?.value;
+  const vm_name = vmSel?.options[vmSel.selectedIndex]?.dataset.name || vm_id;
+  const d = await _api('/api/cf-tunnels', 'POST', {
+    vm_id, vm_name,
+    hostname: document.getElementById('cf-hostname')?.value.trim(),
+    target_ip: document.getElementById('cf-target-ip')?.value.trim(),
+    target_port: document.getElementById('cf-target-port')?.value,
+    protocol: document.getElementById('cf-protocol')?.value || 'http',
+  });
+  if (d.ok || d.tunnel_name) { toast(`Tunnel oluşturuldu: ${d.tunnel_name}`, 'success'); closeModal('modal-cf-create'); loadCfTunnels(); }
+  else toast(d.error || 'Oluşturulamadı', 'error');
+}
+async function cfTunnelAction(vm_id, action) {
+  const d = await _api(`/api/cf-tunnels/${vm_id}/${action}`, 'POST');
+  if (d.ok) { toast(`Tunnel ${action}`, 'success'); loadCfTunnels(); }
+  else toast(d.error || 'Başarısız', 'error');
+}
+async function cfTunnelDelete(vm_id) {
+  if (!confirm('Tunnel silinecek. Emin misin?')) return;
+  const d = await _api(`/api/cf-tunnels/${vm_id}`, 'DELETE');
+  if (d.ok) { toast('Tunnel silindi', 'success'); loadCfTunnels(); }
+  else toast(d.error || 'Silinemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HA Cluster + DRS
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadHaPage() {
+  const d = await _api('/api/ha/nodes');
+  const nodes = d.nodes || [];
+  const tbody = document.getElementById('ha-nodes-tbody');
+  if (tbody) {
+    tbody.innerHTML = nodes.length ? nodes.map(n => `<tr>
+      <td><b>${escHtml(n.name||n.ip||'')}</b></td>
+      <td><code>${escHtml(n.ip||'')}</code></td>
+      <td><span class="badge">${escHtml(n.role||'secondary')}</span></td>
+      <td><span class="badge ${n.online?'badge-green':'badge-red'}">${n.online?'Online':'Offline'}</span></td>
+      <td>${n.vms !== undefined ? n.vms : '—'}</td>
+      <td>${n.libvirt!==undefined ? (n.libvirt ? '✓' : '✗') : '—'}</td>
+      <td><button class="btn-sm btn-danger" onclick="removeHaNode('${escHtml(n.ip||'')}')">✕</button></td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty-state">Node yok — tekli node modu</td></tr>';
+  }
+  // Fill migration VM select
+  const migVm = document.getElementById('ha-mig-vm');
+  const migTarget = document.getElementById('ha-mig-target');
+  if (migVm) {
+    const vms = await _api('/vms');
+    migVm.innerHTML = '<option value="">— VM seçin —</option>' +
+      (vms.vms||[]).filter(v=>v.state==='running').map(v=>`<option value="${escHtml(v.id)}">${escHtml(v.name||v.id)}</option>`).join('');
+  }
+  if (migTarget) {
+    migTarget.innerHTML = '<option value="">— Hedef node IP —</option>' +
+      nodes.filter(n=>n.online && n.libvirt).map(n=>`<option value="${escHtml(n.ip)}">${escHtml(n.name||n.ip)}</option>`).join('');
+  }
+}
+async function loadDrsAnalyze() {
+  const el = document.getElementById('drs-result');
+  if (!el) return;
+  el.innerHTML = '<div class="spinner-sm"></div>';
+  const d = await _api('/api/drs/analyze');
+  const recs = d.recommendations || [];
+  el.innerHTML = `<div style="margin-bottom:8px;font-size:12px">
+    <b>${d.running||0}</b> çalışan VM · Ort. CPU: <b>${d.avg_cpu||0}%</b> · Yüksek yük: <b>${d.hot_vms||0}</b> VM
+  </div>` + (recs.length
+    ? `<table style="width:100%;font-size:12px"><thead><tr><th>VM</th><th>Neden</th><th>Öneri</th></tr></thead><tbody>` +
+      recs.map(r=>`<tr>
+        <td>${escHtml(r.vm_name||r.vm_id||'')}</td>
+        <td style="color:var(--red-lt)">${escHtml(r.reason||'')}</td>
+        <td><code>${escHtml(r.action||'')} → ${r.suggested_vcpus||''}vCPU</code></td>
+      </tr>`).join('') + '</tbody></table>'
+    : '<div style="color:var(--green-lt)">✓ Kaynak dağılımı dengeli, öneri yok</div>') +
+    `<div style="font-size:10px;color:var(--text-muted);margin-top:6px">${escHtml(d.note||'')}</div>`;
+}
+async function doAddHaNode() {
+  const ip = document.getElementById('ha-node-ip')?.value.trim();
+  if (!ip) { toast('IP gerekli', 'error'); return; }
+  const d = await _api('/api/ha/nodes', 'POST', {
+    ip, name: document.getElementById('ha-node-name')?.value.trim(),
+    role: document.getElementById('ha-node-role')?.value || 'secondary',
+  });
+  if (d.ip) { toast(`Node eklendi: ${ip}`, 'success'); closeModal('modal-ha-add-node'); loadHaPage(); }
+  else toast(d.error || 'Eklenemedi', 'error');
+}
+async function removeHaNode(ip) {
+  if (!confirm(`"${ip}" node'u kümeden çıkar?`)) return;
+  const d = await _api(`/api/ha/nodes/${ip}`, 'DELETE');
+  if (d.removed) { toast('Node kaldırıldı', 'success'); loadHaPage(); }
+}
+async function doLiveMigration() {
+  const vm_id = document.getElementById('ha-mig-vm')?.value;
+  const target_ip = document.getElementById('ha-mig-target')?.value;
+  if (!vm_id || !target_ip) { toast('VM ve hedef node seçin', 'error'); return; }
+  if (!confirm(`VM "${vm_id}" → "${target_ip}" migrate edilecek. Bu işlem birkaç dakika sürebilir. Devam?`)) return;
+  toast('Migration başlatıldı...', 'info');
+  const d = await _api('/api/ha/migrate', 'POST', {vm_id, target_ip});
+  if (d.status === 'migrated') toast('Migration tamamlandı!', 'success');
+  else toast(d.error || 'Migration başarısız', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Bulk Snapshot
+══════════════════════════════════════════════════════════════════════════════ */
+async function openBulkSnapshotModal() {
+  const el = document.getElementById('bulk-snap-vm-list');
+  if (!el) { openModal('modal-bulk-snapshot'); return; }
+  el.innerHTML = '<div class="spinner-sm"></div>';
+  openModal('modal-bulk-snapshot');
+  const d = await _api('/vms');
+  const vms = d.vms || [];
+  el.innerHTML = vms.map(v => `<label style="display:flex;align-items:center;gap:8px;padding:4px;cursor:pointer">
+    <input type="checkbox" class="bulk-snap-vm" value="${escHtml(v.id)}" data-state="${escHtml(v.state||'')}">
+    <span class="status-dot ${v.state==='running'?'running':''}"></span>
+    <span style="font-size:13px">${escHtml(v.name||v.id)}</span>
+    <span style="font-size:11px;color:var(--text-muted)">${escHtml(v.state||'')}</span>
+  </label>`).join('');
+}
+function bulkSnapSelectAll() {
+  document.querySelectorAll('.bulk-snap-vm').forEach(c => c.checked = true);
+}
+function bulkSnapSelectRunning() {
+  document.querySelectorAll('.bulk-snap-vm').forEach(c => {
+    c.checked = c.dataset.state === 'running';
+  });
+}
+async function doBulkSnapshot() {
+  const vm_ids = [...document.querySelectorAll('.bulk-snap-vm:checked')].map(c => c.value);
+  if (!vm_ids.length) { toast('En az bir VM seçin', 'error'); return; }
+  const name = document.getElementById('bulk-snap-name')?.value.trim();
+  const description = document.getElementById('bulk-snap-desc')?.value.trim() || 'Bulk snapshot';
+  toast(`${vm_ids.length} VM için snapshot alınıyor...`, 'info');
+  const d = await _api('/api/vms/snapshots/bulk', 'POST', {vm_ids, name, description});
+  if (d.results) {
+    toast(`Snapshot tamamlandı: ${d.success}/${d.total} başarılı`, d.failed ? 'warning' : 'success');
+    closeModal('modal-bulk-snapshot');
+  } else toast(d.error || 'Snapshot başarısız', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   IPv6 Network
+══════════════════════════════════════════════════════════════════════════════ */
+async function addIpv6ToNetwork(net_uuid, address, prefix, dhcp_start, dhcp_end) {
+  const d = await _api(`/api/networks/${net_uuid}/ipv6`, 'POST', {address, prefix, dhcp_start, dhcp_end});
+  if (d.ok) { toast(`IPv6 eklendi: ${address}/${prefix}`, 'success'); loadNetworks(); }
+  else toast(d.error || 'IPv6 eklenemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Navigate loader extension (containers, ha, cf-tunnels)
+══════════════════════════════════════════════════════════════════════════════ */
+(function _extendLoaders() {
+  const _origNavigate = navigate;
+  window.navigate = function(page) {
+    _origNavigate(page);
+    if (page === 'containers') loadContainers();
+    else if (page === 'ha') loadHaPage();
+    else if (page === 'cf-tunnels') loadCfTunnels();
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Extend loadHardwareConfig to call new sections
+══════════════════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  const _origLoadHardware = window.loadHardwareConfig;
+  if (typeof _origLoadHardware === 'function') {
+    window.loadHardwareConfig = async function(vmId) {
+      await _origLoadHardware(vmId);
+      hwLoadVtpm();
+      hwRefreshPciAttached();
+      hwRefreshUsbAttached();
+      hwLoadBootOrder();
+      hwLoadNuma();
+    };
+  }
+});
 
 </script>
 
@@ -15011,6 +15761,137 @@ if (TOKEN()) {
     </div>
     <div style="text-align:right;margin-top:14px">
       <button class="btn" onclick="document.getElementById('modal-mac').style.display='none'">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Docker Container Oluştur ══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-docker-create" onclick="if(event.target===this)closeModal('modal-docker-create')">
+  <div class="modal" style="width:540px">
+    <div class="modal-title">🐳 Docker Container Oluştur</div>
+    <div class="form-row"><label>Container Adı</label><input id="dc-name" type="text" placeholder="myapp"></div>
+    <div class="form-row"><label>Image</label><input id="dc-image" type="text" placeholder="nginx:latest"></div>
+    <div class="form-row"><label>Port Mapping</label><input id="dc-ports" type="text" placeholder="80:80,443:443 (virgülle ayır)"></div>
+    <div class="form-row"><label>Env Variables</label><input id="dc-env" type="text" placeholder="KEY=val,KEY2=val2"></div>
+    <div class="form-row"><label>Volume Mapping</label><input id="dc-volumes" type="text" placeholder="/host/path:/container/path"></div>
+    <div class="form-row"><label>Memory Limit</label><input id="dc-memory" type="text" placeholder="512m, 2g (boş=sınırsız)"></div>
+    <div class="form-row"><label>CPU Limit</label><input id="dc-cpus" type="text" placeholder="1.5 (boş=sınırsız)"></div>
+    <div class="form-row"><label>Restart Policy</label>
+      <select id="dc-restart">
+        <option value="unless-stopped">unless-stopped (önerilen)</option>
+        <option value="always">always</option>
+        <option value="on-failure">on-failure</option>
+        <option value="no">no</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-docker-create')">İptal</button>
+      <button class="btn primary" onclick="doCreateDockerContainer()">▶ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: LXC Container Oluştur ════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-lxc-create" onclick="if(event.target===this)closeModal('modal-lxc-create')">
+  <div class="modal" style="width:440px">
+    <div class="modal-title">📦 LXC Container Oluştur</div>
+    <div class="form-row"><label>Container Adı</label><input id="lxc-name" type="text" placeholder="mycontainer"></div>
+    <div class="form-row"><label>Dağıtım</label>
+      <select id="lxc-template">
+        <option value="ubuntu">Ubuntu</option>
+        <option value="debian">Debian</option>
+        <option value="alpine">Alpine</option>
+        <option value="centos">CentOS</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Sürüm</label><input id="lxc-release" type="text" placeholder="22.04" value="22.04"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-lxc-create')">İptal</button>
+      <button class="btn primary" onclick="doCreateLxcContainer()">▶ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: HA Node Ekle ══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ha-add-node" onclick="if(event.target===this)closeModal('modal-ha-add-node')">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">🔗 Cluster Node Ekle</div>
+    <div class="form-row"><label>Node IP</label><input id="ha-node-ip" type="text" placeholder="192.168.1.10"></div>
+    <div class="form-row"><label>Node Adı</label><input id="ha-node-name" type="text" placeholder="node2 (opsiyonel)"></div>
+    <div class="form-row"><label>Rol</label>
+      <select id="ha-node-role">
+        <option value="secondary">Secondary</option>
+        <option value="primary">Primary</option>
+        <option value="backup">Backup</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin:8px 0">
+      SSH key-based auth gereklidir: <code>ssh-copy-id root@&lt;node-ip&gt;</code><br>
+      Hedef node'da libvirt kurulu ve çalışıyor olmalıdır.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-ha-add-node')">İptal</button>
+      <button class="btn primary" onclick="doAddHaNode()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Cloudflare Tunnel Oluştur ════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-cf-create" onclick="if(event.target===this)closeModal('modal-cf-create')">
+  <div class="modal" style="width:480px">
+    <div class="modal-title">☁️ Cloudflare Tunnel Oluştur</div>
+    <div class="form-row"><label>VM</label>
+      <select id="cf-vm-sel" onfocus="if(!this.options.length||this.options[0].value==='')_fillCfVmSelect(this)">
+        <option value="">— VM seçin —</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Hostname (FQDN)</label><input id="cf-hostname" type="text" placeholder="app.example.com"></div>
+    <div class="form-row"><label>VM IP Adresi</label><input id="cf-target-ip" type="text" placeholder="192.168.100.101"></div>
+    <div class="form-row"><label>VM Port</label><input id="cf-target-port" type="number" placeholder="80" value="80"></div>
+    <div class="form-row"><label>Protokol</label>
+      <select id="cf-protocol">
+        <option value="http">HTTP</option>
+        <option value="https">HTTPS</option>
+        <option value="tcp">TCP</option>
+        <option value="ssh">SSH</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-cf-create')">İptal</button>
+      <button class="btn primary" onclick="doCreateCfTunnel()">☁️ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Toplu Snapshot ═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-bulk-snapshot" onclick="if(event.target===this)closeModal('modal-bulk-snapshot')">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">📷 Toplu Snapshot Al</div>
+    <div class="form-row"><label>Snapshot Adı</label><input id="bulk-snap-name" type="text" placeholder="pre-update (boş=otomatik)"></div>
+    <div class="form-row"><label>Açıklama</label><input id="bulk-snap-desc" type="text" placeholder="Bulk snapshot"></div>
+    <div style="margin:8px 0">
+      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase">VM Seçimi</label>
+      <div style="display:flex;gap:8px;margin-bottom:6px;margin-top:4px">
+        <button class="btn-sm" onclick="bulkSnapSelectAll()">Tümünü Seç</button>
+        <button class="btn-sm" onclick="bulkSnapSelectRunning()">Sadece Çalışanlar</button>
+        <button class="btn-sm" onclick="document.querySelectorAll('.bulk-snap-vm').forEach(c=>c.checked=false)">Temizle</button>
+      </div>
+      <div id="bulk-snap-vm-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-bulk-snapshot')">İptal</button>
+      <button class="btn primary" onclick="doBulkSnapshot()">📷 Snapshot Al</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Docker Container Logs ════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-docker-logs" onclick="if(event.target===this)closeModal('modal-docker-logs')">
+  <div class="modal" style="width:700px">
+    <div class="modal-title">📜 Container Logları <span id="docker-logs-name" style="font-weight:400;font-size:13px"></span></div>
+    <pre id="docker-logs-content" style="background:var(--bg);border-radius:6px;padding:12px;max-height:400px;overflow:auto;font-size:11px;line-height:1.5">yükleniyor...</pre>
+    <div style="text-align:right;margin-top:12px">
+      <button class="btn" onclick="closeModal('modal-docker-logs')">Kapat</button>
     </div>
   </div>
 </div>

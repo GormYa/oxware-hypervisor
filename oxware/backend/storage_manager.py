@@ -172,7 +172,10 @@ def upload_iso(file_path, dest_name=None):
 
 
 def list_isos():
-    """Scan ISO_DIR and /tmp for .iso files (#27)."""
+    """Scan ISO_DIR only for user-uploaded ISO files.
+    /tmp and /var/lib/libvirt/images are NOT scanned — they contain
+    auto-generated cloud-init seed ISOs (ci-*.iso) that should not
+    appear in the ISO library."""
     isos = []
     _seen = set()
 
@@ -182,6 +185,9 @@ def list_isos():
         try:
             for f in os.listdir(directory):
                 if not f.lower().endswith(".iso"):
+                    continue
+                # Skip cloud-init seed ISOs
+                if f.startswith("ci-") or f.startswith("seed-"):
                     continue
                 path = os.path.join(directory, f)
                 rpath = os.path.realpath(path)
@@ -203,9 +209,6 @@ def list_isos():
             pass
 
     _scan_dir(config.ISO_DIR)
-    _scan_dir("/tmp")
-    # Also scan libvirt images dir
-    _scan_dir("/var/lib/libvirt/images")
     return isos
 
 
