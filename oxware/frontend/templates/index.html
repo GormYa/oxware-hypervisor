@@ -3383,6 +3383,11 @@
                 <div class="form-row"><label>Let's Encrypt Domain</label><input id="leDomain" type="text" class="form-control" placeholder="oxware.example.com"></div>
                 <div class="form-row"><label>E-posta</label><input id="leEmail" type="text" class="form-control" placeholder="admin@example.com"></div>
                 <button class="btn-primary" onclick="requestLetsEncrypt()">🔒 Sertifika Al</button>
+                <div style="margin-top:10px;padding:8px 10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:6px;font-size:11px;color:var(--text-muted)">
+                  ⚠️ <strong>certbot hata alıyorsanız</strong> (pyOpenSSL / X509Extension):
+                  <code style="display:block;margin-top:4px;background:var(--surface2);padding:4px 6px;border-radius:4px">pip install pyopenssl --upgrade<br>pip install certbot certbot-nginx --upgrade</code>
+                  veya: <code>apt install python3-certbot-nginx</code>
+                </div>
               </div>
             </div>
           </div>
