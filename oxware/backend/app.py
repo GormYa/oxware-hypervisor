@@ -1584,6 +1584,21 @@ def api_vm_disk_backup(vm_id):
     dest_path = data.get("dest_path", "")
     if not dest_path:
         return err("dest_path gerekli", 400)
+    # Prevent path traversal — dest must be absolute and inside an allowed base
+    import os, re as _re
+    _ALLOWED_BACKUP_DIRS = [
+        "/var/lib/libvirt/images",
+        "/var/lib/oxware/backups",
+        "/backups",
+        "/mnt",
+        "/srv",
+    ]
+    dest_path = os.path.realpath(dest_path)
+    if not any(dest_path.startswith(d) for d in _ALLOWED_BACKUP_DIRS):
+        return err(f"Hedef yol izin verilmeyen bir dizinde: {dest_path}", 403)
+    # device must be safe alphanumeric (e.g. vda, sdb, hdc)
+    if not _re.match(r'^[a-z]{2,4}\d*$', device):
+        return err("Geçersiz disk aygıtı", 400)
     try:
         import subprocess, xml.etree.ElementTree as ET
         conn = vm_manager._connect()
@@ -1599,8 +1614,7 @@ def api_vm_disk_backup(vm_id):
         conn.close()
         if not src:
             return err(f"Disk bulunamadı: {device}", 404)
-        import os
-        os.makedirs(os.path.dirname(dest_path) or "/", exist_ok=True)
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         r = subprocess.run(
             ["qemu-img", "convert", "-O", "qcow2", src, dest_path],
             capture_output=True, text=True, timeout=3600
@@ -1618,12 +1632,15 @@ def api_vm_disk_backup(vm_id):
 @require_role("admin", "administrator")
 def api_vm_disk_wipe(vm_id):
     """Detach a secondary disk and zero-fill it, then delete the image file."""
+    import re as _re2, os
     data   = request.get_json() or {}
     device = data.get("device", "")
     if not device or device in ("vda", "sda", "hda"):
         return err("Ana disk silinemez", 400)
+    if not _re2.match(r'^[a-z]{2,4}\d*$', device):
+        return err("Geçersiz disk aygıtı", 400)
     try:
-        import subprocess, xml.etree.ElementTree as ET, os
+        import subprocess, xml.etree.ElementTree as ET
         conn = vm_manager._connect()
         dom  = conn.lookupByName(vm_id)
         root = ET.fromstring(dom.XMLDesc(0))
@@ -1637,14 +1654,19 @@ def api_vm_disk_wipe(vm_id):
         conn.close()
         if not src:
             return err(f"Disk bulunamadı: {device}", 404)
+        # Verify src is inside a known libvirt/oxware path before wiping
+        src_real = os.path.realpath(src)
+        _safe_roots = ["/var/lib/libvirt/images", "/var/lib/oxware", "/srv", "/mnt"]
+        if not any(src_real.startswith(r) for r in _safe_roots):
+            return err("Disk dosyası güvenli dizin dışında — silme engellendi", 403)
         # Detach first
         vm_manager.hot_detach_disk(vm_id, device)
         # Zero-fill then remove
-        subprocess.run(["dd", "if=/dev/zero", f"of={src}", "bs=1M"], capture_output=True, timeout=300)
-        if os.path.exists(src):
-            os.remove(src)
-        ev.info(f"Disk silindi: {vm_id}/{device} ({src})", category="vm")
-        return ok(deleted=src)
+        subprocess.run(["dd", "if=/dev/zero", f"of={src_real}", "bs=1M"], capture_output=True, timeout=300)
+        if os.path.exists(src_real):
+            os.remove(src_real)
+        ev.info(f"Disk silindi: {vm_id}/{device} ({src_real})", category="vm")
+        return ok(deleted=src_real)
     except Exception as e:
         return err(e, 500)
 
