@@ -4416,22 +4416,10 @@ systemctl enable --now qemu-guest-agent</pre>
           <option value="hd">Yalnızca Disk</option>
         </select>
       </div>
-      <!-- Kullanıcı Adı & Şifre (Cloud-Init / unattend.xml) -->
-      <div style="margin-top:10px;padding:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px">
-        <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">🔐 Giriş Bilgileri</div>
-        <div class="form-row">
-          <label>Kullanıcı Adı</label>
-          <input id="ci-user" placeholder="ubuntu (VM adından otomatik)" oninput="window._ciUserManual=true">
-          <div class="form-hint" id="ci-user-hint">Linux: VM adı kullanılır. Windows: otomatik Administrator.</div>
-        </div>
-        <div class="form-row">
-          <label>Şifre <span style="color:var(--red-lt)">*</span></label>
-          <input id="ci-password" type="password" placeholder="Güçlü bir şifre girin" autocomplete="new-password">
-          <div class="form-hint">Bu şifre ile VM'e giriş yapacaksınız</div>
-        </div>
-        <details style="margin-top:8px">
+      <!-- Gelişmiş Seçenekler (SSH Key / Başlangıç Script / Statik IP) -->
+      <details style="margin-top:10px">
           <summary style="font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;padding:4px 0">☁️ Gelişmiş (SSH Key / Başlangıç Script / Statik IP)</summary>
-          <div style="margin-top:8px">
+          <div style="margin-top:8px;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px">
             <div class="form-row"><label>SSH Public Key</label><input id="ci-sshkey" placeholder="ssh-rsa AAAA..."></div>
             <div class="form-row"><label>Başlangıç Script'i</label>
               <textarea id="ci-userdata" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:7px 10px;resize:vertical;font-family:monospace" placeholder="#!/bin/bash&#10;apt-get update"></textarea>
@@ -4439,7 +4427,7 @@ systemctl enable --now qemu-guest-agent</pre>
             <!-- Statik IP — Bridge ağlar için -->
             <div style="margin-top:10px;padding:10px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:6px">
               <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:8px">🌐 Statik IP (Bridge Ağ)</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Bridge ağ seçildiğinde VM kendi gerçek IP'siyle açılır. Speedtest, host IP'sini değil VM'in IP'sini gösterir.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Bridge ağ seçildiğinde VM kendi gerçek IP'siyle açılır.</div>
               <div class="form-row" style="margin:0 0 6px 0">
                 <label style="min-width:80px">IP Adresi</label>
                 <input id="ci-static-ip" placeholder="203.0.113.10" style="font-family:monospace">
@@ -4459,7 +4447,6 @@ systemctl enable --now qemu-guest-agent</pre>
             </div>
           </div>
         </details>
-      </div>
     </div>
       <!-- App Install -->
       <details id="app-install-section" style="margin-top:8px">
@@ -8954,11 +8941,8 @@ async function createVM() {
   const appInstall = document.querySelector('input[name="app_install"]:checked')?.value || '';
   if (appInstall) body.app_install = appInstall;
   // Cloud-Init / unattend.xml credentials
-  const ciUser = document.getElementById("ci-user")?.value.trim() || 'ubuntu';
-  const ciPass = document.getElementById("ci-password")?.value;
   const ciKey  = document.getElementById("ci-sshkey")?.value.trim();
   const ciData = document.getElementById("ci-userdata")?.value.trim();
-  if (!ciPass || ciPass.length < 4) return toast("Şifre en az 4 karakter olmalı", "error");
   // Static IP (bridge networks)
   const ciStaticIp = document.getElementById("ci-static-ip")?.value.trim();
   const ciGateway  = document.getElementById("ci-gateway")?.value.trim();
@@ -8966,7 +8950,6 @@ async function createVM() {
   const ciDnsRaw   = document.getElementById("ci-dns")?.value.trim() || "8.8.8.8, 1.1.1.1";
   const ciDns      = ciDnsRaw.split(',').map(s=>s.trim()).filter(Boolean);
   body.cloud_init  = {
-    user: ciUser, password: ciPass,
     ssh_key: ciKey||undefined, user_data: ciData||undefined,
     static_ip: ciStaticIp||undefined, gateway: ciGateway||undefined,
     netmask: ciNetmask, dns: ciDns,
