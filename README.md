@@ -57,12 +57,16 @@
 - **OVA export** — download any VM as a portable `.tar.gz` archive
 
 ### Console & Remote Access
-- **VNC console** — embedded noVNC in a dedicated browser tab; no client software needed
+- **Multi-console type selection** — choose noVNC (graphical VNC), xterm.js serial (virsh console via PTY), or SPICE for each VM
+- **noVNC console** — embedded in a dedicated browser tab; no client software needed
+- **xterm.js serial console** — direct virsh console over WebSocket; works headless (no GUI required on guest)
+- **SPICE support** — connection info and one-click open for SPICE-capable VMs
+- **Clipboard paste** — paste into any console via Ctrl+Shift+V, right-click, or toolbar button
 - **Auto TLS** — VNC WebSocket traffic encrypted; self-signed cert auto-generated at first start
 - **Pointer lock** — seamless mouse capture inside the VNC window
 - **Ctrl+Alt+Del** — send keyboard shortcuts to VM
 - **Fullscreen mode** — native browser fullscreen for the console
-- **Web SSH terminal** — browser-based SSH client for Linux VMs
+- **Host shell console** — root PTY shell on the hypervisor; xterm.js with paste support
 - **SPICE info** — display connection info for SPICE-capable clients
 
 ### Role-Based Access Control
@@ -74,23 +78,33 @@
 - Session management — view and revoke active sessions from the web UI
 
 ### Networking
+- **Detailed network page** — 4-tab view: Virtual Networks, Host Interfaces, DHCP Leases, Routing Table
+- **Host interface stats** — type badge (ethernet/bridge/virtual/bond/vlan/tunnel), speed (Mbps/Gbps), duplex, RX/TX bytes+packets
+- **DHCP live leases** — browse all active DHCP assignments with hostname, MAC, expiry
+- **Routing table** — live kernel route table view via `ip route`
 - **IP pool management** — CIDR-based allocation, static assignment, NAT and bridge modes
 - **DHCP static entries** — bind VM MAC → IP via libvirt dnsmasq
 - **Per-VM firewall** — nftables rules managed via web UI (allow/deny by port, protocol, source)
 - **Network QoS** — per-VM bandwidth limits (ingress/egress)
+- **BGP tunneling** — peer management (add/remove BGP peers) via UI and API
 - **DNS watchdog** — monitors resolution health, auto-repairs broken dnsmasq
 - **HAProxy load balancer** — configure L4/L7 backends from the UI
 - **VLAN support** — tag-based VLAN isolation for multi-tenant setups
 - **Topology view** — interactive network graph showing VM ↔ network ↔ host relationships
+- **Network speedtest** — built-in latency + download benchmark to 12 servers (4× Turkey, 8× international)
 
 ### Storage & Snapshots
 - **qcow2 image management** — create, resize, move disk images
+- **Disk type detection** — auto-detect NVMe/SSD/HDD/virtual with badge in UI
+- **Disk backup** — copy VM disk to local path with path traversal protection
+- **Disk wipe** — secure zero-fill + delete with double confirmation; irreversible action guard
 - **Snapshot create / revert / delete** — live snapshots for running VMs
 - **Auto-snapshot scheduler** — periodic snapshots with configurable retention
 - **Backup to MinIO / S3** — scheduled off-host backups to any S3-compatible store
+- **SFTP/SSH backup** — transfer backups to remote servers via paramiko; test connection from UI
 - **Local backup path** — rsync to NFS, USB, or another local mount
 - **SMART health monitoring** — disk health alerts before failures
-- **ISO library** — upload, list, and attach ISO images to VMs
+- **ISO library** — upload, list, and attach ISO images; auto-scans `/tmp` and `/var/lib/libvirt/images`
 
 ### Security
 - **JWT authentication** — short-lived access tokens + refresh tokens, auto-rotation
@@ -103,6 +117,9 @@
 - **IDS integration** — Suricata/Snort alert ingestion
 - **Rate limiting** — per-IP request throttling on auth endpoints
 - **Secrets vault** — encrypted per-VM credential storage
+- **Role enforcement on AI** — `vm-user` role blocked from OXY AI (prevents information disclosure)
+- **Path traversal protection** — all disk paths validated with `os.path.realpath()` + allowlist
+- **No PDF export** — export functionality removed; avoids client-side data exposure vulnerabilities
 
 ### Monitoring & Observability
 - **Live metrics** — CPU %, RAM %, disk I/O MB/s, network RX/TX MB/s; no blocking sleep
@@ -113,6 +130,8 @@
 - **Prometheus endpoint** — `/metrics` exposes all VM and host stats for Grafana
 - **Uptime tracker** — per-VM uptime history, SLA calculation
 - **Node summary** — host CPU, RAM, disk, load, network overview
+- **Optimized İzleme+ page** — staggered API loading (6 tiers) prevents UI freeze; 30s reload cache
+- **Network speedtest** — server-to-internet latency + download test; 12 servers across 4 continents
 
 ### AI Assistant
 - **Natural-language VM creation** — "Create a 4-core Ubuntu server with 8 GB RAM" → done
