@@ -1,7 +1,7 @@
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.5-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -11,7 +11,7 @@
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
-> **v2.4 (2026-05):** Bridge IP isolation, cloud-init static IP injection, RAM hot-increase (stop/restart), SFTP ESXi VMDK browser + auto-import, monitoring stagger fix, subnet calculator, network DHCP live edit, natural language command confirmation, import name dedup, VM-to-network auto-connect.
+> **v2.5 (2026-05):** DiyoCP billing panel integration, machine-ID independent credentials + password reset file, unified monitoring page with performance history graphs, VGA video driver default for VMs, network stat cards UI, clean ISO library filtering, ISO installer black screen fixed (vga=791/modesetting/quiet splash removed), optimized 30s polling.
 
 ---
 
@@ -60,6 +60,7 @@
 - **cloud-init static IP injection** — set real routable IP, gateway, netmask, DNS at VM creation; no DHCP needed
 - **KVM → KVM live migration** — zero-downtime migration between two OXware nodes
 - **OVA export** — download any VM as a portable `.tar.gz` archive
+- **VGA video driver** — default `vga` display adapter for new VMs; avoids black screen on ISO install and serial console access
 
 ### Console & Remote Access
 - **Multi-console type selection** — choose noVNC (graphical VNC), xterm.js serial (virsh console via PTY), or SPICE for each VM
@@ -99,7 +100,7 @@
 - **HAProxy load balancer** — configure L4/L7 backends from the UI
 - **VLAN support** — tag-based VLAN isolation for multi-tenant setups
 - **Topology view** — interactive network graph showing VM ↔ network ↔ host relationships
-- **Network speedtest** — built-in latency + download benchmark to 12 servers (4× Turkey, 8× international)
+- **Network stat cards** — colour-coded gradient stat cards (virtual networks, active networks, host interfaces, active interfaces) at the top of the network page
 
 ### Storage & Snapshots
 - **qcow2 image management** — create, resize, move disk images
@@ -113,6 +114,7 @@
 - **Local backup path** — rsync to NFS, USB, or another local mount
 - **SMART health monitoring** — disk health alerts before failures
 - **ISO library** — upload, list, and attach ISO images; auto-scans `/tmp` and `/var/lib/libvirt/images`
+- **Clean ISO library** — `ci-*` and `seed-*` cloud-init/seed ISOs automatically filtered from the library; only user-uploaded ISOs appear
 
 ### Security
 - **JWT authentication** — short-lived access tokens + refresh tokens, auto-rotation
@@ -128,6 +130,8 @@
 - **Role enforcement on AI** — `vm-user` role blocked from OXY AI (prevents information disclosure)
 - **Path traversal protection** — all disk paths validated with `os.path.realpath()` + allowlist
 - **No PDF export** — export functionality removed; avoids client-side data exposure vulnerabilities
+- **Machine-ID independent credentials** — admin username persisted to `/etc/oxware/.username` plaintext backup; survives machine-id changes after kernel updates or disk cloning; auth file re-encrypts on next login
+- **Password reset file** — root can reset credentials by writing `USERNAME=x\nPASSWORD=y` to `/etc/oxware/.passwd_reset` (mode 600, uid 0); applied on next service restart, file deleted automatically
 
 ### Monitoring & Observability
 - **Live metrics** — CPU %, RAM %, disk I/O MB/s, network RX/TX MB/s; no blocking sleep
@@ -138,8 +142,9 @@
 - **Prometheus endpoint** — `/metrics` exposes all VM and host stats for Grafana
 - **Uptime tracker** — per-VM uptime history, SLA calculation
 - **Node summary** — host CPU, RAM, disk, load, network overview
-- **İzleme+ staggered loading** — 5-tier deferred load prevents UI freeze; QoS/Trend/Migration load on demand only
-- **Network speedtest** — server-to-internet latency + download test; 12 servers across 4 continents
+- **Unified monitoring page** — system metrics, SMART disk health, HA status, IDS/IPS alerts, VM uptime, trend analysis, and cost estimation in one page; heavy sections load only on demand
+- **Performance history graphs** — CPU and RAM trend charts for 1h, 6h, 24h, 7d, 30d ranges per VM
+- **Optimised polling** — 30-second refresh interval across the dashboard; topology scan disabled by default (no auto-freeze)
 
 ### AI Assistant
 - **Natural-language VM creation** — "Create a 4-core Ubuntu server with 8 GB RAM" → done
@@ -153,6 +158,7 @@
 - **LDAP / Active Directory** — SSO login, group-to-role mapping
 - **WiseCP** — provisioning module for hosting control panel automation
 - **WHMCS** — VM lifecycle hooks for billing integration
+- **DiyoCP** — Turkish hosting panel integration; full VM provisioning module (create, suspend, unsuspend, terminate, resize, connection test); download from **Settings → Integrations → DiyoCP**
 - **Terraform provider** — IaC-driven VM provisioning
 - **Nginx + Let's Encrypt** — manage reverse proxy and SSL certs from the UI
 - **MinIO / S3** — backup and ISO storage
@@ -223,6 +229,38 @@ The installer:
 5. Configures Nginx as a reverse proxy on port 8006 with a self-signed TLS cert
 6. Generates a random JWT secret and stores it in `/etc/oxware/jwt_secret.key`
 
+### Method 3 — Script on existing Debian 12 (Bookworm)
+
+OXware fully supports Debian 12 Bookworm. The same install script works; the installer automatically detects the distribution and uses `apt` with Debian-compatible package names.
+
+```bash
+# Ensure KVM hardware virtualisation is enabled in BIOS/UEFI first
+sudo apt-get update && sudo apt-get install -y git curl
+
+git clone https://github.com/ShinnAsukha/oxware-hypervisor.git /opt/oxware-src
+cd /opt/oxware-src
+sudo bash install.sh
+```
+
+**Debian-specific notes:**
+
+- `python3-venv` must be installed before the script runs (the script installs it automatically, but you can pre-install it with `sudo apt-get install -y python3-venv`)
+- If `qemu-kvm` is not found, install `qemu-system-x86` instead — both are equivalent on Debian 12
+- Backports repo (`bookworm-backports`) is added automatically for the latest `libvirt` and `qemu` packages
+- OXware credential encryption uses `/etc/machine-id` — present by default on systemd-based Debian 12
+
+```bash
+# Verify KVM is available on Debian 12
+kvm-ok 2>/dev/null || sudo apt-get install -y cpu-checker && kvm-ok
+
+# If VT-x/AMD-V is not shown:
+# Enable "Intel VT-x" or "SVM Mode" in BIOS and reboot
+```
+
+After install, navigate to `https://<server-ip>:8006` — the setup wizard runs on first access.
+
+> **Debian 12 ISO method:** The bootable ISO (Method 1) is itself based on Debian 12 Live — it installs a clean Debian 12 base with OXware pre-configured. Use the ISO for bare-metal servers where you want OXware as the primary OS.
+
 ### System Requirements
 
 | Component | Minimum | Recommended |
@@ -230,7 +268,7 @@ The installer:
 | CPU | 2 cores, VT-x/AMD-V | 4+ cores |
 | RAM | 2 GB | 8 GB+ |
 | Disk | 20 GB | 100 GB+ (for VM images) |
-| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| OS | Ubuntu 22.04 LTS **or** Debian 12 (Bookworm) | Ubuntu 22.04 LTS |
 | Network | 1 NIC | 2 NICs (mgmt + VM traffic) |
 
 ---
@@ -728,6 +766,24 @@ sudo bash repair.sh --reset-password
 ---
 
 ## Changelog
+
+### v2.5 — 2026-05
+
+**New features:**
+- **DiyoCP integration** — full PHP provisioning module for Turkish billing panel; supports create, suspend, unsuspend, terminate, resize, testConnection; downloadable from Settings → Integrations
+- **Machine-ID independent credentials** — admin username backed up to `/etc/oxware/.username` plaintext file; survives `machine-id` changes (kernel update, disk clone, VM migration); login never breaks silently
+- **Password reset file** — root places `/etc/oxware/.passwd_reset` (mode 600, owner root) with `USERNAME=` and `PASSWORD=`; applied at next service restart, file deleted automatically; group/world-readable files rejected
+- **Unified monitoring page** — system metrics, SMART disk health, HA status, IDS alerts, VM uptime history, cost estimate, and trend analysis merged into a single page; heavy sections (QoS, Trend, Migration) load on-demand only
+- **Performance history graphs** — CPU and RAM trend charts with 1h / 6h / 24h / 7d / 30d range picker per VM
+- **Optimised polling** — global dashboard refresh reduced from 8 s to 30 s; topology auto-scan disabled (was causing DDoS-like load on large clusters)
+- **VGA video driver** — `vga` set as default display adapter for newly created VMs; eliminates black screen on ISO-based OS install and improves serial console compatibility
+- **Network stat cards** — gradient colour-coded stat cards (blue/green/purple/orange) at the top of the network management page; shows virtual networks, active networks, host interfaces, active interfaces counts
+- **Clean ISO library** — `ci-*` and `seed-*` prefixed files automatically hidden from the ISO library; only genuine user-uploaded ISOs appear
+
+**Bug fixes:**
+- `showToast` → `toast` — 14 frontend ReferenceError occurrences fixed
+- Duplicate Flask route stubs removed (`POST /api/networks` 405 stub, shadowed `POST /api/ssl/letsencrypt` stub)
+- ISO installer black screen — removed `vga=791`, `quiet splash`, `loglevel=0` from GRUB; removed `Driver "modesetting"` from Xorg config (fixes nomodeset boot); removed `exec startx` (errors now visible on terminal)
 
 ### v2.4 — 2026-05
 
