@@ -2132,6 +2132,9 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadStorage()">↻ Yenile</button>
             <button class="btn primary" onclick="openCreatePoolModal()">+ Havuz Ekle</button>
+            <button class="btn" style="color:#06b6d4" onclick="openModal('modal-nfs-pool')">🌐 NFS Havuz</button>
+            <button class="btn" style="color:#f97316" onclick="openModal('modal-ceph-pool')">🗃 Ceph Havuz</button>
+            <button class="btn" style="color:#f97316" onclick="loadCephStatus()">📊 Ceph Durum</button>
           </div>
           <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px">
             <button class="settings-tab active" data-stab="pools" onclick="switchStorageTab('pools')">⊞ Volumes</button>
@@ -2139,6 +2142,13 @@
             <button class="settings-tab" data-stab="hostdisk" onclick="switchStorageTab('hostdisk')">▣ Host Disks</button>
           </div>
           <div id="storage-tab-pools">
+            <!-- Ceph status card (hidden until loaded) -->
+            <div id="ceph-status-card" class="card" style="display:none;margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">🗃 Ceph Cluster Durumu
+                <button class="btn-sm" style="margin-left:auto" onclick="loadCephStatus()">↻</button>
+              </div>
+              <div id="ceph-status-content" style="padding:4px 0;font-size:13px"></div>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Ad</th><th>Durum</th><th>Tür</th><th>Yol</th><th>Kapasite</th><th>Kullanılan</th><th>Boş</th><th>İşlemler</th></tr></thead>
@@ -2371,6 +2381,39 @@
               <thead><tr><th>Kullanıcı Adı</th><th>Rol</th><th>Oluşturulma</th><th>İşlemler</th></tr></thead>
               <tbody id="users-tbody"><tr><td colspan="4"><div class="empty-state"><p>Yükleniyor...</p></div></td></tr></tbody>
             </table>
+          </div>
+
+          <!-- ── Resource Pools ── -->
+          <div class="card" style="margin-top:20px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              🗂 Kaynak Havuzları (Resource Pools)
+              <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-respool-create')">+ Havuz Ekle</button>
+              <button class="btn-sm" onclick="loadResourcePools()">↻</button>
+            </div>
+            <div class="table-wrap" style="margin:0">
+              <table>
+                <thead><tr><th>Ad</th><th>Açıklama</th><th>VM Sayısı</th><th>İşlemler</th></tr></thead>
+                <tbody id="res-pools-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── RBAC Kaynak İzinleri ── -->
+          <div class="card" style="margin-top:20px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              🔒 RBAC — Kaynak Düzeyinde Erişim Kontrolü
+              <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-rbac-grant')">+ İzin Ekle</button>
+              <button class="btn-sm" onclick="loadRbacPerms()">↻</button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);padding:4px 0 10px">
+              Kullanıcılara belirli VM/network/storage kaynaklarına granüler erişim verin.
+            </div>
+            <div class="table-wrap" style="margin:0">
+              <table>
+                <thead><tr><th>Kaynak</th><th>Kullanıcı</th><th>İzinler</th><th>Kaldır</th></tr></thead>
+                <tbody id="rbac-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -3299,7 +3342,33 @@
               <div class="card-title">HAProxy Durumu</div>
               <div id="haproxyStatus" style="padding:8px 0"></div>
             </div>
-            <div class="empty-state"><p class="text-muted">HAProxy frontend/backend yönetimi API üzerinden yapılır.</p></div>
+            <!-- Frontends -->
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                Frontends
+                <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-ha-frontend')">+ Frontend Ekle</button>
+              </div>
+              <div class="table-wrap" style="margin:0">
+                <table>
+                  <thead><tr><th>Ad</th><th>Bind</th><th>Default Backend</th><th>Reload</th></tr></thead>
+                  <tbody id="ha-frontends-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Backends -->
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                Backends
+                <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-ha-backend')">+ Backend Ekle</button>
+                <button class="btn-sm" onclick="haproxyReload()">↻ Reload</button>
+              </div>
+              <div class="table-wrap" style="margin:0">
+                <table>
+                  <thead><tr><th>Ad</th><th>Balance</th><th>Serverlar</th><th>İşlemler</th></tr></thead>
+                  <tbody id="ha-backends-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -4496,6 +4565,208 @@ systemctl enable --now qemu-guest-agent</pre>
 </div>
 
 <!-- Edit Network Modal -->
+<!-- ═══ Modal: IPv6 Ağ Yapılandırması ══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ipv6-net" onclick="if(event.target===this)closeModal('modal-ipv6-net')">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h2>🌐 IPv6 Yapılandır: <span id="ipv6-net-name"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-ipv6-net')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>IPv6 Adresi</label><input id="ipv6-address" type="text" class="form-control" placeholder="fd00::1" value="fd00::1"></div>
+      <div class="form-row"><label>Prefix Uzunluğu</label><input id="ipv6-prefix" type="number" class="form-control" value="64" min="1" max="128" style="width:100px"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">DHCPv6 aralığı (opsiyonel)</div>
+      <div class="form-row"><label>DHCPv6 Başlangıç</label><input id="ipv6-dhcp-start" type="text" class="form-control" placeholder="fd00::100"></div>
+      <div class="form-row"><label>DHCPv6 Bitiş</label><input id="ipv6-dhcp-end" type="text" class="form-control" placeholder="fd00::1ff"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Host üzerinde <code>net.ipv6.conf.all.forwarding=1</code> otomatik aktif edilir.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ipv6-net')">İptal</button>
+      <button class="btn primary" onclick="saveIpv6Net()">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: NFS Depolama Havuzu ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-nfs-pool" onclick="if(event.target===this)closeModal('modal-nfs-pool')">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <h2>🌐 NFS Depolama Havuzu Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-nfs-pool')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Havuz Adı</label><input id="nfs-pool-name" type="text" class="form-control" placeholder="nfs-pool-1"></div>
+      <div class="form-row"><label>NFS Host</label><input id="nfs-host" type="text" class="form-control" placeholder="192.168.1.100"></div>
+      <div class="form-row"><label>Kaynak Yol (host'ta)</label><input id="nfs-source-path" type="text" class="form-control" placeholder="/exports/vms"></div>
+      <div class="form-row"><label>Hedef Yol (yerel)</label><input id="nfs-target-path" type="text" class="form-control" placeholder="/mnt/nfs-vms"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Otomatik mount edilir, autostart aktif. NFS client kurulu olmalı: <code>apt install nfs-common</code></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-nfs-pool')">İptal</button>
+      <button class="btn primary" onclick="createNfsPool()">+ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Ceph RBD Depolama Havuzu ═════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ceph-pool" onclick="if(event.target===this)closeModal('modal-ceph-pool')">
+  <div class="modal" style="width:460px">
+    <div class="modal-header">
+      <h2>🗃 Ceph RBD Havuzu Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-ceph-pool')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Havuz Adı</label><input id="ceph-pool-name" type="text" class="form-control" placeholder="ceph-rbd-pool"></div>
+      <div class="form-row"><label>Monitor Hostlar</label><input id="ceph-hosts" type="text" class="form-control" placeholder="192.168.1.10,192.168.1.11"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin:-6px 0 8px">Virgülle ayırın</div>
+      <div class="form-row"><label>Ceph Pool Adı</label><input id="ceph-pool-pool" type="text" class="form-control" placeholder="vms" value="vms"></div>
+      <div class="form-row"><label>Auth Kullanıcı</label><input id="ceph-auth-user" type="text" class="form-control" placeholder="admin" value="admin"></div>
+      <div class="form-row"><label>Libvirt Secret UUID</label><input id="ceph-secret-uuid" type="text" class="form-control" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Secret UUID: <code>virsh secret-list</code> ile görüntüleyin. Ceph client: <code>apt install ceph-common</code></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ceph-pool')">İptal</button>
+      <button class="btn primary" onclick="createCephPool()">+ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: HAProxy Frontend Ekle ═════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ha-frontend" onclick="if(event.target===this)closeModal('modal-ha-frontend')">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>HAProxy Frontend Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-ha-frontend')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Ad</label><input id="ha-front-name" type="text" class="form-control" placeholder="http-in"></div>
+      <div class="form-row"><label>Bind</label><input id="ha-front-bind" type="text" class="form-control" placeholder="*:80"></div>
+      <div class="form-row"><label>Default Backend</label><input id="ha-front-backend" type="text" class="form-control" placeholder="web-backend (opsiyonel)"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ha-frontend')">İptal</button>
+      <button class="btn primary" onclick="createHaFrontend()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: HAProxy Backend Ekle ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ha-backend" onclick="if(event.target===this)closeModal('modal-ha-backend')">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>HAProxy Backend Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-ha-backend')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Ad</label><input id="ha-back-name" type="text" class="form-control" placeholder="web-backend"></div>
+      <div class="form-row"><label>Balance Algoritması</label>
+        <select id="ha-back-balance" class="form-control">
+          <option value="roundrobin">roundrobin</option>
+          <option value="leastconn">leastconn</option>
+          <option value="source">source</option>
+          <option value="first">first</option>
+          <option value="uri">uri</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ha-backend')">İptal</button>
+      <button class="btn primary" onclick="createHaBackend()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: HAProxy Server Ekle ═══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ha-server" onclick="if(event.target===this)closeModal('modal-ha-server')">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>Server Ekle: <span id="ha-server-back-label"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-ha-server')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Server Adı</label><input id="ha-server-name" type="text" class="form-control" placeholder="web1"></div>
+      <div class="form-row"><label>Host/IP</label><input id="ha-server-host" type="text" class="form-control" placeholder="192.168.1.10"></div>
+      <div class="form-row"><label>Port</label><input id="ha-server-port" type="number" class="form-control" value="80" min="1" max="65535" style="width:100px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ha-server')">İptal</button>
+      <button class="btn primary" onclick="doAddHaServer()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Kaynak Havuzu Oluştur ═════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-respool-create" onclick="if(event.target===this)closeModal('modal-respool-create')">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <h2>🗂 Kaynak Havuzu Oluştur</h2>
+      <button class="modal-close" onclick="closeModal('modal-respool-create')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Ad</label><input id="respool-name" type="text" class="form-control" placeholder="prod-pool"></div>
+      <div class="form-row"><label>Açıklama</label><input id="respool-desc" type="text" class="form-control" placeholder="Üretim VM'leri"></div>
+      <div class="form-row"><label>Max CPU (opsiyonel)</label><input id="respool-cpu" type="number" class="form-control" placeholder="32" min="0" style="width:100px"></div>
+      <div class="form-row"><label>Max RAM MB (opsiyonel)</label><input id="respool-mem" type="number" class="form-control" placeholder="65536" min="0" style="width:120px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-respool-create')">İptal</button>
+      <button class="btn primary" onclick="createResourcePool()">+ Oluştur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: Pool'a VM Ekle ════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-pool-add-vm" onclick="if(event.target===this)closeModal('modal-pool-add-vm')">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <h2>VM Ekle: <span id="pool-vm-pool-label"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-pool-add-vm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>VM</label>
+        <select id="pool-vm-select" class="form-control"><option value="">Yükleniyor...</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-pool-add-vm')">İptal</button>
+      <button class="btn primary" onclick="doAddVmToPool()">+ Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Modal: RBAC İzin Ekle ════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-rbac-grant" onclick="if(event.target===this)closeModal('modal-rbac-grant')">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <h2>🔒 Kaynak İzni Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-rbac-grant')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>Kullanıcı Adı</label><input id="rbac-username" type="text" class="form-control" placeholder="john"></div>
+      <div class="form-row"><label>Kaynak Türü</label>
+        <select id="rbac-res-type" class="form-control">
+          <option value="vm">VM</option>
+          <option value="network">Network</option>
+          <option value="storage">Storage</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Kaynak ID</label><input id="rbac-res-id" type="text" class="form-control" placeholder="vm-id veya network-uuid"></div>
+      <div class="form-row"><label>İzinler</label>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;padding:6px 0">
+          <label><input type="checkbox" class="rbac-perm-chk" value="read" checked> read</label>
+          <label><input type="checkbox" class="rbac-perm-chk" value="write"> write</label>
+          <label><input type="checkbox" class="rbac-perm-chk" value="exec"> exec</label>
+          <label><input type="checkbox" class="rbac-perm-chk" value="delete"> delete</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-rbac-grant')">İptal</button>
+      <button class="btn primary" onclick="saveRbacPerm()">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-edit-net">
   <div class="modal" style="width:440px">
     <div class="modal-header">
@@ -7367,7 +7638,7 @@ function navigate(page) {
     networks: loadNetworks,
     storage: loadStorage,
     monitor: loadMonitor,
-    users: loadUsers,
+    users: () => { loadUsers(); loadResourcePools(); loadRbacPerms(); },
     topology: loadTopology,
     snapshots: loadSnapshots,
     settings: loadSettings,
@@ -9803,6 +10074,7 @@ async function loadNetworks() {
       <td>
         <div class="action-btns">
           <button class="btn sm" onclick="openEditNetwork('${n.uuid}','${escHtml(n.name)}')">✏</button>
+          <button class="btn sm" style="color:#818cf8" onclick="openIpv6Modal('${n.uuid}','${escHtml(n.name)}')" title="IPv6 yapılandır">🌐 IPv6</button>
           ${n.active
             ? `<button class="btn sm" onclick="netAction('${n.uuid}','stop')">■ Durdur</button>`
             : `<button class="btn sm success" onclick="netAction('${n.uuid}','start')">▶ Başlat</button>`}
@@ -12344,7 +12616,15 @@ async function deleteNginxSite(name) { if (!await showConfirm(`"${name}" nginx s
 async function loadHaproxyStatus() {
   const d = await _api('/api/haproxy/status');
   const el = document.getElementById('haproxyStatus');
-  if (el) el.innerHTML = `<span class="badge-${d.active?'success':'danger'}">${d.active?'Aktif':'Pasif'}</span> <span class="text-muted">${escHtml(d.version||'')}</span>`;
+  if (el) {
+    const running = d.active || d.running || d.status === 'running';
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+      <span class="badge ${running?'active':'inactive'}">${running?'● Çalışıyor':'● Durdu'}</span>
+      ${d.pid?`<code style="font-size:11px">PID ${d.pid}</code>`:''}
+      <span class="text-muted" style="font-size:12px">${escHtml(d.version||'')}</span>
+    </div>`;
+  }
+  loadHaproxyFullData();
 }
 
 /* ══════════════════ Monitoring ══════════════════ */
@@ -15379,6 +15659,230 @@ async function addIpv6ToNetwork(net_uuid, address, prefix, dhcp_start, dhcp_end)
   const d = await _api(`/api/networks/${net_uuid}/ipv6`, 'POST', {address, prefix, dhcp_start, dhcp_end});
   if (d.ok) { toast(`IPv6 eklendi: ${address}/${prefix}`, 'success'); loadNetworks(); }
   else toast(d.error || 'IPv6 eklenemedi', 'error');
+}
+let _ipv6NetUuid = null;
+function openIpv6Modal(uuid, name) {
+  _ipv6NetUuid = uuid;
+  document.getElementById('ipv6-net-name').textContent = name;
+  document.getElementById('ipv6-address').value = 'fd00::1';
+  document.getElementById('ipv6-prefix').value = '64';
+  document.getElementById('ipv6-dhcp-start').value = '';
+  document.getElementById('ipv6-dhcp-end').value = '';
+  openModal('modal-ipv6-net');
+}
+async function saveIpv6Net() {
+  const address = document.getElementById('ipv6-address').value.trim();
+  const prefix = parseInt(document.getElementById('ipv6-prefix').value) || 64;
+  const dhcp_start = document.getElementById('ipv6-dhcp-start').value.trim() || null;
+  const dhcp_end = document.getElementById('ipv6-dhcp-end').value.trim() || null;
+  if (!address) { toast('IPv6 adresi girin', 'error'); return; }
+  await addIpv6ToNetwork(_ipv6NetUuid, address, prefix, dhcp_start, dhcp_end);
+  closeModal('modal-ipv6-net');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   NFS / Ceph Storage Pools
+══════════════════════════════════════════════════════════════════════════════ */
+async function createNfsPool() {
+  const name        = document.getElementById('nfs-pool-name').value.trim();
+  const host        = document.getElementById('nfs-host').value.trim();
+  const source_path = document.getElementById('nfs-source-path').value.trim();
+  const target_path = document.getElementById('nfs-target-path').value.trim();
+  if (!name || !host || !source_path || !target_path) { toast('Tüm alanları doldurun', 'error'); return; }
+  const d = await _api('/api/storage/pools/nfs', 'POST', {name, host, source_path, target_path});
+  if (d.name) { toast(`NFS havuz oluşturuldu: ${d.name}`, 'success'); closeModal('modal-nfs-pool'); loadStorage(); }
+  else toast(d.error || 'NFS havuz oluşturulamadı', 'error');
+}
+async function createCephPool() {
+  const name         = document.getElementById('ceph-pool-name').value.trim();
+  const hosts        = document.getElementById('ceph-hosts').value.split(',').map(h => h.trim()).filter(Boolean);
+  const ceph_pool    = document.getElementById('ceph-pool-pool').value.trim() || 'vms';
+  const auth_username= document.getElementById('ceph-auth-user').value.trim() || 'admin';
+  const auth_uuid    = document.getElementById('ceph-secret-uuid').value.trim();
+  if (!name || !hosts.length) { toast('Ad ve monitor host(lar) gerekli', 'error'); return; }
+  const d = await _api('/api/storage/pools/ceph', 'POST', {name, hosts, ceph_pool, auth_username, auth_uuid});
+  if (d.name) { toast(`Ceph havuz oluşturuldu: ${d.name}`, 'success'); closeModal('modal-ceph-pool'); loadStorage(); }
+  else toast(d.error || 'Ceph havuz oluşturulamadı', 'error');
+}
+async function loadCephStatus() {
+  const card = document.getElementById('ceph-status-card');
+  const el   = document.getElementById('ceph-status-content');
+  if (!el) return;
+  if (card) card.style.display = '';
+  el.innerHTML = '<span style="color:var(--text-muted)">Yükleniyor...</span>';
+  const d = await _api('/api/storage/ceph/status');
+  if (d.error) { el.innerHTML = `<span style="color:#ef4444">${escHtml(d.error)}</span>`; return; }
+  const health = d.status?.health?.status || 'UNKNOWN';
+  const col = health === 'HEALTH_OK' ? 'var(--green-lt)' : health === 'HEALTH_WARN' ? '#fbbf24' : '#ef4444';
+  el.innerHTML = `<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px">
+    <div><span style="color:var(--text-muted);font-size:11px">Sağlık</span><br><b style="color:${col}">${escHtml(health)}</b></div>
+    ${d.osd_stat?.num_osds != null ? `<div><span style="color:var(--text-muted);font-size:11px">OSD</span><br><b>${d.osd_stat.num_up_osds||0}/${d.osd_stat.num_osds||0} UP</b></div>` : ''}
+    ${d.df?.stats?.total_bytes ? `<div><span style="color:var(--text-muted);font-size:11px">Toplam</span><br><b>${_fmtBytes(d.df.stats.total_bytes)}</b></div>` : ''}
+    ${d.df?.stats?.total_used_raw_bytes ? `<div><span style="color:var(--text-muted);font-size:11px">Kullanılan</span><br><b>${_fmtBytes(d.df.stats.total_used_raw_bytes)}</b></div>` : ''}
+    ${d.df?.stats?.total_avail_bytes ? `<div><span style="color:var(--text-muted);font-size:11px">Boş</span><br><b>${_fmtBytes(d.df.stats.total_avail_bytes)}</b></div>` : ''}
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HAProxy Full Management
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadHaproxyFullData() {
+  const [fd, bd] = await Promise.all([
+    _api('/api/haproxy/frontends').catch(() => ({frontends:[]})),
+    _api('/api/haproxy/backends').catch(() => ({backends:[]}))
+  ]);
+  const fronts   = fd.frontends || [];
+  const backends = bd.backends  || [];
+  const fEl = document.getElementById('ha-frontends-tbody');
+  const bEl = document.getElementById('ha-backends-tbody');
+  if (fEl) fEl.innerHTML = fronts.length ? fronts.map(f => `<tr>
+    <td><b>${escHtml(f.name||'—')}</b></td>
+    <td><code>${escHtml(f.bind||'—')}</code></td>
+    <td>${escHtml(f.default_backend||'—')}</td>
+    <td><button class="btn-sm" onclick="haproxyReload()" title="Reload config">↻</button></td>
+  </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Frontend yok</td></tr>';
+  if (bEl) bEl.innerHTML = backends.length ? backends.map(b => `<tr>
+    <td><b>${escHtml(b.name||'—')}</b></td>
+    <td>${escHtml(b.balance||'roundrobin')}</td>
+    <td>${(b.servers||[]).map(s=>`<code style="font-size:11px;margin:1px">${escHtml(typeof s==='string'?s:s.name||JSON.stringify(s))}</code>`).join(' ')||'—'}</td>
+    <td>
+      <button class="btn-sm" onclick="openAddHaServer('${escHtml(b.name||'')}')">+ Server</button>
+      <button class="btn-sm" onclick="haproxyReload()" title="Reload">↻</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Backend yok</td></tr>';
+}
+async function createHaFrontend() {
+  const name    = document.getElementById('ha-front-name').value.trim();
+  const bind    = document.getElementById('ha-front-bind').value.trim();
+  const backend = document.getElementById('ha-front-backend').value.trim();
+  if (!name || !bind) { toast('Ad ve bind gerekli', 'error'); return; }
+  const d = await _api('/api/haproxy/frontends', 'POST', {name, bind, default_backend: backend||undefined});
+  if (d.name || d.ok || d.status==='ok') { toast('Frontend oluşturuldu', 'success'); closeModal('modal-ha-frontend'); loadHaproxyFullData(); }
+  else toast(d.error || 'Oluşturulamadı', 'error');
+}
+async function createHaBackend() {
+  const name    = document.getElementById('ha-back-name').value.trim();
+  const balance = document.getElementById('ha-back-balance').value;
+  if (!name) { toast('Backend adı gerekli', 'error'); return; }
+  const d = await _api('/api/haproxy/backends', 'POST', {name, balance});
+  if (d.name || d.ok || d.status==='ok') { toast('Backend oluşturuldu', 'success'); closeModal('modal-ha-backend'); loadHaproxyFullData(); }
+  else toast(d.error || 'Oluşturulamadı', 'error');
+}
+async function haproxyReload() {
+  const d = await _api('/api/haproxy/reload', 'POST');
+  if (d.ok || d.status==='ok') { toast('HAProxy yeniden yüklendi', 'success'); loadHaproxyFullData(); }
+  else toast(d.error || 'Reload başarısız', 'error');
+}
+let _haAddServerBackend = '';
+function openAddHaServer(backendName) {
+  _haAddServerBackend = backendName;
+  document.getElementById('ha-server-back-label').textContent = backendName;
+  document.getElementById('ha-server-name').value = '';
+  document.getElementById('ha-server-host').value = '';
+  document.getElementById('ha-server-port').value = '80';
+  openModal('modal-ha-server');
+}
+async function doAddHaServer() {
+  const name = document.getElementById('ha-server-name').value.trim();
+  const host = document.getElementById('ha-server-host').value.trim();
+  const port = parseInt(document.getElementById('ha-server-port').value) || 80;
+  if (!name || !host) { toast('Ad ve host gerekli', 'error'); return; }
+  const d = await _api(`/api/haproxy/backends/${encodeURIComponent(_haAddServerBackend)}/servers`, 'POST', {name, host, port});
+  if (d.name || d.ok || d.status==='ok') { toast('Server eklendi', 'success'); closeModal('modal-ha-server'); loadHaproxyFullData(); }
+  else toast(d.error || 'Eklenemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Resource Pools  (/api/pools)
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadResourcePools() {
+  const d = await _api('/api/pools');
+  const pools = d.pools || [];
+  const tbody = document.getElementById('res-pools-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = pools.length ? pools.map(p => `<tr>
+    <td><b>${escHtml(p.name || p.id || '—')}</b></td>
+    <td>${escHtml(p.description || '—')}</td>
+    <td>${(p.vms || []).length} VM</td>
+    <td>
+      <button class="btn-sm" onclick="openAddVmToPool('${escHtml(p.id||'')}','${escHtml(p.name||'')}')">+ VM</button>
+      <button class="btn-sm btn-danger" onclick="deleteResourcePool('${escHtml(p.id||'')}','${escHtml(p.name||p.id||'')}')">✕</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Kaynak havuzu yok</td></tr>';
+}
+async function createResourcePool() {
+  const name        = document.getElementById('respool-name').value.trim();
+  const description = document.getElementById('respool-desc').value.trim();
+  const max_cpu     = parseInt(document.getElementById('respool-cpu').value) || null;
+  const max_mem_mb  = parseInt(document.getElementById('respool-mem').value) || null;
+  if (!name) { toast('Havuz adı gerekli', 'error'); return; }
+  const body = {name, description};
+  if (max_cpu)    body.max_cpu    = max_cpu;
+  if (max_mem_mb) body.max_mem_mb = max_mem_mb;
+  const d = await _api('/api/pools', 'POST', body);
+  if (d.id || d.name) { toast('Kaynak havuzu oluşturuldu', 'success'); closeModal('modal-respool-create'); loadResourcePools(); }
+  else toast(d.error || 'Oluşturulamadı', 'error');
+}
+async function deleteResourcePool(id, name) {
+  if (!await showConfirm(`"${name}" kaynak havuzu silinecek.`, 'Havuz Sil', true)) return;
+  const d = await _api(`/api/pools/${encodeURIComponent(id)}`, 'DELETE');
+  if (d.deleted) { toast('Havuz silindi', 'success'); loadResourcePools(); }
+  else toast(d.error || 'Silinemedi', 'error');
+}
+let _poolAddTarget = '';
+async function openAddVmToPool(poolId, poolName) {
+  _poolAddTarget = poolId;
+  document.getElementById('pool-vm-pool-label').textContent = poolName;
+  const d = await _api('/api/vms');
+  const sel = document.getElementById('pool-vm-select');
+  sel.innerHTML = (d.vms || []).map(v => `<option value="${escHtml(v.id||v.name)}">${escHtml(v.name)}</option>`).join('') || '<option value="">VM yok</option>';
+  openModal('modal-pool-add-vm');
+}
+async function doAddVmToPool() {
+  const vm_id = document.getElementById('pool-vm-select').value;
+  if (!vm_id) { toast('VM seçin', 'error'); return; }
+  const d = await _api(`/api/pools/${encodeURIComponent(_poolAddTarget)}/vms`, 'POST', {vm_id});
+  if (d.added) { toast('VM havuza eklendi', 'success'); closeModal('modal-pool-add-vm'); loadResourcePools(); }
+  else toast(d.error || 'Eklenemedi', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RBAC — Resource-Level Permissions
+══════════════════════════════════════════════════════════════════════════════ */
+async function loadRbacPerms() {
+  const d = await _api('/api/rbac/resources');
+  const el = document.getElementById('rbac-tbody');
+  if (!el) return;
+  const perms = d.permissions || {};
+  const rows = [];
+  for (const [key, userPerms] of Object.entries(perms)) {
+    for (const [user, ps] of Object.entries(userPerms)) {
+      rows.push(`<tr>
+        <td><code style="font-size:11px">${escHtml(key)}</code></td>
+        <td>${escHtml(user)}</td>
+        <td>${(ps||[]).map(p=>`<span class="badge" style="font-size:10px;margin:1px;background:var(--surface2)">${escHtml(p)}</span>`).join('')||'—'}</td>
+        <td><button class="btn-sm btn-danger" onclick="deleteRbacPerm('${escHtml(key)}','${escHtml(user)}')">✕</button></td>
+      </tr>`);
+    }
+  }
+  el.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Kaynak izni tanımlanmamış</td></tr>';
+}
+async function saveRbacPerm() {
+  const username      = document.getElementById('rbac-username').value.trim();
+  const resource_type = document.getElementById('rbac-res-type').value;
+  const resource_id   = document.getElementById('rbac-res-id').value.trim();
+  const permissions   = [...document.querySelectorAll('.rbac-perm-chk:checked')].map(c => c.value);
+  if (!username || !resource_id) { toast('Kullanıcı ve kaynak ID gerekli', 'error'); return; }
+  const d = await _api('/api/rbac/resources', 'POST', {username, resource_type, resource_id, permissions});
+  if (d.key) { toast('İzin kaydedildi', 'success'); closeModal('modal-rbac-grant'); loadRbacPerms(); }
+  else toast(d.error || 'Kaydedilemedi', 'error');
+}
+async function deleteRbacPerm(key, username) {
+  const [resource_type, ...rest] = key.split(':');
+  const resource_id = rest.join(':');
+  await _api(`/api/rbac/resources/${encodeURIComponent(resource_type)}/${encodeURIComponent(resource_id)}`, 'DELETE', {username});
+  toast('İzin kaldırıldı', 'success');
+  loadRbacPerms();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
