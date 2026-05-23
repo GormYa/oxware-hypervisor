@@ -24,6 +24,8 @@ from pathlib import Path
 AUTH_FILE        = os.environ.get("OXWARE_AUTH_FILE",  os.environ.get("ADAOS_AUTH_FILE",  "/etc/oxware/.auth"))
 RESET_FILE       = os.environ.get("OXWARE_RESET_FILE", os.environ.get("ADAOS_RESET_FILE", "/etc/oxware/.passwd_reset"))
 SETUP_FLAG_FILE  = "/etc/oxware/.setup_done"
+# Username plaintext yedek dosyası — machine-id değişse bile username okunabilir kalır
+USERNAME_FILE    = "/etc/oxware/.username"
 
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -130,10 +132,24 @@ def _save_auth(data: dict):
     encrypted = _encrypt(json.dumps(data))
     Path(AUTH_FILE).write_text(encrypted)
     os.chmod(AUTH_FILE, 0o600)
+    # Username ayrıca plaintext kaydedilir — machine-id değişse bile okunabilir
+    try:
+        if data.get("username"):
+            Path(USERNAME_FILE).write_text(data["username"])
+            os.chmod(USERNAME_FILE, 0o600)
+    except Exception:
+        pass
 
 
 def is_setup_done() -> bool:
-    return os.path.exists(SETUP_FLAG_FILE) and os.path.exists(AUTH_FILE)
+    # Auth dosyası veya username yedeği varsa setup tamamlanmış sayılır.
+    # machine-id değişmiş olsa bile setup sayfası AÇILMAZ.
+    if os.path.exists(SETUP_FLAG_FILE) and os.path.exists(AUTH_FILE):
+        return True
+    # Yedek: username dosyası varsa setup yapılmış ama auth silinmiş/bozulmuş olabilir
+    if os.path.exists(USERNAME_FILE) and os.path.exists(AUTH_FILE):
+        return True
+    return False
 
 
 def first_setup(username: str, password: str):
@@ -157,6 +173,16 @@ def first_setup(username: str, password: str):
 def verify_credentials(username: str, password: str) -> bool:
     data = _load_auth()
     if not data:
+        # Auth dosyası çözülemedi (machine-id değişmiş olabilir)
+        import logging as _log
+        _log.getLogger("oxware.credentials").critical(
+            "GİRİŞ BAŞARISIZ: .auth dosyası çözülemedi. "
+            "machine-id değişmiş olabilir. "
+            "Şifreyi sıfırlamak için root olarak: "
+            "printf 'USERNAME=%s\\nPASSWORD=yeni_sifre\\n' > /etc/oxware/.passwd_reset && "
+            "chmod 600 /etc/oxware/.passwd_reset && systemctl restart oxware",
+            username
+        )
         return False
     if data.get("username") != username:
         return False
@@ -164,7 +190,26 @@ def verify_credentials(username: str, password: str) -> bool:
 
 
 def get_username() -> str:
-    return _load_auth().get("username", "admin")
+    # Önce şifreli auth dosyasından dene
+    data = _load_auth()
+    if data.get("username"):
+        return data["username"]
+    # Şifreli dosya çözülemediyse (machine-id değişmiş olabilir) plaintext yedeğe bak
+    try:
+        if os.path.exists(USERNAME_FILE):
+            uname = Path(USERNAME_FILE).read_text().strip()
+            if uname:
+                import logging as _log
+                _log.getLogger("oxware.credentials").critical(
+                    "AUTH DOSYASI ÇÖZÜLEMEDI! machine-id değişmiş olabilir. "
+                    "USERNAME_FILE yedeğinden '%s' okundu. "
+                    "Şifreyi sıfırlamak için: /etc/oxware/.passwd_reset dosyası oluşturun.",
+                    uname
+                )
+                return uname
+    except Exception:
+        pass
+    return "admin"
 
 
 def apply_reset_if_exists():
