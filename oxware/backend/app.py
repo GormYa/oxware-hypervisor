@@ -12185,16 +12185,58 @@ def api_migration_esxi_import():
                                         continue
                                     try:
                                         with open(str(_dp), "r+b") as _df:
-                                            _df.seek(1124)
-                                            _rv = _struct.unpack("<I", _df.read(4))[0]
-                                            _rv &= ~0x400   # metadata_csum
-                                            _rv &= ~0x10000 # orphan_present
-                                            _df.seek(1124)
-                                            _df.write(_struct.pack("<I", _rv))
+                                            # ── Superblock patch ─────────────────────────
+                                            _df.seek(1024)
+                                            _sb = bytearray(_df.read(1024))
+                                            # s_log_block_size at SB+24
+                                            _blksz = 1024 << _struct.unpack_from("<I", _sb, 24)[0]
+                                            # s_blocks_per_group at SB+32
+                                            _bpg = _struct.unpack_from("<I", _sb, 32)[0]
+                                            # s_blocks_count at SB+4 (lo) and SB+80 (hi)
+                                            _bclo = _struct.unpack_from("<I", _sb, 4)[0]
+                                            _bchi = _struct.unpack_from("<I", _sb, 80)[0]
+                                            _total_blk = _bclo | (_bchi << 32)
+                                            _num_bg = max(1, (_total_blk + _bpg - 1) // _bpg)
+                                            # s_feature_incompat at SB+96
+                                            _fincompat = _struct.unpack_from("<I", _sb, 96)[0]
+                                            _has64 = bool(_fincompat & 0x80)
+                                            # s_desc_size at SB+254 (only valid if 64bit)
+                                            _desc_sz = _struct.unpack_from("<H", _sb, 254)[0] if _has64 else 32
+                                            if _desc_sz < 32:
+                                                _desc_sz = 32
+                                            # s_feature_ro_compat at SB+100
+                                            _rv = _struct.unpack_from("<I", _sb, 100)[0]
+                                            _rv &= ~0x400    # EXT4_FEATURE_RO_COMPAT_METADATA_CSUM
+                                            _rv &= ~0x10000  # EXT4_FEATURE_RO_COMPAT_ORPHAN_PRESENT
+                                            _struct.pack_into("<I", _sb, 100, _rv)
+                                            _df.seek(1024)
+                                            _df.write(bytes(_sb))
+
+                                            # ── Block group descriptor patch ─────────────
+                                            # GDT at block 1 (blksz>1024) or block 2 (blksz==1024)
+                                            _gdt_blk = 2 if _blksz == 1024 else 1
+                                            _gdt_off = _gdt_blk * _blksz
+                                            for _bg in range(_num_bg):
+                                                _doff = _gdt_off + _bg * _desc_sz
+                                                _df.seek(_doff)
+                                                _desc = bytearray(_df.read(_desc_sz))
+                                                if len(_desc) < 20:
+                                                    continue
+                                                # bg_flags at descriptor+18 (uint16)
+                                                _bflags = _struct.unpack_from("<H", _desc, 18)[0]
+                                                if _bflags & 0x3:  # INODE_UNINIT|BLOCK_UNINIT
+                                                    _bflags &= ~0x3
+                                                    _struct.pack_into("<H", _desc, 18, _bflags)
+                                                    # bg_checksum at descriptor+30 — zero it
+                                                    # (metadata_csum cleared → no checksum needed)
+                                                    if _desc_sz >= 32:
+                                                        _struct.pack_into("<H", _desc, 30, 0)
+                                                    _df.seek(_doff)
+                                                    _df.write(bytes(_desc))
                                             _df.flush()
                                         _fixed.append(str(_dp))
-                                        log.info("ESXi ext4 fix: %s ro_compat=%#x",
-                                                 _dp, _rv)
+                                        log.info("ESXi ext4 fix: %s ro_compat=%#x blksz=%d ngroups=%d",
+                                                 _dp, _rv, _blksz, _num_bg)
                                     except Exception as _pe:
                                         log.warning("ESXi ext4 patch %s: %s", _dp, _pe)
                                 if _fixed:
