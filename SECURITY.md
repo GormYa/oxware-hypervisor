@@ -163,7 +163,7 @@ We thank the following researchers for responsible disclosures:
 
 - **OMERATI-2026-001** — VNC WebSocket role bypass. Fixed in v2.2.1.
 - **OMERATI-2026-002** — Unauthenticated password reset RCE. Fixed in v2.2.2.
-- **Zencefil Efendi** — Comprehensive white-box security audit (2026-05-24). 20 findings including 4 critical attack chains. All critical and high findings addressed in v2.5.0.
+- **Zencefil Efendi** @zencefilefendi — Comprehensive white-box security audit (2026-05-24). 20 findings including 4 critical attack chains. All critical and high findings addressed in v2.5.0.
 
 ---
 
