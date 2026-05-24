@@ -1077,17 +1077,60 @@ def get_hardware_config(vm_id: str) -> dict:
 
 
 def hot_set_vcpus(vm_id: str, count: int) -> dict:
-    """Çalışan VM'de vCPU sayısını canlı değiştir."""
+    """
+    VM vCPU sayısını değiştir.
+    - count <= maxvcpus → canlı (live) + config güncelleme.
+    - count > maxvcpus  → VM durdur → XML maxvcpus güncelle → redefine → yeniden başlat.
+    """
     conn = _connect()
     try:
         dom = conn.lookupByUUIDString(vm_id)
         state_val, _ = dom.state()
         running = (state_val == libvirt.VIR_DOMAIN_RUNNING)
-        flags = libvirt.VIR_DOMAIN_VCPU_CONFIG
-        if running:
-            flags |= libvirt.VIR_DOMAIN_VCPU_LIVE
-        dom.setVcpusFlags(count, flags)
-        return {"ok": True, "vcpus": count, "live": running}
+
+        # Mevcut maxvcpus — inactive XML'den oku
+        xml_str = dom.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        root = ET.fromstring(xml_str)
+        vcpu_el = root.find("vcpu")
+        cur_max = int(vcpu_el.text or "1") if vcpu_el is not None else 1
+
+        if count > cur_max:
+            # maxvcpus aşıldı — offline XML güncelleme gerekli
+            was_running = running
+            if running:
+                dom.destroy()
+                time.sleep(1)
+
+            if vcpu_el is not None:
+                vcpu_el.text = str(count)
+                vcpu_el.set("current", str(count))
+            else:
+                vcpu_el = ET.SubElement(root, "vcpu")
+                vcpu_el.text = str(count)
+                vcpu_el.set("current", str(count))
+
+            new_xml = ET.tostring(root, encoding="unicode")
+            conn.defineXML(new_xml)
+
+            restarted = False
+            if was_running:
+                try:
+                    dom2 = conn.lookupByUUIDString(vm_id)
+                    dom2.create()
+                    restarted = True
+                except Exception:
+                    pass
+
+            return {"ok": True, "vcpus": count, "live": False,
+                    "restarted": restarted,
+                    "message": "maxvcpus aşıldı — VM yeniden başlatıldı" if restarted else "maxvcpus aşıldı — VM durduruldu, elle başlatın"}
+        else:
+            # count <= maxvcpus — live hotplug
+            flags = libvirt.VIR_DOMAIN_VCPU_CONFIG
+            if running:
+                flags |= libvirt.VIR_DOMAIN_VCPU_LIVE
+            dom.setVcpusFlags(count, flags)
+            return {"ok": True, "vcpus": count, "live": running}
     finally:
         conn.close()
 
