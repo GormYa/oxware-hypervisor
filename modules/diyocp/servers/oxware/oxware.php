@@ -1,299 +1,379 @@
 <?php
+
+namespace App\System\Module;
+
+use App\System\Model\ModuleLogModel;
+use App\System\Model\UserProductModel;
+use App\System\Vendor\beLanguage;
+use App\System\Vendor\Basic\beCookie;
+
 /**
- * OXware Hypervisor — DiyoCP Server Module
- * Versiyon: 1.0.0
+ * OXware Hypervisor - DiyoCP Server Module v2.0.0
  *
- * Kurulum:
- *   Bu klasörü DiyoCP'nin modules/servers/ dizinine kopyalayın:
- *     modules/servers/oxware/
- *   Ardından: DiyoCP Admin → Sunucular → Yeni Sunucu → Tip: OXware
+ * Kurulum: modules/servers/oxware/ dizinine kopyalayin
  *
- * Sunucu ayarları (DiyoCP Admin paneli):
- *   hostname  : OXware API URL (ör: https://oxware.example.com)
- *   password  : OXware API anahtarı (oxw_... ile başlar)
- *
- * Paket ayarları (configoptions):
- *   cpu, ram_mb, disk_gb, os_template, network
+ * DiyoCP Admin > Sunucular > Yeni Sunucu:
+ *   Tip   : OXware Hypervisor
+ *   URL   : https://oxware.example.com
+ *   Sifre : oxw_... (OXware API anahtari)
  */
 
-class Servers_Oxware
+class oxware
 {
-    // ── Metadata ──────────────────────────────────────────────────────────────
+    public $options = ['isneedserver' => true];
 
-    public static $ModuleVersion  = '1.0.0';
-    public static $ModuleName     = 'OXware Hypervisor';
-    public static $ModuleAuthor   = 'OXware Team';
+    public $pages = [
+        '/' => [
+            'showmenu' => true,
+            'name'     => 'Sunucu Yonetimi',
+            'icon'     => '<i class="ri-server-line"></i>',
+        ],
+    ];
 
-    public static function MetaData()
+    public function oxware_info()
     {
         return [
-            'DisplayName' => 'OXware Hypervisor',
-            'APIVersion'  => '1.1',
-            'RequiresServer' => true,
+            'name'        => 'OXware Hypervisor',
+            'description' => 'OXware KVM Hypervisor uzerinden sanal sunucu otomasyonu saglar',
+            'version'     => '2.0.0',
+            'vercode'     => 20,
+            'type'        => 'server',
+            'author'      => 'OXware Team',
         ];
     }
 
-    public static function getConfig()
+    public function oxware_connection_test($params = [])
+    {
+        $res = $this->_api($params['surl'], $params['spassword'], 'GET', '/api/system/stats');
+        if (!$res['status']) {
+            return ['status' => false, 'message' => $res['message']];
+        }
+        return ['status' => true];
+    }
+
+    public function oxware_order_config()
+    {
+        return [];
+    }
+
+    public function oxware_product_config($params = [])
     {
         return [
-            'name'     => 'OXware Hypervisor',
-            'version'  => self::$ModuleVersion,
-            'settings' => [
-                'cpu' => [
-                    'type'        => 'text',
-                    'label'       => 'CPU (vCPU)',
-                    'value'       => '2',
-                    'description' => 'Sanal CPU sayısı',
-                ],
-                'ram_mb' => [
-                    'type'        => 'text',
-                    'label'       => 'RAM (MB)',
-                    'value'       => '2048',
-                    'description' => 'Bellek MB cinsinden (2048 = 2 GB)',
-                ],
-                'disk_gb' => [
-                    'type'        => 'text',
-                    'label'       => 'Disk (GB)',
-                    'value'       => '50',
-                    'description' => 'Disk alanı GB cinsinden',
-                ],
-                'os_template' => [
-                    'type'        => 'text',
-                    'label'       => 'OS Template',
-                    'value'       => 'ubuntu-22.04',
-                    'description' => 'OXware template ID (ör: ubuntu-22.04, debian-12)',
-                ],
-                'network' => [
-                    'type'        => 'text',
-                    'label'       => 'Network',
-                    'value'       => 'default',
-                    'description' => 'Libvirt ağ adı (ör: default, br0)',
-                ],
+            'vcpus' => [
+                'name'        => 'vCPU Sayisi',
+                'description' => 'Sanal islemci cekirdek sayisi',
+                'type'        => 'integer',
+                'default'     => '2',
+            ],
+            'ram_mb' => [
+                'name'        => 'RAM (MB)',
+                'description' => 'Bellek miktari MB cinsinden (2048 = 2 GB)',
+                'type'        => 'integer',
+                'default'     => '2048',
+            ],
+            'disk_gb' => [
+                'name'        => 'Disk (GB)',
+                'description' => 'Disk alani GB cinsinden',
+                'type'        => 'integer',
+                'default'     => '50',
+            ],
+            'os_template' => [
+                'name'        => 'OS Sablonu',
+                'description' => 'OXware sablon adi (ornek: ubuntu-22.04, debian-12)',
+                'type'        => 'string',
+                'default'     => 'ubuntu-22.04',
+            ],
+            'network' => [
+                'name'        => 'Ag',
+                'description' => 'Libvirt ag adi (ornek: default, br0)',
+                'type'        => 'string',
+                'default'     => 'default',
             ],
         ];
     }
 
-    // ── Yardımcı: OXware REST API ─────────────────────────────────────────────
-
-    private static function api($server, $method, $endpoint, $body = null)
+    public function oxware_create($params = [])
     {
-        $base = rtrim(
-            $server['serverhostname'] ?? $server['ip_address'] ?? $server['hostname'] ?? $server['host'] ?? '',
-            '/'
-        );
-        $key = trim($server['serverpassword'] ?? $server['api_key'] ?? $server['password'] ?? '');
+        $server         = $params['server'];
+        $userproduct    = $params['userproduct'];
+        $productmodules = $params['productmodules'];
 
-        if (!$base) {
-            return ['error' => 'Sunucu adresi tanımlı değil'];
+        $vm_name = 'vm-' . $userproduct['upid'] . '-' . substr(md5((string) $userproduct['upid']), 0, 6);
+
+        $body = [
+            'name'        => $vm_name,
+            'vcpus'       => (int)($productmodules['vcpus']    ?? 2),
+            'memory_mb'   => (int)($productmodules['ram_mb']   ?? 2048),
+            'disk_gb'     => (int)($productmodules['disk_gb']  ?? 50),
+            'os_template' => $productmodules['os_template']     ?? 'ubuntu-22.04',
+            'network'     => $productmodules['network']         ?? 'default',
+            'auto_start'  => true,
+        ];
+
+        $res = $this->_api($server['surl'], $server['spassword'], 'POST', '/api/provision/create', $body);
+
+        if (!$res['status']) {
+            ModuleLogModel::beCreateModuleLog(
+                $userproduct['upid'], 'oxware',
+                'VM Olusturma Hatasi', 'VM olusturulurken hata olustu',
+                ['response' => $res]
+            );
+            return ['status' => false, 'message' => 'VM olusturulamadi: ' . $res['message']];
         }
 
-        // https eksikse ekle
-        if (!preg_match('#^https?://#i', $base)) {
-            $base = 'https://' . $base;
+        $vm_id = $res['data']['vm']['id']  ?? $res['data']['vm_id'] ?? '';
+        $ip    = $res['data']['vm']['ip']  ?? $res['data']['ip']    ?? '';
+
+        if (!$vm_id) {
+            return ['status' => false, 'message' => 'VM olusturuldu ancak VM ID alinamadi'];
         }
 
-        // SSL: sistem CA bundle
-        $ca_path = '';
-        foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $f) {
-            if (file_exists($f)) { $ca_path = $f; break; }
+        $updata     = ['vm_id' => $vm_id, 'vm_name' => $vm_name, 'ip' => $ip];
+        $updatedata = ['updata' => json_encode($updata, JSON_UNESCAPED_UNICODE)];
+        if ($ip) {
+            $updatedata['uptag'] = $ip;
         }
 
-        $ch = curl_init($base . '/api' . $endpoint);
-        $curl_opts = [
+        UserProductModel::beUpdate($updatedata)->beWhere('upid', $userproduct['upid'])->beExecute();
+
+        return [
+            'status'         => true,
+            'message'        => 'VM basariyla olusturuldu',
+            'url'            => beGetRoute('client.userproduct.userproduct.show', ['upid' => $userproduct['upid']]),
+            'activisioninfo' => "VM ID: {$vm_id}\nSunucu Adi: {$vm_name}\nIP: " . ($ip ?: 'Ataniyor...'),
+        ];
+    }
+
+    public function oxware_manage($params = [])
+    {
+        $userproduct = $params['userproduct'];
+        beCookie::beCreateCookie('be_upid', $userproduct['upid'], true, true);
+        return [
+            'status'  => true,
+            'message' => 'Yonetim paneline yonlendiriliyorsunuz',
+            'url'     => beGetRoute('client.userproduct.userproduct.show', ['upid' => $userproduct['upid']]),
+        ];
+    }
+
+    public function oxware_extend($params = [])
+    {
+        return ['status' => true];
+    }
+
+    public function oxware_suspend($params = [])
+    {
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return ['status' => false, 'message' => 'VM ID bulunamadi'];
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'POST', "/api/provision/{$vm_id}/suspend");
+        if (!$res['status']) {
+            return ['status' => false, 'message' => 'Askiya alma basarisiz: ' . $res['message']];
+        }
+        return ['status' => true, 'message' => 'VM askiya alindi'];
+    }
+
+    public function oxware_unsuspend($params = [])
+    {
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return ['status' => false, 'message' => 'VM ID bulunamadi'];
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'POST', "/api/provision/{$vm_id}/unsuspend");
+        if (!$res['status']) {
+            return ['status' => false, 'message' => 'Aktiflestime basarisiz: ' . $res['message']];
+        }
+        return ['status' => true, 'message' => 'VM aktiflestirildi'];
+    }
+
+    public function oxware_terminate($params = [])
+    {
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return ['status' => true, 'message' => 'VM ID yok, zaten silinmis'];
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'DELETE', "/api/provision/{$vm_id}");
+        if (!$res['status']) {
+            return ['status' => false, 'message' => 'VM silinemedi: ' . $res['message']];
+        }
+        return ['status' => true, 'message' => 'VM basariyla silindi'];
+    }
+
+    public function oxware_clientarea($params = [])
+    {
+        beLanguage::beReadLang('oxware');
+        $server      = $params['server'];
+        $userproduct = $params['userproduct'];
+        $updata      = json_decode($userproduct['updata'], true);
+        $vm_id       = $updata['vm_id'] ?? '';
+
+        if (!$vm_id) {
+            return beAjaxError(['message' => 'VM henuz olusturulmamis']);
+        }
+
+        $res       = $this->_api($server['surl'], $server['spassword'], 'GET', "/api/provision/{$vm_id}/status");
+        $vm_status = 'Bilinmiyor';
+        $vm_ip     = $updata['ip'] ?? '';
+
+        if ($res['status']) {
+            $vm_status  = $res['data']['status'] ?? 'Bilinmiyor';
+            $fetched_ip = $res['data']['ip'] ?? '';
+            if ($fetched_ip && !$vm_ip) {
+                $vm_ip        = $fetched_ip;
+                $updata['ip'] = $vm_ip;
+                UserProductModel::beUpdate([
+                    'updata' => json_encode($updata, JSON_UNESCAPED_UNICODE),
+                    'uptag'  => $vm_ip,
+                ])->beWhere('upid', $userproduct['upid'])->beExecute();
+            }
+        }
+
+        $vminfo = [
+            'vm_id'     => $vm_id,
+            'vm_name'   => $updata['vm_name'] ?? $vm_id,
+            'ip'        => $vm_ip ?: 'Ataniyor...',
+            'status'    => $vm_status,
+            'panel_url' => rtrim($server['surl'], '/'),
+        ];
+
+        return [
+            'status'  => true,
+            'title'   => 'VM Yonetimi',
+            'content' => beGetView('modules.oxware.server', [
+                'vm'          => $vminfo,
+                'userproduct' => $userproduct,
+            ]),
+        ];
+    }
+
+    public function oxware_restart($params = [])
+    {
+        beLanguage::beReadLang('oxware');
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return beAjaxError(['message' => 'VM ID bulunamadi']);
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'POST', "/api/vms/{$vm_id}/reboot");
+        if (!$res['status']) {
+            return beAjaxError(['message' => 'Yeniden baslatma basarisiz: ' . $res['message']]);
+        }
+        return beAjaxSuccess(['message' => 'VM yeniden baslatiliyor']);
+    }
+
+    public function oxware_start($params = [])
+    {
+        beLanguage::beReadLang('oxware');
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return beAjaxError(['message' => 'VM ID bulunamadi']);
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'POST', "/api/vms/{$vm_id}/start");
+        if (!$res['status']) {
+            return beAjaxError(['message' => 'Baslatma basarisiz: ' . $res['message']]);
+        }
+        return beAjaxSuccess(['message' => 'VM baslatiliyor']);
+    }
+
+    public function oxware_stop($params = [])
+    {
+        beLanguage::beReadLang('oxware');
+        $updata = json_decode($params['userproduct']['updata'], true);
+        $vm_id  = $updata['vm_id'] ?? '';
+        if (!$vm_id) {
+            return beAjaxError(['message' => 'VM ID bulunamadi']);
+        }
+        $res = $this->_api($params['server']['surl'], $params['server']['spassword'], 'POST', "/api/vms/{$vm_id}/stop");
+        if (!$res['status']) {
+            return beAjaxError(['message' => 'Durdurma basarisiz: ' . $res['message']]);
+        }
+        return beAjaxSuccess(['message' => 'VM durduruluyor']);
+    }
+
+    public function oxware_changepackage($params = [])
+    {
+        $server         = $params['server'];
+        $userproduct    = $params['userproduct'];
+        $productmodules = $params['productmodules'];
+        $updata         = json_decode($userproduct['updata'], true);
+        $vm_id          = $updata['vm_id'] ?? '';
+
+        if (!$vm_id) {
+            return ['status' => false, 'message' => 'VM ID bulunamadi'];
+        }
+
+        $body = [
+            'vcpus'     => (int)($productmodules['vcpus']   ?? 2),
+            'memory_mb' => (int)($productmodules['ram_mb']  ?? 2048),
+            'disk_gb'   => (int)($productmodules['disk_gb'] ?? 50),
+        ];
+
+        $res = $this->_api($server['surl'], $server['spassword'], 'PUT', "/api/provision/{$vm_id}/resize", $body);
+        if (!$res['status']) {
+            return ['status' => false, 'message' => 'Resize basarisiz: ' . $res['message']];
+        }
+        return ['status' => true, 'message' => 'VM basariyla yeniden boyutlandirildi'];
+    }
+
+    // ---- Dahili: OXware REST API ----
+
+    private function _api(string $base_url, string $api_key, string $method, string $endpoint, array $body = null): array
+    {
+        $base_url = rtrim($base_url, '/');
+        if (!preg_match('#^https?://#i', $base_url)) {
+            $base_url = 'https://' . $base_url;
+        }
+
+        $ch = curl_init($base_url . $endpoint);
+
+        curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_CUSTOMREQUEST  => strtoupper($method),
             CURLOPT_HTTPHEADER     => [
-                'Content-Type: application/json',
                 'Accept: application/json',
-                'X-API-Key: ' . $key,
+                'Content-Type: application/json',
+                'X-API-Key: ' . trim($api_key),
             ],
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-        ];
+        ]);
 
-        if ($ca_path) {
-            $curl_opts[CURLOPT_CAINFO] = $ca_path;
+        foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $ca) {
+            if (file_exists($ca)) {
+                curl_setopt($ch, CURLOPT_CAINFO, $ca);
+                break;
+            }
         }
-
-        // OXW-2026-011 fix: TLS doğrulama devre dışı bırakma seçeneği kaldırıldı.
-        // CURLOPT_SSL_VERIFYPEER her zaman true. Özel CA için ca_path kullanın.
-        // (Önceki: serversecure==0 ile VERIFYPEER=false yapılabiliyordu — MITM riski)
-
-        curl_setopt_array($ch, $curl_opts);
 
         if ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
         }
 
-        $raw       = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_err  = curl_error($ch);
+        $raw      = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
         curl_close($ch);
 
-        if ($raw === false) {
-            return ['error' => 'cURL hatası: ' . $curl_err];
+        if ($raw === false || $curlErr) {
+            return ['status' => false, 'message' => 'Baglanti hatasi: ' . $curlErr];
         }
 
         $data = json_decode($raw, true);
 
-        if ($http_code >= 400) {
-            return ['error' => $data['error'] ?? "HTTP $http_code"];
+        if ($httpCode >= 400) {
+            return [
+                'status'    => false,
+                'message'   => $data['error'] ?? $data['message'] ?? "HTTP {$httpCode}",
+                'http_code' => $httpCode,
+            ];
         }
 
-        return $data ?? [];
-    }
-
-    // ── UUID doğrulama ────────────────────────────────────────────────────────
-
-    private static function validateVmId($vm_id)
-    {
-        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $vm_id)) {
-            throw new Exception('Geçersiz VM ID formatı: ' . htmlspecialchars($vm_id));
-        }
-    }
-
-    // ── create ────────────────────────────────────────────────────────────────
-
-    public static function create($params)
-    {
-        $server  = $params;
-        $package = $params['configoptions'] ?? $params;
-        $account = $params;
-
-        $client_id = $account['clientid'] ?? $account['userid'] ?? rand(10000, 99999);
-        $domain    = preg_replace('/[^a-z0-9\-]/', '', strtolower($account['domain'] ?? 'vm'));
-        $name      = 'vm-' . $client_id . '-' . ($domain ?: 'vm');
-
-        $body = [
-            'name'        => $name,
-            'cpu'         => (int)($package['cpu'] ?? 2),
-            'ram_mb'      => (int)($package['ram_mb'] ?? 2048),
-            'disk_gb'     => (int)($package['disk_gb'] ?? 50),
-            'os_template' => $package['os_template'] ?? 'ubuntu-22.04',
-            'network'     => $package['network'] ?? 'default',
-            'auto_start'  => true,
-        ];
-
-        $result = self::api($server, 'POST', '/provision/create', $body);
-
-        if (!empty($result['error'])) {
-            throw new Exception($result['error']);
-        }
-
-        $vm_id = $result['vm']['id'] ?? $result['vm_id'] ?? '';
-        $ip    = $result['vm']['ip']
-              ?? ($result['vm']['networks'][0]['ip'] ?? '')
-              ?: '';
-
-        if (!$vm_id) {
-            throw new Exception('VM oluşturuldu ancak VM ID alınamadı');
-        }
-
-        return [
-            'username' => $vm_id,
-            'password' => '',
-            'ip'       => $ip,
-        ];
-    }
-
-    // ── suspend ───────────────────────────────────────────────────────────────
-
-    public static function suspend($params)
-    {
-        $vm_id = $params['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı (username alanı boş)');
-        self::validateVmId($vm_id);
-
-        $result = self::api($params, 'POST', "/provision/$vm_id/suspend");
-        if (!empty($result['error'])) throw new Exception($result['error']);
-        return 'success';
-    }
-
-    // ── unsuspend ─────────────────────────────────────────────────────────────
-
-    public static function unsuspend($params)
-    {
-        $vm_id = $params['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı (username alanı boş)');
-        self::validateVmId($vm_id);
-
-        $result = self::api($params, 'POST', "/provision/$vm_id/unsuspend");
-        if (!empty($result['error'])) throw new Exception($result['error']);
-        return 'success';
-    }
-
-    // ── terminate ─────────────────────────────────────────────────────────────
-
-    public static function terminate($params)
-    {
-        $vm_id = $params['username'] ?? '';
-        if (!$vm_id) return 'success'; // Zaten yok, sorun değil
-
-        // Geçersiz UUID ise sessizce geç
-        if (!preg_match('/^[0-9a-f\-]{36}$/i', $vm_id)) {
-            return 'success';
-        }
-
-        $result = self::api($params, 'DELETE', "/provision/$vm_id");
-        if (!empty($result['error'])) throw new Exception($result['error']);
-        return 'success';
-    }
-
-    // ── resize / upgrade ──────────────────────────────────────────────────────
-
-    public static function changePackage($params)
-    {
-        $vm_id   = $params['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı');
-        self::validateVmId($vm_id);
-
-        $package = $params['configoptions'] ?? $params;
-        $body = [
-            'cpu'     => (int)($package['cpu'] ?? 2),
-            'ram_mb'  => (int)($package['ram_mb'] ?? 2048),
-            'disk_gb' => (int)($package['disk_gb'] ?? 50),
-        ];
-
-        $result = self::api($params, 'PUT', "/provision/$vm_id/resize", $body);
-        if (!empty($result['error'])) throw new Exception($result['error']);
-        return 'success';
-    }
-
-    // ── status / info ─────────────────────────────────────────────────────────
-
-    public static function getDetails($params)
-    {
-        $vm_id = $params['username'] ?? '';
-        if (!$vm_id) return [];
-
-        $s = self::api($params, 'GET', "/provision/$vm_id/status");
-        if (!empty($s['error'])) return [];
-
-        return [
-            'status'     => $s['status']       ?? 'unknown',
-            'ip'         => $s['ip']           ?? '',
-            'cpu_usage'  => $s['cpu_percent']  ?? 0,
-            'ram_usage'  => $s['mem_percent']  ?? 0,
-            'disk_used'  => $s['disk_used_gb'] ?? 0,
-        ];
-    }
-
-    // DiyoCP compat alias
-    public static function status($params)
-    {
-        return self::getDetails($params);
-    }
-
-    // ── testConnection ────────────────────────────────────────────────────────
-
-    public static function testConnection($params)
-    {
-        $result = self::api($params, 'GET', '/system/stats');
-        if (!empty($result['error'])) {
-            throw new Exception($result['error']);
-        }
-        return 'Connection successful';
+        return ['status' => true, 'data' => $data ?? [], 'http_code' => $httpCode];
     }
 }
