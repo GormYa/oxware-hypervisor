@@ -11978,51 +11978,97 @@ def api_migration_esxi_import():
                         raise RuntimeError(f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
 
                     # ── ESXi thin-disk ext4 fixup ─────────────────────────────────────
-                    # ESXi thin VMDKs have sparse inode-table blocks (never physically
-                    # written on ESXi → zeros after conversion → ext4 metadata_csum
-                    # rejects them → "UNEXPECTED INCONSISTENCY" → VM unbootable).
+                    # ESXi thin VMDKs have sparse inode-table blocks (never written
+                    # on ESXi → zeros after conversion → ext4 metadata_csum rejects
+                    # them → "UNEXPECTED INCONSISTENCY" → VM unbootable).
                     #
-                    # Fix: e2fsck -E fix_csum_errors recalculates correct checksums
-                    # for zero-filled inode blocks WITHOUT deleting their contents.
-                    # (plain e2fsck -fy treats bad-checksum inodes as corrupt → deletes)
+                    # Fix: directly clear metadata_csum bit in ext4 superblock.
+                    # s_feature_ro_compat at superblock(1024) + field_offset(100) = 1124.
+                    # EXT4_FEATURE_RO_COMPAT_METADATA_CSUM = 0x400
+                    # EXT4_FEATURE_RO_COMPAT_ORPHAN_PRESENT = 0x10000
                     #
-                    # Uses guestfish "debug sh" (not "sh") — guestfish's sh chroots
-                    # into mounted guest and requires mount first; debug sh runs in
-                    # the appliance shell directly, accessing unmounted block devices.
+                    # Uses qemu-nbd to expose qcow2 as block device so host Python
+                    # can patch the superblock directly — no version-dependent tools.
+                    _esxi_vg_names: set = set()
                     try:
                         _import_job_update(j_id,
-                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: checksum onarımı",
+                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: metadata_csum patch",
                                            percent=min(91, pct_conv + 5))
-                        # List all filesystems in the converted qcow2
-                        _gf_list = subprocess.run(
-                            ["guestfish", "-a", str(final_qcow2)],
-                            input=b"run\nvg-activate-all true\nlist-filesystems\n",
-                            capture_output=True, timeout=180)
-                        _ext4_devs = [
-                            _l.split(":")[0].strip()
-                            for _l in (_gf_list.stdout or b"").decode(errors="replace").splitlines()
-                            if ": ext4" in _l or ": ext3" in _l or ": ext2" in _l
-                        ]
-                        for _edev in _ext4_devs:
-                            # fix_csum_errors: recalculate checksums for zero inode
-                            # blocks instead of clearing (deleting) them. Preserves
-                            # all file/directory data that was valid on ESXi.
-                            _fix_res = subprocess.run(
-                                ["guestfish", "-a", str(final_qcow2)],
-                                input=(
-                                    f"run\nvg-activate-all true\n"
-                                    f"debug sh \"e2fsck -fy -E fix_csum_errors {_edev} 2>&1\"\n"
-                                ).encode(),
-                                capture_output=True, timeout=600)
-                            _fix_out = (_fix_res.stdout or b"").decode(errors="replace")
-                            log.info("ESXi ext4 fixup [%s]: %s", _edev,
-                                     _fix_out[:500] if _fix_out else "(no output)")
-                        if _ext4_devs:
-                            ev.info(
-                                f"ESXi ext4 fixup: {', '.join(_ext4_devs)} → checksum onarımı tamamlandı",
-                                category="vm")
+                        import struct as _struct
+                        subprocess.run(["modprobe", "nbd", "max_part=8"],
+                                       capture_output=True, timeout=10)
+                        _nbd_dev, _nbd_idx = None, -1
+                        for _ni in range(16):
+                            if not _pathlib.Path(f"/sys/class/block/nbd{_ni}/pid").exists():
+                                _nbd_dev, _nbd_idx = f"/dev/nbd{_ni}", _ni
+                                break
+                        if not _nbd_dev:
+                            log.warning("ESXi ext4 fixup: free nbd device bulunamadı")
                         else:
-                            log.info("ESXi ext4 fixup: ext4 bulunamadı (%s)", final_qcow2.name)
+                            try:
+                                subprocess.run(
+                                    ["qemu-nbd", "--connect", _nbd_dev, str(final_qcow2)],
+                                    capture_output=True, timeout=30)
+                                import time as _t2; _t2.sleep(1)
+                                # Find VGs on THIS nbd device only — never touch host VGs
+                                _pvs_r = subprocess.run(
+                                    ["pvs", "--noheadings", "-o", "pv_name,vg_name"],
+                                    capture_output=True, text=True, timeout=30)
+                                for _pl in _pvs_r.stdout.splitlines():
+                                    _pp = _pl.strip().split()
+                                    if len(_pp) >= 2 and f"nbd{_nbd_idx}" in _pp[0]:
+                                        _esxi_vg_names.add(_pp[1])
+                                for _vgn in _esxi_vg_names:
+                                    subprocess.run(["vgchange", "-ay", _vgn],
+                                                   capture_output=True, timeout=30)
+                                _t2.sleep(0.5)
+                                # Collect: LV devices + raw nbd partitions
+                                _fix_devs = list(
+                                    _pathlib.Path("/dev").glob(f"nbd{_nbd_idx}p*"))
+                                for _vgn in _esxi_vg_names:
+                                    _lvs_r = subprocess.run(
+                                        ["lvs", "--noheadings", "-o", "lv_dm_path", _vgn],
+                                        capture_output=True, text=True, timeout=30)
+                                    for _lp in _lvs_r.stdout.splitlines():
+                                        _lp = _lp.strip()
+                                        if _lp:
+                                            _fix_devs.append(_pathlib.Path(_lp))
+                                _fixed: list = []
+                                for _dp in _fix_devs:
+                                    if not _dp.exists():
+                                        continue
+                                    _bt = subprocess.run(
+                                        ["blkid", "-o", "value", "-s", "TYPE", str(_dp)],
+                                        capture_output=True, text=True, timeout=10)
+                                    if "ext" not in _bt.stdout:
+                                        continue
+                                    try:
+                                        with open(str(_dp), "r+b") as _df:
+                                            _df.seek(1124)
+                                            _rv = _struct.unpack("<I", _df.read(4))[0]
+                                            _rv &= ~0x400   # metadata_csum
+                                            _rv &= ~0x10000 # orphan_present
+                                            _df.seek(1124)
+                                            _df.write(_struct.pack("<I", _rv))
+                                            _df.flush()
+                                        _fixed.append(str(_dp))
+                                        log.info("ESXi ext4 fix: %s ro_compat=%#x",
+                                                 _dp, _rv)
+                                    except Exception as _pe:
+                                        log.warning("ESXi ext4 patch %s: %s", _dp, _pe)
+                                if _fixed:
+                                    ev.info(
+                                        f"ESXi ext4 fixup: {', '.join(_fixed)} → metadata_csum temizlendi",
+                                        category="vm")
+                                else:
+                                    log.info("ESXi ext4 fixup: ext4 partition bulunamadı")
+                            finally:
+                                for _vgn in _esxi_vg_names:
+                                    subprocess.run(["vgchange", "-an", _vgn],
+                                                   capture_output=True, timeout=30)
+                                subprocess.run(
+                                    ["qemu-nbd", "--disconnect", _nbd_dev],
+                                    capture_output=True, timeout=30)
                     except Exception as _fx_err:
                         log.warning("ESXi ext4 fixup (non-critical): %s", _fx_err)
 
