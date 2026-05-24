@@ -12010,6 +12010,12 @@ def api_migration_esxi_import():
                                     ["qemu-nbd", "--connect", _nbd_dev, str(final_qcow2)],
                                     capture_output=True, timeout=30)
                                 import time as _t2; _t2.sleep(1)
+                                # pvscan REQUIRED before pvs — without it LVM cache
+                                # doesn't know about PVs on the newly connected nbd device
+                                subprocess.run(
+                                    ["pvscan", "--cache", _nbd_dev],
+                                    capture_output=True, timeout=30)
+                                _t2.sleep(0.5)
                                 # Find VGs on THIS nbd device only — never touch host VGs
                                 _pvs_r = subprocess.run(
                                     ["pvs", "--noheadings", "-o", "pv_name,vg_name"],
