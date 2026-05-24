@@ -11033,45 +11033,301 @@ def _proxmox_get_disk_keys(cfg: dict) -> list:
     return keys
 
 
-def _proxmox_ssh_export(ssh_host, ssh_port, ssh_user, ssh_password,
-                        vmid, disk_key, dest_path, job_id):
-    """SSH to Proxmox, export disk via 'qm disk export', SFTP download."""
+def _proxmox_parse_networks(cfg: dict) -> list:
+    """Parse net0/net1/... from Proxmox VM config. Returns list of dicts."""
+    nets = []
+    for k in sorted(cfg.keys()):
+        if not (k.startswith("net") and k[3:].isdigit()):
+            continue
+        v = cfg[k]
+        if not isinstance(v, str):
+            continue
+        parts = {}
+        for p in v.split(","):
+            if "=" in p:
+                pk, pv = p.split("=", 1)
+                parts[pk.strip()] = pv.strip()
+        bridge = parts.get("bridge", "")
+        vlan = parts.get("tag", "")
+        if "virtio=" in v:
+            model = "virtio"
+        elif "e1000=" in v or "e1000e=" in v:
+            model = "e1000"
+        elif "vmxnet3=" in v:
+            model = "virtio"
+        else:
+            model = "rtl8139"
+        nets.append({"key": k, "bridge": bridge, "vlan": vlan, "model": model})
+    return nets
+
+
+def _map_source_network(name_or_bridge: str, fallback: str = "default") -> str:
+    """Map Proxmox bridge / ESXi portgroup to a libvirt network name.
+    Queries 'virsh net-list' and 'virsh net-info' to find a matching bridge.
+    Falls back to 'fallback' if no match found."""
+    if not name_or_bridge:
+        return fallback
+    try:
+        r = subprocess.run(["virsh", "net-list", "--all"],
+                           capture_output=True, text=True, timeout=10)
+        net_names = [ln.split()[0] for ln in r.stdout.splitlines()[2:]
+                     if ln.split()]
+        # Exact network name match
+        for nn in net_names:
+            if nn.lower() == name_or_bridge.lower():
+                return nn
+        # Bridge name match via net-info
+        for nn in net_names:
+            r2 = subprocess.run(["virsh", "net-info", nn],
+                                capture_output=True, text=True, timeout=5)
+            for line in r2.stdout.splitlines():
+                if "Bridge:" in line and name_or_bridge.lower() in line.lower():
+                    return nn
+    except Exception:
+        pass
+    return fallback
+
+
+def _esxi_parse_vmx_ssh(client, vmx_dir: str, vm_name: str) -> dict:
+    """SSH-cat the VMX file and parse networks, disks, CPU, RAM, firmware.
+    Returns dict with: vcpus, ram_mb, firmware, os_type, networks, disks (relative paths)."""
+    import re as _re_vmx
+    result = {"vcpus": 2, "ram_mb": 2048, "firmware": "bios",
+              "os_type": "unknown", "networks": [], "disks": []}
+    vmx_path = vmx_dir.rstrip("/") + "/" + vm_name + ".vmx"
+    try:
+        _, out, _ = client.exec_command(f"cat '{vmx_path}' 2>/dev/null", timeout=10)
+        content = out.read().decode(errors="replace")
+        if not content.strip():
+            # Try with glob — some VMs have different VMX name
+            _, gl_out, _ = client.exec_command(
+                f"ls '{vmx_dir}'/*.vmx 2>/dev/null | head -1", timeout=5)
+            alt_path = gl_out.read().decode(errors="replace").strip()
+            if alt_path:
+                _, out2, _ = client.exec_command(f"cat '{alt_path}' 2>/dev/null", timeout=10)
+                content = out2.read().decode(errors="replace")
+    except Exception:
+        return result
+
+    eth_data = {}  # "ethernetN" -> {networkName, virtualDev}
+    disk_files = []
+
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or "=" not in line or line.startswith("#"):
+            continue
+        k, _, v = line.partition("=")
+        k, v = k.strip().lower(), v.strip().strip('"')
+        vl = v.lower()
+        if k == "numvcpus":
+            try: result["vcpus"] = max(1, min(128, int(v)))
+            except Exception: pass
+        elif k == "memsize":
+            try: result["ram_mb"] = max(512, min(262144, int(v)))
+            except Exception: pass
+        elif k == "firmware":
+            result["firmware"] = "efi" if vl == "efi" else "bios"
+        elif k == "guestos":
+            if any(x in vl for x in ["win", "windows", "server"]):
+                result["os_type"] = "windows"
+            elif any(x in vl for x in ["linux", "ubuntu", "centos", "rhel",
+                                         "fedora", "debian", "suse", "oracle",
+                                         "freebsd", "rocky", "alma"]):
+                result["os_type"] = "linux"
+        else:
+            # ethernet0.networkname / ethernet0.virtualdev
+            m_eth = _re_vmx.match(r'^(ethernet\d+)\.(networkname|virtualdev)$', k)
+            if m_eth:
+                idx, attr = m_eth.group(1), m_eth.group(2)
+                eth_data.setdefault(idx, {})[attr] = v
+                continue
+            # scsi0:0.filename / sata0:0.filename / ide0:0.filename
+            m_disk = _re_vmx.match(r'^(scsi|sata|ide|nvme)\d+:\d+\.filename$', k)
+            if m_disk and vl.endswith(".vmdk"):
+                if "-flat" not in vl and not _re_vmdk_extent.search(vl):
+                    disk_files.append(v)  # relative path
+
+    for idx in sorted(eth_data.keys()):
+        d = eth_data[idx]
+        vdev = d.get("virtualdev", "vmxnet3").lower()
+        if "vmxnet" in vdev:
+            model = "virtio"
+        elif "e1000" in vdev:
+            model = "e1000"
+        else:
+            model = "virtio"
+        result["networks"].append({
+            "key": idx,
+            "network_name": d.get("networkname", "VM Network"),
+            "model": model,
+        })
+
+    if result["os_type"] == "unknown":
+        result["os_type"] = _detect_os_from_name(vm_name)
+
+    # Deduplicate disk files preserving order
+    seen = set()
+    for df in disk_files:
+        if df not in seen:
+            result["disks"].append(vmx_dir.rstrip("/") + "/" + df)
+            seen.add(df)
+
+    return result
+
+
+def _build_import_xml_multi(vm_name: str, disk_paths: list, vcpus: int, ram_mb: int,
+                             os_type: str, firmware: str = "bios",
+                             networks: list = None) -> str:
+    """Build libvirt domain XML with multiple disks and multiple NICs.
+    disk_paths: list of (path_str, fmt_str) where fmt_str is 'qcow2' or 'raw'.
+    networks: list of {libvirt_network, model} dicts."""
+    import re as _re_net2
+    efi = firmware.lower() == "efi"
+    os_efi_block = """  <os firmware='efi'>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <firmware>
+      <feature enabled='no' name='secure-boot'/>
+    </firmware>
+    <boot dev='hd'/>
+  </os>"""
+    os_bios_block = """  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>"""
+    os_block = os_efi_block if efi else os_bios_block
+
+    # ── Disks ──────────────────────────────────────────────────────────────────
+    disk_xmls = []
+    for idx, (dp, fmt) in enumerate(disk_paths):
+        dev = "sd" + chr(ord("a") + idx)
+        discard = ' discard="unmap"' if (os_type == "linux" and fmt == "qcow2") else ""
+        disk_xmls.append(
+            f"    <disk type='file' device='disk'>\n"
+            f"      <driver name='qemu' type='{fmt}' cache='none' io='native'{discard}/>\n"
+            f"      <source file='{dp}'/>\n"
+            f"      <target dev='{dev}' bus='sata'/>\n"
+            f"    </disk>"
+        )
+    disks_str = "\n".join(disk_xmls)
+
+    # ── NICs ──────────────────────────────────────────────────────────────────
+    if not networks:
+        networks = [{"libvirt_network": "default",
+                     "model": "virtio" if os_type == "linux" else "e1000"}]
+    net_xmls = []
+    for ni in networks:
+        nw = _re_net2.sub(r'[^a-zA-Z0-9_\-\.]', '', ni.get("libvirt_network", "default")) or "default"
+        md = ni.get("model", "virtio" if os_type == "linux" else "e1000")
+        net_xmls.append(
+            f"    <interface type='network'>\n"
+            f"      <source network='{nw}'/>\n"
+            f"      <model type='{md}'/>\n"
+            f"    </interface>"
+        )
+    nets_str = "\n".join(net_xmls)
+
+    # ── OS-specific ────────────────────────────────────────────────────────────
+    if os_type == "windows":
+        features_str = ("  <features>\n    <acpi/><apic/>\n"
+                        "    <hyperv mode='custom'>\n"
+                        "      <relaxed state='on'/><vapic state='on'/>\n"
+                        "      <spinlocks state='on' retries='8191'/>\n"
+                        "    </hyperv>\n    <vmport state='off'/>\n  </features>")
+        clock_str = ("  <clock offset='localtime'>\n"
+                     "    <timer name='rtc' tickpolicy='catchup'/>\n"
+                     "    <timer name='pit' tickpolicy='delay'/>\n"
+                     "    <timer name='hpet' present='no'/>\n"
+                     "    <timer name='hypervclock' present='yes'/>\n  </clock>")
+        extra_str = "    <input type='tablet' bus='usb'/>\n    <input type='keyboard' bus='usb'/>"
+        video_str = "    <video><model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/></video>"
+    else:
+        features_str = "  <features><acpi/><apic/></features>"
+        clock_str = ("  <clock offset='utc'>\n"
+                     "    <timer name='rtc' tickpolicy='catchup'/>\n"
+                     "    <timer name='pit' tickpolicy='delay'/>\n"
+                     "    <timer name='hpet' present='no'/>\n  </clock>")
+        extra_str = ("    <input type='tablet' bus='usb'/>\n"
+                     "    <memballoon model='virtio'><stats period='10'/></memballoon>\n"
+                     "    <rng model='virtio'><backend model='random'>/dev/urandom</backend></rng>")
+        video_str = "    <video><model type='vga' vram='16384' heads='1' primary='yes'/></video>"
+
+    return (f"<domain type='kvm'>\n"
+            f"  <name>{vm_name}</name>\n"
+            f"  <memory unit='MiB'>{ram_mb}</memory>\n"
+            f"  <vcpu placement='static'>{vcpus}</vcpu>\n"
+            f"{os_block}\n"
+            f"{features_str}\n"
+            f"  <cpu mode='host-passthrough' check='none' migratable='on'/>\n"
+            f"{clock_str}\n"
+            f"  <devices>\n"
+            f"{disks_str}\n"
+            f"    <controller type='sata' index='0'/>\n"
+            f"{nets_str}\n"
+            f"{extra_str}\n"
+            f"    <graphics type='vnc' port='-1' listen='0.0.0.0'/>\n"
+            f"{video_str}\n"
+            f"  </devices>\n"
+            f"</domain>")
+
+
+def _proxmox_ssh_export_all(ssh_host, ssh_port, ssh_user, ssh_password,
+                             vmid, disk_keys, dest_dir, job_id) -> list:
+    """SSH to Proxmox node, export ALL disks via 'qm disk export', SFTP download.
+    disk_keys: list of (disk_key, volid) tuples.
+    dest_dir: pathlib.Path directory to store qcow2 files.
+    Returns list of (local_path, 'qcow2') tuples."""
     import paramiko as _pmp
-    _import_job_update(job_id, step=f"Proxmox SSH: {ssh_host}", percent=10)
+    _import_job_update(job_id, step=f"Proxmox SSH: {ssh_host}", percent=8)
     client = _pmp.SSHClient()
     client.set_missing_host_key_policy(_pmp.AutoAddPolicy())
     client.connect(ssh_host, port=ssh_port, username=ssh_user,
                    password=ssh_password, timeout=30,
                    look_for_keys=False, allow_agent=False)
+    local_disks = []
     try:
-        remote_tmp = f"/tmp/oxw_export_{vmid}_{disk_key}.qcow2"
-        cmd = f"qm disk export {vmid} {disk_key} {remote_tmp} --format qcow2"
-        _import_job_update(job_id, step=f"Disk export: vmid={vmid} {disk_key}", percent=15)
-        _, stdout, stderr = client.exec_command(cmd, timeout=7200)
-        exit_code = stdout.channel.recv_exit_status()
-        if exit_code != 0:
-            err_txt = stderr.read().decode(errors="replace")[:400]
-            raise RuntimeError(f"qm disk export hata (code={exit_code}): {err_txt}")
-        _import_job_update(job_id, step="Disk indirilıyor (SFTP)", percent=40)
         sftp = client.open_sftp()
         try:
-            remote_size = sftp.stat(remote_tmp).st_size or 1
+            total_keys = len(disk_keys)
+            for dk_idx, (disk_key, _volid) in enumerate(disk_keys):
+                remote_tmp = f"/tmp/oxw_export_{vmid}_{disk_key}.qcow2"
+                pct_base = 10 + dk_idx * 70 // max(total_keys, 1)
+                pct_end  = 10 + (dk_idx + 1) * 70 // max(total_keys, 1)
+                _import_job_update(job_id,
+                                   step=f"Disk export [{dk_idx+1}/{total_keys}]: vmid={vmid} {disk_key}",
+                                   percent=pct_base)
+                cmd = f"qm disk export {vmid} {disk_key} {remote_tmp} --format qcow2"
+                _, stdout, stderr = client.exec_command(cmd, timeout=7200)
+                exit_code = stdout.channel.recv_exit_status()
+                if exit_code != 0:
+                    err_txt = stderr.read().decode(errors="replace")[:400]
+                    raise RuntimeError(f"qm disk export hata [{disk_key}] (code={exit_code}): {err_txt}")
 
-            def _prg(tx, tot):
-                pct = min(88, int(40 + 48 * tx / max(tot, 1)))
-                mb = round(tx / 1048576, 1)
-                tot_mb = round(tot / 1048576, 1)
-                _import_job_update(job_id, step=f"İndirilıyor: {mb}/{tot_mb} MB", percent=pct)
+                local_path = dest_dir / f"px_{vmid}_{disk_key}.qcow2"
+                _import_job_update(job_id,
+                                   step=f"Disk indirilıyor [{dk_idx+1}/{total_keys}]: {disk_key}",
+                                   percent=pct_base + (pct_end - pct_base) // 2)
 
-            sftp.get(remote_tmp, str(dest_path), callback=_prg)
-            try:
-                sftp.remove(remote_tmp)
-            except Exception:
-                pass
+                def _make_prg(base, end):
+                    def _prg(tx, tot):
+                        pct = min(end, int(base + (end - base) * tx / max(tot, 1)))
+                        mb = round(tx / 1048576, 1)
+                        tot_mb = round(tot / 1048576, 1)
+                        _import_job_update(job_id,
+                                           step=f"İndirilıyor [{dk_idx+1}/{total_keys}]: {mb}/{tot_mb} MB",
+                                           percent=pct)
+                    return _prg
+
+                sftp.get(remote_tmp, str(local_path), callback=_make_prg(pct_base, pct_end))
+                try:
+                    sftp.remove(remote_tmp)
+                except Exception:
+                    pass
+                local_disks.append((str(local_path), "qcow2"))
         finally:
             sftp.close()
     finally:
         client.close()
+    return local_disks
 
 
 @app.route("/api/migration/proxmox/scan", methods=["POST"])
@@ -11105,6 +11361,10 @@ def api_migration_proxmox_scan():
                     if not vmid:
                         continue
                     disk_gb = 0
+                    disk_count = 0
+                    networks_info = []
+                    os_type_scan = "linux"
+                    firmware_scan = "bios"
                     try:
                         cfg = _proxmox_request(
                             px_host, px_port, px_token_id, px_token_secret,
@@ -11112,6 +11372,8 @@ def api_migration_proxmox_scan():
                             verify_ssl=verify_ssl) or {}
                         for k, v in cfg.items():
                             if k.startswith(("scsi", "virtio", "ide", "sata")) and isinstance(v, str):
+                                if any(s in v for s in ("cdrom", "none", "cloudinit")):
+                                    continue
                                 m = _re_px.search(r"size=(\d+)([GMTgmt]?)", v)
                                 if m:
                                     sz = int(m.group(1))
@@ -11119,6 +11381,13 @@ def api_migration_proxmox_scan():
                                     if unit in ("G", ""): disk_gb += sz
                                     elif unit == "M": disk_gb += max(1, sz // 1024)
                                     elif unit == "T": disk_gb += sz * 1024
+                                    disk_count += 1
+                        networks_info = _proxmox_parse_networks(cfg)
+                        ostype_val = (cfg.get("ostype") or "").lower()
+                        if any(x in ostype_val for x in ["win", "w10", "w11", "wxp", "w2k"]):
+                            os_type_scan = "windows"
+                        firmware_scan = "efi" if (cfg.get("efidisk0") or
+                                                   (cfg.get("bios", "") or "").lower() == "ovmf") else "bios"
                     except Exception:
                         pass
                     vms.append({
@@ -11129,6 +11398,10 @@ def api_migration_proxmox_scan():
                         "vcpus": int(vm.get("cpus", 1)),
                         "memory_mb": int((vm.get("maxmem") or 0) // (1024 * 1024)),
                         "disk_gb": disk_gb,
+                        "disk_count": disk_count,
+                        "os_type": os_type_scan,
+                        "firmware": firmware_scan,
+                        "networks": networks_info,
                     })
             except Exception as _ne:
                 ev.warn(f"Proxmox node {node} listelenemedi: {_ne}", category="migration")
@@ -11182,9 +11455,9 @@ def api_migration_proxmox_import():
             }
         job_ids.append(job_id)
 
-        def _run_px(j_id, j_vmid, j_node, j_vm_name):
+        def _run_px(j_id, j_vmid, j_node, j_vm_name, j_net_map):
             try:
-                _import_job_update(j_id, step="Disk listesi alınıyor", percent=3)
+                _import_job_update(j_id, step="VM config alınıyor", percent=3)
                 cfg = _proxmox_request(
                     px_host, px_port, px_token_id, px_token_secret,
                     f"/nodes/{j_node}/qemu/{j_vmid}/config",
@@ -11195,7 +11468,6 @@ def api_migration_proxmox_import():
                                        step="Hata: export edilebilir disk yok",
                                        percent=0, finished=time.time())
                     return
-                disk_key, _ = disk_keys[0]
                 vcpus = int(cfg.get("sockets", 1)) * int(cfg.get("cores", 1))
                 ram_mb = int(cfg.get("memory") or 2048)
                 os_type = "linux"
@@ -11205,11 +11477,27 @@ def api_migration_proxmox_import():
                 firmware = "efi" if (cfg.get("efidisk0") or
                                      (cfg.get("bios", "") or "").lower() == "ovmf") else "bios"
 
-                dest_path = _IMPORT_DIR / f"px_{j_vmid}_{j_vm_name}.qcow2"
-                _proxmox_ssh_export(ssh_host, ssh_port, ssh_user, ssh_password,
-                                    j_vmid, disk_key, dest_path, j_id)
+                # Map Proxmox networks → libvirt networks
+                px_nets = _proxmox_parse_networks(cfg)
+                libvirt_nets = []
+                for pn in px_nets:
+                    bridge = pn["bridge"]
+                    # User may supply explicit mapping via j_net_map {bridge: libvirt_net}
+                    mapped = j_net_map.get(bridge) or _map_source_network(bridge, network)
+                    libvirt_nets.append({"libvirt_network": mapped, "model": pn["model"]})
+                if not libvirt_nets:
+                    libvirt_nets = [{"libvirt_network": network,
+                                     "model": "virtio" if os_type == "linux" else "e1000"}]
 
-                _import_job_update(j_id, step="libvirt'e kaydediliyor", percent=91)
+                # Export ALL disks
+                _IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+                local_disks = _proxmox_ssh_export_all(
+                    ssh_host, ssh_port, ssh_user, ssh_password,
+                    j_vmid, disk_keys, _IMPORT_DIR, j_id)
+
+                _import_job_update(j_id, step=f"libvirt'e kaydediliyor ({len(local_disks)} disk)", percent=82)
+
+                # Deduplicate VM name
                 import libvirt as _lv_px
                 _conn_px = _lv_px.open(config.LIBVIRT_URI)
                 final_name = j_vm_name
@@ -11225,11 +11513,18 @@ def api_migration_proxmox_import():
                 finally:
                     _conn_px.close()
 
+                # Move disks to /var/lib/libvirt/images/
                 import shutil as _shpx
-                final_disk = _pathlib.Path("/var/lib/libvirt/images") / f"{final_name}.qcow2"
-                _shpx.move(str(dest_path), str(final_disk))
-                xml_px = _build_import_xml(final_name, final_disk, vcpus, ram_mb,
-                                           os_type, firmware, network)
+                final_disks = []
+                img_dir = _pathlib.Path("/var/lib/libvirt/images")
+                for dk_i, (lp, lfmt) in enumerate(local_disks):
+                    suffix = "" if dk_i == 0 else f"-disk{dk_i}"
+                    dst = img_dir / f"{final_name}{suffix}.qcow2"
+                    _shpx.move(lp, str(dst))
+                    final_disks.append((str(dst), lfmt))
+
+                xml_px = _build_import_xml_multi(final_name, final_disks, vcpus, ram_mb,
+                                                 os_type, firmware, libvirt_nets)
                 import libvirt as _lv_px2
                 _conn_px2 = _lv_px2.open(config.LIBVIRT_URI)
                 try:
@@ -11237,10 +11532,12 @@ def api_migration_proxmox_import():
                 finally:
                     _conn_px2.close()
 
+                disk_summary = f"{len(final_disks)} disk, {len(libvirt_nets)} NIC"
                 _import_job_update(j_id, vm_name=final_name, status="completed",
-                                   step=f"Tamamlandı: {final_name}", percent=100,
-                                   finished=time.time())
-                ev.info(f"Proxmox migration tamamlandı: {final_name} (vmid={j_vmid})",
+                                   step=f"Tamamlandı: {final_name} ({disk_summary})",
+                                   percent=100, finished=time.time())
+                ev.info(f"Proxmox migration tamamlandı: {final_name} vmid={j_vmid} "
+                        f"({len(final_disks)} disk, {len(libvirt_nets)} NIC)",
                         category="migration")
             except Exception as ex:
                 _import_job_update(j_id, status="error",
@@ -11248,7 +11545,9 @@ def api_migration_proxmox_import():
                                    message=str(ex), finished=time.time())
                 ev.error(f"Proxmox migration hata vmid={j_vmid}: {ex}", category="migration")
 
-        threading.Thread(target=_run_px, args=(job_id, vmid, node, vm_name),
+        # net_map: {proxmox_bridge: libvirt_network} from request, or empty
+        net_map = vm_spec.get("net_map") or d.get("net_map") or {}
+        threading.Thread(target=_run_px, args=(job_id, vmid, node, vm_name, net_map),
                          daemon=True).start()
 
     if not job_ids:
@@ -11298,7 +11597,9 @@ def api_migration_esxi_scan():
                     f"vim-cmd vmsvc/power.getstate {vmid} 2>/dev/null", timeout=8)
                 ps_text = ps_out.read().decode(errors="replace").lower()
                 status = "running" if "on" in ps_text else ("off" if "off" in ps_text else "unknown")
-                # Disk size estimate via du
+                # Parse VMX for full config (networks, disks, CPU, RAM, firmware)
+                vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
+                # Disk size estimate via du (as fallback for total size display)
                 _, du_out, _ = client.exec_command(
                     f"du -sh '{vmx_dir}' 2>/dev/null | awk '{{print $1}}'", timeout=10)
                 du_text = du_out.read().decode(errors="replace").strip()
@@ -11307,21 +11608,29 @@ def api_migration_esxi_scan():
                 if m:
                     sz, unit = float(m.group(1)), m.group(2).upper()
                     disk_gb = int(sz) if unit == "G" else (
-                        max(1, int(sz // 1024)) if unit == "M" else sz * 1024)
-                # OS type from guestid
-                gl = guestid.lower()
-                if any(x in gl for x in ["win", "w10", "w11"]):
-                    os_type = "windows"
-                elif any(x in gl for x in ["linux", "ubuntu", "centos", "rhel",
-                                            "fedora", "debian", "suse", "oracle"]):
-                    os_type = "linux"
-                else:
-                    os_type = _detect_os_from_name(name)
+                        max(1, int(sz // 1024)) if unit == "M" else int(sz * 1024))
+                # OS type: prefer VMX parse, fallback to guestid, then filename
+                os_type = vmx_info.get("os_type", "unknown")
+                if os_type == "unknown":
+                    gl = guestid.lower()
+                    if any(x in gl for x in ["win", "w10", "w11"]):
+                        os_type = "windows"
+                    elif any(x in gl for x in ["linux", "ubuntu", "centos", "rhel",
+                                                "fedora", "debian", "suse", "oracle"]):
+                        os_type = "linux"
+                    else:
+                        os_type = _detect_os_from_name(name)
                 vms.append({
                     "vmid": vmid, "name": name, "datastore": datastore,
                     "vmx_path": vmx_path, "vmx_dir": vmx_dir,
                     "status": status, "guestid": guestid,
                     "os_type": os_type, "disk_gb": disk_gb,
+                    "vcpus": vmx_info.get("vcpus", 2),
+                    "memory_mb": vmx_info.get("ram_mb", 2048),
+                    "firmware": vmx_info.get("firmware", "bios"),
+                    "networks": vmx_info.get("networks", []),
+                    "disks": vmx_info.get("disks", []),
+                    "disk_count": len(vmx_info.get("disks", [])) or 1,
                 })
         finally:
             client.close()
@@ -11367,7 +11676,8 @@ def api_migration_esxi_import():
             }
         job_ids.append(job_id)
 
-        def _run_esxi(j_id, j_vmid, j_vm_name, j_vmx_dir, j_os_type):
+        def _run_esxi(j_id, j_vmid, j_vm_name, j_vmx_dir, j_os_type,
+                      j_vcpus, j_ram_mb, j_firmware, j_vmx_disks, j_vmx_nets, j_net_map):
             try:
                 import paramiko as _pme2
                 _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
@@ -11375,51 +11685,68 @@ def api_migration_esxi_import():
                 client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
                 client2.connect(host, port=port, username=user, password=password,
                                 timeout=30, look_for_keys=False, allow_agent=False)
+                local_vmdks = []   # list of local tmp paths
                 try:
                     sftp2 = client2.open_sftp()
                     try:
-                        _import_job_update(j_id, step="VMDK aranıyor", percent=8)
-                        try:
-                            dir_items = sftp2.listdir(j_vmx_dir)
-                        except Exception:
-                            dir_items = []
-                        vmdk_name = None
-                        for item in dir_items:
-                            il = item.lower()
-                            if (il.endswith(".vmdk") and
-                                    "-flat" not in il and
-                                    not _re_vmdk_extent.search(il)):
-                                if j_vm_name.lower() in il or vmdk_name is None:
-                                    vmdk_name = item
-                        if not vmdk_name:
-                            _import_job_update(j_id, status="error",
-                                               step="Hata: primary VMDK bulunamadı",
-                                               percent=0, finished=time.time())
-                            return
-                        remote_vmdk = j_vmx_dir.rstrip("/") + "/" + vmdk_name
-                        local_vmdk = _IMPORT_DIR / f"esxi_{j_vmid}_{j_vm_name}.vmdk"
-                        remote_size = sftp2.stat(remote_vmdk).st_size or 1
-                        sz_gb = round(remote_size / (1024 ** 3), 1)
-                        _import_job_update(j_id,
-                                           step=f"VMDK indiriliyor: {vmdk_name} ({sz_gb} GB)",
-                                           percent=10)
+                        # Determine which VMDKs to download
+                        # j_vmx_disks: absolute paths from VMX parse (may be empty)
+                        if j_vmx_disks:
+                            remote_vmdks = j_vmx_disks
+                        else:
+                            # Fallback: list directory and pick descriptor VMDKs
+                            _import_job_update(j_id, step="VMDK listesi alınıyor", percent=7)
+                            try:
+                                dir_items = sftp2.listdir(j_vmx_dir)
+                            except Exception:
+                                dir_items = []
+                            remote_vmdks = []
+                            for item in dir_items:
+                                il = item.lower()
+                                if (il.endswith(".vmdk") and
+                                        "-flat" not in il and
+                                        not _re_vmdk_extent.search(il)):
+                                    remote_vmdks.append(j_vmx_dir.rstrip("/") + "/" + item)
+                            if not remote_vmdks:
+                                _import_job_update(j_id, status="error",
+                                                   step="Hata: VMDK bulunamadı",
+                                                   percent=0, finished=time.time())
+                                return
 
-                        def _prg_esxi(tx, tot):
-                            pct = min(75, int(10 + 65 * tx / max(tot, 1)))
-                            mb = round(tx / 1048576, 1)
-                            tot_mb = round(tot / 1048576, 1)
+                        total_vmdks = len(remote_vmdks)
+                        for vd_idx, remote_vmdk in enumerate(remote_vmdks):
+                            vd_name = remote_vmdk.rsplit("/", 1)[-1]
+                            pct_base = 8 + vd_idx * 62 // max(total_vmdks, 1)
+                            pct_end  = 8 + (vd_idx + 1) * 62 // max(total_vmdks, 1)
+                            try:
+                                remote_size = sftp2.stat(remote_vmdk).st_size or 1
+                            except Exception:
+                                remote_size = 1
+                            sz_gb = round(remote_size / (1024 ** 3), 1)
                             _import_job_update(j_id,
-                                               step=f"İndirilıyor: {mb}/{tot_mb} MB",
-                                               percent=pct)
+                                               step=f"VMDK [{vd_idx+1}/{total_vmdks}]: {vd_name} ({sz_gb} GB)",
+                                               percent=pct_base)
+                            local_tmp = _IMPORT_DIR / f"esxi_{j_vmid}_disk{vd_idx}.vmdk"
 
-                        sftp2.get(remote_vmdk, str(local_vmdk), callback=_prg_esxi)
+                            def _make_prg_e(base, end, vd_n):
+                                def _prg_e(tx, tot):
+                                    pct = min(end, int(base + (end - base) * tx / max(tot, 1)))
+                                    mb = round(tx / 1048576, 1)
+                                    tot_mb = round(tot / 1048576, 1)
+                                    _import_job_update(j_id,
+                                                       step=f"İndirilıyor [{vd_n}]: {mb}/{tot_mb} MB",
+                                                       percent=pct)
+                                return _prg_e
+
+                            sftp2.get(remote_vmdk, str(local_tmp),
+                                      callback=_make_prg_e(pct_base, pct_end, vd_name))
+                            local_vmdks.append(str(local_tmp))
                     finally:
                         sftp2.close()
                 finally:
                     client2.close()
 
-                # qemu-img convert VMDK → qcow2
-                _import_job_update(j_id, step="qemu-img dönüştürülüyor...", percent=77)
+                # Deduplicate VM name
                 import libvirt as _lv_esxi
                 _conn_esxi = _lv_esxi.open(config.LIBVIRT_URI)
                 final_name = j_vm_name
@@ -11435,21 +11762,44 @@ def api_migration_esxi_import():
                 finally:
                     _conn_esxi.close()
 
-                disk_path_esxi = _pathlib.Path("/var/lib/libvirt/images") / f"{final_name}.qcow2"
-                conv = subprocess.run(
-                    ["qemu-img", "convert", "-f", "vmdk", "-O", "qcow2",
-                     str(local_vmdk), str(disk_path_esxi)],
-                    capture_output=True, text=True, timeout=7200)
-                try:
-                    local_vmdk.unlink()
-                except Exception:
-                    pass
-                if conv.returncode != 0:
-                    raise RuntimeError(f"qemu-img: {conv.stderr[:300]}")
+                # Convert each VMDK → qcow2
+                img_dir = _pathlib.Path("/var/lib/libvirt/images")
+                final_disks = []
+                for vd_idx, local_vmdk_path in enumerate(local_vmdks):
+                    suffix = "" if vd_idx == 0 else f"-disk{vd_idx}"
+                    final_qcow2 = img_dir / f"{final_name}{suffix}.qcow2"
+                    pct_conv = 72 + vd_idx * 18 // max(len(local_vmdks), 1)
+                    _import_job_update(j_id,
+                                       step=f"qemu-img dönüştürülüyor [{vd_idx+1}/{len(local_vmdks)}]",
+                                       percent=pct_conv)
+                    conv = subprocess.run(
+                        ["qemu-img", "convert", "-f", "vmdk", "-O", "qcow2",
+                         local_vmdk_path, str(final_qcow2)],
+                        capture_output=True, text=True, timeout=7200)
+                    try:
+                        _pathlib.Path(local_vmdk_path).unlink()
+                    except Exception:
+                        pass
+                    if conv.returncode != 0:
+                        raise RuntimeError(f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
+                    final_disks.append((str(final_qcow2), "qcow2"))
 
-                _import_job_update(j_id, step="libvirt'e kaydediliyor", percent=94)
-                xml_esxi = _build_import_xml(final_name, disk_path_esxi, 2, 2048,
-                                             j_os_type, "bios", network)
+                # Map ESXi networks → libvirt
+                libvirt_nets = []
+                for en in j_vmx_nets:
+                    pg = en.get("network_name", "VM Network")
+                    mapped = j_net_map.get(pg) or _map_source_network(pg, network)
+                    libvirt_nets.append({"libvirt_network": mapped, "model": en.get("model", "virtio")})
+                if not libvirt_nets:
+                    libvirt_nets = [{"libvirt_network": network,
+                                     "model": "virtio" if j_os_type == "linux" else "e1000"}]
+
+                _import_job_update(j_id,
+                                   step=f"libvirt'e kaydediliyor ({len(final_disks)} disk, {len(libvirt_nets)} NIC)",
+                                   percent=92)
+                xml_esxi = _build_import_xml_multi(
+                    final_name, final_disks, j_vcpus, j_ram_mb,
+                    j_os_type, j_firmware, libvirt_nets)
                 import libvirt as _lv_esxi2
                 _conn_esxi2 = _lv_esxi2.open(config.LIBVIRT_URI)
                 try:
@@ -11457,10 +11807,11 @@ def api_migration_esxi_import():
                 finally:
                     _conn_esxi2.close()
 
+                disk_summary = f"{len(final_disks)} disk, {len(libvirt_nets)} NIC"
                 _import_job_update(j_id, vm_name=final_name, status="completed",
-                                   step=f"Tamamlandı: {final_name}", percent=100,
-                                   finished=time.time())
-                ev.info(f"ESXi migration tamamlandı: {final_name} (vmid={j_vmid})",
+                                   step=f"Tamamlandı: {final_name} ({disk_summary})",
+                                   percent=100, finished=time.time())
+                ev.info(f"ESXi migration tamamlandı: {final_name} vmid={j_vmid} ({disk_summary})",
                         category="migration")
             except Exception as ex:
                 _import_job_update(j_id, status="error",
@@ -11468,9 +11819,18 @@ def api_migration_esxi_import():
                                    message=str(ex), finished=time.time())
                 ev.error(f"ESXi migration hata vmid={j_vmid}: {ex}", category="migration")
 
-        threading.Thread(target=_run_esxi,
-                         args=(job_id, vmid, vm_name, vmx_dir, os_type),
-                         daemon=True).start()
+        # Pass VMX scan data so import uses correct CPU/RAM/firmware/networks/disks
+        esxi_net_map = vm_spec.get("net_map") or d.get("net_map") or {}
+        threading.Thread(
+            target=_run_esxi,
+            args=(job_id, vmid, vm_name, vmx_dir, os_type,
+                  vm_spec.get("vcpus", 2),
+                  vm_spec.get("memory_mb", 2048),
+                  vm_spec.get("firmware", "bios"),
+                  vm_spec.get("disks", []),
+                  vm_spec.get("networks", []),
+                  esxi_net_map),
+            daemon=True).start()
 
     if not job_ids:
         return err("Geçerli VM bulunamadı", 400)

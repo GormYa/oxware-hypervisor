@@ -4187,6 +4187,8 @@
                     <th style="padding:6px 8px;text-align:right">RAM</th>
                     <th style="padding:6px 8px;text-align:right">Disk</th>
                     <th style="padding:6px 8px;text-align:left">OS</th>
+                    <th style="padding:6px 8px;text-align:left">Ağlar</th>
+                    <th style="padding:6px 8px;text-align:left">FW</th>
                   </tr>
                 </thead>
                 <tbody id="mig-vm-tbody"></tbody>
@@ -14047,11 +14049,25 @@ function migRenderVmList() {
     // ram
     const ram = vm.memory_mb ? (vm.memory_mb >= 1024 ? (vm.memory_mb/1024).toFixed(1)+'G' : vm.memory_mb+'M') : '-';
     tr.appendChild(_migMakeCell(ram, 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
-    // disk
-    tr.appendChild(_migMakeCell(vm.disk_gb ? vm.disk_gb + ' GB' : '-', 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
+    // disk (count + GB)
+    var diskLabel = '';
+    if (vm.disk_count && vm.disk_count > 1) diskLabel = vm.disk_count + ' disk';
+    else if (vm.disk_gb) diskLabel = vm.disk_gb + ' GB';
+    else diskLabel = '-';
+    tr.appendChild(_migMakeCell(diskLabel, 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
     // os
     const osIcon = vm.os_type === 'windows' ? '🪟' : (vm.os_type === 'linux' ? '🐧' : '❓');
     tr.appendChild(_migMakeCell(osIcon + ' ' + (vm.os_type || '?'), 'padding:6px 8px;font-size:12px'));
+    // networks (bridges/portgroups)
+    var netLabel = '-';
+    if (vm.networks && vm.networks.length) {
+      netLabel = vm.networks.map(function(n) {
+        return n.bridge || n.network_name || '?';
+      }).join(', ');
+    }
+    tr.appendChild(_migMakeCell(netLabel, 'padding:6px 8px;font-size:10px;color:var(--accent-lt);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
+    // firmware
+    tr.appendChild(_migMakeCell(vm.firmware === 'efi' ? 'UEFI' : 'BIOS', 'padding:6px 8px;font-size:10px;color:var(--text-muted)'));
     tbody.appendChild(tr);
   });
 }
@@ -14086,7 +14102,9 @@ async function migStartImport() {
         ssh_host: document.getElementById('mig-px-ssh-host').value.trim(),
         ssh_password: document.getElementById('mig-px-ssh-pass').value,
         network,
-        vms: selected.map(function(v) { return { vmid: v.vmid, node: v.node, name: v.name }; })
+        vms: selected.map(function(v) {
+          return { vmid: v.vmid, node: v.node, name: v.name };
+        })
       });
     } else {
       d = await _api('/api/migration/esxi/import', 'POST', {
@@ -14095,7 +14113,17 @@ async function migStartImport() {
         username: document.getElementById('mig-esxi-user').value.trim(),
         password: document.getElementById('mig-esxi-pass').value,
         network,
-        vms: selected.map(function(v) { return { vmid: v.vmid, name: v.name, vmx_dir: v.vmx_dir, os_type: v.os_type }; })
+        vms: selected.map(function(v) {
+          return {
+            vmid: v.vmid, name: v.name, vmx_dir: v.vmx_dir,
+            os_type: v.os_type,
+            vcpus: v.vcpus || 2,
+            memory_mb: v.memory_mb || 2048,
+            firmware: v.firmware || 'bios',
+            disks: v.disks || [],
+            networks: v.networks || []
+          };
+        })
       });
     }
     if (d.error) throw new Error(d.error);
