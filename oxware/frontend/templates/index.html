@@ -2157,6 +2157,8 @@
                 → Speedtest = VM'in gerçek IP'si (host IP değil)
               </div>
             </div>
+          </div><!-- /net-tab-bridge -->
+
           <!-- vSwitch Tab -->
           <div id="net-tab-vswitch" style="display:none">
             <style>
@@ -2207,7 +2209,6 @@
             </div>
           </div>
 
-          </div>
         </div>
 
         <!-- ─────── Storage Page ─────── -->
@@ -7640,13 +7641,33 @@ function addTaskToPanel(id, desc, status) {
   const now = new Date().toLocaleString('tr-TR');
   const tr = document.createElement('tr');
   tr.id = 'task-row-' + id;
-  tr.innerHTML = `<td>${now}</td><td>—</td><td>${escHtml(window.location.hostname)}</td><td>system</td><td>${escHtml(desc)} <span id="task-pct-${id}"></span></td><td><span class="badge" id="task-status-${id}" style="background:var(--yellow-lt);color:#000;padding:2px 8px;border-radius:3px;font-size:10px">Çalışıyor</span></td>`;
+
+  const td1 = document.createElement('td'); td1.textContent = now;
+  const td2 = document.createElement('td'); td2.textContent = '—';
+  const td3 = document.createElement('td'); td3.textContent = window.location.hostname;
+  const td4 = document.createElement('td'); td4.textContent = 'system';
+  const td5 = document.createElement('td'); td5.textContent = desc;
+  const pctSpan = document.createElement('span');
+  pctSpan.id = 'task-pct-' + id;
+  pctSpan.style.cssText = 'display:none;margin-left:6px;background:var(--accent,#3d82f0);color:#fff;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;vertical-align:middle';
+  td5.appendChild(pctSpan);
+  const td6 = document.createElement('td');
+  const badge = document.createElement('span');
+  badge.id = 'task-status-' + id;
+  badge.className = 'badge';
+  badge.style.cssText = 'background:var(--yellow-lt);color:#000;padding:2px 8px;border-radius:3px;font-size:10px';
+  badge.textContent = 'Çalışıyor';
+  td6.appendChild(badge);
+
+  [td1, td2, td3, td4, td5, td6].forEach(function(td) { tr.appendChild(td); });
   tbody.prepend(tr);
 }
 
 function updateTaskPanel(id, pct) {
   const el = document.getElementById('task-pct-' + id);
-  if (el) el.textContent = `${pct}%`;
+  if (!el) return;
+  el.textContent = pct + '%';
+  el.style.display = '';
 }
 
 function completeTaskPanel(id, result) {
@@ -7658,7 +7679,7 @@ function completeTaskPanel(id, result) {
     statusEl.style.color = '#fff';
   }
   const pctEl = document.getElementById('task-pct-' + id);
-  if (pctEl) pctEl.textContent = '';
+  if (pctEl) { pctEl.textContent = ''; pctEl.style.display = 'none'; }
   if (row) {
     const cells = row.querySelectorAll('td');
     if (cells[1]) cells[1].textContent = new Date().toLocaleString('tr-TR');
@@ -14823,11 +14844,16 @@ function _migBuildJobEl(j) {
   elSpan.textContent = elapsed;
   hdr.appendChild(leftDiv); hdr.appendChild(elSpan); wrap.appendChild(hdr);
 
+  const barRow = document.createElement('div');
+  barRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
   const barWrap = document.createElement('div');
-  barWrap.style.cssText = 'height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:6px';
+  barWrap.style.cssText = 'flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden';
   const barFill = document.createElement('div');
   barFill.style.cssText = 'height:100%;width:' + pct + '%;background:' + statusColor + ';transition:width .4s;border-radius:3px';
-  barWrap.appendChild(barFill); wrap.appendChild(barWrap);
+  const pctLabel = document.createElement('span');
+  pctLabel.style.cssText = 'font-size:11px;font-weight:700;color:' + statusColor + ';min-width:32px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0';
+  pctLabel.textContent = pct + '%';
+  barWrap.appendChild(barFill); barRow.appendChild(barWrap); barRow.appendChild(pctLabel); wrap.appendChild(barRow);
 
   const stepEl = document.createElement('div');
   stepEl.style.cssText = 'font-size:11px;color:var(--text-muted)';
@@ -14908,7 +14934,7 @@ function doImportOva() {
     if (!e.lengthComputable) return;
     const pct = Math.round(e.loaded / e.total * 100);
     const pctEl = document.getElementById('task-pct-' + taskId);
-    if (pctEl) pctEl.textContent = ` — Dosya yükleniyor (${pct}%)`;
+    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.display = ''; }
     statusEl.innerHTML = `
       <div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">⬆ Sunucuya yükleniyor <strong>${pct}%</strong></div>
       <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
@@ -14964,7 +14990,7 @@ async function _pollImportJob(jobId, taskId, statusEl, filename) {
 
       // Update task panel percent column
       const pctEl = document.getElementById('task-pct-' + taskId);
-      if (pctEl) pctEl.textContent = ` — ${escHtml(step)} (${pct}%)`;
+      if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.display = ''; }
 
       // Update modal status if still visible
       if (statusEl) {
@@ -15914,24 +15940,26 @@ function _initVmEventsSocket() {
   if (_vmEventsSocket) return;
   if (!TOKEN()) return;
   try {
-    _vmEventsSocket = io({ transports: ["websocket", "polling"], reconnection: true, reconnectionDelay: 3000 });
+    // Capture socket in local var — callbacks must use this reference,
+    // NOT _vmEventsSocket (which gets nulled on disconnect while socket.io
+    // internally reconnects, causing "can't access property emit, null").
+    const _sock = io({ transports: ["websocket", "polling"], reconnection: true, reconnectionDelay: 3000 });
+    _vmEventsSocket = _sock;
 
-    _vmEventsSocket.on("connect", () => {
-      // Subscribe to all VM state events
-      _vmEventsSocket.emit("subscribe_vm_events", { vm_ids: "*" });
+    _sock.on("connect", () => {
+      // Re-subscribe after every (re)connect
+      _sock.emit("subscribe_vm_events", { vm_ids: "*" });
     });
 
     // VM state change → update tree badge + list row
-    _vmEventsSocket.on("vm_event", (data) => {
+    _sock.on("vm_event", (data) => {
       const { vm_id, type, state } = data;
       if (type === "state" && vm_id && state) {
-        // Update tree badge color
         const badge = document.querySelector(`.tree-item[data-vmid="${vm_id}"] .vm-state-dot`);
         if (badge) {
           badge.className = "vm-state-dot";
           badge.classList.add(state === "running" ? "dot-running" : state === "paused" ? "dot-paused" : "dot-stopped");
         }
-        // If VM detail page is open for this VM, refresh state indicator
         if (currentVmId === vm_id) {
           const stEl = document.getElementById("vd-state");
           if (stEl) stEl.textContent = state === "running" ? "Çalışıyor" : state === "paused" ? "Duraklatıldı" : "Kapalı";
@@ -15939,8 +15967,15 @@ function _initVmEventsSocket() {
       }
     });
 
-    _vmEventsSocket.on("disconnect", () => {
-      _vmEventsSocket = null;
+    _sock.on("disconnect", () => {
+      // Don't null _vmEventsSocket — socket.io reconnection:true reuses
+      // the same socket object and fires "connect" again. Nulling here
+      // caused "can't access property emit, _vmEventsSocket is null".
+      // _vmEventsSocket stays pointing at _sock so subscribeVmMetrics works.
+    });
+
+    _sock.on("connect_error", () => {
+      // Silent — socket.io will retry via reconnectionDelay
     });
   } catch(e) {}
 }
@@ -15948,11 +15983,11 @@ function _initVmEventsSocket() {
 // Subscribe to per-VM real-time metrics when VM detail opens
 function subscribeVmMetrics(vmId, interval = 3) {
   if (!_vmEventsSocket) return;
-  _vmEventsSocket.emit("subscribe_vm_metrics", { vm_id: vmId, interval });
-  _vmEventsSocket.off("vm_metrics");
-  _vmEventsSocket.on("vm_metrics", (data) => {
+  const _s = _vmEventsSocket;
+  _s.emit("subscribe_vm_metrics", { vm_id: vmId, interval });
+  _s.off("vm_metrics");
+  _s.on("vm_metrics", (data) => {
     if (data.vm_id !== vmId) return;
-    // Update mini metric bars in header strip if present
     const cpuEl = document.getElementById("vd-cpu-sub");
     if (cpuEl && data.cpu_pct != null)
       cpuEl.textContent = `CPU: ${data.cpu_pct.toFixed(1)}%`;
