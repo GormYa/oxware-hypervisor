@@ -1,19 +1,15 @@
 <?php
 /**
- * OXware Hypervisor — WHMCS Server Module
- * Versiyon: 1.0.0
+ * OXware Hypervisor - WHMCS Server Module v2.0.0
  *
- * Kurulum:
- *   Bu klasörü WHMCS'in modules/servers/ dizinine kopyalayın:
- *     modules/servers/oxware/
- *   Ardından: WHMCS Admin → Kurulum → Sunucular → Yeni Sunucu → Tip: OXware
+ * Kurulum: modules/servers/oxware/ dizinine kopyalayin.
+ * WHMCS Admin -> Kurulum -> Sunucular -> Yeni Sunucu -> Tip: OXware
  *
- * Sunucu ayarları (WHMCS Admin → Kurulum → Sunucular):
- *   Hostname    : OXware API URL (ör: https://oxware.example.com)
- *   Access Hash : OXware API anahtarı (oxw_... ile başlar)
+ * Sunucu ayarlari:
+ *   Hostname    : OXware API URL (ornek: https://oxware.example.com)
+ *   Access Hash : OXware API anahtari (oxw_... ile baslar)
  *
- * Ürün yapılandırma seçenekleri (Configurable Options):
- *   CPU (vCPU), RAM (MB), Disk (GB), OS Template, Network
+ * Ozellikler: VM olustur/sil/askiya al, OS degistir, IP ata, console URL, kimlik bilgileri
  */
 
 if (!defined("WHMCS")) {
@@ -28,6 +24,7 @@ function oxware_MetaData()
         'DisplayName'    => 'OXware Hypervisor',
         'APIVersion'     => '1.1',
         'RequiresServer' => true,
+        'Description'    => 'OXware KVM Hypervisor otomasyonu - OS degistir, IP ata, console erisimi',
     ];
 }
 
@@ -36,36 +33,68 @@ function oxware_MetaData()
 function oxware_ConfigOptions()
 {
     return [
-        'CPU (vCPU)' => [
+        'vCPU' => [
             'Type'        => 'text',
             'Size'        => 5,
             'Default'     => '2',
-            'Description' => 'Sanal CPU sayısı (1-256)',
+            'Description' => 'Sanal CPU sayisi (1-256)',
         ],
         'RAM (MB)' => [
             'Type'        => 'text',
             'Size'        => 8,
             'Default'     => '2048',
-            'Description' => 'Bellek (MB) — ör: 2048 = 2 GB',
+            'Description' => 'Bellek MB cinsinden (2048 = 2 GB)',
         ],
         'Disk (GB)' => [
             'Type'        => 'text',
             'Size'        => 8,
             'Default'     => '50',
-            'Description' => 'Disk alanı (GB)',
+            'Description' => 'Disk alani GB cinsinden',
         ],
         'OS Template' => [
             'Type'        => 'text',
             'Size'        => 30,
             'Default'     => 'ubuntu-22.04',
-            'Description' => 'OXware template ID (ör: ubuntu-22.04, debian-12)',
+            'Description' => 'OXware template ID (ornek: ubuntu-22.04, debian-12)',
         ],
         'Network' => [
             'Type'        => 'text',
             'Size'        => 20,
             'Default'     => 'default',
-            'Description' => 'Libvirt ağ adı',
+            'Description' => 'Libvirt ag adi',
         ],
+        'IP Pool' => [
+            'Type'        => 'text',
+            'Size'        => 30,
+            'Default'     => '',
+            'Description' => 'Otomatik IP atama icin havuz adi (bos birakilirsa IP atanmaz)',
+        ],
+    ];
+}
+
+// ── Yardimci: rastgele sifre uret ────────────────────────────────────────────
+
+function _oxware_random_password($len = 20)
+{
+    $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $pwd   = '';
+    for ($i = 0; $i < $len; $i++) {
+        $pwd .= $chars[random_int(0, strlen($chars) - 1)];
+    }
+    return $pwd;
+}
+
+// ── Admin buton listesi ───────────────────────────────────────────────────────
+
+function oxware_AdminCustomButtonArray()
+{
+    return [
+        'OS Degistir'       => 'ChangeOS',
+        'IP Ata'            => 'AssignIP',
+        'Console URL Al'    => 'GetConsoleURL',
+        'VM Baslat'         => 'StartVM',
+        'VM Durdur'         => 'StopVM',
+        'VM Yeniden Baslat' => 'RebootVM',
     ];
 }
 
@@ -146,19 +175,31 @@ function _oxware_vm_id($params)
 
 function oxware_CreateAccount($params)
 {
-    $cfg   = $params['configoptions'];
-    $svcid = $params['serviceid'];
-    $name  = 'vm-' . $svcid . '-' . preg_replace('/[^a-z0-9\-]/', '', strtolower($params['domain'] ?? 'svc'));
+    $cfg    = $params['configoptions'];
+    $svcid  = $params['serviceid'];
+    $domain = preg_replace('/[^a-z0-9\-]/', '', strtolower($params['domain'] ?? 'vm'));
+    $name   = 'vm-' . $svcid . '-' . ($domain ?: 'svc');
+
+    // Musteri icin rastgele VM sifresi olustur
+    $vm_password = _oxware_random_password();
 
     $body = [
         'name'        => $name,
-        'cpu'         => (int)($cfg['CPU (vCPU)'] ?? 2),
-        'ram_mb'      => (int)($cfg['RAM (MB)'] ?? 2048),
+        'vcpus'       => (int)($cfg['vCPU']      ?? 2),
+        'memory_mb'   => (int)($cfg['RAM (MB)']  ?? 2048),
         'disk_gb'     => (int)($cfg['Disk (GB)'] ?? 50),
-        'os_template' => $cfg['OS Template'] ?? 'ubuntu-22.04',
-        'network'     => $cfg['Network'] ?? 'default',
+        'os_template' => $cfg['OS Template']     ?? 'ubuntu-22.04',
+        'network'     => $cfg['Network']         ?? 'default',
         'auto_start'  => true,
+        'username'    => 'root',
+        'password'    => $vm_password,
     ];
+
+    // IP havuzu belirtilmisse otomatik IP ata
+    $ip_pool = trim($cfg['IP Pool'] ?? '');
+    if ($ip_pool) {
+        $body['ip_pool'] = $ip_pool;
+    }
 
     $result = _oxware_api($params, 'POST', '/provision/create', $body);
 
@@ -166,24 +207,24 @@ function oxware_CreateAccount($params)
         return 'error: ' . $result['error'];
     }
 
-    $vm_id = $result['vm']['id'] ?? $result['vm_id'] ?? '';
-    $ip    = $result['vm']['ip']
-          ?? ($result['vm']['networks'][0]['ip'] ?? '')
-          ?: '';
+    $vm    = $result['vm'] ?? [];
+    $vm_id = $vm['id'] ?? $result['vm_id'] ?? '';
+    $ip    = $vm['ip'] ?? ($vm['networks'][0]['ip'] ?? '');
 
     if (!$vm_id) {
-        return 'error: VM ID alınamadı';
+        return 'error: VM ID alinamadi';
     }
 
-    // VM ID'yi WHMCS servis alanına kaydet
+    // VM ID ve sifreyi WHMCS servis alanina kaydet
     localAPI('UpdateClientProduct', [
         'serviceid' => $svcid,
         'username'  => $vm_id,
+        'password'  => $vm_password,
     ]);
 
     if ($ip) {
         localAPI('UpdateClientProduct', [
-            'serviceid'  => $svcid,
+            'serviceid'   => $svcid,
             'dedicatedip' => $ip,
         ]);
     }
@@ -237,13 +278,85 @@ function oxware_ChangePackage($params)
 
     $cfg  = $params['configoptions'];
     $body = [
-        'cpu'     => (int)($cfg['CPU (vCPU)'] ?? 2),
-        'ram_mb'  => (int)($cfg['RAM (MB)'] ?? 2048),
-        'disk_gb' => (int)($cfg['Disk (GB)'] ?? 50),
+        'vcpus'     => (int)($cfg['vCPU']      ?? 2),
+        'memory_mb' => (int)($cfg['RAM (MB)']  ?? 2048),
+        'disk_gb'   => (int)($cfg['Disk (GB)'] ?? 50),
     ];
 
     $result = _oxware_api($params, 'PUT', "/provision/$vm_id/resize", $body);
     return !empty($result['error']) ? 'error: ' . $result['error'] : 'success';
+}
+
+// ── OS Degistir ───────────────────────────────────────────────────────────────
+
+function oxware_ChangeOS($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $os = trim($params['configoptions']['OS Template'] ?? '');
+    if (!$os) return 'error: OS Template yapilandirma seceneginde tanimli degil';
+    $r = _oxware_api($params, 'POST', "/provision/$vm_id/reinstall", ['os_template' => $os]);
+    return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
+}
+
+// ── Otomatik IP Atama ─────────────────────────────────────────────────────────
+
+function oxware_AssignIP($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $pool = trim($params['configoptions']['IP Pool'] ?? '');
+    $body = $pool ? ['pool' => $pool] : [];
+    $r    = _oxware_api($params, 'POST', "/provision/$vm_id/assign-ip", $body);
+    if (!empty($r['error'])) return 'error: ' . $r['error'];
+    if (!empty($r['ip'])) {
+        localAPI('UpdateClientProduct', ['serviceid' => $params['serviceid'], 'dedicatedip' => $r['ip']]);
+    }
+    return 'success';
+}
+
+// ── Console URL Al ────────────────────────────────────────────────────────────
+
+function oxware_GetConsoleURL($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $r = _oxware_api($params, 'POST', "/provision/$vm_id/console-token", []);
+    if (!empty($r['error'])) return 'error: ' . $r['error'];
+    $url = $r['console_url'] ?? '';
+    return $url ? "success: $url" : 'error: Console URL alinamadi';
+}
+
+// ── VM Kontrol Butonlari ──────────────────────────────────────────────────────
+
+function oxware_StartVM($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $r = _oxware_api($params, 'POST', "/vms/$vm_id/start");
+    return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
+}
+
+function oxware_StopVM($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $r = _oxware_api($params, 'POST', "/vms/$vm_id/stop");
+    return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
+}
+
+function oxware_RebootVM($params)
+{
+    $vm_id = _oxware_vm_id($params);
+    if (!$vm_id) return 'error: VM ID bulunamadi';
+    try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
+    $r = _oxware_api($params, 'POST', "/vms/$vm_id/reboot");
+    return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
 }
 
 // ── TestConnection ────────────────────────────────────────────────────────────
@@ -271,24 +384,50 @@ function oxware_ClientArea($params)
     if (!$vm_id) {
         return [
             'templatefile' => 'clientarea',
-            'vars'         => ['error' => 'VM henüz oluşturulmadı.'],
+            'vars'         => ['error' => 'VM henuz olusturulmadi.'],
         ];
     }
 
-    $status   = _oxware_api($params, 'GET', "/provision/$vm_id/status");
-    $base_url = rtrim($params['serverhostname'], '/');
+    $status = _oxware_api($params, 'GET', "/provision/$vm_id/status");
+    $creds  = _oxware_api($params, 'GET', "/provision/$vm_id/credentials");
+
+    // 5 dakika gecerli console token
+    $console_url = '';
+    $ct = _oxware_api($params, 'POST', "/provision/$vm_id/console-token", []);
+    if (empty($ct['error'])) { $console_url = $ct['console_url'] ?? ''; }
+
+    // SSH kimlik bilgisi
+    $ssh_user = 'root';
+    $ssh_pass = $params['password'] ?? '';
+    if (!empty($creds['credentials'])) {
+        foreach ($creds['credentials'] as $c) {
+            $t = $c['cred_type'] ?? $c['type'] ?? '';
+            if (in_array($t, ['ssh', 'custom', ''])) {
+                $ssh_user = $c['username'] ?? $ssh_user;
+                $ssh_pass = $c['password'] ?? $ssh_pass;
+                break;
+            }
+        }
+    }
 
     return [
         'templatefile' => 'clientarea',
         'vars'         => [
-            'vm_id'      => $vm_id,
-            'vm_name'    => $status['name']        ?? '—',
-            'vm_status'  => $status['status']      ?? 'unknown',
-            'vm_ip'      => $status['ip']          ?? '—',
-            'vm_cpu'     => $status['cpu_percent'] ?? 0,
-            'vm_ram'     => $status['mem_percent'] ?? 0,
-            'base_url'   => $base_url,
-            'error'      => $status['error']       ?? '',
+            'vm_id'        => $vm_id,
+            'vm_name'      => $status['name']         ?? '---',
+            'vm_status'    => $status['status']       ?? 'unknown',
+            'vm_ip'        => $status['ip']           ?? '---',
+            'vm_public_ip' => $status['public_ip']    ?? '',
+            'vm_int_ip'    => $status['internal_ip']  ?? '',
+            'vm_cpu'       => $status['cpu_percent']  ?? 0,
+            'vm_ram'       => $status['mem_percent']  ?? 0,
+            'vm_ram_total' => $status['mem_total_mb'] ?? 0,
+            'vm_disk'      => $status['disk_used_gb'] ?? 0,
+            'ssh_user'     => $ssh_user,
+            'ssh_pass'     => $ssh_pass,
+            'console_url'  => $console_url,
+            'base_url'     => rtrim($params['serverhostname'], '/'),
+            'error'        => $status['error']        ?? '',
         ],
     ];
 }
@@ -302,10 +441,9 @@ function oxware_GetUsage($params)
 
     $s = _oxware_api($params, 'GET', "/provision/$vm_id/status");
     if (!empty($s['error'])) return [];
-
     return [
-        'cpu'    => $s['cpu_percent'] ?? 0,
-        'memory' => $s['mem_percent'] ?? 0,
+        'cpu'    => $s['cpu_percent']  ?? 0,
+        'memory' => $s['mem_percent']  ?? 0,
         'hdd'    => $s['disk_used_gb'] ?? 0,
     ];
 }

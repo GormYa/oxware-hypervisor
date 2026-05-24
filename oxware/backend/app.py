@@ -9238,19 +9238,26 @@ def api_provision_create():
 
     d = request.get_json() or {}
     name        = d.get("name", "").strip()
-    cpu         = int(d.get("cpu", 2))
-    ram_mb      = int(d.get("ram_mb", 2048))
+    # vcpus/cpu ve memory_mb/ram_mb her ikisini de kabul et
+    cpu         = int(d.get("vcpus") or d.get("cpu") or 2)
+    ram_mb      = int(d.get("memory_mb") or d.get("ram_mb") or 2048)
     disk_gb     = int(d.get("disk_gb", 50))
     os_template = d.get("os_template", "ubuntu-22.04").strip()
     network     = d.get("network", "default").strip()
     auto_start  = bool(d.get("auto_start", True))
+    # cloud-init kimlik bilgileri (billing panel tarafından aktarılabilir)
+    ci_username = d.get("username", "").strip()
+    ci_password = d.get("password", "")
+    ci_ssh_key  = d.get("ssh_key", "")
+    # IP havuzu — oluşturma sonrası otomatik IP ata
+    ip_pool_req = d.get("ip_pool", "").strip()
 
     if not name:
         return err("name zorunludur")
     if cpu < 1 or cpu > 256:
-        return err("cpu 1-256 arasında olmalı")
+        return err("vcpus 1-256 arasında olmalı")
     if ram_mb < 512 or ram_mb > 1048576:
-        return err("ram_mb 512-1048576 arasında olmalı")
+        return err("memory_mb 512-1048576 arasında olmalı")
     if disk_gb < 5 or disk_gb > 65536:
         return err("disk_gb 5-65536 arasında olmalı")
 
@@ -9259,7 +9266,18 @@ def api_provision_create():
     tpl = template_map.get(os_template, {})
     iso_path   = tpl.get("iso_path")
     os_variant = tpl.get("os_variant", "generic")
-    cloud_init = tpl.get("cloud_init")
+    cloud_init = dict(tpl.get("cloud_init") or {})
+
+    # Billing panel'den gelen kimlik bilgilerini cloud-init'e ekle
+    if ci_username:
+        cloud_init["user"] = ci_username
+    if ci_password:
+        cloud_init["password"] = ci_password
+    if ci_ssh_key:
+        cloud_init.setdefault("ssh_keys", [])
+        cloud_init["ssh_keys"].append(ci_ssh_key)
+    if not cloud_init:
+        cloud_init = None
 
     try:
         vm = vm_manager.create_vm(
@@ -9276,11 +9294,33 @@ def api_provision_create():
         log.error("provision/create hatası: %s", e)
         return err(str(e), 500)
 
+    vm_id = vm["id"]
+
     if auto_start:
         try:
-            vm_manager.start_vm(vm["id"])
+            vm_manager.start_vm(vm_id)
         except Exception:
             pass
+
+    # Vault'a kimlik bilgilerini kaydet
+    if vault_mgr and (ci_username or ci_password):
+        try:
+            vault_mgr.store_credential(vm_id, "ssh",
+                                       ci_username or "root",
+                                       ci_password, "cloud-init")
+        except Exception:
+            pass
+
+    # Otomatik IP atama
+    assigned_ip = vm.get("ip", "")
+    if ip_pool_req:
+        try:
+            mac = (vm.get("networks") or [{}])[0].get("mac", "") if vm.get("networks") else ""
+            alloc = ip_pool_mgr.allocate_ip(ip_pool_req, vm_id, name, mac)
+            assigned_ip = alloc.get("ip", assigned_ip)
+            vm["ip"] = assigned_ip
+        except Exception as _ipe:
+            log.warning("provision/create IP havuzu atama hatası: %s", _ipe)
 
     ev.info(f"Provisioning: VM oluşturuldu name={name}", category="provision")
     return ok(vm=vm)
@@ -9335,12 +9375,24 @@ def api_provision_status(vm_id):
         if not vm:
             return err("VM bulunamadı", 404)
         stats = vm_manager.get_vm_stats(vm_id) or {}
-        ip = (vm.get("networks") or [{}])[0].get("ip", "") if vm.get("networks") else ""
+        # İç DHCP IP'si
+        internal_ip = (vm.get("networks") or [{}])[0].get("ip", "") if vm.get("networks") else ""
+        # IP havuzundan atanmış public IP (varsa tercih et)
+        public_ip = ""
+        try:
+            _assignment = ip_pool_mgr.get_vm_assignment(vm_id)
+            if _assignment and _assignment.get("pool") not in ("__internal__", "", None):
+                public_ip = _assignment.get("ip", "")
+        except Exception:
+            pass
+        ip = public_ip or internal_ip
         return ok(
             vm_id=vm_id,
             name=vm.get("name", ""),
             status=vm.get("status", "unknown"),
             ip=ip,
+            public_ip=public_ip,
+            internal_ip=internal_ip,
             cpu_percent=stats.get("cpu_percent", 0),
             mem_percent=stats.get("mem_percent", 0),
             mem_used_mb=stats.get("memory_used_mb", 0),
@@ -9360,17 +9412,27 @@ def api_provision_resize(vm_id):
         vm = vm_manager.get_vm(vm_id)
         if not vm:
             return err("VM bulunamadı", 404)
-        conn = libvirt.open(config.LIBVIRT_URI)
-        dom  = conn.lookupByUUIDString(vm_id)
-        if "cpu" in d:
-            dom.setVcpusFlags(int(d["cpu"]), libvirt.VIR_DOMAIN_AFFECT_CONFIG)
-        if "ram_mb" in d:
-            kb = int(d["ram_mb"]) * 1024
-            dom.setMemoryFlags(kb, libvirt.VIR_DOMAIN_AFFECT_CONFIG)
-            dom.setMaxMemory(kb)
-        conn.close()
+
+        notes = []
+
+        # vCPU — DiyoCP modülü "vcpus" gönderir, eski uyumluluk için "cpu" da kabul et
+        vcpu_val = d.get("vcpus") or d.get("cpu")
+        if vcpu_val is not None:
+            res = vm_manager.hot_set_vcpus(vm_id, int(vcpu_val))
+            if not res.get("ok"):
+                return err(res.get("message", "vCPU değiştirilemedi"), 500)
+            notes.append(res.get("message", f"vCPU → {vcpu_val}"))
+
+        # RAM — DiyoCP modülü "memory_mb" gönderir, eski uyumluluk için "ram_mb" da kabul et
+        mem_val = d.get("memory_mb") or d.get("ram_mb")
+        if mem_val is not None:
+            res = vm_manager.hot_set_memory(vm_id, int(mem_val))
+            if not res.get("ok"):
+                return err(res.get("message", "RAM değiştirilemedi"), 500)
+            notes.append(res.get("message", f"RAM → {mem_val} MB"))
+
         ev.info(f"Provisioning: VM yeniden boyutlandırıldı id={vm_id}", category="provision")
-        return ok(resized=True, note="Değişiklikler VM yeniden başlatıldığında aktif olur")
+        return ok(resized=True, note="; ".join(notes) if notes else "Değişiklik yok")
     except Exception as e:
         return err(str(e), 500)
 
@@ -9384,6 +9446,211 @@ def api_provision_templates():
         {"id": k, "name": v.get("name", k), "os_variant": v.get("os_variant", "generic")}
         for k, v in tpls.items()
     ])
+
+
+# ── Provision: OS Yeniden Kurulum (Reinstall) ─────────────────────────────────
+
+@app.route("/api/provision/<vm_id>/reinstall", methods=["POST"])
+def api_provision_reinstall(vm_id):
+    """VM diski sıfırla ve yeni OS şablonuyla yeniden kur."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    d = request.get_json() or {}
+    os_template = d.get("os_template", "").strip()
+    if not os_template:
+        return err("os_template zorunludur")
+
+    template_map = getattr(config, "PROVISION_TEMPLATES", {})
+    tpl = template_map.get(os_template)
+    if tpl is None:
+        return err(f"Bilinmeyen template: {os_template}", 404)
+
+    iso_path = tpl.get("iso_path")
+
+    try:
+        import libvirt as _lv_r
+        import xml.etree.ElementTree as _ET_r
+
+        # 1. VM durdur
+        try:
+            vm_manager.stop_vm(vm_id, force=True)
+            time.sleep(2)
+        except Exception:
+            pass
+
+        conn = _lv_r.open(config.LIBVIRT_URI)
+        dom  = conn.lookupByUUIDString(vm_id)
+        xml_str = dom.XMLDesc(libvirt.VIR_DOMAIN_XML_INACTIVE)
+        root = _ET_r.fromstring(xml_str)
+
+        # 2. Birincil disk yolu bul ve sıfırla
+        for disk_el in root.findall(".//disk[@device='disk']"):
+            src = disk_el.find("source")
+            if src is not None:
+                disk_path = src.get("file", "")
+                if disk_path and os.path.exists(disk_path):
+                    try:
+                        import json as _json_r
+                        _sz_out = subprocess.run(
+                            ["qemu-img", "info", "--output=json", disk_path],
+                            capture_output=True, text=True
+                        )
+                        _sz = _json_r.loads(_sz_out.stdout).get("virtual-size", 50 * 1024 ** 3)
+                        disk_gb_r = max(5, int(_sz / 1024 ** 3))
+                    except Exception:
+                        disk_gb_r = 50
+                    os.remove(disk_path)
+                    subprocess.run(
+                        ["qemu-img", "create", "-f", "qcow2", disk_path, f"{disk_gb_r}G"],
+                        check=True, capture_output=True
+                    )
+            break
+
+        # 3. Mevcut CDROM'ları kaldır
+        devices_el = root.find("devices")
+        if devices_el is not None:
+            for cdrom_el in list(devices_el.findall("disk[@device='cdrom']")):
+                devices_el.remove(cdrom_el)
+
+        # 4. Yeni ISO ekle
+        if iso_path and os.path.exists(iso_path) and devices_el is not None:
+            import html as _html_r
+            _cdrom = _ET_r.fromstring(
+                f"<disk type='file' device='cdrom'>"
+                f"<driver name='qemu' type='raw'/>"
+                f"<source file='{_html_r.escape(iso_path, quote=True)}'/>"
+                f"<target dev='sdb' bus='sata'/>"
+                f"<readonly/>"
+                f"</disk>"
+            )
+            devices_el.append(_cdrom)
+
+        # 5. Boot sırasını güncelle: cdrom önce
+        os_el = root.find("os")
+        if os_el is not None:
+            for b in list(os_el.findall("boot")):
+                os_el.remove(b)
+            b1 = _ET_r.SubElement(os_el, "boot"); b1.set("dev", "cdrom")
+            b2 = _ET_r.SubElement(os_el, "boot"); b2.set("dev", "hd")
+
+        conn.defineXML(_ET_r.tostring(root, encoding="unicode"))
+        conn.close()
+
+        # 6. VM'i başlat
+        try:
+            vm_manager.start_vm(vm_id)
+        except Exception as _se:
+            log.warning("reinstall: VM başlatma hatası vm=%s: %s", vm_id, _se)
+
+        ev.info(f"Provisioning: VM yeniden kuruldu id={vm_id} template={os_template}", category="provision")
+        return ok(reinstalled=True, os_template=os_template)
+    except Exception as e:
+        log.error("provision/reinstall hatası vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+# ── Provision: Otomatik IP Atama ─────────────────────────────────────────────
+
+@app.route("/api/provision/<vm_id>/assign-ip", methods=["POST"])
+def api_provision_assign_ip(vm_id):
+    """IP havuzundan VM'e otomatik IP ata."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    d = request.get_json() or {}
+    pool_name = d.get("pool", "").strip()
+    manual_ip = d.get("ip", "").strip()
+
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if not vm:
+            return err("VM bulunamadı", 404)
+        mac = (vm.get("networks") or [{}])[0].get("mac", "") if vm.get("networks") else ""
+
+        # Havuz belirtilmemişse ilk mevcut havuzu kullan
+        if not pool_name:
+            _pools = ip_pool_mgr.list_pools()
+            _pools = [p for p in _pools if p.get("name") not in ("__internal__", "", None)]
+            if not _pools:
+                return err("Kullanılabilir IP havuzu bulunamadı")
+            pool_name = _pools[0]["name"]
+
+        if manual_ip:
+            alloc = ip_pool_mgr.manual_assign(
+                ip=manual_ip, mac=mac, vm_name=vm.get("name", ""),
+                pool_name=pool_name, vm_id=vm_id
+            )
+        else:
+            alloc = ip_pool_mgr.allocate_ip(pool_name, vm_id, vm.get("name", ""), mac)
+
+        assigned_ip = alloc.get("ip", "")
+        ev.info(f"Provisioning: IP atandı id={vm_id} ip={assigned_ip} pool={pool_name}", category="provision")
+        return ok(ip=assigned_ip, pool=pool_name, mac=mac)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ── Provision: VM Kimlik Bilgileri (Vault) ────────────────────────────────────
+
+@app.route("/api/provision/<vm_id>/credentials", methods=["GET"])
+def api_provision_credentials_get(vm_id):
+    """VM kimlik bilgilerini getir (provision key ile erişilebilir)."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    if not vault_mgr:
+        return ok(credentials=[])
+    return ok(credentials=vault_mgr.list_credentials(vm_id))
+
+
+@app.route("/api/provision/<vm_id>/credentials", methods=["POST"])
+def api_provision_credentials_set(vm_id):
+    """VM kimlik bilgilerini kaydet (provision key ile erişilebilir)."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    d = request.get_json() or {}
+    if not vault_mgr:
+        return err("Vault kullanılamıyor")
+    username  = d.get("username", "root")
+    password  = d.get("password", "")
+    cred_type = d.get("cred_type", "ssh")
+    notes     = d.get("notes", "")
+    try:
+        vault_mgr.store_credential(vm_id, cred_type, username, password, notes)
+        ev.info(f"Provisioning: Kimlik bilgisi kaydedildi id={vm_id} type={cred_type}", category="provision")
+        return ok(stored=True, cred_type=cred_type, username=username)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ── Provision: Console Token (noVNC) ─────────────────────────────────────────
+
+@app.route("/api/provision/<vm_id>/console-token", methods=["POST"])
+def api_provision_console_token(vm_id):
+    """Billing panel için kısa ömürlü noVNC console token üret."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if not vm:
+            return err("VM bulunamadı", 404)
+
+        import secrets as _sec_p
+        token = _sec_p.token_urlsafe(32)
+        with _vnc_token_lock:
+            _vnc_one_time_tokens[token] = {
+                "vm_id":    vm_id,
+                "username": "provision-api",
+                "role":     "operator",
+                "expires":  _time_mod.time() + 300,  # 5 dakika
+                "used":     False,
+            }
+
+        # Tam console URL — billing panel bu URL'yi müşteriye verebilir
+        _scheme = "https" if request.is_secure else "http"
+        _host   = request.host
+        console_url = f"{_scheme}://{_host}/console/{vm_id}?vnc_token={token}"
+        return ok(token=token, console_url=console_url, expires_in=300)
+    except Exception as e:
+        return err(str(e), 500)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -1,19 +1,15 @@
 <?php
 /**
- * OXware Hypervisor — WiseCP Server Module
- * Versiyon: 1.0.0
+ * OXware Hypervisor - WiseCP Server Module v2.0.0
  *
- * Kurulum:
- *   Bu klasörü WiseCP'nin modules/server/ dizinine kopyalayın:
- *     modules/server/oxware/
- *   Ardından: WiseCP Admin → Sunucular → Yeni Sunucu → Tip: OXware
+ * Kurulum: modules/server/oxware/ dizinine kopyalayin.
+ * WiseCP Admin -> Sunucular -> Yeni Sunucu -> Tip: OXware
  *
- * Sunucu ayarları (WiseCP Admin paneli):
- *   ip_address / hostname : OXware API URL (ör: https://oxware.example.com)
- *   password / api_key    : OXware API anahtarı (oxw_... ile başlar)
+ * Sunucu ayarlari:
+ *   ip_address / hostname : OXware API URL (ornek: https://oxware.example.com)
+ *   password / api_key    : OXware API anahtari (oxw_... ile baslar)
  *
- * Paket ayarları:
- *   cpu, ram_mb, disk_gb, os_template, network
+ * Ozellikler: VM olustur/sil/askiya al, OS degistir, IP ata, console URL, kimlik bilgileri
  */
 
 class Server_oxware
@@ -24,40 +20,58 @@ class Server_oxware
     {
         return [
             'name'     => 'OXware Hypervisor',
-            'version'  => '1.0.0',
+            'version'  => '2.0.0',
             'settings' => [
-                'cpu' => [
-                    'type'    => 'text',
-                    'label'   => 'CPU (vCPU)',
-                    'value'   => '2',
-                    'description' => 'Sanal CPU sayısı',
+                'vcpus' => [
+                    'type'        => 'text',
+                    'label'       => 'vCPU',
+                    'value'       => '2',
+                    'description' => 'Sanal CPU sayisi (1-256)',
                 ],
-                'ram_mb' => [
-                    'type'    => 'text',
-                    'label'   => 'RAM (MB)',
-                    'value'   => '2048',
+                'memory_mb' => [
+                    'type'        => 'text',
+                    'label'       => 'RAM (MB)',
+                    'value'       => '2048',
                     'description' => 'Bellek MB cinsinden (2048 = 2 GB)',
                 ],
                 'disk_gb' => [
-                    'type'    => 'text',
-                    'label'   => 'Disk (GB)',
-                    'value'   => '50',
-                    'description' => 'Disk alanı GB cinsinden',
+                    'type'        => 'text',
+                    'label'       => 'Disk (GB)',
+                    'value'       => '50',
+                    'description' => 'Disk alani GB cinsinden',
                 ],
                 'os_template' => [
-                    'type'    => 'text',
-                    'label'   => 'OS Template',
-                    'value'   => 'ubuntu-22.04',
-                    'description' => 'OXware template ID',
+                    'type'        => 'text',
+                    'label'       => 'OS Template',
+                    'value'       => 'ubuntu-22.04',
+                    'description' => 'OXware template ID (ornek: ubuntu-22.04, debian-12)',
                 ],
                 'network' => [
-                    'type'    => 'text',
-                    'label'   => 'Network',
-                    'value'   => 'default',
-                    'description' => 'Libvirt ağ adı',
+                    'type'        => 'text',
+                    'label'       => 'Network',
+                    'value'       => 'default',
+                    'description' => 'Libvirt ag adi',
+                ],
+                'ip_pool' => [
+                    'type'        => 'text',
+                    'label'       => 'IP Pool',
+                    'value'       => '',
+                    'description' => 'Otomatik IP atama icin havuz adi (bos = IP atanmaz)',
                 ],
             ],
         ];
+    }
+
+    // ── Yardimci: rastgele sifre ──────────────────────────────────────────────
+
+    private static function randomPassword($len = 20)
+    {
+        $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $pwd   = '';
+        for ($i = 0; $i < $len; $i++) {
+            $pwd .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        return $pwd;
     }
 
     // ── Yardımcı: OXware REST API ─────────────────────────────────────────────
@@ -133,18 +147,28 @@ class Server_oxware
 
     public static function create($package, $account, $server)
     {
-        $name = 'vm-' . ($account['id'] ?? rand(10000, 99999))
-              . '-' . preg_replace('/[^a-z0-9\-]/', '', strtolower($account['domain'] ?? 'vm'));
+        $acct_id = $account['id'] ?? rand(10000, 99999);
+        $domain  = preg_replace('/[^a-z0-9\-]/', '', strtolower($account['domain'] ?? 'vm'));
+        $name    = 'vm-' . $acct_id . '-' . ($domain ?: 'vm');
+
+        // Musteri icin rastgele VM sifresi olustur
+        $vm_password = self::randomPassword();
 
         $body = [
             'name'        => $name,
-            'cpu'         => (int)($package['cpu'] ?? 2),
-            'ram_mb'      => (int)($package['ram_mb'] ?? 2048),
-            'disk_gb'     => (int)($package['disk_gb'] ?? 50),
-            'os_template' => $package['os_template'] ?? 'ubuntu-22.04',
-            'network'     => $package['network'] ?? 'default',
+            'vcpus'       => (int)($package['vcpus']       ?? 2),
+            'memory_mb'   => (int)($package['memory_mb']   ?? 2048),
+            'disk_gb'     => (int)($package['disk_gb']     ?? 50),
+            'os_template' => $package['os_template']       ?? 'ubuntu-22.04',
+            'network'     => $package['network']           ?? 'default',
             'auto_start'  => true,
+            'username'    => 'root',
+            'password'    => $vm_password,
         ];
+
+        // IP havuzu belirtilmisse otomatik IP ata
+        $ip_pool = trim($package['ip_pool'] ?? '');
+        if ($ip_pool) { $body['ip_pool'] = $ip_pool; }
 
         $result = self::api($server, 'POST', '/provision/create', $body);
 
@@ -152,23 +176,85 @@ class Server_oxware
             throw new Exception($result['error']);
         }
 
-        $vm_id = $result['vm']['id'] ?? $result['vm_id'] ?? '';
-        $ip    = $result['vm']['ip']
-              ?? ($result['vm']['networks'][0]['ip'] ?? '')
-              ?: '';
+        $vm    = $result['vm'] ?? [];
+        $vm_id = $vm['id'] ?? $result['vm_id'] ?? '';
+        $ip    = $vm['ip'] ?? ($vm['networks'][0]['ip'] ?? '');
 
-        if (!$vm_id) {
-            throw new Exception('VM ID alınamadı');
-        }
+        if (!$vm_id) { throw new Exception('VM ID alinamadi'); }
 
-        // WiseCP: dönen değerler servis kaydına yazılır
+        // Kimlik bilgilerini vault'a kaydet
+        try {
+            self::api($server, 'POST', "/provision/$vm_id/credentials", [
+                'username'  => 'root',
+                'password'  => $vm_password,
+                'cred_type' => 'ssh',
+                'notes'     => 'WiseCP olusturma sifresi',
+            ]);
+        } catch (Exception $e) { /* Vault hatasi kritik degil */ }
+
         return [
             'username' => $vm_id,
-            'password' => '',
+            'password' => $vm_password,
             'ip'       => $ip,
             'ns1'      => '',
             'ns2'      => '',
         ];
+    }
+
+    // ── OS Degistir ───────────────────────────────────────────────────────────
+
+    public static function changeOs($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $os = trim($package['os_template'] ?? '');
+        if (!$os) throw new Exception('os_template paket ayarinda tanimli degil');
+        $result = self::api($server, 'POST', "/provision/$vm_id/reinstall", ['os_template' => $os]);
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return true;
+    }
+
+    // ── Otomatik IP Atama ─────────────────────────────────────────────────────
+
+    public static function assignIp($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $pool = trim($package['ip_pool'] ?? '');
+        $body = $pool ? ['pool' => $pool] : [];
+        $result = self::api($server, 'POST', "/provision/$vm_id/assign-ip", $body);
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return $result['ip'] ?? '';
+    }
+
+    // ── Console URL ───────────────────────────────────────────────────────────
+
+    public static function getConsoleUrl($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $result = self::api($server, 'POST', "/provision/$vm_id/console-token", []);
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return $result['console_url'] ?? '';
+    }
+
+    // ── Kimlik Bilgileri Kaydet ───────────────────────────────────────────────
+
+    public static function setCredentials($package, $account, $server, $username, $password)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $result = self::api($server, 'POST', "/provision/$vm_id/credentials", [
+            'username'  => $username ?: 'root',
+            'password'  => $password,
+            'cred_type' => 'ssh',
+        ]);
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return true;
     }
 
     // ── suspend ───────────────────────────────────────────────────────────────
@@ -176,7 +262,7 @@ class Server_oxware
     public static function suspend($package, $account, $server)
     {
         $vm_id = $account['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
         self::validateVmId($vm_id);
 
         $result = self::api($server, 'POST', "/provision/$vm_id/suspend");
@@ -189,7 +275,7 @@ class Server_oxware
     public static function unsuspend($package, $account, $server)
     {
         $vm_id = $account['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
         self::validateVmId($vm_id);
 
         $result = self::api($server, 'POST', "/provision/$vm_id/unsuspend");
@@ -215,13 +301,13 @@ class Server_oxware
     public static function resize($package, $account, $server)
     {
         $vm_id = $account['username'] ?? '';
-        if (!$vm_id) throw new Exception('VM ID bulunamadı');
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
         self::validateVmId($vm_id);
 
         $body = [
-            'cpu'     => (int)($package['cpu'] ?? 2),
-            'ram_mb'  => (int)($package['ram_mb'] ?? 2048),
-            'disk_gb' => (int)($package['disk_gb'] ?? 50),
+            'vcpus'     => (int)($package['vcpus']     ?? 2),
+            'memory_mb' => (int)($package['memory_mb'] ?? 2048),
+            'disk_gb'   => (int)($package['disk_gb']   ?? 50),
         ];
 
         $result = self::api($server, 'PUT', "/provision/$vm_id/resize", $body);
@@ -236,15 +322,42 @@ class Server_oxware
         $vm_id = $account['username'] ?? '';
         if (!$vm_id) return [];
 
-        $s = self::api($server, 'GET', "/provision/$vm_id/status");
+        $s     = self::api($server, 'GET', "/provision/$vm_id/status");
+        $creds = self::api($server, 'GET', "/provision/$vm_id/credentials");
+
         if (!empty($s['error'])) return [];
 
+        // Console URL
+        $console_url = '';
+        $ct = self::api($server, 'POST', "/provision/$vm_id/console-token", []);
+        if (empty($ct['error'])) { $console_url = $ct['console_url'] ?? ''; }
+
+        // SSH kimlik bilgisi
+        $ssh_user = 'root';
+        $ssh_pass = $account['password'] ?? '';
+        if (!empty($creds['credentials'])) {
+            foreach ($creds['credentials'] as $c) {
+                $t = $c['cred_type'] ?? $c['type'] ?? '';
+                if (in_array($t, ['ssh', 'custom', ''])) {
+                    $ssh_user = $c['username'] ?? $ssh_user;
+                    $ssh_pass = $c['password'] ?? $ssh_pass;
+                    break;
+                }
+            }
+        }
+
         return [
-            'status'    => $s['status']      ?? 'unknown',
-            'ip'        => $s['ip']          ?? '',
-            'cpu_usage' => $s['cpu_percent'] ?? 0,
-            'ram_usage' => $s['mem_percent'] ?? 0,
-            'disk_used' => $s['disk_used_gb'] ?? 0,
+            'status'      => $s['status']        ?? 'unknown',
+            'ip'          => $s['ip']             ?? '',
+            'public_ip'   => $s['public_ip']      ?? '',
+            'internal_ip' => $s['internal_ip']    ?? '',
+            'cpu_usage'   => $s['cpu_percent']    ?? 0,
+            'ram_usage'   => $s['mem_percent']    ?? 0,
+            'ram_total'   => $s['mem_total_mb']   ?? 0,
+            'disk_used'   => $s['disk_used_gb']   ?? 0,
+            'ssh_user'    => $ssh_user,
+            'ssh_pass'    => $ssh_pass,
+            'console_url' => $console_url,
         ];
     }
 
