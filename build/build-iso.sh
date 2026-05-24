@@ -196,7 +196,13 @@ deb http://security.debian.org/debian-security bookworm-security main contrib
 deb http://deb.debian.org/debian bookworm-backports main contrib
 APT
 
-apt-get update -qq
+apt-get update -qq || { echo "[ERROR] apt-get update başarısız — network/DNS kontrolü yap"; exit 1; }
+
+# ── ZORUNLU: xinit (startx sağlar) — hata olursa build dur ───────────────────
+apt-get install -y --no-install-recommends xinit || {
+    echo "[FATAL] xinit kurulamadı. 'startx' ISO'da olmayacak — build durduruluyor."
+    exit 1
+}
 
 # ── Minimal X11 (sadece gerekli olanlar — Proxmox gibi ağır DE yok) ───────────
 apt-get install -y -qq --no-install-recommends \
@@ -205,7 +211,6 @@ apt-get install -y -qq --no-install-recommends \
     xserver-xorg-video-all \
     xserver-xorg-input-all \
     x11-xserver-utils \
-    xinit \
     openbox \
     2>/dev/null || true
 
@@ -289,6 +294,23 @@ for mp in dev/pts dev sys proc run; do
     umount "$SQUASHFS_ROOT/$mp" 2>/dev/null || true
 done
 log "Chroot paketler OK"
+
+# ── Kritik dosya doğrulama ────────────────────────────────────────────────────
+step "Kritik dosya doğrulama"
+_missing=0
+for _f in \
+    "$SQUASHFS_ROOT/usr/bin/startx" \
+    "$SQUASHFS_ROOT/usr/bin/Xorg" \
+    "$SQUASHFS_ROOT/usr/bin/openbox"
+do
+    if [ ! -f "$_f" ]; then
+        warn "EKSİK: $_f"
+        _missing=1
+    else
+        log "OK: $_f"
+    fi
+done
+[ "$_missing" -eq 1 ] && err "Kritik binary eksik — build iptal. Chroot içinde paket kurulumu başarısız olmuş olabilir."
 
 # ── OXware Calamares Config ───────────────────────────────────────────────────
 step "OXware Calamares Konfigürasyonu"
@@ -420,6 +442,18 @@ GETTY
 cat > "$SQUASHFS_ROOT/root/.bash_profile" << 'BASHPROF'
 # OXware Installer: tty1'de otomatik X başlat
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ]; then
+    # startx binary kontrol — eksikse anlamlı hata ver
+    if ! command -v startx &>/dev/null; then
+        echo ""
+        echo "============================================"
+        echo "  HATA: startx bulunamadı (kod: 127)"
+        echo "  xinit paketi ISO'ya dahil edilmemiş."
+        echo "  Acil düzeltme için:"
+        echo "    apt-get install -y xinit"
+        echo "  Sonra: startx /opt/oxware-installer/oxware-start.sh"
+        echo "============================================"
+        exec bash
+    fi
     # exec kullanma — hata durumunda loglara bakabilmek için
     startx /opt/oxware-installer/oxware-start.sh -- :0 -nolisten tcp vt1 \
         2>/tmp/startx-error.log
