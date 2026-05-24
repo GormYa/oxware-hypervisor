@@ -382,6 +382,10 @@
     .form-hint{font-size:10px;color:var(--text-dim);margin-top:3px}
     input[type=text],input[type=password],input[type=number],input[type=email],select,textarea{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;outline:none;font-family:inherit}
     input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+    /* ── Dark dropdown (all select/option) ── */
+    select option{background:#0f1521;color:#e6edf3}
+    select option:checked,select option:hover{background:#1e3a5f;color:#60a5fa}
+    select{color-scheme:dark}
     /* ── Resource Sliders ── */
     .res-slider-wrap{display:flex;flex-direction:column;gap:8px}
     .res-slider-top{display:flex;align-items:baseline;justify-content:space-between}
@@ -4632,15 +4636,32 @@ systemctl enable --now qemu-guest-agent</pre>
 }
 .cvm-row input, .cvm-row select, .cvm-row textarea {
   width: 100%;
-  background: rgba(255,255,255,0.04);
+  background: #111827;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 6px;
-  color: var(--text, #e6edf3);
+  color: #e6edf3;
   padding: 7px 10px; font-size: 12px;
   transition: border-color 0.15s;
+  -webkit-appearance: none; appearance: none;
+}
+.cvm-row select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8590'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.cvm-row select option {
+  background: #111827;
+  color: #e6edf3;
+}
+.cvm-row select option:hover, .cvm-row select option:checked {
+  background: #1e3a5f;
+  color: #60a5fa;
 }
 .cvm-row input:focus, .cvm-row select:focus, .cvm-row textarea:focus {
   outline: none; border-color: rgba(61,130,240,0.6);
+  background: #151f30;
 }
 .cvm-row .hint { font-size: 10px; color: var(--text-muted, #7d8590); margin-top: 4px; }
 .cvm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -9791,11 +9812,17 @@ function _resSliderFill(el) {
   el.style.background = `linear-gradient(to right,var(--accent-lt) ${pct}%,var(--border2) ${pct}%)`;
 }
 function resSliderMem(v) {
-  v = Math.max(256, Math.min(parseInt(v) || 256, parseInt(document.getElementById('vm-mem').max)));
-  document.getElementById('vm-mem').value = v;
-  document.getElementById('vm-mem-input').value = v;
-  document.getElementById('vm-mem-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' GB' : '';
-  _resSliderFill(document.getElementById('vm-mem'));
+  const sl = document.getElementById('vm-mem');
+  if (!sl) return;
+  v = Math.max(256, Math.min(parseInt(v) || 256, parseInt(sl.max)));
+  sl.value = v;
+  const inp = document.getElementById('vm-mem-input');
+  if (inp) inp.value = v;
+  const sub = document.getElementById('vm-mem-sub');
+  if (sub) sub.textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' GB' : '';
+  _resSliderFill(sl);
+  // new modal display
+  cvmMemChange(v);
 }
 function resSliderMemInput(v, clamp) {
   v = parseInt(v) || 256;
@@ -9803,19 +9830,25 @@ function resSliderMemInput(v, clamp) {
   resSliderMem(v);
 }
 function resSliderDisk(v) {
-  v = Math.max(1, Math.min(parseInt(v) || 1, parseInt(document.getElementById('vm-disk').max)));
-  document.getElementById('vm-disk').value = v;
-  document.getElementById('vm-disk-input').value = v;
-  document.getElementById('vm-disk-sub').textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' TB' : '';
-  _resSliderFill(document.getElementById('vm-disk'));
+  const sl = document.getElementById('vm-disk');
+  if (!sl) return;
+  v = Math.max(1, Math.min(parseInt(v) || 1, parseInt(sl.max)));
+  sl.value = v;
+  const inp = document.getElementById('vm-disk-input');
+  if (inp) inp.value = v;
+  const sub = document.getElementById('vm-disk-sub');
+  if (sub) sub.textContent = v >= 1024 ? (v/1024 % 1 === 0 ? v/1024 : (v/1024).toFixed(1)) + ' TB' : '';
+  _resSliderFill(sl);
+  // new modal display
+  cvmDiskChange(v);
 }
 function resSliderDiskInput(v, clamp) {
   v = parseInt(v) || 1;
   resSliderDisk(v);
 }
 document.addEventListener('DOMContentLoaded', () => {
-  resSliderMem(document.getElementById('vm-mem').value);
-  resSliderDisk(document.getElementById('vm-disk').value);
+  if (document.getElementById('vm-mem'))  resSliderMem(document.getElementById('vm-mem').value);
+  if (document.getElementById('vm-disk')) resSliderDisk(document.getElementById('vm-disk').value);
 });
 
 async function createVM() {
