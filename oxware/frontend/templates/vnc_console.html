@@ -366,24 +366,88 @@ const _lockPoller = setInterval(() => {
   if (canvas) { clearInterval(_lockPoller); setupPointerLock(canvas); }
 }, 150);
 
-// ── Paste support (#36) ──────────────────────────────────────────────────────
-async function vncPaste() {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (_rfb && text) {
-      // noVNC: send clipboard text then key sequence to paste
-      _rfb.clipboardPasteFrom(text);
+// ── Paste support — sendKey() per char, avoids ClientCutText RFB disconnect ──
+// clipboardPasteFrom() sends ClientCutText which crashes QEMU VNC → disconnects.
+// Instead: open textarea modal, user pastes freely, then send char-by-char via sendKey().
+function vncPaste() {
+  const existing = document.getElementById("vnc-paste-modal");
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement("div");
+  overlay.id = "vnc-paste-modal";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center";
+
+  const box = document.createElement("div");
+  box.style.cssText = "background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 22px;width:400px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.7)";
+
+  const ttl = document.createElement("div");
+  ttl.textContent = "📋 VM'ye Yapıştır";
+  ttl.style.cssText = "font-size:14px;font-weight:700;color:#e6edf3;margin-bottom:5px";
+
+  const hint = document.createElement("div");
+  hint.textContent = "Ctrl+V ile yapıştırın → Gönder. İzin gerekmez, VNC bağlantısı kesilmez.";
+  hint.style.cssText = "font-size:11px;color:#8b949e;margin-bottom:10px";
+
+  const ta = document.createElement("textarea");
+  ta.placeholder = "Metni buraya yapıştırın…";
+  ta.style.cssText = "width:100%;height:85px;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 11px;color:#e6edf3;font-size:13px;font-family:monospace;resize:vertical;outline:none";
+  ta.addEventListener("focus", () => { ta.style.borderColor = "#1e88e5"; });
+  ta.addEventListener("blur",  () => { ta.style.borderColor = "#30363d"; });
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:10px";
+
+  const cBtn = document.createElement("button");
+  cBtn.textContent = "İptal";
+  cBtn.style.cssText = "padding:6px 14px;border-radius:6px;border:1px solid #30363d;background:transparent;color:#e6edf3;cursor:pointer;font-size:12px";
+  cBtn.onclick = () => overlay.remove();
+
+  const sBtn = document.createElement("button");
+  sBtn.textContent = "Gönder →";
+  sBtn.style.cssText = "padding:6px 16px;border-radius:6px;border:none;background:#1565c0;color:#fff;cursor:pointer;font-size:12px;font-weight:600";
+  sBtn.onclick = () => {
+    const text = ta.value;
+    overlay.remove();
+    if (text && _rfb && typeof _rfb.sendKey === "function") {
+      _sendKeysToRfb(_rfb, text);
     }
-  } catch(e) {
-    alert("Pano erişimi reddedildi. Tarayıcı izni gerekli (HTTPS + clipboard-read).");
-  }
+  };
+
+  ta.addEventListener("keydown", e => { if (e.ctrlKey && e.key === "Enter") sBtn.click(); });
+
+  row.append(cBtn, sBtn);
+  box.append(ttl, hint, ta, row);
+  overlay.append(box);
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  setTimeout(() => ta.focus(), 30);
 }
 
-// Ctrl+Shift+V → paste
-document.addEventListener("keydown", async (e) => {
-  if (e.ctrlKey && e.shiftKey && (e.key === 'V' || e.code === 'KeyV')) {
+function _sendKeysToRfb(rfb, text) {
+  // Send characters via X11 keysyms — does NOT trigger VNC disconnect
+  let i = 0;
+  function next() {
+    if (i >= text.length) return;
+    const ch = text[i++];
+    let ks;
+    if      (ch === "\n" || ch === "\r") { ks = 0xff0d; }
+    else if (ch === "\t")                { ks = 0xff09; }
+    else {
+      const c = ch.charCodeAt(0);
+      ks = (c >= 0x20 && c <= 0x7e) ? c : (0x1000000 | c);
+    }
+    rfb.sendKey(ks, "", true);
+    rfb.sendKey(ks, "", false);
+    setTimeout(next, 30);
+  }
+  next();
+}
+
+// Ctrl+Shift+V → paste modal
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && (e.key === "V" || e.code === "KeyV")) {
     e.preventDefault();
-    await vncPaste();
+    vncPaste();
   }
 });
 </script>
