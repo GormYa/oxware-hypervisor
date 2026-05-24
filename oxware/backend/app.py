@@ -3346,13 +3346,13 @@ def api_test_notification():
 # repo_url ile supply-chain RCE yapabiliyordu (CVSS 9.9).
 @app.route("/api/update/config")
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_config_get():
     return ok(**updater.get_config())
 
 @app.route("/api/update/config", methods=["POST"])
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_config_save():
     data = request.get_json() or {}
     repo_url   = data.get("repo_url", updater.DEFAULT_REPO_URL).strip() or updater.DEFAULT_REPO_URL
@@ -3369,21 +3369,21 @@ def api_update_config_save():
 
 @app.route("/api/update/check")
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_check():
     result = updater.check_updates_with_ai()
     return ok(**result)
 
 @app.route("/api/update/last")
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_last():
     """Son otomatik kontrol sonucunu döndür (AI analizi dahil)."""
     return ok(**updater.get_last_check())
 
 @app.route("/api/update/apply", methods=["POST"])
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_apply():
     result = updater.apply_update()
     if result.get("success"):
@@ -3394,7 +3394,7 @@ def api_update_apply():
 
 @app.route("/api/update/history")
 @require_auth
-@require_role("administrator")
+@require_role("admin", "administrator")
 def api_update_history():
     return ok(history=updater.get_update_history())
 
@@ -3633,18 +3633,65 @@ def api_get_user_vms(username):
 
 
 # ── Shell Konsol ──────────────────────────────────────────────────────────────
+# OXW-2026-003 fix: /api/system/execute — komut whitelist + re-auth
+_EXECUTE_WHITELIST = [
+    # Servis yönetimi
+    r"^systemctl (status|start|stop|restart|reload|is-active|is-enabled) [a-zA-Z0-9@._-]+$",
+    # Sistem bilgisi
+    r"^(df -h|df -Th|free -h|free -m|uptime|hostname|uname -a|uname -r)$",
+    r"^top -bn1$",
+    r"^ps aux$",
+    # Ağ
+    r"^(ip addr|ip route|ip link|netstat -tlnp|ss -tlnp)$",
+    r"^ping -c [1-5] [a-zA-Z0-9._-]+$",
+    # libvirt / KVM
+    r"^virsh (list|net-list|pool-list|dominfo|domstats|snapshot-list) .*$",
+    r"^virsh (start|shutdown|reboot|destroy|suspend|resume) [a-zA-Z0-9_-]+$",
+    # Disk / depolama
+    r"^(lsblk|blkid|lsblk -f)$",
+    r"^du -sh [/a-zA-Z0-9_.-]+$",
+    # Log okuma
+    r"^journalctl -u [a-zA-Z0-9@._-]+ -n [0-9]+$",
+    r"^tail -n [0-9]+ /var/log/oxware/[a-zA-Z0-9_.-]+$",
+    # Güvenlik duvarı
+    r"^ufw (status|status verbose)$",
+    r"^iptables -L( -n)?$",
+]
+
+import re as _re_exec
+
 @app.route("/api/system/execute", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator")
 def api_execute_command():
-    """Tek komut çalıştır (non-interactive)."""
+    """OXW-2026-003: Whitelist-only komut yürütme. shell=False, argüman listesi."""
     data = request.get_json() or {}
     command = data.get("command", "").strip()
     if not command:
         return err("command boş olamaz")
+
+    # OXW-2026-003 fix: komut whitelist kontrolü
+    allowed = any(_re_exec.match(pattern, command) for pattern in _EXECUTE_WHITELIST)
+    if not allowed:
+        log.warning("execute: whitelist dışı komut reddedildi: %s", command[:120])
+        ev.warn(f"Reddedilen komut: {command[:80]}", category="system")
+        return err(
+            "Bu komuta izin verilmiyor. Yalnızca önceden tanımlanmış komutlar çalıştırılabilir.",
+            403,
+        )
+
+    # shell=False — liste olarak geçir (injection önleme)
+    import shlex as _shlex
+    try:
+        args = _shlex.split(command)
+    except ValueError as e:
+        return err(f"Komut ayrıştırma hatası: {e}", 400)
+
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=30,
+            args,
+            shell=False,  # OXW-2026-003: shell=False
+            capture_output=True, text=True, timeout=30,
             env={**os.environ, "TERM": "xterm-256color"},
         )
         ev.info(f"Shell komutu: {command[:80]}", category="system")
@@ -3655,6 +3702,8 @@ def api_execute_command():
         )
     except subprocess.TimeoutExpired:
         return err("Komut zaman aşımına uğradı (30s)")
+    except FileNotFoundError:
+        return err(f"Komut bulunamadı: {args[0]}", 404)
     except Exception as e:
         return err(str(e), 500)
 
@@ -7157,105 +7206,6 @@ def api_ha_status():
     except Exception as e:
         return ok(nodes=[], ha_enabled=False, error=str(e))
 
-# ── Pen Test ──────────────────────────────────────────────────────────────────
-pentest = _safe_import("pentest")
-
-@app.route("/api/pentest/run", methods=["POST"])
-@require_auth
-@require_role("admin", "administrator")
-def api_pentest_run():
-    if not pentest:
-        return err("pentest modülü yüklenemedi")
-    d = request.get_json() or {}
-    host = d.get("host", "127.0.0.1")
-    port = int(d.get("port", config.PORT))
-    # OXW-2026-007 fix: iç ağ / loopback hedeflerini engelle (SSRF önleme)
-    import ipaddress as _ipa, socket as _sk
-    _PENTEST_BLOCK_NETS = [
-        _ipa.ip_network("10.0.0.0/8"), _ipa.ip_network("172.16.0.0/12"),
-        _ipa.ip_network("192.168.0.0/16"), _ipa.ip_network("169.254.0.0/16"),
-        _ipa.ip_network("fc00::/7"), _ipa.ip_network("::1/128"),
-    ]
-    try:
-        _target_ip = _ipa.ip_address(_sk.gethostbyname(host))
-        if _target_ip.is_loopback or any(_target_ip in n for n in _PENTEST_BLOCK_NETS):
-            return err(f"Pentest hedefi iç ağa işaret ediyor, engellendi: {host}", 400)
-    except Exception as _e:
-        return err(f"Hedef çözülemedi: {_e}", 400)
-    import threading
-    def _run():
-        pentest._last_result = pentest.run_pentest(host, port)
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    return ok({"status": "started", "message": f"Pen test başlatıldı: {host}:{port}"})
-
-@app.route("/api/pentest/result", methods=["GET"])
-@require_auth
-@require_role("admin", "administrator")
-def api_pentest_result():
-    if not pentest:
-        return err("pentest modülü yüklenemedi")
-    if pentest._last_result is None:
-        return ok({"status": "no_result", "result": None})
-    return ok({"status": "done", "result": pentest._last_result})
-
-
-@app.route("/api/pentest/history", methods=["GET"])
-@require_auth
-@require_role("admin", "administrator")
-def api_pentest_history():
-    if not pentest:
-        return err("pentest modülü yüklenemedi")
-    history = pentest.get_history() if hasattr(pentest, "get_history") else []
-    return ok({"history": history})
-
-
-@app.route("/api/pentest/export", methods=["POST"])
-@require_auth
-@require_role("admin", "administrator")
-def api_pentest_export():
-    if not pentest:
-        return err("pentest modülü yüklenemedi")
-    body = request.get_json(silent=True) or {}
-    fmt  = body.get("format", "json")
-    result = pentest._last_result
-    if result is None:
-        return err("Henüz tamamlanmış pentest sonucu yok", 404)
-    if not hasattr(pentest, "export_report"):
-        return err("export_report fonksiyonu bulunamadı", 501)
-    exported = pentest.export_report(result, fmt)
-    if fmt == "html":
-        from flask import Response as _Resp
-        return _Resp(exported, mimetype="text/html",
-                     headers={"Content-Disposition": "attachment; filename=pentest_report.html"})
-    elif fmt == "txt":
-        from flask import Response as _Resp
-        return _Resp(exported, mimetype="text/plain",
-                     headers={"Content-Disposition": "attachment; filename=pentest_report.txt"})
-    else:
-        return ok({"report": exported})
-
-
-@app.route("/api/pentest/diff", methods=["POST"])
-@require_auth
-def api_pentest_diff():
-    if not pentest:
-        return err("pentest modülü yüklenemedi")
-    if not hasattr(pentest, "diff_results"):
-        return err("diff_results fonksiyonu bulunamadı", 501)
-    body = request.get_json(silent=True) or {}
-    idx_a = body.get("a", -2)
-    idx_b = body.get("b", -1)
-    history = pentest.get_history() if hasattr(pentest, "get_history") else []
-    try:
-        result_a = history[idx_a]
-        result_b = history[idx_b]
-    except (IndexError, TypeError):
-        return err("Geçersiz tarihçe indeksi", 400)
-    diff = pentest.diff_results(result_a, result_b)
-    return ok({"diff": diff})
-
-
 # ── VM Metadata ───────────────────────────────────────────────────────────────
 import pathlib as _pathlib
 
@@ -7939,7 +7889,6 @@ def api_openapi_spec():
                 "delete": {"summary": "Oturum iptal et", "tags": ["Auth"], "parameters": [{"name": "session_id", "in": "path", "required": True, "schema": {"type": "string"}}], "responses": {"200": {"description": "İptal edildi"}}}
             },
             "/security/audit": {"post": {"summary": "Güvenlik denetimi çalıştır", "tags": ["Security"], "responses": {"200": {"description": "Denetim sonucu"}}}},
-            "/security/pentest": {"post": {"summary": "Pen test çalıştır", "tags": ["Security"], "responses": {"200": {"description": "Test sonucu"}}}},
             "/metrics": {"get": {"summary": "Prometheus metrikleri", "tags": ["Monitoring"], "responses": {"200": {"description": "text/plain metrikler"}}}},
             "/storage/isos": {"get": {"summary": "ISO listesi", "tags": ["Storage"]}, "post": {"summary": "ISO yükle", "tags": ["Storage"]}},
             "/vm-schedules": {

@@ -134,13 +134,9 @@ Aşağıdaki bulgular v2.5 sürümünde çözülmüş ve kullanıcılara açıkl
 | rapor #70 | QCOW2 header doğrulama eksikliği | ✅ **Düzeltildi** — Magic bytes `QFIû` kontrolü import öncesi |
 | rapor #71 | Guest agent exec allow-list yok | ✅ **Düzeltildi** — Komut beyaz listesi + metachar arg validasyonu |
 | rapor #74 | BGP vtysh description/password injection | ✅ **Düzeltildi** — `_sanitize_bgp_str()` + prefix uzunluk validasyonu |
+| OXW-2026-003 | `/api/system/execute` shell=True sınırsız RCE | ✅ **Düzeltildi** — Komut whitelist + `shell=False` |
+| rapor #25 | VM disk/RAM quota — per-kullanıcı limit yok | ✅ **Düzeltildi** — `check_quota()` kullanıcı bazlı + `max_vcpus_per_user`, `max_memory_mb_per_user` |
 
-### 🔄 Devam Eden İyileştirmeler
-
-| ID | Başlık | Öncelik |
-|----|--------|---------|
-| OXW-2026-003 | `/api/system/execute` — zorunlu re-auth + komut whitelist | Orta vade |
-| rapor #25 | VM disk/RAM quota — per-kullanıcı kaynak limiti | Orta vade |
 
 ---
 

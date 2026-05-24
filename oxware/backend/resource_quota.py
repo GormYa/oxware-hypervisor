@@ -181,7 +181,9 @@ def get_global_quota():
         data = _load()
         return data.get(GLOBAL_QUOTA_KEY, {
             "max_vms_per_user": 10,
+            "max_vcpus_per_user": 32,
             "max_total_vcpus": 64,
+            "max_memory_mb_per_user": 131072,
             "max_total_memory_gb": 256,
         })
     except Exception as exc:
@@ -215,7 +217,7 @@ def set_global_quota(max_vms_per_user=None, max_total_vcpus=None, max_total_memo
 
 def check_quota(username, vcpus, memory_mb):
     """
-    Yeni VM oluşturulmadan önce kaynak kontrolü yapar.
+    rapor #25 fix: Kullanıcı başına VM/vCPU/RAM kota kontrolü.
     Dönüş: (ok: bool, reason: str)
     """
     try:
@@ -226,10 +228,21 @@ def check_quota(username, vcpus, memory_mb):
         max_memory_gb = global_quota.get("max_total_memory_gb", 256)
         max_vms = global_quota.get("max_vms_per_user", 10)
 
-        # Mevcut toplam kullanım
-        total_vcpus = sum(q.get("max_vcpus") or 0 for q in all_quotas)
-        total_memory_mb = sum(q.get("max_memory_mb") or 0 for q in all_quotas)
-        total_memory_gb = total_memory_mb / 1024
+        # rapor #25: Kullanıcıya atanmış VM'ler üzerinden kota hesapla
+        try:
+            import user_manager as _um
+            user_vm_ids = set(_um.get_user_vms(username))
+        except Exception:
+            user_vm_ids = set()
+
+        user_quotas = [q for q in all_quotas if q.get("vm_id") in user_vm_ids]
+        user_vcpus   = sum(q.get("max_vcpus") or 0 for q in user_quotas)
+        user_mem_mb  = sum(q.get("max_memory_mb") or 0 for q in user_quotas)
+        user_vm_count = len(user_quotas)
+
+        # Sistem geneli kontrol
+        total_vcpus    = sum(q.get("max_vcpus") or 0 for q in all_quotas)
+        total_memory_gb = sum(q.get("max_memory_mb") or 0 for q in all_quotas) / 1024
 
         if total_vcpus + vcpus > max_vcpus:
             return False, (f"Toplam vCPU limiti aşılıyor: "
@@ -240,10 +253,22 @@ def check_quota(username, vcpus, memory_mb):
                            f"mevcut={total_memory_gb:.1f}GB, "
                            f"istenen={memory_mb/1024:.1f}GB, limit={max_memory_gb}GB")
 
-        # Kullanıcı VM sayısı (kullanıcı bazlı filtreleme gerekirse vm_name'e username eklenebilir)
-        # Şimdilik toplam VM sayısına bakalım
-        if len(all_quotas) >= max_vms:
-            return False, f"Maksimum VM sayısına ulaşıldı: {max_vms}"
+        # rapor #25: Kullanıcı başına VM sayısı kontrolü
+        if user_vm_count >= max_vms:
+            return False, (f"Kullanıcı '{username}' VM limitine ulaştı: "
+                           f"mevcut={user_vm_count}, limit={max_vms}")
+
+        # rapor #25: Kullanıcı başına vCPU kontrolü
+        user_max_vcpus = global_quota.get("max_vcpus_per_user", max_vcpus)
+        if user_vcpus + vcpus > user_max_vcpus:
+            return False, (f"Kullanıcı '{username}' vCPU limitini aşıyor: "
+                           f"mevcut={user_vcpus}, istenen={vcpus}, limit={user_max_vcpus}")
+
+        # rapor #25: Kullanıcı başına RAM kontrolü (MB)
+        user_max_mem_mb = global_quota.get("max_memory_mb_per_user", max_memory_gb * 1024)
+        if user_mem_mb + memory_mb > user_max_mem_mb:
+            return False, (f"Kullanıcı '{username}' bellek limitini aşıyor: "
+                           f"mevcut={user_mem_mb}MB, istenen={memory_mb}MB, limit={user_max_mem_mb}MB")
 
         return True, "OK"
     except Exception as exc:
