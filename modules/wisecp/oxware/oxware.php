@@ -99,10 +99,14 @@ class Server_oxware
             return ['error' => 'Sunucu adresi tanımlı değil'];
         }
 
-        // SSL: system CA bundle kullan. Self-signed varsa sunucu tarafında gerçek cert ekle.
-        $ca_path = '';
-        foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $f) {
-            if (file_exists($f)) { $ca_path = $f; break; }
+        // SSL: $server['ssl_verify']='skip' → self-signed cert için doğrulama kapat
+        $ssl_opt  = strtolower(trim($server['ssl_verify'] ?? $server['ssl'] ?? ''));
+        $skip_ssl = in_array($ssl_opt, ['skip', '0', 'false', 'no'], true);
+        $ca_path  = '';
+        if (!$skip_ssl) {
+            foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $f) {
+                if (file_exists($f)) { $ca_path = $f; break; }
+            }
         }
 
         $ch = curl_init($base . '/api' . $endpoint);
@@ -115,8 +119,8 @@ class Server_oxware
                 'Content-Type: application/json',
                 'X-API-Key: ' . $key,
             ],
-            CURLOPT_SSL_VERIFYPEER  => true,
-            CURLOPT_SSL_VERIFYHOST  => 2,
+            CURLOPT_SSL_VERIFYPEER  => !$skip_ssl,
+            CURLOPT_SSL_VERIFYHOST  => $skip_ssl ? 0 : 2,
         ];
         if ($ca_path) {
             $curl_opts[CURLOPT_CAINFO] = $ca_path;
@@ -392,17 +396,24 @@ class Server_oxware
         }
 
         return [
-            'status'      => $s['status']        ?? 'unknown',
-            'ip'          => $s['ip']             ?? '',
-            'public_ip'   => $s['public_ip']      ?? '',
-            'internal_ip' => $s['internal_ip']    ?? '',
-            'cpu_usage'   => $s['cpu_percent']    ?? 0,
-            'ram_usage'   => $s['mem_percent']    ?? 0,
-            'ram_total'   => $s['mem_total_mb']   ?? 0,
-            'disk_used'   => $s['disk_used_gb']   ?? 0,
-            'ssh_user'    => $ssh_user,
-            'ssh_pass'    => $ssh_pass,
-            'console_url' => $console_url,
+            'status'        => $s['status']         ?? 'unknown',
+            'name'          => $s['name']            ?? '',
+            'ip'            => $s['ip']              ?? '',
+            'public_ip'     => $s['public_ip']       ?? '',
+            'internal_ip'   => $s['internal_ip']     ?? '',
+            'vcpus'         => $s['vcpus']           ?? 0,
+            'mem_total_mb'  => $s['mem_total_mb']    ?? 0,
+            'disk_total_gb' => $s['disk_total_gb']   ?? 0,
+            'disk_used_gb'  => $s['disk_used_gb']    ?? 0,
+            'cpu_usage'     => $s['cpu_percent']     ?? 0,
+            'ram_usage'     => $s['mem_percent']     ?? 0,
+            'ram_total'     => $s['mem_total_mb']    ?? 0,
+            'disk_used'     => $s['disk_used_gb']    ?? 0,
+            'os_type'       => $s['os_type']         ?? '',
+            'hostname'      => $s['hostname']        ?? '',
+            'ssh_user'      => $ssh_user,
+            'ssh_pass'      => $ssh_pass,
+            'console_url'   => $console_url,
         ];
     }
 

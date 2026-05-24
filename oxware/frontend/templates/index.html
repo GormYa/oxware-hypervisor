@@ -14214,12 +14214,16 @@ function openImportOvaModal() {
 }
 async function _fillImportNetworkSelect(sel) {
   try {
-    const d = await api('/networks');
-    const nets = (d.networks || []);
-    sel.innerHTML = '<option value="default">default (NAT)</option>' +
-      nets.filter(n => n.active && n.name !== 'default')
-          .map(n => `<option value="${escHtml(n.name)}">${escHtml(n.name)} (${escHtml(n.forward_mode||n.mode||'nat')})</option>`)
-          .join('');
+    const d = await _api('/api/networks', 'GET');
+    const nets = (d.networks || []).filter(function(n) { return n.active && n.name !== 'default'; });
+    // Remove all options except first default
+    while (sel.options.length > 1) sel.remove(1);
+    nets.forEach(function(n) {
+      const opt = document.createElement('option');
+      opt.value = n.name;
+      opt.textContent = n.name + ' (' + (n.forward_mode || n.mode || 'nat') + ')';
+      sel.appendChild(opt);
+    });
   } catch(e) { /* keep default option */ }
 }
 

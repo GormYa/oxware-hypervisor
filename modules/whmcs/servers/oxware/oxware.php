@@ -69,6 +69,12 @@ function oxware_ConfigOptions()
             'Default'     => '',
             'Description' => 'Otomatik IP atama icin havuz adi (bos birakilirsa IP atanmaz)',
         ],
+        'SSL' => [
+            'Type'        => 'text',
+            'Size'        => 20,
+            'Default'     => '',
+            'Description' => 'SSL: bos=sistem CA (guvenli), "skip"=self-signed cert icin dogrulama kapat, ya da /path/to/ca.crt',
+        ],
     ];
 }
 
@@ -123,15 +129,19 @@ function _oxware_api($params, $method, $endpoint, $body = null)
     $base = rtrim($params['serverhostname'], '/');
     $key  = trim($params['serveraccesshash']);
 
-    // SSL: system CA bundle kullan. Self-signed varsa sunucu tarafında gerçek cert ekle.
-    $ca_bundle = $params['configoption5'] ?? '';  // opsiyonel custom CA path
-    $ca_path   = ($ca_bundle && file_exists($ca_bundle))
-        ? $ca_bundle
-        : (file_exists('/etc/ssl/certs/ca-certificates.crt')
-            ? '/etc/ssl/certs/ca-certificates.crt'
-            : (file_exists('/etc/pki/tls/certs/ca-bundle.crt')
-                ? '/etc/pki/tls/certs/ca-bundle.crt'
-                : ''));
+    // SSL: configoptions['SSL'] boş=sistem CA (güvenli), 'skip'=self-signed için kapat
+    $ssl_opt  = strtolower(trim($params['configoptions']['SSL'] ?? ''));
+    $skip_ssl = in_array($ssl_opt, ['skip', '0', 'false', 'no'], true);
+    $ca_path  = '';
+    if (!$skip_ssl) {
+        if ($ssl_opt && file_exists($ssl_opt)) {
+            $ca_path = $ssl_opt;  // özel CA bundle yolu
+        } else {
+            foreach (['/etc/ssl/certs/ca-certificates.crt', '/etc/pki/tls/certs/ca-bundle.crt'] as $f) {
+                if (file_exists($f)) { $ca_path = $f; break; }
+            }
+        }
+    }
 
     $ch = curl_init($base . '/api' . $endpoint);
     $headers = [
@@ -145,8 +155,8 @@ function _oxware_api($params, $method, $endpoint, $body = null)
         CURLOPT_CONNECTTIMEOUT  => 10,
         CURLOPT_CUSTOMREQUEST   => strtoupper($method),
         CURLOPT_HTTPHEADER      => $headers,
-        CURLOPT_SSL_VERIFYPEER  => true,
-        CURLOPT_SSL_VERIFYHOST  => 2,
+        CURLOPT_SSL_VERIFYPEER  => !$skip_ssl,
+        CURLOPT_SSL_VERIFYHOST  => $skip_ssl ? 0 : 2,
     ];
     if ($ca_path) {
         $curl_opts[CURLOPT_CAINFO] = $ca_path;
@@ -424,21 +434,25 @@ function oxware_ClientArea($params)
     return [
         'templatefile' => 'clientarea',
         'vars'         => [
-            'vm_id'        => $vm_id,
-            'vm_name'      => $status['name']         ?? '---',
-            'vm_status'    => $status['status']       ?? 'unknown',
-            'vm_ip'        => $status['ip']           ?? '---',
-            'vm_public_ip' => $status['public_ip']    ?? '',
-            'vm_int_ip'    => $status['internal_ip']  ?? '',
-            'vm_cpu'       => $status['cpu_percent']  ?? 0,
-            'vm_ram'       => $status['mem_percent']  ?? 0,
-            'vm_ram_total' => $status['mem_total_mb'] ?? 0,
-            'vm_disk'      => $status['disk_used_gb'] ?? 0,
-            'ssh_user'     => $ssh_user,
-            'ssh_pass'     => $ssh_pass,
-            'console_url'  => $console_url,
-            'base_url'     => rtrim($params['serverhostname'], '/'),
-            'error'        => $status['error']        ?? '',
+            'vm_id'         => $vm_id,
+            'vm_name'       => $status['name']          ?? '---',
+            'vm_status'     => $status['status']        ?? 'unknown',
+            'vm_ip'         => $status['ip']            ?? '---',
+            'vm_public_ip'  => $status['public_ip']     ?? '',
+            'vm_int_ip'     => $status['internal_ip']   ?? '',
+            'vm_cpu'        => $status['cpu_percent']   ?? 0,
+            'vm_ram'        => $status['mem_percent']   ?? 0,
+            'vm_ram_total'  => $status['mem_total_mb']  ?? 0,
+            'vm_disk'       => $status['disk_used_gb']  ?? 0,
+            'vm_disk_total' => $status['disk_total_gb'] ?? (int)($params['configoptions']['Disk (GB)'] ?? 0),
+            'vm_vcpus'      => $status['vcpus']         ?? (int)($params['configoptions']['vCPU']      ?? 0),
+            'vm_os_type'    => $status['os_type']       ?? '',
+            'vm_hostname'   => $status['hostname']      ?? '',
+            'ssh_user'      => $ssh_user,
+            'ssh_pass'      => $ssh_pass,
+            'console_url'   => $console_url,
+            'base_url'      => rtrim($params['serverhostname'], '/'),
+            'error'         => $status['error']         ?? '',
         ],
     ];
 }

@@ -105,12 +105,30 @@
     </div>
     <div class="oxw-card">
       <div class="oxw-card-label">Disk Kullanımı</div>
-      <div class="oxw-card-value">{$vm_disk} GB</div>
+      <div class="oxw-card-value">{$vm_disk} GB{if $vm_disk_total} / {$vm_disk_total} GB{/if}</div>
     </div>
     {if $vm_ram_total}
     <div class="oxw-card">
       <div class="oxw-card-label">Toplam RAM</div>
       <div class="oxw-card-value">{$vm_ram_total} MB</div>
+    </div>
+    {/if}
+    {if $vm_vcpus}
+    <div class="oxw-card">
+      <div class="oxw-card-label">vCPU</div>
+      <div class="oxw-card-value">{$vm_vcpus} çekirdek</div>
+    </div>
+    {/if}
+    {if $vm_os_type}
+    <div class="oxw-card">
+      <div class="oxw-card-label">İşletim Sistemi</div>
+      <div class="oxw-card-value">{if $vm_os_type == 'windows'}🪟 Windows{elseif $vm_os_type == 'linux'}🐧 Linux{else}{$vm_os_type}{/if}</div>
+    </div>
+    {/if}
+    {if $vm_hostname}
+    <div class="oxw-card">
+      <div class="oxw-card-label">Hostname</div>
+      <div class="oxw-card-value" style="font-size:13px">{$vm_hostname}</div>
     </div>
     {/if}
   </div>
