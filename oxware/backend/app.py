@@ -635,7 +635,7 @@ _NOVNC_TOKEN_TTL = 300       # 5 minutes
 # OXW-2026-008 fix: VNC WebSocket one-time token store
 # JWT sorgu dizesinde taşınmaz — tek kullanımlık kısa ömürlü token
 _vnc_one_time_tokens: dict = {}  # {token: {"vm_id": str, "username": str, "role": str, "expires": float, "used": bool}}
-_vnc_token_lock = _threading.Lock()
+_vnc_token_lock = threading.Lock()
 _VNC_TOKEN_TTL  = 60  # 60 saniye — yalnızca bağlantı kurulumunda kullanılır
 
 def _vnc_token_cleanup_worker():
@@ -651,7 +651,7 @@ def _vnc_token_cleanup_worker():
         except Exception:
             pass
 
-_threading.Thread(target=_vnc_token_cleanup_worker, daemon=True, name="vnc-token-cleanup").start()
+threading.Thread(target=_vnc_token_cleanup_worker, daemon=True, name="vnc-token-cleanup").start()
 
 
 def _novnc_clean():
