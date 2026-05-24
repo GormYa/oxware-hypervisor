@@ -231,9 +231,24 @@ def _parse_disk_info(xml_str):
                 _cap_gb = 0.0
                 try:
                     if _fpath and os.path.isfile(_fpath):
-                        _cap_gb = round(os.path.getsize(_fpath) / (1024 ** 3), 2)
+                        # Use qemu-img virtual-size (what guest sees), NOT os.path.getsize
+                        # which returns sparse/compressed actual size for qcow2 thin disks.
+                        _qi = subprocess.run(
+                            ["qemu-img", "info", "--output=json", _fpath],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if _qi.returncode == 0:
+                            _virt = json.loads(_qi.stdout).get("virtual-size", 0)
+                            if _virt > 0:
+                                _cap_gb = round(_virt / (1024 ** 3), 2)
+                        if _cap_gb == 0:
+                            # Fallback: raw file size
+                            _cap_gb = round(os.path.getsize(_fpath) / (1024 ** 3), 2)
                 except Exception:
-                    pass
+                    try:
+                        _cap_gb = round(os.path.getsize(_fpath) / (1024 ** 3), 2)
+                    except Exception:
+                        pass
                 bus = target.get("bus", "")
                 # Detect underlying host disk type
                 disk_type = _get_host_disk_type(_fpath) if _fpath else "unknown"
