@@ -12112,146 +12112,87 @@ def api_migration_esxi_import():
                     if conv.returncode != 0:
                         raise RuntimeError(f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
 
-                    # ── ESXi thin-disk ext4 fixup ─────────────────────────────────────
-                    # ESXi thin VMDKs have sparse inode-table blocks (never written
-                    # on ESXi → zeros after conversion → ext4 metadata_csum rejects
-                    # them → "UNEXPECTED INCONSISTENCY" → VM unbootable).
+                    # ── ESXi thin-disk ext4 fixup via guestfish ──────────────────────
+                    # Root cause: ESXi thin VMDK sparse blocks → zero inode tables →
+                    # ext4 metadata_csum + INODE_UNINIT flags → "iget: checksum invalid"
+                    # on KVM boot.
                     #
-                    # Fix: directly clear metadata_csum bit in ext4 superblock.
-                    # s_feature_ro_compat at superblock(1024) + field_offset(100) = 1124.
-                    # EXT4_FEATURE_RO_COMPAT_METADATA_CSUM = 0x400
-                    # EXT4_FEATURE_RO_COMPAT_ORPHAN_PRESENT = 0x10000
-                    #
-                    # Uses qemu-nbd to expose qcow2 as block device so host Python
-                    # can patch the superblock directly — no version-dependent tools.
-                    _esxi_vg_names: set = set()
+                    # Fix: guestfish isolated appliance activates guest LVM without
+                    # host VG name conflict, then patches every ext4 filesystem:
+                    #   1. Superblock: clear metadata_csum (0x400) + orphan_present (0x10000)
+                    #   2. GDT: clear INODE_UNINIT (0x1) + BLOCK_UNINIT (0x2) per block group
+                    #   3. bg_checksum: zero (no longer needed without metadata_csum)
                     try:
                         _import_job_update(j_id,
-                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: metadata_csum patch",
+                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: guestfish patch",
                                            percent=min(91, pct_conv + 5))
-                        import struct as _struct
-                        subprocess.run(["modprobe", "nbd", "max_part=8"],
-                                       capture_output=True, timeout=10)
-                        _nbd_dev, _nbd_idx = None, -1
-                        for _ni in range(16):
-                            if not _pathlib.Path(f"/sys/class/block/nbd{_ni}/pid").exists():
-                                _nbd_dev, _nbd_idx = f"/dev/nbd{_ni}", _ni
-                                break
-                        if not _nbd_dev:
-                            log.warning("ESXi ext4 fixup: free nbd device bulunamadı")
-                        else:
-                            try:
-                                subprocess.run(
-                                    ["qemu-nbd", "--connect", _nbd_dev, str(final_qcow2)],
-                                    capture_output=True, timeout=30)
-                                import time as _t2; _t2.sleep(1)
-                                # pvscan REQUIRED before pvs — without it LVM cache
-                                # doesn't know about PVs on the newly connected nbd device
-                                subprocess.run(
-                                    ["pvscan", "--cache", _nbd_dev],
-                                    capture_output=True, timeout=30)
-                                _t2.sleep(0.5)
-                                # Find VGs on THIS nbd device only — never touch host VGs
-                                _pvs_r = subprocess.run(
-                                    ["pvs", "--noheadings", "-o", "pv_name,vg_name"],
-                                    capture_output=True, text=True, timeout=30)
-                                for _pl in _pvs_r.stdout.splitlines():
-                                    _pp = _pl.strip().split()
-                                    if len(_pp) >= 2 and f"nbd{_nbd_idx}" in _pp[0]:
-                                        _esxi_vg_names.add(_pp[1])
-                                for _vgn in _esxi_vg_names:
-                                    subprocess.run(["vgchange", "-ay", _vgn],
-                                                   capture_output=True, timeout=30)
-                                _t2.sleep(0.5)
-                                # Collect: LV devices + raw nbd partitions
-                                _fix_devs = list(
-                                    _pathlib.Path("/dev").glob(f"nbd{_nbd_idx}p*"))
-                                for _vgn in _esxi_vg_names:
-                                    _lvs_r = subprocess.run(
-                                        ["lvs", "--noheadings", "-o", "lv_dm_path", _vgn],
-                                        capture_output=True, text=True, timeout=30)
-                                    for _lp in _lvs_r.stdout.splitlines():
-                                        _lp = _lp.strip()
-                                        if _lp:
-                                            _fix_devs.append(_pathlib.Path(_lp))
-                                _fixed: list = []
-                                for _dp in _fix_devs:
-                                    if not _dp.exists():
-                                        continue
-                                    _bt = subprocess.run(
-                                        ["blkid", "-o", "value", "-s", "TYPE", str(_dp)],
-                                        capture_output=True, text=True, timeout=10)
-                                    if "ext" not in _bt.stdout:
-                                        continue
-                                    try:
-                                        with open(str(_dp), "r+b") as _df:
-                                            # ── Superblock patch ─────────────────────────
-                                            _df.seek(1024)
-                                            _sb = bytearray(_df.read(1024))
-                                            # s_log_block_size at SB+24
-                                            _blksz = 1024 << _struct.unpack_from("<I", _sb, 24)[0]
-                                            # s_blocks_per_group at SB+32
-                                            _bpg = _struct.unpack_from("<I", _sb, 32)[0]
-                                            # s_blocks_count at SB+4 (lo) and SB+80 (hi)
-                                            _bclo = _struct.unpack_from("<I", _sb, 4)[0]
-                                            _bchi = _struct.unpack_from("<I", _sb, 80)[0]
-                                            _total_blk = _bclo | (_bchi << 32)
-                                            _num_bg = max(1, (_total_blk + _bpg - 1) // _bpg)
-                                            # s_feature_incompat at SB+96
-                                            _fincompat = _struct.unpack_from("<I", _sb, 96)[0]
-                                            _has64 = bool(_fincompat & 0x80)
-                                            # s_desc_size at SB+254 (only valid if 64bit)
-                                            _desc_sz = _struct.unpack_from("<H", _sb, 254)[0] if _has64 else 32
-                                            if _desc_sz < 32:
-                                                _desc_sz = 32
-                                            # s_feature_ro_compat at SB+100
-                                            _rv = _struct.unpack_from("<I", _sb, 100)[0]
-                                            _rv &= ~0x400    # EXT4_FEATURE_RO_COMPAT_METADATA_CSUM
-                                            _rv &= ~0x10000  # EXT4_FEATURE_RO_COMPAT_ORPHAN_PRESENT
-                                            _struct.pack_into("<I", _sb, 100, _rv)
-                                            _df.seek(1024)
-                                            _df.write(bytes(_sb))
-
-                                            # ── Block group descriptor patch ─────────────
-                                            # GDT at block 1 (blksz>1024) or block 2 (blksz==1024)
-                                            _gdt_blk = 2 if _blksz == 1024 else 1
-                                            _gdt_off = _gdt_blk * _blksz
-                                            for _bg in range(_num_bg):
-                                                _doff = _gdt_off + _bg * _desc_sz
-                                                _df.seek(_doff)
-                                                _desc = bytearray(_df.read(_desc_sz))
-                                                if len(_desc) < 20:
-                                                    continue
-                                                # bg_flags at descriptor+18 (uint16)
-                                                _bflags = _struct.unpack_from("<H", _desc, 18)[0]
-                                                if _bflags & 0x3:  # INODE_UNINIT|BLOCK_UNINIT
-                                                    _bflags &= ~0x3
-                                                    _struct.pack_into("<H", _desc, 18, _bflags)
-                                                    # bg_checksum at descriptor+30 — zero it
-                                                    # (metadata_csum cleared → no checksum needed)
-                                                    if _desc_sz >= 32:
-                                                        _struct.pack_into("<H", _desc, 30, 0)
-                                                    _df.seek(_doff)
-                                                    _df.write(bytes(_desc))
-                                            _df.flush()
-                                        _fixed.append(str(_dp))
-                                        log.info("ESXi ext4 fix: %s ro_compat=%#x blksz=%d ngroups=%d",
-                                                 _dp, _rv, _blksz, _num_bg)
-                                    except Exception as _pe:
-                                        log.warning("ESXi ext4 patch %s: %s", _dp, _pe)
-                                if _fixed:
-                                    ev.info(
-                                        f"ESXi ext4 fixup: {', '.join(_fixed)} → metadata_csum temizlendi",
-                                        category="vm")
-                                else:
-                                    log.info("ESXi ext4 fixup: ext4 partition bulunamadı")
-                            finally:
-                                for _vgn in _esxi_vg_names:
-                                    subprocess.run(["vgchange", "-an", _vgn],
-                                                   capture_output=True, timeout=30)
-                                subprocess.run(
-                                    ["qemu-nbd", "--disconnect", _nbd_dev],
-                                    capture_output=True, timeout=30)
+                        import base64 as _b64m
+                        # Python script runs INSIDE guestfish appliance (not host, not guest chroot)
+                        _GF_PY = (
+                            "import struct,subprocess,glob,sys,time\n"
+                            "def patch(dev):\n"
+                            " try:\n"
+                            "  with open(dev,'r+b') as f:\n"
+                            "   f.seek(1024); sb=bytearray(f.read(1024))\n"
+                            "   blksz=1024<<struct.unpack_from('<I',sb,24)[0]\n"
+                            "   bpg=struct.unpack_from('<I',sb,32)[0]\n"
+                            "   bclo=struct.unpack_from('<I',sb,4)[0]\n"
+                            "   bchi=struct.unpack_from('<I',sb,80)[0]\n"
+                            "   total=bclo|(bchi<<32)\n"
+                            "   ng=max(1,(total+bpg-1)//bpg)\n"
+                            "   fi=struct.unpack_from('<I',sb,96)[0]\n"
+                            "   ds=struct.unpack_from('<H',sb,254)[0] if fi&0x80 else 32\n"
+                            "   if ds<32: ds=32\n"
+                            "   rv=struct.unpack_from('<I',sb,100)[0]\n"
+                            "   if not(rv&0x400):\n"
+                            "    print('skip',dev,'no metadata_csum',flush=True); return\n"
+                            "   rv&=~0x400; rv&=~0x10000\n"
+                            "   struct.pack_into('<I',sb,100,rv)\n"
+                            "   f.seek(1024); f.write(bytes(sb))\n"
+                            "   gb=2 if blksz==1024 else 1\n"
+                            "   go=gb*blksz; fb=0\n"
+                            "   for bg in range(ng):\n"
+                            "    do=go+bg*ds; f.seek(do); d=bytearray(f.read(ds))\n"
+                            "    if len(d)<20: continue\n"
+                            "    fl=struct.unpack_from('<H',d,18)[0]\n"
+                            "    if fl&3:\n"
+                            "     fl&=~3; struct.pack_into('<H',d,18,fl)\n"
+                            "     if ds>=32: struct.pack_into('<H',d,30,0)\n"
+                            "     f.seek(do); f.write(bytes(d)); fb+=1\n"
+                            "   f.flush()\n"
+                            "  print('patched',dev,'ro=%#x'%rv,'blksz=%d'%blksz,'ng=%d'%ng,'fbg=%d'%fb,flush=True)\n"
+                            " except Exception as e: print('ERR',dev,e,file=sys.stderr,flush=True)\n"
+                            "subprocess.run(['vgchange','-ay'],capture_output=True,timeout=30)\n"
+                            "time.sleep(1)\n"
+                            "r=subprocess.run(['lvs','--noheadings','-o','lv_dm_path'],capture_output=True,text=True,timeout=30)\n"
+                            "done=[]\n"
+                            "for dev in r.stdout.splitlines():\n"
+                            " dev=dev.strip()\n"
+                            " if not dev: continue\n"
+                            " bt=subprocess.run(['blkid','-o','value','-s','TYPE',dev],capture_output=True,text=True,timeout=10)\n"
+                            " if 'ext' in bt.stdout: patch(dev); done.append(dev)\n"
+                            "for dev in sorted(glob.glob('/dev/sda*'))[1:]:\n"
+                            " if dev in done: continue\n"
+                            " bt=subprocess.run(['blkid','-o','value','-s','TYPE',dev],capture_output=True,text=True,timeout=10)\n"
+                            " if 'ext' in bt.stdout: patch(dev)\n"
+                        )
+                        _gf_b64 = _b64m.b64encode(_GF_PY.encode()).decode()
+                        # Pass script via base64 to avoid any shell escaping issues
+                        _gf_sh = f"printf '%s' '{_gf_b64}' | base64 -d | python3"
+                        _gf_r = subprocess.run(
+                            ["guestfish", "-a", str(final_qcow2),
+                             "--", "run", ":", "debug", "sh", _gf_sh],
+                            capture_output=True, text=True, timeout=600)
+                        log.info("guestfish ext4 fixup exit=%d stdout=%s stderr=%s",
+                                 _gf_r.returncode,
+                                 _gf_r.stdout[:500],
+                                 _gf_r.stderr[:200])
+                        if _gf_r.returncode == 0 and "patched" in _gf_r.stdout:
+                            ev.info(
+                                f"ESXi ext4 fixup: {_gf_r.stdout.strip()[:200]}",
+                                category="vm")
+                        elif _gf_r.returncode != 0:
+                            log.warning("guestfish ext4 fixup başarısız — VM boot etmeyebilir")
                     except Exception as _fx_err:
                         log.warning("ESXi ext4 fixup (non-critical): %s", _fx_err)
 
