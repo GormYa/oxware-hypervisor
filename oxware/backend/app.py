@@ -10992,6 +10992,515 @@ def api_ha_migrate():
         return err(str(e), 500)
 
 
+# ── Bulk Migration (Proxmox / ESXi → OXware) ─────────────────────────────────
+
+def _proxmox_request(px_host, px_port, px_token_id, px_token_secret,
+                     path, method="GET", body=None, verify_ssl=False, timeout=20):
+    """Proxmox REST API call with PVEAPIToken auth. Returns data field or raises."""
+    import urllib.request as _ureq, urllib.error as _uerr, urllib.parse as _up, ssl as _ssl, json as _pjson
+    url = f"https://{px_host}:{px_port}/api2/json{path}"
+    ctx = _ssl.create_default_context()
+    if not verify_ssl:
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
+    headers = {"Authorization": f"PVEAPIToken={px_token_id}={px_token_secret}"}
+    data_bytes = None
+    if body:
+        data_bytes = _up.urlencode(body).encode()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    req = _ureq.Request(url, data=data_bytes, headers=headers, method=method)
+    try:
+        with _ureq.urlopen(req, context=ctx, timeout=timeout) as resp:
+            return _pjson.loads(resp.read().decode()).get("data", {})
+    except _uerr.HTTPError as e:
+        raise RuntimeError(f"Proxmox API HTTP {e.code}: {e.read().decode()[:300]}")
+
+
+def _proxmox_get_disk_keys(cfg: dict) -> list:
+    """Return list of (disk_key, volid) tuples from Proxmox VM config dict."""
+    skip = {"cdrom", "none", "cloudinit"}
+    keys = []
+    for k, v in (cfg or {}).items():
+        if not k.startswith(("scsi", "virtio", "ide", "sata")):
+            continue
+        if not isinstance(v, str):
+            continue
+        if any(s in v for s in skip):
+            continue
+        volid = v.split(",")[0].strip()
+        if ":" in volid:
+            keys.append((k, volid))
+    return keys
+
+
+def _proxmox_ssh_export(ssh_host, ssh_port, ssh_user, ssh_password,
+                        vmid, disk_key, dest_path, job_id):
+    """SSH to Proxmox, export disk via 'qm disk export', SFTP download."""
+    import paramiko as _pmp
+    _import_job_update(job_id, step=f"Proxmox SSH: {ssh_host}", percent=10)
+    client = _pmp.SSHClient()
+    client.set_missing_host_key_policy(_pmp.AutoAddPolicy())
+    client.connect(ssh_host, port=ssh_port, username=ssh_user,
+                   password=ssh_password, timeout=30,
+                   look_for_keys=False, allow_agent=False)
+    try:
+        remote_tmp = f"/tmp/oxw_export_{vmid}_{disk_key}.qcow2"
+        cmd = f"qm disk export {vmid} {disk_key} {remote_tmp} --format qcow2"
+        _import_job_update(job_id, step=f"Disk export: vmid={vmid} {disk_key}", percent=15)
+        _, stdout, stderr = client.exec_command(cmd, timeout=7200)
+        exit_code = stdout.channel.recv_exit_status()
+        if exit_code != 0:
+            err_txt = stderr.read().decode(errors="replace")[:400]
+            raise RuntimeError(f"qm disk export hata (code={exit_code}): {err_txt}")
+        _import_job_update(job_id, step="Disk indirilıyor (SFTP)", percent=40)
+        sftp = client.open_sftp()
+        try:
+            remote_size = sftp.stat(remote_tmp).st_size or 1
+
+            def _prg(tx, tot):
+                pct = min(88, int(40 + 48 * tx / max(tot, 1)))
+                mb = round(tx / 1048576, 1)
+                tot_mb = round(tot / 1048576, 1)
+                _import_job_update(job_id, step=f"İndirilıyor: {mb}/{tot_mb} MB", percent=pct)
+
+            sftp.get(remote_tmp, str(dest_path), callback=_prg)
+            try:
+                sftp.remove(remote_tmp)
+            except Exception:
+                pass
+        finally:
+            sftp.close()
+    finally:
+        client.close()
+
+
+@app.route("/api/migration/proxmox/scan", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_proxmox_scan():
+    """Proxmox API ile node ve VM listesi döndür."""
+    d = request.get_json() or {}
+    px_host = d.get("host", "").strip()
+    px_port = int(d.get("port", 8006))
+    px_token_id = d.get("token_id", "").strip()
+    px_token_secret = d.get("token_secret", "").strip()
+    verify_ssl = bool(d.get("verify_ssl", False))
+    if not px_host or not px_token_id or not px_token_secret:
+        return err("host, token_id ve token_secret gerekli", 400)
+    try:
+        nodes_data = _proxmox_request(px_host, px_port, px_token_id, px_token_secret,
+                                      "/nodes", verify_ssl=verify_ssl) or []
+        vms = []
+        import re as _re_px
+        for node_info in nodes_data:
+            node = node_info.get("node", "")
+            if not node:
+                continue
+            try:
+                node_vms = _proxmox_request(
+                    px_host, px_port, px_token_id, px_token_secret,
+                    f"/nodes/{node}/qemu", verify_ssl=verify_ssl) or []
+                for vm in node_vms:
+                    vmid = vm.get("vmid")
+                    if not vmid:
+                        continue
+                    disk_gb = 0
+                    try:
+                        cfg = _proxmox_request(
+                            px_host, px_port, px_token_id, px_token_secret,
+                            f"/nodes/{node}/qemu/{vmid}/config",
+                            verify_ssl=verify_ssl) or {}
+                        for k, v in cfg.items():
+                            if k.startswith(("scsi", "virtio", "ide", "sata")) and isinstance(v, str):
+                                m = _re_px.search(r"size=(\d+)([GMTgmt]?)", v)
+                                if m:
+                                    sz = int(m.group(1))
+                                    unit = m.group(2).upper()
+                                    if unit in ("G", ""): disk_gb += sz
+                                    elif unit == "M": disk_gb += max(1, sz // 1024)
+                                    elif unit == "T": disk_gb += sz * 1024
+                    except Exception:
+                        pass
+                    vms.append({
+                        "vmid": vmid,
+                        "name": vm.get("name", f"vm-{vmid}"),
+                        "node": node,
+                        "status": vm.get("status", "unknown"),
+                        "vcpus": int(vm.get("cpus", 1)),
+                        "memory_mb": int((vm.get("maxmem") or 0) // (1024 * 1024)),
+                        "disk_gb": disk_gb,
+                    })
+            except Exception as _ne:
+                ev.warn(f"Proxmox node {node} listelenemedi: {_ne}", category="migration")
+        return ok(vms=vms, node_count=len(nodes_data))
+    except Exception as e:
+        return err(f"Proxmox bağlanamadı: {e}", 502)
+
+
+@app.route("/api/migration/proxmox/import", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_proxmox_import():
+    """Proxmox VM'lerini OXware'e toplu aktar."""
+    d = request.get_json() or {}
+    px_host = d.get("host", "").strip()
+    px_port = int(d.get("port", 8006))
+    px_token_id = d.get("token_id", "").strip()
+    px_token_secret = d.get("token_secret", "").strip()
+    verify_ssl = bool(d.get("verify_ssl", False))
+    ssh_host = d.get("ssh_host", "").strip() or px_host
+    ssh_port = int(d.get("ssh_port", 22))
+    ssh_user = d.get("ssh_user", "root").strip()
+    ssh_password = d.get("ssh_password", "").strip()
+    vms_req = d.get("vms", [])
+    network = (d.get("network") or "default").strip() or "default"
+    if not px_host or not px_token_id or not px_token_secret:
+        return err("host, token_id, token_secret gerekli", 400)
+    if not ssh_password:
+        return err("ssh_password gerekli (Proxmox node SSH erişimi için)", 400)
+    if not vms_req:
+        return err("vms listesi boş", 400)
+
+    import uuid as _uidpx
+    job_ids = []
+    _IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for vm_spec in vms_req[:20]:
+        vmid = vm_spec.get("vmid")
+        node = vm_spec.get("node", "")
+        vm_name = (vm_spec.get("name") or f"vm-{vmid}").replace(" ", "_")
+        if not vmid or not node:
+            continue
+        job_id = _uidpx.uuid4().hex[:8]
+        with _import_jobs_lock:
+            _import_jobs[job_id] = {
+                "id": job_id, "filename": f"proxmox-{vmid}",
+                "vm_name": vm_name, "source": "proxmox",
+                "status": "running", "step": "Başlıyor...",
+                "percent": 0, "started": time.time(),
+                "finished": None, "message": "",
+            }
+        job_ids.append(job_id)
+
+        def _run_px(j_id, j_vmid, j_node, j_vm_name):
+            try:
+                _import_job_update(j_id, step="Disk listesi alınıyor", percent=3)
+                cfg = _proxmox_request(
+                    px_host, px_port, px_token_id, px_token_secret,
+                    f"/nodes/{j_node}/qemu/{j_vmid}/config",
+                    verify_ssl=verify_ssl) or {}
+                disk_keys = _proxmox_get_disk_keys(cfg)
+                if not disk_keys:
+                    _import_job_update(j_id, status="error",
+                                       step="Hata: export edilebilir disk yok",
+                                       percent=0, finished=time.time())
+                    return
+                disk_key, _ = disk_keys[0]
+                vcpus = int(cfg.get("sockets", 1)) * int(cfg.get("cores", 1))
+                ram_mb = int(cfg.get("memory") or 2048)
+                os_type = "linux"
+                ostype_val = (cfg.get("ostype") or "").lower()
+                if any(x in ostype_val for x in ["win", "w10", "w11", "wxp", "w2k"]):
+                    os_type = "windows"
+                firmware = "efi" if (cfg.get("efidisk0") or
+                                     (cfg.get("bios", "") or "").lower() == "ovmf") else "bios"
+
+                dest_path = _IMPORT_DIR / f"px_{j_vmid}_{j_vm_name}.qcow2"
+                _proxmox_ssh_export(ssh_host, ssh_port, ssh_user, ssh_password,
+                                    j_vmid, disk_key, dest_path, j_id)
+
+                _import_job_update(j_id, step="libvirt'e kaydediliyor", percent=91)
+                import libvirt as _lv_px
+                _conn_px = _lv_px.open(config.LIBVIRT_URI)
+                final_name = j_vm_name
+                sfx = 0
+                try:
+                    while True:
+                        try:
+                            _conn_px.lookupByName(final_name)
+                            sfx += 1
+                            final_name = f"{j_vm_name}-{sfx}"
+                        except _lv_px.libvirtError:
+                            break
+                finally:
+                    _conn_px.close()
+
+                import shutil as _shpx
+                final_disk = _pathlib.Path("/var/lib/libvirt/images") / f"{final_name}.qcow2"
+                _shpx.move(str(dest_path), str(final_disk))
+                xml_px = _build_import_xml(final_name, final_disk, vcpus, ram_mb,
+                                           os_type, firmware, network)
+                import libvirt as _lv_px2
+                _conn_px2 = _lv_px2.open(config.LIBVIRT_URI)
+                try:
+                    _conn_px2.defineXML(xml_px)
+                finally:
+                    _conn_px2.close()
+
+                _import_job_update(j_id, vm_name=final_name, status="completed",
+                                   step=f"Tamamlandı: {final_name}", percent=100,
+                                   finished=time.time())
+                ev.info(f"Proxmox migration tamamlandı: {final_name} (vmid={j_vmid})",
+                        category="migration")
+            except Exception as ex:
+                _import_job_update(j_id, status="error",
+                                   step=f"Hata: {ex}", percent=0,
+                                   message=str(ex), finished=time.time())
+                ev.error(f"Proxmox migration hata vmid={j_vmid}: {ex}", category="migration")
+
+        threading.Thread(target=_run_px, args=(job_id, vmid, node, vm_name),
+                         daemon=True).start()
+
+    if not job_ids:
+        return err("Geçerli VM bulunamadı", 400)
+    ev.info(f"Proxmox bulk migration başlatıldı: {len(job_ids)} VM", category="migration")
+    return ok(job_ids=job_ids, started=len(job_ids))
+
+
+@app.route("/api/migration/esxi/scan", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_esxi_scan():
+    """ESXi SSH ile VM listesi döndür (vim-cmd vmsvc/getallvms)."""
+    d = request.get_json() or {}
+    host = d.get("host", "").strip()
+    port = int(d.get("port", 22))
+    user = d.get("username", "root").strip()
+    password = d.get("password", "").strip()
+    if not host or not password:
+        return err("host ve password gerekli", 400)
+    try:
+        import paramiko as _pmesxi
+        client = _pmesxi.SSHClient()
+        client.set_missing_host_key_policy(_pmesxi.AutoAddPolicy())
+        client.connect(host, port=port, username=user, password=password,
+                       timeout=20, look_for_keys=False, allow_agent=False)
+        try:
+            _, stdout, _ = client.exec_command("vim-cmd vmsvc/getallvms 2>/dev/null", timeout=30)
+            raw = stdout.read().decode(errors="replace")
+            vms = []
+            import re as _re_esxi
+            for line in raw.strip().splitlines():
+                parts = line.split(None, 5)
+                if len(parts) < 4:
+                    continue
+                try:
+                    vmid = int(parts[0])
+                except ValueError:
+                    continue
+                name = parts[1]
+                datastore = parts[2].strip("[]")
+                vmx_path = parts[3] if len(parts) > 3 else ""
+                guestid = parts[4] if len(parts) > 4 else ""
+                vmx_dir = "/vmfs/volumes/" + datastore + "/" + name
+                # Power state
+                _, ps_out, _ = client.exec_command(
+                    f"vim-cmd vmsvc/power.getstate {vmid} 2>/dev/null", timeout=8)
+                ps_text = ps_out.read().decode(errors="replace").lower()
+                status = "running" if "on" in ps_text else ("off" if "off" in ps_text else "unknown")
+                # Disk size estimate via du
+                _, du_out, _ = client.exec_command(
+                    f"du -sh '{vmx_dir}' 2>/dev/null | awk '{{print $1}}'", timeout=10)
+                du_text = du_out.read().decode(errors="replace").strip()
+                disk_gb = 0
+                m = _re_esxi.match(r"([\d.]+)([GMTgmt])", du_text)
+                if m:
+                    sz, unit = float(m.group(1)), m.group(2).upper()
+                    disk_gb = int(sz) if unit == "G" else (
+                        max(1, int(sz // 1024)) if unit == "M" else sz * 1024)
+                # OS type from guestid
+                gl = guestid.lower()
+                if any(x in gl for x in ["win", "w10", "w11"]):
+                    os_type = "windows"
+                elif any(x in gl for x in ["linux", "ubuntu", "centos", "rhel",
+                                            "fedora", "debian", "suse", "oracle"]):
+                    os_type = "linux"
+                else:
+                    os_type = _detect_os_from_name(name)
+                vms.append({
+                    "vmid": vmid, "name": name, "datastore": datastore,
+                    "vmx_path": vmx_path, "vmx_dir": vmx_dir,
+                    "status": status, "guestid": guestid,
+                    "os_type": os_type, "disk_gb": disk_gb,
+                })
+        finally:
+            client.close()
+        return ok(vms=vms)
+    except ImportError:
+        return err("paramiko kurulu değil: pip install paramiko", 500)
+    except Exception as e:
+        return err(f"ESXi SSH bağlantı hatası: {e}", 502)
+
+
+@app.route("/api/migration/esxi/import", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_esxi_import():
+    """ESXi VM'lerini OXware'e toplu aktar (SSH SFTP + qemu-img convert)."""
+    d = request.get_json() or {}
+    host = d.get("host", "").strip()
+    port = int(d.get("port", 22))
+    user = d.get("username", "root").strip()
+    password = d.get("password", "").strip()
+    vms_req = d.get("vms", [])
+    network = (d.get("network") or "default").strip() or "default"
+    if not host or not password or not vms_req:
+        return err("host, password ve vms gerekli", 400)
+
+    import uuid as _uidesxi
+    job_ids = []
+    _IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for vm_spec in vms_req[:20]:
+        vmid = vm_spec.get("vmid", "x")
+        vm_name = (vm_spec.get("name") or f"esxi-{vmid}").replace(" ", "_")
+        vmx_dir = vm_spec.get("vmx_dir", "")
+        os_type = vm_spec.get("os_type", "unknown")
+        job_id = _uidesxi.uuid4().hex[:8]
+        with _import_jobs_lock:
+            _import_jobs[job_id] = {
+                "id": job_id, "filename": f"esxi-{vmid}",
+                "vm_name": vm_name, "source": "esxi",
+                "status": "running", "step": "Başlıyor...",
+                "percent": 0, "started": time.time(),
+                "finished": None, "message": "",
+            }
+        job_ids.append(job_id)
+
+        def _run_esxi(j_id, j_vmid, j_vm_name, j_vmx_dir, j_os_type):
+            try:
+                import paramiko as _pme2
+                _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
+                client2 = _pme2.SSHClient()
+                client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
+                client2.connect(host, port=port, username=user, password=password,
+                                timeout=30, look_for_keys=False, allow_agent=False)
+                try:
+                    sftp2 = client2.open_sftp()
+                    try:
+                        _import_job_update(j_id, step="VMDK aranıyor", percent=8)
+                        try:
+                            dir_items = sftp2.listdir(j_vmx_dir)
+                        except Exception:
+                            dir_items = []
+                        vmdk_name = None
+                        for item in dir_items:
+                            il = item.lower()
+                            if (il.endswith(".vmdk") and
+                                    "-flat" not in il and
+                                    not _re_vmdk_extent.search(il)):
+                                if j_vm_name.lower() in il or vmdk_name is None:
+                                    vmdk_name = item
+                        if not vmdk_name:
+                            _import_job_update(j_id, status="error",
+                                               step="Hata: primary VMDK bulunamadı",
+                                               percent=0, finished=time.time())
+                            return
+                        remote_vmdk = j_vmx_dir.rstrip("/") + "/" + vmdk_name
+                        local_vmdk = _IMPORT_DIR / f"esxi_{j_vmid}_{j_vm_name}.vmdk"
+                        remote_size = sftp2.stat(remote_vmdk).st_size or 1
+                        sz_gb = round(remote_size / (1024 ** 3), 1)
+                        _import_job_update(j_id,
+                                           step=f"VMDK indiriliyor: {vmdk_name} ({sz_gb} GB)",
+                                           percent=10)
+
+                        def _prg_esxi(tx, tot):
+                            pct = min(75, int(10 + 65 * tx / max(tot, 1)))
+                            mb = round(tx / 1048576, 1)
+                            tot_mb = round(tot / 1048576, 1)
+                            _import_job_update(j_id,
+                                               step=f"İndirilıyor: {mb}/{tot_mb} MB",
+                                               percent=pct)
+
+                        sftp2.get(remote_vmdk, str(local_vmdk), callback=_prg_esxi)
+                    finally:
+                        sftp2.close()
+                finally:
+                    client2.close()
+
+                # qemu-img convert VMDK → qcow2
+                _import_job_update(j_id, step="qemu-img dönüştürülüyor...", percent=77)
+                import libvirt as _lv_esxi
+                _conn_esxi = _lv_esxi.open(config.LIBVIRT_URI)
+                final_name = j_vm_name
+                sfx = 0
+                try:
+                    while True:
+                        try:
+                            _conn_esxi.lookupByName(final_name)
+                            sfx += 1
+                            final_name = f"{j_vm_name}-{sfx}"
+                        except _lv_esxi.libvirtError:
+                            break
+                finally:
+                    _conn_esxi.close()
+
+                disk_path_esxi = _pathlib.Path("/var/lib/libvirt/images") / f"{final_name}.qcow2"
+                conv = subprocess.run(
+                    ["qemu-img", "convert", "-f", "vmdk", "-O", "qcow2",
+                     str(local_vmdk), str(disk_path_esxi)],
+                    capture_output=True, text=True, timeout=7200)
+                try:
+                    local_vmdk.unlink()
+                except Exception:
+                    pass
+                if conv.returncode != 0:
+                    raise RuntimeError(f"qemu-img: {conv.stderr[:300]}")
+
+                _import_job_update(j_id, step="libvirt'e kaydediliyor", percent=94)
+                xml_esxi = _build_import_xml(final_name, disk_path_esxi, 2, 2048,
+                                             j_os_type, "bios", network)
+                import libvirt as _lv_esxi2
+                _conn_esxi2 = _lv_esxi2.open(config.LIBVIRT_URI)
+                try:
+                    _conn_esxi2.defineXML(xml_esxi)
+                finally:
+                    _conn_esxi2.close()
+
+                _import_job_update(j_id, vm_name=final_name, status="completed",
+                                   step=f"Tamamlandı: {final_name}", percent=100,
+                                   finished=time.time())
+                ev.info(f"ESXi migration tamamlandı: {final_name} (vmid={j_vmid})",
+                        category="migration")
+            except Exception as ex:
+                _import_job_update(j_id, status="error",
+                                   step=f"Hata: {ex}", percent=0,
+                                   message=str(ex), finished=time.time())
+                ev.error(f"ESXi migration hata vmid={j_vmid}: {ex}", category="migration")
+
+        threading.Thread(target=_run_esxi,
+                         args=(job_id, vmid, vm_name, vmx_dir, os_type),
+                         daemon=True).start()
+
+    if not job_ids:
+        return err("Geçerli VM bulunamadı", 400)
+    ev.info(f"ESXi bulk migration başlatıldı: {len(job_ids)} VM", category="migration")
+    return ok(job_ids=job_ids, started=len(job_ids))
+
+
+@app.route("/api/migration/jobs", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_jobs_list():
+    """Tüm migration job'larını listele (Proxmox + ESXi + OVA)."""
+    with _import_jobs_lock:
+        all_jobs = [dict(j) for j in _import_jobs.values()]
+    all_jobs.sort(key=lambda x: x.get("started", 0), reverse=True)
+    return ok(jobs=all_jobs, count=len(all_jobs))
+
+
+@app.route("/api/migration/jobs/<job_id>", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_migration_job_get(job_id):
+    """Tek migration job durumu."""
+    with _import_jobs_lock:
+        job = _import_jobs.get(job_id)
+    if not job:
+        return err("Job bulunamadı", 404)
+    return ok(job=dict(job))
+
+
 # ── Auto SSL cert — runs at import time (works with systemd/gunicorn too) ──────
 if config.SSL_ENABLED:
     _ensure_ssl_cert(config.SSL_CERT, config.SSL_KEY)

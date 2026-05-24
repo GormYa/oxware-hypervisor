@@ -3922,6 +3922,7 @@
             <div class="sub-tab" onclick="cfgTab('resources')" id="cfg-tab-resources">🗂️ Kaynaklar</div>
             <div class="sub-tab" onclick="cfgTab('schedule')" id="cfg-tab-schedule">📅 Zamanlama</div>
             <div class="sub-tab" onclick="cfgTab('network')" id="cfg-tab-network">🔀 Ağ / Bağlantı</div>
+            <div class="sub-tab" onclick="cfgTab('migration')" id="cfg-tab-migration">🚀 Toplu Taşıma</div>
           </div>
 
           <!-- ── General pane ── -->
@@ -4095,6 +4096,115 @@
               <div id="sftp-file-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border2);border-radius:6px;background:var(--surface2)"></div>
             </div>
           </div>
+
+          </div><!-- /cfg-pane-network -->
+
+          <!-- ── Migration pane ── -->
+          <div id="cfg-pane-migration" style="display:none">
+
+          <!-- Source selector -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title">🚀 Toplu VM Taşıma — Proxmox / ESXi → OXware</div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+              Proxmox VE veya VMware ESXi üzerindeki sanal makineleri OXware'e toplu aktarın.
+              Disk dışa aktarımı SSH + SFTP üzerinden yapılır; qemu-img ile qcow2'ye dönüştürülür.
+            </p>
+            <!-- Source type tabs -->
+            <div style="display:flex;gap:6px;margin-bottom:16px">
+              <button id="mig-src-proxmox" class="btn" onclick="migSwitchSource('proxmox')"
+                style="background:#1e40af;border-color:#3b82f6;font-size:12px">🖥️ Proxmox VE</button>
+              <button id="mig-src-esxi" class="btn" onclick="migSwitchSource('esxi')"
+                style="font-size:12px;background:var(--surface2);border-color:var(--border2)">☁️ VMware ESXi</button>
+            </div>
+
+            <!-- Proxmox form -->
+            <div id="mig-form-proxmox">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                <div class="form-row" style="margin:0"><label style="font-size:11px">Proxmox Host/IP</label>
+                  <input id="mig-px-host" class="form-control" placeholder="192.168.1.100"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">API Port</label>
+                  <input id="mig-px-port" class="form-control" value="8006" style="width:80px"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">API Token ID</label>
+                  <input id="mig-px-token-id" class="form-control" placeholder="user@pam!mytoken"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">API Token Secret</label>
+                  <input id="mig-px-token-secret" type="password" class="form-control" placeholder="xxxxxxxx-xxxx-xxxx-xxxx"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Host (Node IP)</label>
+                  <input id="mig-px-ssh-host" class="form-control" placeholder="Boş → API host kullanılır"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Şifre (root)</label>
+                  <input id="mig-px-ssh-pass" type="password" class="form-control" placeholder="Proxmox node root şifresi"></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button class="btn sm" onclick="migProxmoxScan()">🔍 VM Listesini Tara</button>
+                <span id="mig-px-scan-status" style="font-size:11px;color:var(--text-muted)"></span>
+              </div>
+            </div>
+
+            <!-- ESXi form -->
+            <div id="mig-form-esxi" style="display:none">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                <div class="form-row" style="margin:0"><label style="font-size:11px">ESXi Host/IP</label>
+                  <input id="mig-esxi-host" class="form-control" placeholder="192.168.1.101"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">SSH Port</label>
+                  <input id="mig-esxi-port" class="form-control" value="22" style="width:80px"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">Kullanıcı</label>
+                  <input id="mig-esxi-user" class="form-control" value="root"></div>
+                <div class="form-row" style="margin:0"><label style="font-size:11px">Şifre</label>
+                  <input id="mig-esxi-pass" type="password" class="form-control" placeholder="ESXi root şifresi"></div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <button class="btn sm" onclick="migEsxiScan()">🔍 VM Listesini Tara</button>
+                <span id="mig-esxi-scan-status" style="font-size:11px;color:var(--text-muted)"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- VM list + import -->
+          <div class="card" style="margin-bottom:14px" id="mig-vm-list-card" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+              <div class="card-title" style="margin:0">📋 Bulunan VM'ler
+                <span id="mig-vm-count" style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:8px"></span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <label style="font-size:11px;color:var(--text-muted)">Hedef Ağ:</label>
+                <select id="mig-network" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px"
+                  onfocus="if(!this.options.length||this.options[0].value==='default')_fillImportNetworkSelect(this)">
+                  <option value="default">default (NAT)</option>
+                </select>
+                <button class="btn sm" onclick="migSelectAll()">☑ Tümünü Seç</button>
+                <button class="btn sm" style="background:#16a34a;border-color:#16a34a" onclick="migStartImport()">⬇ Seçilenleri Aktar</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:12px" id="mig-vm-table">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border2);color:var(--text-muted)">
+                    <th style="padding:6px 4px;text-align:left;width:28px"><input type="checkbox" id="mig-check-all" onchange="migToggleAll(this)"></th>
+                    <th style="padding:6px 8px;text-align:left">ID</th>
+                    <th style="padding:6px 8px;text-align:left">VM Adı</th>
+                    <th style="padding:6px 8px;text-align:left">Node/Datastore</th>
+                    <th style="padding:6px 8px;text-align:left">Durum</th>
+                    <th style="padding:6px 8px;text-align:right">CPU</th>
+                    <th style="padding:6px 8px;text-align:right">RAM</th>
+                    <th style="padding:6px 8px;text-align:right">Disk</th>
+                    <th style="padding:6px 8px;text-align:left">OS</th>
+                  </tr>
+                </thead>
+                <tbody id="mig-vm-tbody"></tbody>
+              </table>
+            </div>
+            <div id="mig-import-status" style="margin-top:10px;font-size:12px;color:var(--text-muted)"></div>
+          </div>
+
+          <!-- Jobs progress -->
+          <div class="card" id="mig-jobs-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div class="card-title" style="margin:0">📊 Aktarım İşleri</div>
+              <button class="btn sm" onclick="migRefreshJobs()">↻ Yenile</button>
+            </div>
+            <div id="mig-jobs-list" style="font-size:12px;color:var(--text-muted)">Henüz işlem başlatılmadı.</div>
+          </div>
+
+          </div><!-- /cfg-pane-migration -->
 
           </div><!-- /cfg-pane-network -->
         </div><!-- /page-tab-settings -->
@@ -8051,7 +8161,7 @@ async function loadVMDetail(vmId) {
 }
 
 // ── Settings Sub-Tab Switch ────────────────────────────────────────────────────
-const _cfgPanes = ['general','resources','schedule','network'];
+const _cfgPanes = ['general','resources','schedule','network','migration'];
 function cfgTab(name) {
   _cfgPanes.forEach(p => {
     const pane = document.getElementById(`cfg-pane-${p}`);
@@ -8060,9 +8170,10 @@ function cfgTab(name) {
     if (tab)  tab.classList.toggle('active', p === name);
   });
   // Lazy-load when switching to a pane
-  if (name === 'resources') { loadScalerPolicies(); loadQuotas(); loadResourcePools(); }
-  if (name === 'schedule')  loadVmSchedules();
-  if (name === 'network')   loadBgpSettings();
+  if (name === 'resources')  { loadScalerPolicies(); loadQuotas(); loadResourcePools(); }
+  if (name === 'schedule')   loadVmSchedules();
+  if (name === 'network')    loadBgpSettings();
+  if (name === 'migration')  migRefreshJobs();
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
@@ -13821,6 +13932,250 @@ async function openSpiceInfo(vmId, vmName) {
     }
   } catch(e) {
     document.getElementById('spice-info-content').innerHTML = `<div style="color:#f43f5e">Hata: ${escHtml(e.message||String(e))}</div>`;
+  }
+}
+
+// ── Bulk Migration (Proxmox / ESXi) ──────────────────────────────────────────
+let _migSource = 'proxmox';
+let _migVms = [];
+
+function migSwitchSource(src) {
+  _migSource = src;
+  document.getElementById('mig-form-proxmox').style.display = src === 'proxmox' ? '' : 'none';
+  document.getElementById('mig-form-esxi').style.display = src === 'esxi' ? '' : 'none';
+  const btnPx = document.getElementById('mig-src-proxmox');
+  const btnEx = document.getElementById('mig-src-esxi');
+  btnPx.style.background = src === 'proxmox' ? '#1e40af' : 'var(--surface2)';
+  btnPx.style.borderColor = src === 'proxmox' ? '#3b82f6' : 'var(--border2)';
+  btnEx.style.background = src === 'esxi' ? '#7c3aed' : 'var(--surface2)';
+  btnEx.style.borderColor = src === 'esxi' ? '#8b5cf6' : 'var(--border2)';
+  document.getElementById('mig-vm-list-card').style.display = 'none';
+  _migVms = [];
+}
+
+async function migProxmoxScan() {
+  const st = document.getElementById('mig-px-scan-status');
+  st.textContent = '⏳ Taranıyor...';
+  st.style.color = 'var(--text-muted)';
+  try {
+    const d = await _api('/api/migration/proxmox/scan', 'POST', {
+      host: document.getElementById('mig-px-host').value.trim(),
+      port: parseInt(document.getElementById('mig-px-port').value) || 8006,
+      token_id: document.getElementById('mig-px-token-id').value.trim(),
+      token_secret: document.getElementById('mig-px-token-secret').value.trim(),
+      verify_ssl: false
+    });
+    if (!d.vms) throw new Error(d.error || 'Tarama başarısız');
+    _migVms = d.vms.map(v => ({ ...v, _source: 'proxmox' }));
+    st.textContent = '✓ ' + d.vms.length + ' VM bulundu (' + d.node_count + ' node)';
+    st.style.color = '#22c55e';
+    migRenderVmList();
+  } catch(e) {
+    st.textContent = '✗ ' + (e.message || String(e));
+    st.style.color = '#f43f5e';
+  }
+}
+
+async function migEsxiScan() {
+  const st = document.getElementById('mig-esxi-scan-status');
+  st.textContent = '⏳ Taranıyor...';
+  st.style.color = 'var(--text-muted)';
+  try {
+    const d = await _api('/api/migration/esxi/scan', 'POST', {
+      host: document.getElementById('mig-esxi-host').value.trim(),
+      port: parseInt(document.getElementById('mig-esxi-port').value) || 22,
+      username: document.getElementById('mig-esxi-user').value.trim(),
+      password: document.getElementById('mig-esxi-pass').value
+    });
+    if (!d.vms) throw new Error(d.error || 'Tarama başarısız');
+    _migVms = d.vms.map(v => ({ ...v, _source: 'esxi' }));
+    st.textContent = '✓ ' + d.vms.length + ' VM bulundu';
+    st.style.color = '#22c55e';
+    migRenderVmList();
+  } catch(e) {
+    st.textContent = '✗ ' + (e.message || String(e));
+    st.style.color = '#f43f5e';
+  }
+}
+
+function _migMakeCell(text, style) {
+  const td = document.createElement('td');
+  td.style.cssText = style || 'padding:6px 8px';
+  td.textContent = text;
+  return td;
+}
+
+function migRenderVmList() {
+  const card = document.getElementById('mig-vm-list-card');
+  card.style.display = '';
+  document.getElementById('mig-vm-count').textContent = '(' + _migVms.length + ' VM)';
+  const tbody = document.getElementById('mig-vm-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  if (!_migVms.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9; td.style.cssText = 'padding:12px;text-align:center;color:var(--text-muted)';
+    td.textContent = 'VM bulunamadı'; tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  _migVms.forEach(function(vm, i) {
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border);cursor:pointer';
+    // checkbox
+    const tdCb = document.createElement('td'); tdCb.style.cssText = 'padding:6px 4px';
+    const cb = document.createElement('input'); cb.type = 'checkbox';
+    cb.dataset.idx = i; cb.className = 'mig-vm-check';
+    tdCb.appendChild(cb); tr.appendChild(tdCb);
+    tr.onclick = function(e) { if (e.target !== cb) cb.checked = !cb.checked; };
+    // vmid
+    const tdId = document.createElement('td');
+    tdId.style.cssText = 'padding:6px 8px;font-family:monospace;color:var(--accent-lt)';
+    tdId.textContent = vm.vmid; tr.appendChild(tdId);
+    // name
+    const tdNm = document.createElement('td');
+    tdNm.style.cssText = 'padding:6px 8px;font-weight:500;color:var(--text)';
+    tdNm.textContent = vm.name; tr.appendChild(tdNm);
+    // node/datastore
+    tr.appendChild(_migMakeCell(vm.node || vm.datastore || '-', 'padding:6px 8px;color:var(--text-muted);font-size:11px'));
+    // status
+    const tdSt = document.createElement('td'); tdSt.style.cssText = 'padding:6px 8px';
+    const stColor = vm.status === 'running' ? '#22c55e' : (vm.status === 'off' ? '#94a3b8' : '#f59e0b');
+    const stSpan = document.createElement('span');
+    stSpan.style.cssText = 'color:' + stColor + ';font-size:11px';
+    stSpan.textContent = '● ' + vm.status; tdSt.appendChild(stSpan); tr.appendChild(tdSt);
+    // cpu
+    tr.appendChild(_migMakeCell(vm.vcpus != null ? vm.vcpus + ' vCPU' : '-', 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
+    // ram
+    const ram = vm.memory_mb ? (vm.memory_mb >= 1024 ? (vm.memory_mb/1024).toFixed(1)+'G' : vm.memory_mb+'M') : '-';
+    tr.appendChild(_migMakeCell(ram, 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
+    // disk
+    tr.appendChild(_migMakeCell(vm.disk_gb ? vm.disk_gb + ' GB' : '-', 'padding:6px 8px;text-align:right;color:var(--text-muted)'));
+    // os
+    const osIcon = vm.os_type === 'windows' ? '🪟' : (vm.os_type === 'linux' ? '🐧' : '❓');
+    tr.appendChild(_migMakeCell(osIcon + ' ' + (vm.os_type || '?'), 'padding:6px 8px;font-size:12px'));
+    tbody.appendChild(tr);
+  });
+}
+
+function migSelectAll() {
+  document.querySelectorAll('.mig-vm-check').forEach(function(cb) { cb.checked = true; });
+  const all = document.getElementById('mig-check-all');
+  if (all) all.checked = true;
+}
+
+function migToggleAll(master) {
+  document.querySelectorAll('.mig-vm-check').forEach(function(cb) { cb.checked = master.checked; });
+}
+
+async function migStartImport() {
+  const selected = Array.from(document.querySelectorAll('.mig-vm-check:checked'))
+    .map(function(cb) { return _migVms[parseInt(cb.dataset.idx)]; })
+    .filter(Boolean);
+  if (!selected.length) { alert('En az bir VM seçin.'); return; }
+  const network = document.getElementById('mig-network').value || 'default';
+  const st = document.getElementById('mig-import-status');
+  st.textContent = '⏳ ' + selected.length + ' VM aktarımı başlatılıyor...';
+  st.style.color = 'var(--text-muted)';
+  try {
+    let d;
+    if (_migSource === 'proxmox') {
+      d = await _api('/api/migration/proxmox/import', 'POST', {
+        host: document.getElementById('mig-px-host').value.trim(),
+        port: parseInt(document.getElementById('mig-px-port').value) || 8006,
+        token_id: document.getElementById('mig-px-token-id').value.trim(),
+        token_secret: document.getElementById('mig-px-token-secret').value.trim(),
+        ssh_host: document.getElementById('mig-px-ssh-host').value.trim(),
+        ssh_password: document.getElementById('mig-px-ssh-pass').value,
+        network,
+        vms: selected.map(function(v) { return { vmid: v.vmid, node: v.node, name: v.name }; })
+      });
+    } else {
+      d = await _api('/api/migration/esxi/import', 'POST', {
+        host: document.getElementById('mig-esxi-host').value.trim(),
+        port: parseInt(document.getElementById('mig-esxi-port').value) || 22,
+        username: document.getElementById('mig-esxi-user').value.trim(),
+        password: document.getElementById('mig-esxi-pass').value,
+        network,
+        vms: selected.map(function(v) { return { vmid: v.vmid, name: v.name, vmx_dir: v.vmx_dir, os_type: v.os_type }; })
+      });
+    }
+    if (d.error) throw new Error(d.error);
+    st.textContent = '✓ ' + d.started + ' VM aktarımı başlatıldı. Job ID\'ler: ' + (d.job_ids||[]).join(', ');
+    st.style.color = '#22c55e';
+    setTimeout(migRefreshJobs, 1000);
+  } catch(e) {
+    st.textContent = '✗ Hata: ' + (e.message || String(e));
+    st.style.color = '#f43f5e';
+  }
+}
+
+function _migBuildJobEl(j) {
+  const pct = j.percent || 0;
+  const statusColor = j.status === 'completed' ? '#22c55e' :
+    (j.status === 'error' ? '#f43f5e' : (j.status === 'running' ? '#60a5fa' : '#f59e0b'));
+  const statusIcon = j.status === 'completed' ? '✓' :
+    (j.status === 'error' ? '✗' : (j.status === 'running' ? '⏳' : '⏸'));
+  const srcLabel = j.source === 'proxmox' ? '🖥️ Proxmox' : (j.source === 'esxi' ? '☁️ ESXi' : '📦 OVA');
+  const elapsed = j.finished ? Math.round(j.finished - j.started) + 's' :
+    (j.started ? Math.round(Date.now()/1000 - j.started) + 's' : '-');
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-bottom:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px';
+
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px';
+
+  const nameSpan = document.createElement('span');
+  nameSpan.style.cssText = 'color:' + statusColor + ';margin-right:6px;font-weight:600';
+  nameSpan.textContent = statusIcon + ' ' + (j.vm_name || j.filename);
+  const srcSpan = document.createElement('span');
+  srcSpan.style.cssText = 'font-size:10px;color:var(--text-muted);margin-right:6px';
+  srcSpan.textContent = srcLabel;
+  const idSpan = document.createElement('span');
+  idSpan.style.cssText = 'font-family:monospace;font-size:10px;color:var(--text-muted)';
+  idSpan.textContent = '#' + j.id;
+  const leftDiv = document.createElement('div');
+  leftDiv.appendChild(nameSpan); leftDiv.appendChild(srcSpan); leftDiv.appendChild(idSpan);
+  const elSpan = document.createElement('span');
+  elSpan.style.cssText = 'font-size:10px;color:var(--text-muted)';
+  elSpan.textContent = elapsed;
+  hdr.appendChild(leftDiv); hdr.appendChild(elSpan); wrap.appendChild(hdr);
+
+  const barWrap = document.createElement('div');
+  barWrap.style.cssText = 'height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:6px';
+  const barFill = document.createElement('div');
+  barFill.style.cssText = 'height:100%;width:' + pct + '%;background:' + statusColor + ';transition:width .4s;border-radius:3px';
+  barWrap.appendChild(barFill); wrap.appendChild(barWrap);
+
+  const stepEl = document.createElement('div');
+  stepEl.style.cssText = 'font-size:11px;color:var(--text-muted)';
+  stepEl.textContent = j.step || '';
+  wrap.appendChild(stepEl);
+  if (j.message) {
+    const msgEl = document.createElement('div');
+    msgEl.style.cssText = 'font-size:11px;color:#f43f5e;margin-top:2px';
+    msgEl.textContent = j.message;
+    wrap.appendChild(msgEl);
+  }
+  return wrap;
+}
+
+async function migRefreshJobs() {
+  const el = document.getElementById('mig-jobs-list');
+  try {
+    const d = await _api('/api/migration/jobs', 'GET');
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (!d.jobs || !d.jobs.length) {
+      el.textContent = 'Henüz işlem başlatılmadı.';
+      el.style.color = 'var(--text-muted)';
+      return;
+    }
+    d.jobs.forEach(function(j) { el.appendChild(_migBuildJobEl(j)); });
+    if (d.jobs.some(function(j) { return j.status === 'running'; })) {
+      setTimeout(migRefreshJobs, 3000);
+    }
+  } catch(e) {
+    el.textContent = 'Yüklenemedi: ' + (e.message || String(e));
+    el.style.color = '#f43f5e';
   }
 }
 
