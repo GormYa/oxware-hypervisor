@@ -296,7 +296,7 @@ def _vnc_ws_middleware(environ, start_response):
                 log.warning("VNC WS: geçersiz/süresi dolmuş vnc_token vm=%s", vm_id)
         if not _vnc_caller:
             start_response("401 Unauthorized", [("Content-Type", "text/plain")])
-            return [b"VNC token geçersiz veya süresi dolmuş"]
+            return [b"VNC token invalid or expired"]
     elif token:
         # Legacy JWT path — geriye uyumluluk (yeni istemciler vnc_token kullanmalı)
         try:
@@ -8771,7 +8771,7 @@ def api_import_ova():
             src_size  = max(src_disk.stat().st_size, 1)
 
             # rapor #70 fix: QCOW2 magic header doğrulama
-            _MAGIC_QCOW2 = b"QFIû"
+            _MAGIC_QCOW2 = b"QFI\xfb"
             if src_disk.suffix.lower() == ".qcow2":
                 try:
                     with open(src_disk, "rb") as _mf:
