@@ -9231,6 +9231,28 @@ def _require_provision_key():
     return None
 
 
+@app.route("/api/provision/ping", methods=["GET"])
+def api_provision_ping():
+    """Billing panel baglantisini dogrula ve event log'a kaydet."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    client_ip  = request.headers.get("X-Forwarded-For", request.remote_addr or "?")
+    user_agent = request.headers.get("User-Agent", "")
+    ua_lower   = user_agent.lower()
+    if "whmcs" in ua_lower:
+        panel = "WHMCS"
+    elif "wisecp" in ua_lower:
+        panel = "WiseCP"
+    elif "hostbill" in ua_lower:
+        panel = "HostBill"
+    elif "blesta" in ua_lower:
+        panel = "Blesta"
+    else:
+        panel = "Billing Panel"
+    ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
+    return ok(status="ok", panel=panel, version="2.0.0", connected=True)
+
+
 @app.route("/api/provision/create", methods=["POST"])
 def api_provision_create():
     auth_err = _require_provision_key()

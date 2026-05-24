@@ -84,6 +84,17 @@ function _oxware_random_password($len = 20)
     return $pwd;
 }
 
+function _oxware_random_vm_name()
+{
+    // Rastgele, insan okunabilir VM ismi: ornek -> nova-wolf-a3f7b2
+    $adj  = ['fast','blue','dark','iron','nova','star','bold','pure','cool','free',
+             'red','gold','soft','keen','peak','wise','true','firm','vast','epic'];
+    $noun = ['wolf','hawk','lion','bear','fox','owl','ray','ore','arc','bay',
+             'ash','elm','ivy','jet','oak','rye','sky','vim','web','zen'];
+    $hex  = bin2hex(random_bytes(3)); // 6 karakter hex suffix
+    return $adj[random_int(0, 19)] . '-' . $noun[random_int(0, 19)] . '-' . $hex;
+}
+
 // ── Admin buton listesi ───────────────────────────────────────────────────────
 
 function oxware_AdminCustomButtonArray()
@@ -177,8 +188,7 @@ function oxware_CreateAccount($params)
 {
     $cfg    = $params['configoptions'];
     $svcid  = $params['serviceid'];
-    $domain = preg_replace('/[^a-z0-9\-]/', '', strtolower($params['domain'] ?? 'vm'));
-    $name   = 'vm-' . $svcid . '-' . ($domain ?: 'svc');
+    $name   = _oxware_random_vm_name();
 
     // Musteri icin rastgele VM sifresi olustur
     $vm_password = _oxware_random_password();
@@ -363,7 +373,8 @@ function oxware_RebootVM($params)
 
 function oxware_TestConnection($params)
 {
-    $result = _oxware_api($params, 'GET', '/system/stats');
+    // /provision/ping: API key dogrular + OXware event log'a WHMCS baglantisi kaydeder
+    $result = _oxware_api($params, 'GET', '/provision/ping');
 
     if (!empty($result['error'])) {
         return [

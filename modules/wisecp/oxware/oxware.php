@@ -74,6 +74,17 @@ class Server_oxware
         return $pwd;
     }
 
+    private static function randomVmName()
+    {
+        // Rastgele insan okunabilir VM ismi: ornek -> nova-wolf-a3f7b2
+        $adj  = ['fast','blue','dark','iron','nova','star','bold','pure','cool','free',
+                 'red','gold','soft','keen','peak','wise','true','firm','vast','epic'];
+        $noun = ['wolf','hawk','lion','bear','fox','owl','ray','ore','arc','bay',
+                 'ash','elm','ivy','jet','oak','rye','sky','vim','web','zen'];
+        $hex  = bin2hex(random_bytes(3));
+        return $adj[random_int(0,19)] . '-' . $noun[random_int(0,19)] . '-' . $hex;
+    }
+
     // ── Yardımcı: OXware REST API ─────────────────────────────────────────────
 
     private static function api($server, $method, $endpoint, $body = null)
@@ -147,9 +158,7 @@ class Server_oxware
 
     public static function create($package, $account, $server)
     {
-        $acct_id = $account['id'] ?? rand(10000, 99999);
-        $domain  = preg_replace('/[^a-z0-9\-]/', '', strtolower($account['domain'] ?? 'vm'));
-        $name    = 'vm-' . $acct_id . '-' . ($domain ?: 'vm');
+        $name = self::randomVmName();
 
         // Musteri icin rastgele VM sifresi olustur
         $vm_password = self::randomPassword();
@@ -365,10 +374,48 @@ class Server_oxware
 
     public static function testConnection($server)
     {
-        $result = self::api($server, 'GET', '/system/stats');
+        // /provision/ping: API key dogrular + OXware event log'a WiseCP baglantisi kaydeder
+        $result = self::api($server, 'GET', '/provision/ping');
         if (!empty($result['error'])) {
             throw new Exception($result['error']);
         }
         return true;
+    }
+
+    // ── Musteri Paneli HTML Gorunumu ──────────────────────────────────────────
+
+    public static function clientarea($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) {
+            return '<div style="color:#ef4444;padding:16px;">VM henuz olusturulmadi.</div>';
+        }
+
+        $data = self::info($package, $account, $server);
+
+        $views_path = __DIR__ . '/views/client.php';
+        if (file_exists($views_path)) {
+            ob_start();
+            include $views_path;
+            return ob_get_clean();
+        }
+
+        // Fallback: views dosyasi yoksa basit HTML
+        $ip     = htmlspecialchars($data['ip']       ?? '---');
+        $user   = htmlspecialchars($data['ssh_user'] ?? 'root');
+        $pass   = htmlspecialchars($data['ssh_pass'] ?? '');
+        $status = htmlspecialchars($data['status']   ?? 'unknown');
+        $con    = htmlspecialchars($data['console_url'] ?? '');
+
+        $html  = "<div style='background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:16px;color:#e0e0e0;font-family:monospace'>";
+        $html .= "<p><strong>Durum:</strong> $status</p>";
+        $html .= "<p><strong>IP:</strong> $ip</p>";
+        $html .= "<p><strong>Kullanici:</strong> $user</p>";
+        $html .= "<p><strong>Sifre:</strong> <span style='filter:blur(4px)' onmouseover=\"this.style.filter=''\" onmouseout=\"this.style.filter='blur(4px)'\">$pass</span></p>";
+        if ($con) {
+            $html .= "<p><a href='$con' target='_blank' style='color:#6366f1'>Web Konsolu Ac</a></p>";
+        }
+        $html .= "</div>";
+        return $html;
     }
 }

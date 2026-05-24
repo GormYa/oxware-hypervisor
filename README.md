@@ -11,7 +11,7 @@
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
-> **v2.5 (2026-05):** DiyoCP billing panel integration, machine-ID independent credentials + password reset file, unified monitoring page with performance history graphs, VGA video driver default for VMs, network stat cards UI, clean ISO library filtering, ISO installer black screen fixed (vga=791/modesetting/quiet splash removed), optimized 30s polling.
+> **v2.5 (2026-05):** WHMCS & WiseCP billing panel integrations (OS reinstall, auto IP, credentials, console token), machine-ID independent credentials + password reset file, unified monitoring page with performance history graphs, VGA video driver default for VMs, network stat cards UI, clean ISO library filtering, ISO installer black screen fixed (vga=791/modesetting/quiet splash removed), optimized 30s polling.
 
 ---
 
@@ -158,7 +158,6 @@
 - **LDAP / Active Directory** — SSO login, group-to-role mapping
 - **WiseCP** — provisioning module for hosting control panel automation
 - **WHMCS** — VM lifecycle hooks for billing integration
-- **DiyoCP** — Turkish hosting panel integration; full VM provisioning module (create, suspend, unsuspend, terminate, resize, connection test); download from **Settings → Integrations → DiyoCP**
 - **Terraform provider** — IaC-driven VM provisioning
 - **Nginx + Let's Encrypt** — manage reverse proxy and SSL certs from the UI
 - **MinIO / S3** — backup and ISO storage
@@ -770,7 +769,7 @@ sudo bash repair.sh --reset-password
 ### v2.5 — 2026-05
 
 **New features:**
-- **DiyoCP integration** — full PHP provisioning module for Turkish billing panel; supports create, suspend, unsuspend, terminate, resize, testConnection; downloadable from Settings → Integrations
+- **WHMCS & WiseCP v2.0** — OS reinstall, auto IP assignment, SSH credentials vault, noVNC console token; random VM name generation; connection events logged to OXware event log
 - **Machine-ID independent credentials** — admin username backed up to `/etc/oxware/.username` plaintext file; survives `machine-id` changes (kernel update, disk clone, VM migration); login never breaks silently
 - **Password reset file** — root places `/etc/oxware/.passwd_reset` (mode 600, owner root) with `USERNAME=` and `PASSWORD=`; applied at next service restart, file deleted automatically; group/world-readable files rejected
 - **Unified monitoring page** — system metrics, SMART disk health, HA status, IDS alerts, VM uptime history, cost estimate, and trend analysis merged into a single page; heavy sections (QoS, Trend, Migration) load on-demand only
