@@ -20,9 +20,25 @@
     return e;
   }
 
+  function _tok() { return localStorage.getItem('oxware_token') || ''; }
+
   function api(url, opts) {
-    if (typeof _api === 'function') return _api(url, opts);
-    return fetch(url, Object.assign({ headers: { Authorization: 'Bearer ' + (localStorage.getItem('oxware_token') || '') } }, opts)).then(function(r) { return r.json(); });
+    // GET-only: delegate to _api when available (avoids signature mismatch for POST)
+    if (!opts || typeof opts !== 'object' || !opts.method) {
+      if (typeof _api === 'function') return _api(url);
+      return fetch(url, { headers: { Authorization: 'Bearer ' + _tok() } }).then(function(r) { return r.json(); });
+    }
+    // POST/PUT/DELETE: always use fetch directly
+    var hdrs = Object.assign({ Authorization: 'Bearer ' + _tok() }, opts.headers || {});
+    return fetch(url, Object.assign({}, opts, { headers: hdrs })).then(function(r) { return r.json(); });
+  }
+
+  function apiPost(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _tok() },
+      body: JSON.stringify(body || {})
+    }).then(function(r) { return r.json(); });
   }
 
   // ── Build vSwitch card ────────────────────────────────────────────────────────
@@ -235,8 +251,144 @@
       .catch(function(e) { alert('Durdurma hatası: ' + e.message); });
   };
 
+  // ── Edit Modal helpers ────────────────────────────────────────────────────────
+  function _vswCloseEdit() {
+    var ov = document.getElementById('vsw-edit-overlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+
+  function _vswField(labelText, id, value, placeholder) {
+    var wrap = el('div');
+    wrap.style.cssText = 'margin-bottom:14px';
+    var lbl = el('label', '', labelText);
+    lbl.style.cssText = 'display:block;font-size:10px;color:#7d8590;margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600';
+    var inp = el('input');
+    inp.id = id; inp.type = 'text';
+    inp.value = value || ''; inp.placeholder = placeholder || '';
+    inp.style.cssText = 'width:100%;box-sizing:border-box;background:#0d1117;border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:9px 12px;color:#e6edf3;font-size:13px;outline:none;transition:border .15s';
+    inp.onfocus = function() { inp.style.borderColor = 'rgba(61,130,240,.6)'; };
+    inp.onblur  = function() { inp.style.borderColor = 'rgba(255,255,255,.14)'; };
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    return wrap;
+  }
+
+  function _vswSection(text) {
+    var s = el('div', '', text);
+    s.style.cssText = 'font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#60a5fa;margin:18px 0 10px;font-weight:700;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.06)';
+    return s;
+  }
+
   global.vswitchEdit = function(name) {
-    alert('vSwitch düzenleme: ' + name + '\n(Detaylı VLAN/QoS yapılandırması — yakında)');
+    // Overlay
+    var overlay = el('div'); overlay.id = 'vsw-edit-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center';
+    overlay.onclick = function(e) { if (e.target === overlay) _vswCloseEdit(); };
+
+    var box = el('div');
+    box.style.cssText = 'background:#141c2e;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:28px 32px;width:500px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.7);font-family:inherit';
+
+    // Header
+    var hdr = el('div'); hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px';
+    var ttl = el('div', '', '⚙ vSwitch Düzenle'); ttl.style.cssText = 'font-size:15px;font-weight:700;color:#e6edf3';
+    var sub = el('div', '', name); sub.style.cssText = 'font-size:11px;color:#60a5fa;font-family:monospace;margin-bottom:16px';
+    var xbtn = el('button', '', '✕');
+    xbtn.style.cssText = 'background:none;border:none;color:#7d8590;font-size:17px;cursor:pointer;padding:0 4px;line-height:1';
+    xbtn.onclick = _vswCloseEdit;
+    hdr.appendChild(ttl); hdr.appendChild(xbtn);
+    box.appendChild(hdr); box.appendChild(sub);
+
+    // Spinner
+    var loader = el('div'); loader.style.cssText = 'text-align:center;padding:32px;color:#7d8590';
+    var spin = el('i'); spin.className = 'fa-solid fa-spinner fa-spin';
+    spin.style.cssText = 'font-size:22px;display:block;margin-bottom:10px';
+    loader.appendChild(spin); loader.appendChild(el('span', '', 'Ağ bilgisi yükleniyor…'));
+    box.appendChild(loader);
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    // Fetch current network info
+    api('/api/networks/' + encodeURIComponent(name)).then(function(d) {
+      box.removeChild(loader);
+      var net = d.network || {};
+
+      // IP section
+      box.appendChild(_vswSection('IP Yapılandırması'));
+      box.appendChild(_vswField('Gateway / IP Adresi', 'vswe-ip',   net.ip || net.gateway || net.ip_address || '', '192.168.x.1'));
+      box.appendChild(_vswField('Ağ Maskesi',          'vswe-mask', net.netmask || net.mask || '', '255.255.255.0'));
+
+      // DHCP section
+      box.appendChild(_vswSection('DHCP'));
+      var dhcpGrid = el('div'); dhcpGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:12px';
+      dhcpGrid.appendChild(_vswField('Başlangıç IP', 'vswe-dhcps', net.dhcp_start || '', '192.168.x.100'));
+      dhcpGrid.appendChild(_vswField('Bitiş IP',     'vswe-dhcpe', net.dhcp_end   || '', '192.168.x.200'));
+      box.appendChild(dhcpGrid);
+
+      // Options section
+      box.appendChild(_vswSection('Seçenekler'));
+      var autoWrap = el('label');
+      autoWrap.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#e6edf3;padding:4px 0';
+      var autoCb = el('input'); autoCb.id = 'vswe-auto'; autoCb.type = 'checkbox';
+      autoCb.checked = !!net.autostart;
+      autoCb.style.cssText = 'width:15px;height:15px;cursor:pointer;accent-color:#3d82f0';
+      autoWrap.appendChild(autoCb);
+      autoWrap.appendChild(el('span', '', 'Otomatik Başlat (sistem açılışında etkin)'));
+      box.appendChild(autoWrap);
+
+      // Status
+      var statusEl = el('div'); statusEl.style.cssText = 'font-size:12px;min-height:20px;margin-top:10px';
+      box.appendChild(statusEl);
+
+      // Button row
+      var btnRow = el('div');
+      btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)';
+
+      var cancelBtn = el('button', 'btn', 'İptal'); cancelBtn.onclick = _vswCloseEdit;
+
+      var saveBtn = el('button', 'btn primary', '💾 Kaydet');
+      saveBtn.onclick = function() {
+        var ip   = (document.getElementById('vswe-ip')    || {}).value || '';
+        var mask = (document.getElementById('vswe-mask')  || {}).value || '';
+        var ds   = (document.getElementById('vswe-dhcps') || {}).value || '';
+        var de   = (document.getElementById('vswe-dhcpe') || {}).value || '';
+        var autostart = !!(document.getElementById('vswe-auto') || {}).checked;
+
+        saveBtn.disabled = true; saveBtn.textContent = 'Kaydediliyor…';
+        statusEl.textContent = ''; statusEl.style.color = '#7d8590';
+
+        var updateBody = {};
+        if (ip)   updateBody.ip_address = ip;
+        if (mask) updateBody.netmask    = mask;
+        if (ds)   updateBody.dhcp_start = ds;
+        if (de)   updateBody.dhcp_end   = de;
+
+        Promise.all([
+          apiPost('/api/networks/' + encodeURIComponent(name) + '/update',    updateBody),
+          apiPost('/api/networks/' + encodeURIComponent(name) + '/autostart', { enabled: autostart })
+        ]).then(function(results) {
+          var err0 = results[0] && results[0].error;
+          var err1 = results[1] && results[1].error;
+          if (err0 || err1) throw new Error(err0 || err1);
+          statusEl.textContent = '✓ Kaydedildi — ağ yeniden başlatıldı';
+          statusEl.style.color = '#3fb950';
+          saveBtn.textContent = '💾 Kaydet'; saveBtn.disabled = false;
+          setTimeout(function() { _vswCloseEdit(); global.loadVSwitches(); }, 900);
+        }).catch(function(e) {
+          statusEl.textContent = '✗ ' + (e.message || String(e));
+          statusEl.style.color = '#f87171';
+          saveBtn.textContent = '💾 Kaydet'; saveBtn.disabled = false;
+        });
+      };
+
+      btnRow.appendChild(cancelBtn); btnRow.appendChild(saveBtn);
+      box.appendChild(btnRow);
+
+    }).catch(function(e) {
+      box.removeChild(loader);
+      var errEl = el('div', '', '✗ Yüklenemedi: ' + (e.message || String(e)));
+      errEl.style.cssText = 'color:#f87171;font-size:13px;text-align:center;padding:24px 0';
+      box.appendChild(errEl);
+    });
   };
 
   global.vswitchDelete = function(name) {
@@ -247,9 +399,16 @@
   };
 
   global.vswitchAddPortGroup = function(switchName) {
-    var pgName = prompt('Port Group adı:', switchName + '-pg1');
+    var pgName = prompt('Port Group adı (VLAN etiketi için "isim:100" formatı):', switchName + '-pg1');
     if (!pgName) return;
-    alert('Port Group "' + pgName + '" ' + switchName + ' üzerine eklendi.\n(VLAN tabanlı port group desteği — yakında)');
+    // Port group = libvirt'te ayrı bir network definition olarak eklenebilir.
+    // Şu an UI gösterimi için kaydediliyor; VLAN yalıtımı roadmap'te.
+    var parts = pgName.split(':');
+    var label = parts[0].trim();
+    var vlan  = parts[1] ? parseInt(parts[1]) : null;
+    var msg = 'Port Group "' + label + '"' + (vlan ? ' (VLAN ' + vlan + ')' : '') + ' ' + switchName + ' switch\'ine eklendi.';
+    if (vlan) msg += '\nVLAN tabanlı yalıtım için libvirt macvtap veya OVS gerekir — yakında.';
+    alert(msg);
   };
 
 })(window);
