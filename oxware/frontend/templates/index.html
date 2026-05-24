@@ -1420,7 +1420,7 @@
                   </div>
                 </div>
 
-                <button class="btn primary" style="font-size:13px;padding:10px 28px;width:100%" onclick="_openSelectedConsole()">▶ Konsolu Aç</button>
+                <button class="btn primary" id="console-open-btn" style="font-size:13px;padding:10px 28px;width:100%" onclick="_openSelectedConsole()">▶ Konsolu Aç</button>
 
                 <!-- xterm.js inline terminal (hidden by default) -->
                 <div id="vm-xterm-wrap" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
@@ -8856,6 +8856,13 @@ function vdTab(name) {
   if (name === 'fw'      && currentVmId) loadVdFirewall(currentVmId);
   if (name === 'snap'    && currentVmId) _loadVdSnapshots(currentVmId);
   if (name === 'format'  && currentVmId) _loadFmtDiskOptions(currentVmId);
+  // Auto-open serial console preview when console tab is opened
+  if (name === 'console' && currentVmId) {
+    _selectConsoleType('xterm');
+    setTimeout(() => _openVmSerialConsole(currentVmId), 80);
+  }
+  // Disconnect serial when leaving console tab
+  if (name !== 'console') _vmSerialDisconnect();
 }
 
 // ── Live Metrics Polling ──────────────────────────────────────────────────────
@@ -10205,6 +10212,9 @@ function _selectConsoleType(type) {
   if (type !== 'xterm') { document.getElementById('vm-xterm-wrap').style.display = 'none'; }
   if (type !== 'spice') { document.getElementById('vm-spice-info').style.display = 'none'; }
   if (type === 'spice') { _loadSpiceInfo(currentVmId); }
+  // Show "Konsolu Aç" button only for noVNC/SPICE; xterm auto-connects
+  const openBtn = document.getElementById('console-open-btn');
+  if (openBtn) openBtn.style.display = type === 'xterm' ? 'none' : '';
 }
 
 async function _openSelectedConsole() {

@@ -837,6 +837,49 @@ install_ovs() {
     fi
 }
 
+# ── MOTD (SSH login / reboot uyarısı) ───────────────────────
+install_motd() {
+    step "MOTD — SSH Login Uyarısı"
+    MOTD_DIR="/etc/update-motd.d"
+    mkdir -p "$MOTD_DIR"
+
+    cat > "${MOTD_DIR}/99-oxware" << 'MOTDSCRIPT'
+#!/bin/bash
+R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'
+W='\033[1;37m'; G='\033[0;32m'; M='\033[0;35m'; NC='\033[0m'
+printf "\n"
+printf "${C}╔══════════════════════════════════════════════════════════════════╗${NC}\n"
+printf "${C}║${W}              ⚠   OXware Hypervisor — Warning   ⚠              ${C}║${NC}\n"
+printf "${C}╠══════════════════════════════════════════════════════════════════╣${NC}\n"
+printf "${C}║${NC}                                                                  ${C}║${NC}\n"
+printf "${C}║${Y}  If you do not know what you are doing, please do NOT           ${C}║${NC}\n"
+printf "${C}║${Y}  copy-paste commands via SSH.                                   ${C}║${NC}\n"
+printf "${C}║${NC}                                                                  ${C}║${NC}\n"
+printf "${C}║${NC}  Before pasting any command, contact our support team first     ${C}║${NC}\n"
+printf "${C}║${NC}  to understand what it does.                                    ${C}║${NC}\n"
+printf "${C}║${NC}                                                                  ${C}║${NC}\n"
+printf "${C}║${G}  Need support? Reach us at:                                     ${C}║${NC}\n"
+printf "${C}║${NC}    Email  : ${W}root@oxware.top${NC}                                    ${C}║${NC}\n"
+printf "${C}║${NC}    GitHub : ${W}https://github.com/ShinnAsukha/oxware-hypervisor${NC}   ${C}║${NC}\n"
+printf "${C}║${NC}    Docs   : ${W}https://oxware.top/docs${NC}                            ${C}║${NC}\n"
+printf "${C}║${NC}                                                                  ${C}║${NC}\n"
+printf "${C}╚══════════════════════════════════════════════════════════════════╝${NC}\n"
+printf "\n"
+MOTDSCRIPT
+
+    chmod +x "${MOTD_DIR}/99-oxware"
+
+    # Disable Ubuntu's MOTD news/ads (optional noise reduction)
+    for f in 10-help-text 50-motd-news 80-livepatch 91-release-upgrade; do
+        [ -f "${MOTD_DIR}/${f}" ] && chmod -x "${MOTD_DIR}/${f}" 2>/dev/null || true
+    done
+
+    # Static /etc/motd temizle (update-motd.d kullanılıyorsa gerekli değil)
+    echo "" > /etc/motd 2>/dev/null || true
+
+    log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
+}
+
 # ── Suricata IDS/IPS ──────────────────────────────────────────
 install_suricata() {
     step "Suricata IDS/IPS"
@@ -992,6 +1035,7 @@ main() {
     fix_reboot_stability
     install_ovs
     install_suricata
+    install_motd
     install_cli_tools
     start_services
     activate_license
