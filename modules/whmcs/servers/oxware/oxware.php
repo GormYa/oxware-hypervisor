@@ -347,7 +347,7 @@ function oxware_StartVM($params)
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadi';
     try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
-    $r = _oxware_api($params, 'POST', "/vms/$vm_id/start");
+    $r = _oxware_api($params, 'POST', "/provision/$vm_id/start");
     return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
 }
 
@@ -356,7 +356,7 @@ function oxware_StopVM($params)
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadi';
     try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
-    $r = _oxware_api($params, 'POST', "/vms/$vm_id/stop");
+    $r = _oxware_api($params, 'POST', "/provision/$vm_id/stop");
     return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
 }
 
@@ -365,7 +365,7 @@ function oxware_RebootVM($params)
     $vm_id = _oxware_vm_id($params);
     if (!$vm_id) return 'error: VM ID bulunamadi';
     try { _oxware_validate_vm_id($vm_id); } catch (Exception $e) { return 'error: ' . $e->getMessage(); }
-    $r = _oxware_api($params, 'POST', "/vms/$vm_id/reboot");
+    $r = _oxware_api($params, 'POST', "/provision/$vm_id/reboot");
     return !empty($r['error']) ? 'error: ' . $r['error'] : 'success';
 }
 

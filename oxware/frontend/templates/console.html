@@ -123,21 +123,66 @@
   </div>
 
   <script>
-    const vmId  = "{{ vm_id }}";
-    const token = localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
-    if (!token) { window.location.href = "/login"; }
+    const vmId = "{{ vm_id }}";
+
+    // ── Auth: vnc_token (WiseCP/WHMCS) veya JWT (native panel) ──────────────
+    const _urlParams = new URLSearchParams(window.location.search);
+    const _vncToken  = _urlParams.get("vnc_token");
+    const _jwtToken  = localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
+
+    // JWT yoksa ve vnc_token da yoksa → login'e yönlendir
+    if (!_vncToken && !_jwtToken) { window.location.href = "/login"; }
 
     async function initConsole() {
+      const isHttps = location.protocol === "https:";
       try {
-        // Console bilgilerini al
-        const infoRes = await fetch(`/api/vms/${vmId}/console`, {
-          headers: { Authorization: `Bearer ${token}` }
+
+        // ── VNC Token akışı (WiseCP/WHMCS — JWT gerekmez) ──────────────────
+        if (_vncToken) {
+          // VM bilgisini token ile al (token tüketilmez)
+          let vmName = vmId;
+          let vmState = "unknown";
+          try {
+            const infoRes = await fetch(
+              "/api/provision/" + vmId + "/console-info?vnc_token=" + encodeURIComponent(_vncToken)
+            );
+            if (infoRes.ok) {
+              const info = await infoRes.json();
+              vmName  = info.name  || vmId;
+              vmState = info.state || "unknown";
+            }
+          } catch (_) {}
+
+          document.getElementById("vmNameLabel").textContent = vmName;
+          const dot = document.getElementById("statusDot");
+          dot.className = "status-dot" + (vmState === "running" ? "" : " stopped");
+
+          // noVNC → dahili /ws/vnc/ proxy (WebSocket bağlantısında token tüketilir)
+          const wsPath = "ws/vnc/" + vmId + "?vnc_token=" + encodeURIComponent(_vncToken);
+          const port   = location.port || (isHttps ? "443" : "80");
+          const novncUrl = "/novnc/vnc.html?" +
+            "host="     + encodeURIComponent(location.hostname) +
+            "&port="    + port +
+            "&path="    + encodeURIComponent(wsPath) +
+            "&encrypt=" + (isHttps ? "1" : "0") +
+            "&autoconnect=1&resize=scale&show_dot=1";
+
+          const iframe = document.getElementById("novnc-iframe");
+          iframe.src = novncUrl;
+          iframe.style.display = "block";
+          iframe.onload = () => { document.getElementById("loadingOverlay").style.display = "none"; };
+          setTimeout(() => { document.getElementById("loadingOverlay").style.display = "none"; }, 5000);
+          return;
+        }
+
+        // ── JWT akışı (native panel kullanıcıları) ──────────────────────────
+        const infoRes = await fetch("/api/vms/" + vmId + "/console", {
+          headers: { Authorization: "Bearer " + _jwtToken }
         });
         const info = await infoRes.json();
 
-        // VM bilgisini al
-        const vmRes = await fetch(`/api/vms/${vmId}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const vmRes = await fetch("/api/vms/" + vmId, {
+          headers: { Authorization: "Bearer " + _jwtToken }
         });
         const vmData = await vmRes.json();
         const vm = vmData.vm || {};
@@ -146,36 +191,24 @@
         const dot = document.getElementById("statusDot");
         dot.className = "status-dot" + (vm.state === "running" ? "" : " stopped");
 
-        // Websockify başlat
-        await fetch(`/api/vms/${vmId}/console/start`, {
+        await fetch("/api/vms/" + vmId + "/console/start", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: "Bearer " + _jwtToken }
         });
 
-        const { host, websocket_port, vnc_port } = info;
-        const isHttps = location.protocol === "https:";
-
-        // noVNC iframe URL — websockify SSL varsa encrypt=1
-        const novncUrl = `/novnc/vnc.html?` +
-          `host=${host}&` +
-          `port=${websocket_port}&` +
-          `path=websockify&` +
-          `encrypt=${isHttps ? 1 : 0}&` +
-          `autoconnect=1&` +
-          `resize=scale&` +
-          `show_dot=1`;
+        const { host, websocket_port } = info;
+        const novncUrl = "/novnc/vnc.html?" +
+          "host="     + host +
+          "&port="    + websocket_port +
+          "&path=websockify" +
+          "&encrypt=" + (isHttps ? "1" : "0") +
+          "&autoconnect=1&resize=scale&show_dot=1";
 
         const iframe = document.getElementById("novnc-iframe");
         iframe.src = novncUrl;
         iframe.style.display = "block";
-
-        iframe.onload = () => {
-          document.getElementById("loadingOverlay").style.display = "none";
-        };
-
-        setTimeout(() => {
-          document.getElementById("loadingOverlay").style.display = "none";
-        }, 5000);
+        iframe.onload = () => { document.getElementById("loadingOverlay").style.display = "none"; };
+        setTimeout(() => { document.getElementById("loadingOverlay").style.display = "none"; }, 5000);
 
       } catch (e) {
         document.querySelector(".loading-overlay p").textContent =

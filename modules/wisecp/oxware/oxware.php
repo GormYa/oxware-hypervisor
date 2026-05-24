@@ -266,6 +266,42 @@ class Server_oxware
         return true;
     }
 
+    // ── start ─────────────────────────────────────────────────────────────────
+
+    public static function start($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $result = self::api($server, 'POST', "/provision/$vm_id/start");
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return true;
+    }
+
+    // ── stop ──────────────────────────────────────────────────────────────────
+
+    public static function stop($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $result = self::api($server, 'POST', "/provision/$vm_id/stop");
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return true;
+    }
+
+    // ── reboot ────────────────────────────────────────────────────────────────
+
+    public static function reboot($package, $account, $server)
+    {
+        $vm_id = $account['username'] ?? '';
+        if (!$vm_id) throw new Exception('VM ID bulunamadi');
+        self::validateVmId($vm_id);
+        $result = self::api($server, 'POST', "/provision/$vm_id/reboot");
+        if (!empty($result['error'])) throw new Exception($result['error']);
+        return true;
+    }
+
     // ── suspend ───────────────────────────────────────────────────────────────
 
     public static function suspend($package, $account, $server)

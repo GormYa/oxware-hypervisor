@@ -9675,6 +9675,82 @@ def api_provision_console_token(vm_id):
         return err(str(e), 500)
 
 
+# ── Provision: VM Güç Kontrolü (Start / Stop / Reboot) ───────────────────────
+
+@app.route("/api/provision/<vm_id>/start", methods=["POST"])
+def api_provision_start(vm_id):
+    """Provision key ile VM başlat (WHMCS/WiseCP start butonu)."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        r = vm_manager.start_vm(vm_id)
+        ev.info(f"Provisioning: VM başlatıldı id={vm_id}", category="provision")
+        _extra = r if isinstance(r, dict) else {}
+        return ok(status="started", **_extra)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/stop", methods=["POST"])
+def api_provision_stop(vm_id):
+    """Provision key ile VM durdur (WHMCS/WiseCP stop butonu)."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    d = request.get_json() or {}
+    force = bool(d.get("force", False))
+    try:
+        r = vm_manager.stop_vm(vm_id, force=force)
+        ev.info(f"Provisioning: VM durduruldu id={vm_id} force={force}", category="provision")
+        _extra = r if isinstance(r, dict) else {}
+        return ok(status="stopped", **_extra)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/provision/<vm_id>/reboot", methods=["POST"])
+def api_provision_reboot(vm_id):
+    """Provision key ile VM yeniden başlat (WHMCS/WiseCP reboot butonu)."""
+    auth_err = _require_provision_key()
+    if auth_err: return auth_err
+    try:
+        r = vm_manager.reboot_vm(vm_id)
+        ev.info(f"Provisioning: VM yeniden başlatıldı id={vm_id}", category="provision")
+        _extra = r if isinstance(r, dict) else {}
+        return ok(status="rebooted", **_extra)
+    except Exception as e:
+        return err(str(e), 500)
+
+
+# ── Provision: Console Bilgisi (vnc_token ile, JWT gerekmez) ─────────────────
+
+@app.route("/api/provision/<vm_id>/console-info", methods=["GET"])
+def api_provision_console_info(vm_id):
+    """
+    console.html tarafından vnc_token ile çağrılır — JWT gerekmez.
+    Token tüketilmez (WebSocket bağlantısında tüketilir).
+    VM adı ve durumunu döner.
+    """
+    token = request.args.get("vnc_token", "")
+    if not token:
+        return err("vnc_token gerekli", 401)
+    with _vnc_token_lock:
+        ott = _vnc_one_time_tokens.get(token)
+    if not ott or ott.get("used") or _time_mod.time() > ott.get("expires", 0):
+        return err("Geçersiz veya süresi dolmuş token", 401)
+    if ott["vm_id"] != vm_id:
+        return err("Token bu VM için geçerli değil", 403)
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if not vm:
+            return err("VM bulunamadı", 404)
+        return ok(
+            name=vm.get("name", vm_id),
+            state=vm.get("state", "unknown"),
+        )
+    except Exception as e:
+        return err(str(e), 500)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def _ensure_ssl_cert(cert_path: str, key_path: str) -> bool:
     """
