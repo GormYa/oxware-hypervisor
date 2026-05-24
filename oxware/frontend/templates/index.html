@@ -3840,13 +3840,21 @@
               Sunucu adresi olarak OXware'in URL'sini, API anahtarı olarak yukarıda ürettiğiniz değeri kullanın.
             </p>
             <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;font-family:monospace;font-size:11px;line-height:2">
-              <div><span style="color:#8b949e">POST</span>   <span style="color:#79c0ff">/api/provision/create</span>          <span style="color:#8b949e">— VM oluştur</span></div>
-              <div><span style="color:#f85149">DELETE</span> <span style="color:#79c0ff">/api/provision/{vm_id}</span>         <span style="color:#8b949e">— VM sil</span></div>
-              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/suspend</span>  <span style="color:#8b949e">— VM durdur (suspend)</span></div>
-              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/unsuspend</span><span style="color:#8b949e">— VM başlat (unsuspend)</span></div>
-              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/{vm_id}/status</span>  <span style="color:#8b949e">— VM durumu + IP</span></div>
-              <div><span style="color:#eab308">PUT</span>    <span style="color:#79c0ff">/api/provision/{vm_id}/resize</span>  <span style="color:#8b949e">— CPU/RAM/Disk değiştir</span></div>
-              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/templates</span>       <span style="color:#8b949e">— Mevcut OS template listesi</span></div>
+              <div style="color:#6e7681;margin-bottom:4px;font-size:10px;letter-spacing:.06em">── Temel ──────────────────────────────────────────────</div>
+              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/ping</span>                    <span style="color:#6e7681">— Bağlantı testi + event log kaydı</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/create</span>                  <span style="color:#6e7681">— VM oluştur (vcpus, memory_mb, disk_gb, os_template, network, username, password, ip_pool)</span></div>
+              <div><span style="color:#f85149">DELETE</span> <span style="color:#79c0ff">/api/provision/{vm_id}</span>                 <span style="color:#6e7681">— VM sil</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/suspend</span>         <span style="color:#6e7681">— VM durdur (suspend)</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/unsuspend</span>       <span style="color:#6e7681">— VM başlat (unsuspend)</span></div>
+              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/{vm_id}/status</span>          <span style="color:#6e7681">— VM durumu, IP (public_ip + internal_ip ayrı)</span></div>
+              <div><span style="color:#eab308">PUT</span>    <span style="color:#79c0ff">/api/provision/{vm_id}/resize</span>          <span style="color:#6e7681">— CPU/RAM/Disk değiştir (vcpus, memory_mb, disk_gb)</span></div>
+              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/templates</span>               <span style="color:#6e7681">— Mevcut OS template listesi</span></div>
+              <div style="color:#6e7681;margin:6px 0 4px;font-size:10px;letter-spacing:.06em">── Gelişmiş ────────────────────────────────────────────</div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/reinstall</span>       <span style="color:#6e7681">— OS değiştir / yeniden kur (os_template)</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/assign-ip</span>       <span style="color:#6e7681">— IP havuzundan otomatik IP ata (pool)</span></div>
+              <div><span style="color:#e6edf3">GET</span>    <span style="color:#79c0ff">/api/provision/{vm_id}/credentials</span>    <span style="color:#6e7681">— SSH kimlik bilgilerini getir</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/credentials</span>    <span style="color:#6e7681">— SSH kimlik bilgisi kaydet (username, password, cred_type)</span></div>
+              <div><span style="color:#3fb950">POST</span>   <span style="color:#79c0ff">/api/provision/{vm_id}/console-token</span>  <span style="color:#6e7681">— 5 dk geçerli noVNC console URL üret</span></div>
             </div>
           </div>
 
@@ -3888,31 +3896,6 @@
               </button>
             </div>
 
-            <!-- DiyoCP -->
-            <div class="card">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                <i class="fa-solid fa-box" style="color:#34d399"></i> DiyoCP Modülü
-              </div>
-              <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
-                DiyoCP'de <strong>Sunucular → Yeni Sunucu → OXware</strong> seçin.<br>
-                Hostname = OXware URL, API Key alanına API anahtarını girin.
-              </p>
-              <div style="font-size:11px;margin-bottom:12px">
-                <div style="margin-bottom:4px;color:var(--text-dim)">Kurulum yolu:</div>
-                <code style="font-size:11px;background:#0d1117;padding:4px 8px;border-radius:4px;display:block">modules/servers/oxware/oxware.php</code>
-              </div>
-              <div id="diyocp-status" style="font-size:11px;margin-bottom:10px">
-                <div id="diyocp-test-result" style="display:none;padding:8px;border-radius:5px;font-size:11px"></div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-                  <input id="diyocp-url" type="text" placeholder="https://diyocp.domain.com" style="flex:1;min-width:180px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
-                  <input id="diyocp-apikey" type="password" placeholder="DiyoCP API Key" style="flex:1;min-width:140px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
-                </div>
-                <button class="btn sm" onclick="testDiyoCPConnection()" style="margin-bottom:6px">Bağlantı Test Et</button>
-              </div>
-              <button class="btn-primary" onclick="downloadModule('diyocp')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:12px;border:none;cursor:pointer">
-                <i class="fa-solid fa-download"></i> DiyoCP Modülünü İndir
-              </button>
-            </div>
           </div>
 
           <!-- Kurulum kılavuzu -->
