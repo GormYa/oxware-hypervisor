@@ -11976,6 +11976,45 @@ def api_migration_esxi_import():
                         pass
                     if conv.returncode != 0:
                         raise RuntimeError(f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
+
+                    # ── ESXi thin-disk ext4 fixup ─────────────────────────────────────
+                    # ESXi thin VMDKs have sparse inode-table blocks (never physically
+                    # written on ESXi → zeros after conversion → ext4 metadata_csum
+                    # rejects them → "UNEXPECTED INCONSISTENCY" → VM unbootable).
+                    # Fix: disable metadata_csum feature on every ext4/ext3/ext2 fs.
+                    try:
+                        _import_job_update(j_id,
+                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: metadata_csum",
+                                           percent=min(91, pct_conv + 5))
+                        # List all filesystems in the converted qcow2
+                        _gf_list = subprocess.run(
+                            ["guestfish", "-a", str(final_qcow2)],
+                            input=b"run\nvg-activate-all true\nlist-filesystems\n",
+                            capture_output=True, timeout=180)
+                        _ext4_devs = [
+                            _l.split(":")[0].strip()
+                            for _l in (_gf_list.stdout or b"").decode(errors="replace").splitlines()
+                            if ": ext4" in _l or ": ext3" in _l or ": ext2" in _l
+                        ]
+                        for _edev in _ext4_devs:
+                            subprocess.run(
+                                ["guestfish", "-a", str(final_qcow2)],
+                                input=(
+                                    f"run\nvg-activate-all true\n"
+                                    f"sh tune2fs -O ^metadata_csum,^orphan_file {_edev} 2>/dev/null || true\n"
+                                ).encode(),
+                                capture_output=True, timeout=120)
+                        if _ext4_devs:
+                            log.info("ESXi ext4 fixup: metadata_csum disabled on %s",
+                                     ", ".join(_ext4_devs))
+                            ev.info(
+                                f"ESXi ext4 fixup: {', '.join(_ext4_devs)} → metadata_csum kapatıldı",
+                                category="vm")
+                        else:
+                            log.info("ESXi ext4 fixup: ext4 bulunamadı (%s)", final_qcow2.name)
+                    except Exception as _fx_err:
+                        log.warning("ESXi ext4 fixup (non-critical): %s", _fx_err)
+
                     final_disks.append((str(final_qcow2), "qcow2"))
 
                 # Map ESXi networks → libvirt
