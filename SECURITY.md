@@ -114,20 +114,33 @@ Aşağıdaki bulgular v2.5 sürümünde çözülmüş ve kullanıcılara açıkl
 | OXW-2026-013 | Legacy SHA256 migration flag hatası | ✅ **Düzeltildi** — `migrated = True` atama hatası giderildi |
 | OXW-2026-010 | `install.sh` `set -e` devre dışıydı — sessiz kurulum hataları | ✅ **Düzeltildi** — `set -uo pipefail` aktif |
 | Hardcoded IP | `pentest.py` içinde production sunucu IP'si açık kodda | ✅ **Düzeltildi** — `REDACTED_HOST` → `127.0.0.1`, git geçmişi temizlendi |
+| OXW-2026-008 | VNC JWT sorgu dizesinde — tek kullanımlık token sistemi | ✅ **Düzeltildi** — `_vnc_one_time_tokens` + 60s TTL |
+| OXW-2026-009 | libvirt `auth_unix_rw="none"` → polkit geçişi | ✅ **Düzeltildi** — `polkit` auth + polkit rules |
+| OXW-2026-012 | Login timing oracle — sabit-zamanlı dummy PBKDF2 | ✅ **Düzeltildi** — `_dummy_pbkdf2()` ile sabit-zamanlı doğrulama |
+| rapor #15 | Login büyük/küçük harf bypass | ✅ **Düzeltildi** — `username.lower()` normalizasyonu |
+| rapor #16 | Stateless JWT revocation — aktif token blocklist | ✅ **Düzeltildi** — `revoke_all_user_sessions()` + `is_revoked(jti)` |
+| rapor #28 | WebSocket wildcard (`*`) — kiracı izolasyonu | ✅ **Düzeltildi** — vm-user rolünde wildcard engellendi |
+| rapor #30 | `/api/system/processes` herkese açıktı | ✅ **Düzeltildi** — admin/administrator rolü zorunlu |
+| rapor #34 | Ghost persistence — uninstall eksik temizlik | ✅ **Düzeltildi** — uninstall.sh adım 11–13: tunnel, polkit, cron |
+| rapor #38 | PTY shell audit log yok | ✅ **Düzeltildi** — `audit_log.log_action()` shell açılışında |
+| rapor #39 | Fork bomb koruması yok | ✅ **Düzeltildi** — `RLIMIT_NPROC=128, RLIMIT_NOFILE=1024` |
+| rapor #43 | ISO delete/rename URL path traversal | ✅ **Düzeltildi** — `validate_filename(name)` eklendi |
+| rapor #44 | Rate limiter OOM — sınırsız bucket | ✅ **Düzeltildi** — `_MAX_BUCKETS=50_000` + LRU eviction |
+| rapor #53 | Systemd kaynak limiti yok | ✅ **Düzeltildi** — `MemoryMax=2G, TasksMax=512, LimitNOFILE=65536` |
+| rapor #58 | Cloudflare tunnel token plaintext | ✅ **Düzeltildi** — 0600 dosya izni + tunnel_id API yanıtından kaldırıldı |
+| rapor #61 | nginx config injection | ✅ **Düzeltildi** — `_sanitize_nginx_token()` |
+| rapor #62 | Notes stored XSS | ✅ **Düzeltildi** — HTML tag stripping (`_sanitize_note()`) |
+| rapor #67 | SQL injection (audit_log/perf_history) | ✅ **Geçerli Değil** — Parametre bağlama (`?`) kullanılıyor |
+| rapor #70 | QCOW2 header doğrulama eksikliği | ✅ **Düzeltildi** — Magic bytes `QFIû` kontrolü import öncesi |
+| rapor #71 | Guest agent exec allow-list yok | ✅ **Düzeltildi** — Komut beyaz listesi + metachar arg validasyonu |
+| rapor #74 | BGP vtysh description/password injection | ✅ **Düzeltildi** — `_sanitize_bgp_str()` + prefix uzunluk validasyonu |
 
-### 🔄 Devam Eden İyileştirmeler (Faz 2–4)
-
-Aşağıdaki bulgular çözüm sürecindedir veya mimari değişiklik gerektirmektedir:
+### 🔄 Devam Eden İyileştirmeler
 
 | ID | Başlık | Öncelik |
 |----|--------|---------|
-| OXW-2026-003 | `/api/system/execute` — kabul: zorunlu re-auth + komut whitelist | Orta vade |
-| OXW-2026-008 | VNC WebSocket JWT sorgu dizesinde — tek kullanımlık token gerekli | 1 hafta |
-| OXW-2026-009 | libvirt `auth_unix_rw="none"` → polkit geçişi | 1 ay |
-| OXW-2026-012 | Login timing oracle — sabit-zamanlı dummy PBKDF2 yolu | 1 hafta |
-| rapor #16 | Stateless JWT revocation — aktif token blocklist | 1 hafta |
-| rapor #25 | VM disk/RAM quota kontrolü yok | 2 hafta |
-| rapor #28 | WebSocket event wildcard (`*`) — kiracı izolasyonu | 1 hafta |
+| OXW-2026-003 | `/api/system/execute` — zorunlu re-auth + komut whitelist | Orta vade |
+| rapor #25 | VM disk/RAM quota — per-kullanıcı kaynak limiti | Orta vade |
 
 ---
 

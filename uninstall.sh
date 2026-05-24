@@ -162,6 +162,38 @@ find /tmp -name "*.pyc" -delete 2>/dev/null || true
 find /tmp -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 log "Python cache temizlendi"
 
+# ── 11. Cloudflare Tunnel Servisleri (rapor #34 ghost persistence fix) ─────
+step "11. Cloudflare Tunnel Servisleri Kaldırılıyor"
+for svc_file in /etc/systemd/system/oxware-tunnel-*.service; do
+    [ -f "$svc_file" ] || continue
+    svc_name=$(basename "$svc_file" .service)
+    systemctl stop "$svc_name" 2>/dev/null || true
+    systemctl disable "$svc_name" 2>/dev/null || true
+    rm -f "$svc_file"
+    log "Kaldırıldı: $svc_name"
+done
+systemctl daemon-reload 2>/dev/null || true
+
+# ── 12. Polkit Kuralları ──────────────────────────────────────────────────
+step "12. Polkit Kuralları Kaldırılıyor"
+if [ -f /etc/polkit-1/rules.d/50-libvirt-oxware.rules ]; then
+    rm -f /etc/polkit-1/rules.d/50-libvirt-oxware.rules
+    log "Silindi: /etc/polkit-1/rules.d/50-libvirt-oxware.rules"
+fi
+
+# ── 13. Cron / Systemd Timer Temizliği ───────────────────────────────────
+step "13. Cron/Timer Temizliği"
+# oxware crontab girişlerini temizle
+crontab -l 2>/dev/null | grep -v "oxware" | crontab - 2>/dev/null || true
+for timer in /etc/systemd/system/oxware*.timer; do
+    [ -f "$timer" ] || continue
+    timer_name=$(basename "$timer")
+    systemctl stop "$timer_name" 2>/dev/null || true
+    systemctl disable "$timer_name" 2>/dev/null || true
+    rm -f "$timer"
+done
+log "Cron/timer temizlendi"
+
 # ── Sonuç ──────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗"

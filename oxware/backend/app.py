@@ -2557,6 +2557,11 @@ def api_upload_iso():
 @app.route("/api/storage/isos/<name>", methods=["DELETE"])
 @require_auth
 def api_delete_iso(name):
+    # rapor #43 fix: validate name to prevent path traversal
+    try:
+        name = security.validate_filename(name)
+    except ValueError as e:
+        return err(str(e), 400)
     try:
         return ok(**storage_manager.delete_iso(name))
     except FileNotFoundError as e:
@@ -2566,6 +2571,11 @@ def api_delete_iso(name):
 @require_auth
 def api_rename_iso(name):
     """ISO dosyasını yeniden adlandır."""
+    # rapor #43 fix: validate both old and new names
+    try:
+        name = security.validate_filename(name)
+    except ValueError as e:
+        return err(str(e), 400)
     data = request.get_json(force=True, silent=True) or {}
     new_name = (data.get("new_name") or "").strip()
     if not new_name:
@@ -3894,17 +3904,30 @@ def ws_shell_open(data=None):
         _shell_emit(f"\r\n[Yetkilendirme hatası: {e}]\r\n")
         return
 
+    # rapor #38 fix: audit log PTY shell open
+    _client_ip = request.remote_addr or "unknown"
+    audit_log.log_action(identity, "shell_open", "host", "pty", details={"sid": sid, "ip": _client_ip})
+    log.warning("PTY shell acildi: kullanici=%s ip=%s sid=%s", identity, _client_ip, sid)
     # ── PTY + Bash ──────────────────────────────────────────────────────────
     try:
-        import pty, fcntl, termios, eventlet
+        import pty, fcntl, termios, resource as _res, eventlet
 
         master_fd, slave_fd = pty.openpty()
 
         # bash -i: interactive mode zorla (PTY stdin olsa bile bazı env'lerde gerekli)
+        # rapor #39 fix: fork bomb korumasi
+        def _set_limits():
+            os.setsid()
+            try:
+                _res.setrlimit(_res.RLIMIT_NPROC, (128, 256))
+                _res.setrlimit(_res.RLIMIT_NOFILE, (1024, 1024))
+            except Exception:
+                pass
+
         proc = subprocess.Popen(
             ["/bin/bash"],
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
-            close_fds=True, preexec_fn=os.setsid,
+            close_fds=True, preexec_fn=_set_limits,
             env={**os.environ, "TERM": "xterm-256color", "PS1": r"\u@oxware:\w\$ "},
         )
         os.close(slave_fd)
@@ -8746,6 +8769,23 @@ def api_import_ova():
             disk_path = _pathlib.Path("/var/lib/libvirt/images") / f"{vm_name}.qcow2"
             src_disk  = disk_files[0]
             src_size  = max(src_disk.stat().st_size, 1)
+
+            # rapor #70 fix: QCOW2 magic header doğrulama
+            _MAGIC_QCOW2 = b"QFIû"
+            if src_disk.suffix.lower() == ".qcow2":
+                try:
+                    with open(src_disk, "rb") as _mf:
+                        _magic = _mf.read(4)
+                    if _magic != _MAGIC_QCOW2:
+                        _import_job_update(job_id, status="error",
+                                           step="Hata: geçersiz QCOW2 dosyası",
+                                           percent=0,
+                                           message=f"QCOW2 magic bytes geçersiz: {_magic!r}",
+                                           finished=time.time())
+                        ev.warn(f"Import: geçersiz QCOW2 magic — {src_disk.name}", category="vm")
+                        return
+                except Exception as _me:
+                    ev.warn(f"Import: QCOW2 magic okuma hatası — {_me}", category="vm")
 
             # ── qemu-img convert ──────────────────────────────────────────────
             _fmt_map = {".vmdk": "vmdk", ".vhd": "vpc", ".vhdx": "vhdx",

@@ -296,8 +296,19 @@ configure_libvirt() {
     cat > /etc/libvirt/libvirtd.conf << 'EOF'
 unix_sock_group = "libvirt"
 unix_sock_rw_perms = "0770"
-auth_unix_rw = "none"
+auth_unix_rw = "polkit"
 EOF
+    # OXW-2026-009: polkit kuralı — sadece libvirt grubundaki kullanıcılar yetkili
+    mkdir -p /etc/polkit-1/rules.d
+    cat > /etc/polkit-1/rules.d/50-libvirt-oxware.rules << 'POLKIT'
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.libvirt.unix.manage" &&
+        subject.isInGroup("libvirt")) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT
+    chmod 640 /etc/polkit-1/rules.d/50-libvirt-oxware.rules
     systemctl restart libvirtd 2>/dev/null || true
     log "libvirt yapılandırıldı"
 }
@@ -493,6 +504,10 @@ SyslogIdentifier=oxware
 
 # Güvenlik
 NoNewPrivileges=false
+MemoryMax=2G
+TasksMax=512
+LimitNOFILE=65536
+LimitNPROC=512
 PrivateTmp=false
 
 [Install]

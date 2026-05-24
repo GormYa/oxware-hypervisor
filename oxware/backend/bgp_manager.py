@@ -104,8 +104,16 @@ def add_peer(peer_ip: str, peer_asn: int, local_asn: int,
     """
     if BACKEND != "frr":
         return {"success": False, "message": f"FRRouting kurulu değil (backend={BACKEND})"}
-    if not re.match(r"^[\d\.]+$|^[a-fA-F0-9:]+$", peer_ip):
+    if not re.match(r"^[d.]+$|^[a-fA-F0-9:]+$", peer_ip):
         return {"success": False, "message": "Geçersiz peer IP"}
+
+    # rapor #74 fix: sanitize free-text fields before injecting into vtysh
+    try:
+        description = _sanitize_bgp_str(description, "description", max_len=64)
+        password    = _sanitize_bgp_str(password, "password", max_len=128)
+    except ValueError as e:
+        return {"success": False, "message": str(e)}
+
 
     sr_cmd = f"  neighbor {peer_ip} soft-reconfiguration inbound" if soft_reconfig else ""
     mh_cmd = f"  neighbor {peer_ip} ebgp-multihop {multihop}" if multihop > 1 else ""
@@ -213,6 +221,9 @@ def announce_prefix(prefix: str, local_asn: int, next_hop: str = "self") -> dict
         return {"success": False, "message": "FRRouting kurulu değil"}
     if not re.match(r"^[\d\.]+/\d+$|^[a-fA-F0-9:]+/\d+$", prefix):
         return {"success": False, "message": "Geçersiz prefix"}
+    # rapor #74 fix: validate prefix length range (IPv4: 0-32, IPv6: 0-128)
+    if not _validate_prefix_len(prefix):
+        return {"success": False, "message": "Geçersiz prefix uzunluğu (IPv4: /0-32, IPv6: /0-128)"}
 
     stdout, stderr, rc = _vtysh(
         "configure terminal",
@@ -268,3 +279,35 @@ def get_full_status() -> dict:
         "peers":    list_peers(),
         "sessions": get_peer_status() if BACKEND != "none" else [],
     }
+
+
+# ── rapor #74 fix: vtysh injection sanitization ────────────────────────────────
+
+def _sanitize_bgp_str(value: str, field: str = "value", max_len: int = 64) -> str:
+    """
+    BGP description/password — newline, semicolon, vtysh metachar yasak.
+    Yalnızca yazdırılabilir ASCII karakterlere izin ver.
+    """
+    if not value:
+        return value
+    value = str(value)[:max_len]
+    # Newline, NULL, vtysh komut ayırıcıları
+    if re.search(r'[\r\n\x00;`$|&]', value):
+        raise ValueError(f"BGP {field}: geçersiz karakter içeriyor")
+    # Yalnızca yazdırılabilir ASCII
+    if not re.match(r'^[\x20-\x7E]+$', value):
+        raise ValueError(f"BGP {field}: yalnızca ASCII karakterlere izin verilir")
+    return value
+
+
+def _validate_prefix_len(prefix: str) -> bool:
+    """Prefix length realistik mi? IPv4: /0-32, IPv6: /0-128"""
+    try:
+        net, length_str = prefix.rsplit("/", 1)
+        length = int(length_str)
+        if ":" in net:  # IPv6
+            return 0 <= length <= 128
+        else:            # IPv4
+            return 0 <= length <= 32
+    except Exception:
+        return False
