@@ -11707,10 +11707,8 @@ def api_migration_esxi_scan():
         import paramiko as _pmesxi
         client = _pmesxi.SSHClient()
         client.set_missing_host_key_policy(_pmesxi.AutoAddPolicy())
-        # gss_auth=False, gss_kex=False: skip Kerberos probe (counts as failed login on ESXi)
         client.connect(host, port=port, username=user, password=password,
-                       timeout=20, look_for_keys=False, allow_agent=False,
-                       gss_auth=False, gss_kex=False)
+                       timeout=20, look_for_keys=False, allow_agent=False)
         try:
             _, stdout, _ = client.exec_command("vim-cmd vmsvc/getallvms 2>/dev/null", timeout=30)
             raw = stdout.read().decode(errors="replace")
@@ -11830,11 +11828,8 @@ def api_migration_esxi_import():
                 _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
                 client2 = _pme2.SSHClient()
                 client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
-                # gss_auth=False, gss_kex=False: skip Kerberos auth probe
-                # (failed probe counted as failed login on ESXi → triggers lockout)
                 client2.connect(host, port=port, username=user, password=password,
-                                timeout=30, look_for_keys=False, allow_agent=False,
-                                gss_auth=False, gss_kex=False)
+                                timeout=30, look_for_keys=False, allow_agent=False)
                 local_vmdks = []   # list of local tmp paths
                 try:
                     sftp2 = client2.open_sftp()
