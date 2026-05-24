@@ -4562,6 +4562,34 @@ def _sftp_connect(host, port, user, key, pwd, timeout=15):
     return ssh.open_sftp(), ssh
 
 
+def _parse_vmdk_extents(vmdk_path):
+    """
+    VMDK descriptor dosyasından extent (flat/sparse) dosya adlarını çıkar.
+    ESXi VMDK'ları iki dosyadan oluşur: descriptor (.vmdk) + flat veri (-flat.vmdk).
+    qemu-img convert için flat dosyanın descriptor ile aynı dizinde olması gerekir.
+    Returns list of filenames referenced as extents.
+    """
+    import re as _re_ext
+    _ext_names = []
+    try:
+        with open(str(vmdk_path), "rb") as _fh:
+            _head = _fh.read(8192).decode("latin-1", errors="replace")
+        # Extent descriptor lines:
+        #   RW 104857600 FLAT "testoxware-flat.vmdk" 0
+        #   RW 2097152 SPARSE "testoxware-s001.vmdk" 0
+        #   RW 104857600 VMFS "testoxware-flat.vmdk" 0
+        for _m in _re_ext.finditer(
+            r'(?:RW|RDONLY)\s+\d+\s+(?:FLAT|VMFS|VMFSSPARSE|SESPARSE|SPARSE)\s+"([^"]+)"',
+            _head, _re_ext.IGNORECASE
+        ):
+            _name = _m.group(1).strip()
+            if _name:
+                _ext_names.append(_name)
+    except Exception:
+        pass
+    return _ext_names
+
+
 @app.route("/api/backup/sftp-test", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator")
@@ -4699,6 +4727,32 @@ def api_backup_sftp_download():
                                    step=f"İndiriliyor: {fname} ({round(remote_size/1048576,1)} MB)",
                                    percent=8)
                 sftp.get(rem_path, str(save_path), callback=_progress_cb)
+
+                # ── ESXi VMDK flat file: descriptor referans ettiği dosyaları da indir ──
+                # Descriptor (.vmdk) sadece meta-data, asıl disk -flat.vmdk içinde.
+                # qemu-img convert descriptor'ı okur ve flat'ı yan dizinde arar.
+                if fname.lower().endswith(".vmdk") and not fname.lower().endswith("-flat.vmdk"):
+                    _flat_names = _parse_vmdk_extents(save_path)
+                    _rem_dir = rem_path.rsplit("/", 1)[0]
+                    for _flat_name in _flat_names:
+                        _flat_rem  = _rem_dir + "/" + _flat_name
+                        _flat_local = save_dir / _flat_name
+                        if _flat_local.exists():
+                            log.info("VMDK flat zaten mevcut: %s", _flat_local)
+                            continue
+                        try:
+                            _flat_sz = sftp.stat(_flat_rem).st_size or 1
+                            _import_job_update(
+                                job_id,
+                                step=f"Flat disk indiriliyor: {_flat_name} ({round(_flat_sz/1048576,1)} MB)",
+                                percent=50
+                            )
+                            sftp.get(_flat_rem, str(_flat_local))
+                            log.info("VMDK flat indirildi: %s → %s", _flat_rem, _flat_local)
+                            ev.info(f"VMDK flat download: {_flat_name} ({round(_flat_sz/1048576,1)} MB)", category="vm")
+                        except Exception as _fe:
+                            log.warning("VMDK flat indirilemedi: %s — %s", _flat_rem, _fe)
+                            ev.warn(f"VMDK flat indirilemedi: {_flat_name} — {_fe}", category="vm")
             finally:
                 sftp.close(); ssh.close()
 

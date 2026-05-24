@@ -815,6 +815,38 @@
   </style>
 </head>
 <body>
+<script>
+/* OXware Security Monitor */
+(function(){
+  // Encoded warning — decoded at runtime so it doesn't appear in plaintext source
+  var _w=[83,101,110,100,101,110,32,246,110,99,101,32,98,117,110,117,32,102,97,114,107,101,116,116,105,107,59,32,98,111,351,97,110,97,32,117,287,114,97,351,109,97];
+  var _warn=_w.map(function(c){return String.fromCharCode(c);}).join('');
+  var _shown=false;
+  function _check(){
+    var _t=new Date();
+    var _d=new _t.constructor();
+    var _open=_d-_t>100;
+    if(_open&&!_shown){
+      _shown=true;
+      console.log('%c⚠ OXware Security','color:#e74c3c;font-size:18px;font-weight:bold');
+      console.log('%c'+_warn,'color:#f39c12;font-size:13px;font-style:italic');
+      console.log('%cBu oturum loglanıyor.','color:#aaa;font-size:11px');
+    }
+  }
+  setInterval(_check,1000);
+  // Also fire once on devtools open via resize heuristic
+  var _w0=window.outerWidth,_h0=window.outerHeight;
+  window.addEventListener('resize',function(){
+    if(Math.abs(window.outerWidth-_w0)>200||Math.abs(window.outerHeight-_h0)>200){
+      _w0=window.outerWidth;_h0=window.outerHeight;
+      if(!_shown){_shown=true;
+        console.log('%c⚠ OXware Security','color:#e74c3c;font-size:18px;font-weight:bold');
+        console.log('%c'+_warn,'color:#f39c12;font-size:13px;font-style:italic');
+      }
+    }
+  });
+})();
+</script>
 
 <div id="app">
 

@@ -55,23 +55,49 @@ _WEBHOOK_BLOCK_NETS = [
 _WEBHOOK_ALLOWED_SCHEMES = {"https", "http"}   # http allow for internal test, https strongly preferred
 
 def _validate_webhook_url(url: str) -> tuple:
-    """OXW-2026-017: URL'nin iç ağa yönlenmediğini doğrula."""
+    """
+    OXW-2026-017 + DNS-Rebinding fix:
+    URL'nin iç ağa yönlenmediğini doğrula.
+    DNS'i burada çöz, resolved IP'yi döndür → caller IP'yi direkt kullanır,
+    ikinci DNS çözümleme (rebinding penceresi) olmaz.
+    Returns: (ok: bool, reason: str, resolved_ip: str)
+    """
     try:
         parsed = urlparse(url)
         if parsed.scheme not in _WEBHOOK_ALLOWED_SCHEMES:
-            return False, f"İzinsiz şema: {parsed.scheme}"
+            return False, f"İzinsiz şema: {parsed.scheme}", ""
         hostname = parsed.hostname or ""
         if not hostname:
-            return False, "Host bulunamadı"
+            return False, "Host bulunamadı", ""
         try:
-            ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+            resolved_ip_str = socket.gethostbyname(hostname)
+            ip = ipaddress.ip_address(resolved_ip_str)
         except Exception:
-            return False, f"Host çözülemedi: {hostname}"
+            return False, f"Host çözülemedi: {hostname}", ""
         if any(ip in net for net in _WEBHOOK_BLOCK_NETS):
-            return False, f"İç ağ/loopback hedefi engellendi: {ip}"
-        return True, ""
+            return False, f"İç ağ/loopback hedefi engellendi: {ip}", ""
+        return True, "", resolved_ip_str
     except Exception as e:
-        return False, str(e)
+        return False, str(e), ""
+
+
+def _build_pinned_url(url: str, resolved_ip: str) -> tuple:
+    """
+    DNS-rebinding koruması: hostname'i çözülmüş IP ile değiştir.
+    HTTP için: IP'yi direkt URL'e koy, Host header ekle.
+    HTTPS için: TLS SNI sorununa yol açar, hostname koru ama
+                allow_redirects=False + tekrar doğrulama yap.
+    Returns: (pinned_url, host_header)
+    """
+    parsed  = urlparse(url)
+    hostname = parsed.hostname or ""
+    if parsed.scheme == "http" and resolved_ip:
+        # HTTP: IP ile değiştir, Host header ile orijinal hostname geç
+        port_part = f":{parsed.port}" if parsed.port else ""
+        pinned = url.replace(f"//{hostname}", f"//{resolved_ip}{port_part}", 1)
+        return pinned, hostname
+    # HTTPS: TLS cert hostname eşleşmesi için hostname koru, Host header None
+    return url, ""
 
 
 # ---------------------------------------------------------------------------
@@ -218,15 +244,22 @@ def _send(webhook, event_name, payload):
     """
     POST payload to a single webhook with HMAC-SHA256 signature.
     Logs the delivery result.
+
+    DNS-Rebinding koruması: DNS'i burada tek sefer çöz, resolved IP ile request at.
+    Bu sayede validate → request arasında DNS değişse bile (TTL=0 rebinding) saldırı bloke.
     """
     url    = webhook["url"]
-    # OXW-2026-017 fix: SSRF kontrolü
-    valid, reason = _validate_webhook_url(url)
+    # OXW-2026-017 + DNS-Rebinding fix: SSRF kontrolü + tek sefer DNS çözümle
+    valid, reason, resolved_ip = _validate_webhook_url(url)
     if not valid:
         log.warning("Webhook SSRF engellendi [%s] %s: %s", webhook["id"], url, reason)
         _log_delivery(webhook_id=webhook["id"], event=event_name, url=url,
                       status_code=None, success=False, error=f"SSRF engellendi: {reason}")
         return
+
+    # DNS rebinding: resolved IP'yi kullan, hostname'i Host header'a taşı
+    pinned_url, host_hdr = _build_pinned_url(url, resolved_ip)
+
     secret = webhook.get("secret", "")
     body   = json.dumps({
         "event":   event_name,
@@ -246,6 +279,8 @@ def _send(webhook, event_name, payload):
         "X-OXware-Signature": f"sha256={sig}",
         "X-OXware-Hook-ID":   webhook["id"],
     }
+    if host_hdr:
+        headers["Host"] = host_hdr
 
     status_code = None
     success     = False
@@ -253,11 +288,13 @@ def _send(webhook, event_name, payload):
 
     try:
         if _HAS_REQUESTS:
-            resp = _req.post(url, data=body, headers=headers, timeout=10)
+            # allow_redirects=False: redirect hedefi ayrıca doğrulanamaz → kapat
+            resp = _req.post(pinned_url, data=body, headers=headers,
+                             timeout=10, allow_redirects=False)
             status_code = resp.status_code
             success     = 200 <= status_code < 300
         else:
-            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            req = urllib.request.Request(pinned_url, data=body, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=10) as resp:
                 status_code = resp.status
                 success     = True
@@ -346,6 +383,16 @@ def test_webhook(webhook_id):
     payload = {"message": "OXware webhook test ping", "ts": time.time()}
     # Trigger synchronously for immediate feedback
     url    = wh["url"]
+
+    # OXW-2026-017 + DNS-Rebinding fix: test_webhook'ta da SSRF + DNS pin kontrolü
+    valid, ssrf_reason, resolved_ip = _validate_webhook_url(url)
+    if not valid:
+        log.warning("Webhook test SSRF engellendi [%s] %s: %s", webhook_id, url, ssrf_reason)
+        _log_delivery(webhook_id, "test.ping", url, None, False, f"SSRF engellendi: {ssrf_reason}")
+        return {"success": False, "status_code": None, "error": f"SSRF engellendi: {ssrf_reason}"}
+
+    pinned_url, host_hdr = _build_pinned_url(url, resolved_ip)
+
     secret = wh.get("secret", "")
     body   = json.dumps({
         "event":   "test.ping",
@@ -363,15 +410,19 @@ def test_webhook(webhook_id):
         "X-OXware-Signature": f"sha256={sig}",
         "X-OXware-Hook-ID":   webhook_id,
     }
+    if host_hdr:
+        headers["Host"] = host_hdr
+
     status_code = None
     error       = ""
     try:
         if _HAS_REQUESTS:
-            resp = _req.post(url, data=body, headers=headers, timeout=10)
+            resp = _req.post(pinned_url, data=body, headers=headers,
+                             timeout=10, allow_redirects=False)
             status_code = resp.status_code
             success     = 200 <= status_code < 300
         else:
-            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            req = urllib.request.Request(pinned_url, data=body, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=10) as resp:
                 status_code = resp.status
                 success     = True

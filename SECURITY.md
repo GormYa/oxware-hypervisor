@@ -14,7 +14,7 @@
 
 Report vulnerabilities privately via one of the following:
 
-- **Email:** adalyan06@gmail.com
+- **Email:** root@oxware.top
 - **GitHub Private Advisory:** [Security Advisories](https://github.com/ShinnAsukha/oxware-hypervisor/security/advisories/new)
 
 ### What to include
@@ -167,4 +167,4 @@ We thank the following researchers for responsible disclosures:
 
 ---
 
-*OXware Security Team — adalyan06@gmail.com*
+*OXware Security Team — root@oxware.top*

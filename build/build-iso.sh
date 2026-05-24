@@ -204,14 +204,23 @@ apt-get install -y --no-install-recommends xinit || {
     exit 1
 }
 
-# ── Minimal X11 (sadece gerekli olanlar — Proxmox gibi ağır DE yok) ───────────
+# ── ZORUNLU: Xorg (X server binary sağlar) ────────────────────────────────────
+apt-get install -y --no-install-recommends xserver-xorg-core xserver-xorg-input-all || {
+    echo "[FATAL] xserver-xorg-core kurulamadı — Xorg binary olmayacak. Build durduruluyor."
+    exit 1
+}
+
+# ── ZORUNLU: openbox (pencere yöneticisi — Qt/Tk render için şart) ────────────
+apt-get install -y --no-install-recommends openbox || {
+    echo "[FATAL] openbox kurulamadı. Build durduruluyor."
+    exit 1
+}
+
+# ── Minimal X11 eklentiler (opsiyonel — hata olsa devam) ─────────────────────
 apt-get install -y -qq --no-install-recommends \
     xorg \
-    xserver-xorg-core \
     xserver-xorg-video-all \
-    xserver-xorg-input-all \
     x11-xserver-utils \
-    openbox \
     2>/dev/null || true
 
 # ── Calamares — tam bağımlılıklarıyla kur (--no-install-recommends YASAK) ─────
@@ -298,18 +307,40 @@ log "Chroot paketler OK"
 # ── Kritik dosya doğrulama ────────────────────────────────────────────────────
 step "Kritik dosya doğrulama"
 _missing=0
-for _f in \
-    "$SQUASHFS_ROOT/usr/bin/startx" \
+# startx
+if [ ! -f "$SQUASHFS_ROOT/usr/bin/startx" ]; then
+    warn "EKSİK: $SQUASHFS_ROOT/usr/bin/startx"
+    _missing=1
+else
+    log "OK: usr/bin/startx"
+fi
+
+# Xorg: Debian 12'de /usr/lib/xorg/Xorg veya /usr/bin/Xorg olabilir
+_xorg_found=0
+for _xorgpath in \
     "$SQUASHFS_ROOT/usr/bin/Xorg" \
-    "$SQUASHFS_ROOT/usr/bin/openbox"
+    "$SQUASHFS_ROOT/usr/lib/xorg/Xorg" \
+    "$SQUASHFS_ROOT/usr/libexec/Xorg"
 do
-    if [ ! -f "$_f" ]; then
-        warn "EKSİK: $_f"
-        _missing=1
-    else
-        log "OK: $_f"
+    if [ -f "$_xorgpath" ]; then
+        log "OK: ${_xorgpath#$SQUASHFS_ROOT/}"
+        _xorg_found=1
+        break
     fi
 done
+if [ "$_xorg_found" -eq 0 ]; then
+    warn "EKSİK: Xorg binary (usr/bin/Xorg, usr/lib/xorg/Xorg — hiçbirinde yok)"
+    _missing=1
+fi
+
+# openbox
+if [ ! -f "$SQUASHFS_ROOT/usr/bin/openbox" ]; then
+    warn "EKSİK: $SQUASHFS_ROOT/usr/bin/openbox"
+    _missing=1
+else
+    log "OK: usr/bin/openbox"
+fi
+
 [ "$_missing" -eq 1 ] && err "Kritik binary eksik — build iptal. Chroot içinde paket kurulumu başarısız olmuş olabilir."
 
 # ── OXware Calamares Config ───────────────────────────────────────────────────
