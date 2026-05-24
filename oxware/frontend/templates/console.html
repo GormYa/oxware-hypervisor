@@ -519,7 +519,7 @@
           const iframe = document.getElementById("novnc-iframe");
           iframe.src = novncUrl;
           iframe.style.display = "block";
-          iframe.onload = () => { stepDone(3); setTimeout(hideLoading, 800); };
+          iframe.onload = () => { _injectVncKeyHelper(iframe); stepDone(3); setTimeout(hideLoading, 800); };
           setTimeout(hideLoading, 6000);
           return;
         }
@@ -558,7 +558,7 @@
         const iframe = document.getElementById("novnc-iframe");
         iframe.src = novncUrl;
         iframe.style.display = "block";
-        iframe.onload = () => { stepDone(3); setTimeout(hideLoading, 800); };
+        iframe.onload = () => { _injectVncKeyHelper(iframe); stepDone(3); setTimeout(hideLoading, 800); };
         setTimeout(hideLoading, 6000);
 
       } catch (e) {
@@ -594,6 +594,45 @@
     document.addEventListener("keydown", e => {
       if (e.altKey && e.key === "f") { e.preventDefault(); toggleFullscreen(); }
     });
+
+    // ── Inject key-sender into noVNC iframe (same-origin) ───────────────────────
+    // Injects a script that listens for postMessage and calls rfb.sendKey()
+    // with proper X11 keysyms — synthetic KeyboardEvent dispatch doesn't work
+    // because noVNC checks isTrusted; rfb.sendKey() bypasses that entirely.
+    function _injectVncKeyHelper(iframe) {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || !doc.head) return;
+        const s = doc.createElement("script");
+        s.textContent = [
+          "(function(){",
+          "  function getRfb(){",
+          "    return window.rfb||(window.UI&&window.UI.rfb)||null;",
+          "  }",
+          "  window.addEventListener('message',function(ev){",
+          "    if(!ev.data||ev.data.type!=='oxware_keys')return;",
+          "    var txt=ev.data.text||'';",
+          "    var i=0;",
+          "    function next(){",
+          "      if(i>=txt.length)return;",
+          "      var rfb=getRfb();",
+          "      if(!rfb||typeof rfb.sendKey!=='function'){setTimeout(next,300);return;}",
+          "      var ch=txt[i++];",
+          "      var ks;",
+          "      if(ch==='\\n'||ch==='\\r'){ks=0xff0d;}",
+          "      else if(ch==='\\t'){ks=0xff09;}",
+          "      else{var c=ch.charCodeAt(0);ks=(c>=0x20&&c<=0x7e)?c:(0x1000000|c);}",
+          "      rfb.sendKey(ks,'',true);",
+          "      rfb.sendKey(ks,'',false);",
+          "      setTimeout(next,30);",
+          "    }",
+          "    next();",
+          "  });",
+          "})();"
+        ].join("\n");
+        doc.head.appendChild(s);
+      } catch(e) { console.warn("[OXware] VNC key inject failed:", e); }
+    }
 
     // ── Paste Modal — no clipboard permission needed ──────────────────────────
     function openPasteModal() {
@@ -651,30 +690,9 @@
     }
 
     function sendTextToVNC(text) {
-      try {
-        const iwin = document.getElementById("novnc-iframe").contentWindow;
-
-        // Try noVNC 1.x RFB clipboard API first
-        if (iwin.rfb && typeof iwin.rfb.clipboardPasteFrom === "function") {
-          iwin.rfb.clipboardPasteFrom(text);
-          return;
-        }
-
-        // Fallback: dispatch keyboard events to the noVNC canvas
-        const canvas = iwin.document.querySelector("canvas");
-        if (!canvas) { alert("noVNC canvas bulunamadı — konsolu yenileyin."); return; }
-        canvas.focus();
-        for (const char of text) {
-          let key = char;
-          if (char === "\n" || char === "\r\n") key = "Enter";
-          else if (char === "\r") continue;
-          else if (char === "\t") key = "Tab";
-          canvas.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-          canvas.dispatchEvent(new KeyboardEvent("keyup",   { key, bubbles: true, cancelable: true }));
-        }
-      } catch(e) {
-        alert("Yapıştırma hatası: " + e.message);
-      }
+      // postMessage → injected script in iframe calls rfb.sendKey() with X11 keysyms
+      document.getElementById("novnc-iframe").contentWindow
+        .postMessage({ type: "oxware_keys", text: text }, "*");
     }
 
     initConsole();
