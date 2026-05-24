@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/static/fontawesome.css">
   <script src="/static/chart.umd.min.js"></script>
   <script src="/static/socket.io.min.js"></script>
+  <script src="/static/vswitch.js" defer></script>
   <link rel="stylesheet" href="/static/xterm.min.css">
   <script src="/static/xterm.min.js"></script>
   <script src="/static/addon-fit.min.js"></script>
@@ -2048,6 +2049,7 @@
             <button class="settings-tab" data-ntab="leases" onclick="switchNetTab('leases',this)"><i class="fa-solid fa-list-ul"></i> DHCP Kiraları</button>
             <button class="settings-tab" data-ntab="routes" onclick="switchNetTab('routes',this)"><i class="fa-solid fa-route"></i> Yönlendirme</button>
             <button class="settings-tab" data-ntab="bridge" onclick="switchNetTab('bridge',this)"><i class="fa-solid fa-bridge"></i> Bridge & IP İzolasyonu</button>
+            <button class="settings-tab" data-ntab="vswitch" onclick="switchNetTab('vswitch',this);loadVSwitches()"><i class="fa-solid fa-sitemap"></i> vSwitch</button>
           </div>
 
           <!-- Virtual Networks -->
@@ -2151,6 +2153,56 @@
                 → Speedtest = VM'in gerçek IP'si (host IP değil)
               </div>
             </div>
+          <!-- vSwitch Tab -->
+          <div id="net-tab-vswitch" style="display:none">
+            <style>
+            .vsw-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+            .vsw-grid{display:flex;flex-direction:column;gap:12px}
+            .vsw-card{background:var(--surface2,#141c2e);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden}
+            .vsw-card-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;user-select:none}
+            .vsw-card-head:hover{background:rgba(255,255,255,0.03)}
+            .vsw-badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.04em}
+            .vsw-badge.standard{background:rgba(61,130,240,0.15);color:#60a5fa;border:1px solid rgba(61,130,240,0.3)}
+            .vsw-badge.bridge{background:rgba(34,197,94,0.12);color:#4ade80;border:1px solid rgba(34,197,94,0.25)}
+            .vsw-badge.nat{background:rgba(251,146,60,0.12);color:#fb923c;border:1px solid rgba(251,146,60,0.25)}
+            .vsw-body{padding:16px}
+            .vsw-diagram{display:flex;gap:0;align-items:stretch;min-height:80px}
+            .vsw-col{display:flex;flex-direction:column;gap:6px;justify-content:center}
+            .vsw-col.uplink{flex:0 0 140px;padding-right:12px;border-right:2px dashed rgba(255,255,255,0.1)}
+            .vsw-col.switch{flex:0 0 160px;padding:0 16px;display:flex;align-items:center;justify-content:center}
+            .vsw-col.pgroups{flex:1;padding-left:12px}
+            .vsw-sw-box{background:linear-gradient(135deg,rgba(61,130,240,0.15),rgba(0,212,255,0.08));border:1px solid rgba(61,130,240,0.35);border-radius:10px;padding:12px 16px;text-align:center;width:100%}
+            .vsw-sw-box .sw-name{font-size:13px;font-weight:700;color:#60a5fa}
+            .vsw-sw-box .sw-sub{font-size:10px;color:var(--text-muted,#7d8590);margin-top:2px}
+            .vsw-sw-ports{display:flex;justify-content:center;gap:4px;margin-top:8px}
+            .vsw-port{width:14px;height:8px;border-radius:2px;background:rgba(61,130,240,0.4);border:1px solid rgba(61,130,240,0.5)}
+            .vsw-port.up{background:#3fb950;border-color:#3fb950;box-shadow:0 0 4px #3fb95080}
+            .uplink-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;font-size:11px}
+            .uplink-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+            .uplink-dot.up{background:#3fb950;box-shadow:0 0 4px #3fb95070}
+            .uplink-dot.down{background:#6e7681}
+            .pg-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:6px;font-size:11px;cursor:pointer;transition:all .12s}
+            .pg-item:hover{border-color:rgba(61,130,240,0.3);background:rgba(61,130,240,0.05)}
+            .pg-icon{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px}
+            .pg-vlan{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);color:#a78bfa}
+            .vsw-actions{display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.05)}
+            .vsw-connector{width:2px;background:rgba(255,255,255,0.1);align-self:stretch;margin:0 4px}
+            </style>
+
+            <div class="vsw-toolbar">
+              <button class="btn primary" onclick="openVSwitchCreate()">+ Yeni vSwitch</button>
+              <button class="btn" onclick="loadVSwitches()"><i class="fa-solid fa-rotate-right"></i> Yenile</button>
+              <span style="margin-left:auto;font-size:11px;color:var(--text-muted,#7d8590)">ESXi tarzı sanal switch yönetimi — libvirt bridge tabanlı</span>
+            </div>
+
+            <div class="vsw-grid" id="vsw-grid">
+              <div style="text-align:center;padding:40px;color:var(--text-muted,#7d8590);font-size:13px">
+                <i class="fa-solid fa-sitemap" style="font-size:28px;margin-bottom:10px;opacity:.3;display:block"></i>
+                Yükleniyor…
+              </div>
+            </div>
+          </div>
+
           </div>
         </div>
 
@@ -4431,176 +4483,715 @@ systemctl enable --now qemu-guest-agent</pre>
 <!-- ────────── MODALS ────────── -->
 
 <!-- Create VM -->
-<div class="modal-overlay" id="modal-create-vm">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>Yeni Sanal Makine Oluştur</h2>
-      <button class="modal-close" onclick="closeModal('modal-create-vm')">✕</button>
+<!-- ══ VM CREATE MODAL — Detailed ════════════════════════════════════════════ -->
+<style>
+.cvm-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.cvm-overlay.open { display: flex; }
+.cvm-modal {
+  background: var(--surface, #0f1521);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  width: min(960px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+.cvm-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.cvm-head-icon {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, rgba(61,130,240,0.25), rgba(0,212,255,0.1));
+  border: 1px solid rgba(61,130,240,0.3);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.cvm-head h2 { font-size: 16px; font-weight: 700; }
+.cvm-head p  { font-size: 11px; color: var(--text-muted, #7d8590); margin-top: 1px; }
+.cvm-head .ml { margin-left: auto; }
+
+.cvm-body {
+  display: flex; flex: 1; overflow: hidden;
+}
+.cvm-sections {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+/* Section */
+.cvm-sec {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.cvm-sec:last-child { border-bottom: none; margin-bottom: 0; }
+.cvm-sec-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted, #7d8590);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.cvm-sec-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: rgba(255,255,255,0.05);
+}
+
+/* OS Cards */
+.os-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+}
+.os-card {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: rgba(255,255,255,0.02);
+}
+.os-card:hover { border-color: rgba(61,130,240,0.4); background: rgba(61,130,240,0.06); }
+.os-card.selected {
+  border-color: var(--accent, #3d82f0);
+  background: rgba(61,130,240,0.12);
+  box-shadow: 0 0 0 1px rgba(61,130,240,0.3);
+}
+.os-card .os-icon { font-size: 22px; margin-bottom: 4px; }
+.os-card .os-label { font-size: 10px; color: var(--text-muted, #7d8590); line-height: 1.2; }
+.os-card.selected .os-label { color: var(--accent2, #00d4ff); }
+
+/* Hardware sliders */
+.hw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hw-card {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.hw-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.hw-card-label {
+  font-size: 11px; font-weight: 600; color: var(--text-muted, #7d8590);
+  display: flex; align-items: center; gap: 6px;
+}
+.hw-card-label svg { width: 13px; height: 13px; }
+.hw-val {
+  font-size: 18px; font-weight: 700;
+  background: linear-gradient(135deg, #3d82f0, #00d4ff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hw-val-unit { font-size: 11px; color: var(--text-muted, #7d8590); font-weight: 400; }
+.hw-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+.hw-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent, #3d82f0);
+  border: 2px solid rgba(255,255,255,0.2);
+  box-shadow: 0 0 8px rgba(61,130,240,0.5);
+  cursor: pointer; transition: transform 0.1s;
+}
+.hw-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.hw-presets { display: flex; gap: 4px; margin-top: 8px; }
+.hw-preset {
+  flex: 1; text-align: center; font-size: 10px;
+  padding: 3px 2px; border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent; color: var(--text-muted, #7d8590);
+  cursor: pointer; transition: all 0.12s;
+}
+.hw-preset:hover { border-color: rgba(61,130,240,0.4); color: var(--accent2, #00d4ff); }
+.hw-preset.act { border-color: var(--accent, #3d82f0); background: rgba(61,130,240,0.15); color: var(--accent2, #00d4ff); }
+
+/* Form rows inside modal */
+.cvm-row { margin-bottom: 12px; }
+.cvm-row label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text-muted, #7d8590); margin-bottom: 5px;
+}
+.cvm-row input, .cvm-row select, .cvm-row textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: var(--text, #e6edf3);
+  padding: 7px 10px; font-size: 12px;
+  transition: border-color 0.15s;
+}
+.cvm-row input:focus, .cvm-row select:focus, .cvm-row textarea:focus {
+  outline: none; border-color: rgba(61,130,240,0.6);
+}
+.cvm-row .hint { font-size: 10px; color: var(--text-muted, #7d8590); margin-top: 4px; }
+.cvm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cvm-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* Type pills */
+.type-pills { display: flex; gap: 8px; }
+.type-pill {
+  flex: 1; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  cursor: pointer; transition: all 0.15s;
+  text-align: center;
+}
+.type-pill:hover { border-color: rgba(61,130,240,0.4); }
+.type-pill.sel {
+  border-color: var(--accent, #3d82f0);
+  background: rgba(61,130,240,0.1);
+}
+.type-pill .tp-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.type-pill .tp-desc { font-size: 10px; color: var(--text-muted, #7d8590); }
+.type-pill.sel .tp-name { color: var(--accent2, #00d4ff); }
+
+/* Firmware */
+.fw-pills { display: flex; gap: 8px; }
+.fw-pill {
+  flex: 1; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.fw-pill:hover { border-color: rgba(61,130,240,0.4); }
+.fw-pill.sel { border-color: var(--accent, #3d82f0); background: rgba(61,130,240,0.1); }
+.fw-pill .fw-name { font-size: 12px; font-weight: 700; color: var(--text, #e6edf3); }
+.fw-pill.sel .fw-name { color: var(--accent2, #00d4ff); }
+.fw-pill .fw-desc { font-size: 10px; color: var(--text-muted, #7d8590); }
+
+/* Summary sidebar */
+.cvm-summary {
+  width: 200px; flex-shrink: 0;
+  background: rgba(0,0,0,0.2);
+  border-left: 1px solid rgba(255,255,255,0.05);
+  padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto;
+}
+.sum-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted, #7d8590);
+  margin-bottom: 4px;
+}
+.sum-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+}
+.sum-item .si-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted, #7d8590);
+}
+.sum-item .si-val {
+  font-size: 13px; font-weight: 700; color: var(--accent2, #00d4ff);
+}
+.sum-item .si-sub { font-size: 10px; color: var(--text-muted, #7d8590); }
+
+/* App chips — keep existing style if defined, fallback */
+.cvm-app-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cvm-app-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  font-size: 11px; cursor: pointer; transition: all 0.12s;
+  color: var(--text, #e6edf3);
+}
+.cvm-app-chip input { display: none; }
+.cvm-app-chip:hover { border-color: rgba(61,130,240,0.4); background: rgba(61,130,240,0.06); }
+.cvm-app-chip.sel-chip { border-color: var(--accent, #3d82f0); background: rgba(61,130,240,0.12); color: var(--accent2, #00d4ff); }
+
+/* Footer */
+.cvm-foot {
+  padding: 14px 24px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.cvm-foot .spacer { flex: 1; }
+
+@media (max-width: 680px) {
+  .cvm-summary { display: none; }
+  .hw-grid { grid-template-columns: 1fr; }
+  .cvm-grid2, .cvm-grid3 { grid-template-columns: 1fr; }
+  .os-grid { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+
+<div class="cvm-overlay" id="modal-create-vm" onclick="if(event.target===this)closeModal('modal-create-vm')">
+  <div class="cvm-modal">
+    <!-- Header -->
+    <div class="cvm-head">
+      <div class="cvm-head-icon">🖥</div>
+      <div>
+        <h2>Yeni Sanal Makine</h2>
+        <p>KVM/QEMU tabanlı sanal makine yapılandırması</p>
+      </div>
+      <div class="ml">
+        <button class="btn" style="padding:5px 10px;font-size:12px" onclick="closeModal('modal-create-vm')">✕ Kapat</button>
+      </div>
     </div>
-    <div class="modal-body">
-      <div class="form-row"><label>VM Adı</label><input id="vm-name" placeholder="ornek-vm"></div>
-      <div class="form-grid">
-        <div class="form-row"><label>CPU (vCPU)</label><input id="vm-cpu" type="number" value="2" min="1" max="64"></div>
-        <div class="form-row">
-          <label>Bellek (MB)</label>
-          <div class="res-slider-wrap">
-            <div class="res-slider-top">
-              <div style="display:flex;align-items:baseline;gap:4px">
-                <input class="res-slider-input" id="vm-mem-input" type="number" min="256" max="65536" step="256" value="2048"
-                       oninput="resSliderMemInput(this.value)" onblur="resSliderMemInput(this.value,true)">
-                <span class="res-slider-unit">MB</span>
-              </div>
-              <span class="res-slider-sub" id="vm-mem-sub">2 GB</span>
+
+    <!-- Body -->
+    <div class="cvm-body">
+      <!-- Left: Sections -->
+      <div class="cvm-sections">
+
+        <!-- 1. Temel Bilgiler -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Temel Bilgiler</div>
+          <div class="cvm-grid2">
+            <div class="cvm-row">
+              <label>VM Adı *</label>
+              <input id="vm-name" placeholder="ornek-vm-01" oninput="cvmUpdateSummary()">
             </div>
-            <input type="range" class="res-slider" id="vm-mem" min="256" max="65536" step="256" value="2048"
-                   oninput="resSliderMem(this.value)">
+            <div class="cvm-row">
+              <label>VM Tipi</label>
+              <div class="type-pills">
+                <div class="type-pill sel" id="tp-vps" onclick="cvmSetType('vps')">
+                  <div class="tp-name">VPS</div>
+                  <div class="tp-desc">Paylaşımlı CPU</div>
+                </div>
+                <div class="type-pill" id="tp-vds" onclick="cvmSetType('vds')">
+                  <div class="tp-name">VDS</div>
+                  <div class="tp-desc">CPU Passthrough</div>
+                </div>
+              </div>
+              <input type="hidden" id="vm-type" value="vps">
+            </div>
           </div>
         </div>
-      </div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label>Disk (GB)</label>
-          <div class="res-slider-wrap">
-            <div class="res-slider-top">
-              <div style="display:flex;align-items:baseline;gap:4px">
-                <input class="res-slider-input" id="vm-disk-input" type="number" min="1" max="2000" step="1" value="20"
-                       oninput="resSliderDiskInput(this.value)" onblur="resSliderDiskInput(this.value,true)">
-                <span class="res-slider-unit">GB</span>
-              </div>
-              <span class="res-slider-sub" id="vm-disk-sub"></span>
+
+        <!-- 2. İşletim Sistemi -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">İşletim Sistemi</div>
+          <div class="os-grid" id="os-grid">
+            <div class="os-card selected" data-os="ubuntu22.04" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🐧</div>
+              <div class="os-label">Ubuntu 22.04</div>
             </div>
-            <input type="range" class="res-slider" id="vm-disk" min="1" max="2000" step="1" value="20"
-                   oninput="resSliderDisk(this.value)">
+            <div class="os-card" data-os="ubuntu20.04" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🐧</div>
+              <div class="os-label">Ubuntu 20.04</div>
+            </div>
+            <div class="os-card" data-os="debian12" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🌀</div>
+              <div class="os-label">Debian 12</div>
+            </div>
+            <div class="os-card" data-os="centos8" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🎩</div>
+              <div class="os-label">CentOS 8</div>
+            </div>
+            <div class="os-card" data-os="win2022" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🪟</div>
+              <div class="os-label">Windows Server 2022</div>
+            </div>
+            <div class="os-card" data-os="win2019" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🪟</div>
+              <div class="os-label">Windows 2019</div>
+            </div>
+            <div class="os-card" data-os="win10" onclick="cvmSelectOS(this)">
+              <div class="os-icon">🪟</div>
+              <div class="os-label">Windows 10</div>
+            </div>
+            <div class="os-card" data-os="freebsd" onclick="cvmSelectOS(this)">
+              <div class="os-icon">😈</div>
+              <div class="os-label">FreeBSD</div>
+            </div>
+            <div class="os-card" data-os="generic" onclick="cvmSelectOS(this)">
+              <div class="os-icon">⚙️</div>
+              <div class="os-label">Genel / Diğer</div>
+            </div>
+          </div>
+          <input type="hidden" id="vm-os" value="ubuntu22.04">
+        </div>
+
+        <!-- 3. Donanım -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Donanım</div>
+          <div class="hw-grid">
+            <!-- CPU -->
+            <div class="hw-card">
+              <div class="hw-card-header">
+                <div class="hw-card-label">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 0a.5.5 0 0 1 .5.5V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2h1V.5a.5.5 0 0 1 1 0V2A2.5 2.5 0 0 1 14 4.5h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14v1h1.5a.5.5 0 0 1 0 1H14A2.5 2.5 0 0 1 11.5 14v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14h-1v1.5a.5.5 0 0 1-1 0V14A2.5 2.5 0 0 1 2 11.5H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2v-1H.5a.5.5 0 0 1 0-1H2A2.5 2.5 0 0 1 4.5 2V.5A.5.5 0 0 1 5 0zm-.5 3A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13h7a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 11.5 3h-7zM5 6.5A1.5 1.5 0 0 1 6.5 5h3A1.5 1.5 0 0 1 11 6.5v3A1.5 1.5 0 0 1 9.5 11h-3A1.5 1.5 0 0 1 5 9.5v-3z"/></svg>
+                  vCPU
+                </div>
+                <div>
+                  <span class="hw-val" id="cpu-val-disp">2</span>
+                  <span class="hw-val-unit"> çekirdek</span>
+                </div>
+              </div>
+              <input type="range" class="hw-slider" id="vm-cpu" min="1" max="64" step="1" value="2"
+                     oninput="cvmCpuChange(this.value)">
+              <div class="hw-presets">
+                <div class="hw-preset" onclick="cvmSetCpu(1)">1</div>
+                <div class="hw-preset act" onclick="cvmSetCpu(2)">2</div>
+                <div class="hw-preset" onclick="cvmSetCpu(4)">4</div>
+                <div class="hw-preset" onclick="cvmSetCpu(8)">8</div>
+                <div class="hw-preset" onclick="cvmSetCpu(16)">16</div>
+              </div>
+            </div>
+            <!-- RAM -->
+            <div class="hw-card">
+              <div class="hw-card-header">
+                <div class="hw-card-label">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H1zm6 2h2v4H7V5zm-4 0h2v1H3V5zm0 2h2v1H3V7zm0 2h2v1H3V9zm4 1V9h2v1H7zm4-4h2v1h-2V5zm0 2h2v1h-2V7zm0 2h2v1h-2V9z"/></svg>
+                  Bellek
+                </div>
+                <div>
+                  <span class="hw-val" id="mem-val-disp">2</span>
+                  <span class="hw-val-unit" id="mem-val-unit"> GB</span>
+                </div>
+              </div>
+              <input type="range" class="hw-slider" id="vm-mem" min="256" max="65536" step="256" value="2048"
+                     oninput="cvmMemChange(this.value)">
+              <input type="hidden" id="vm-mem-input" value="2048">
+              <div class="hw-presets">
+                <div class="hw-preset" onclick="cvmSetMem(512)">512M</div>
+                <div class="hw-preset" onclick="cvmSetMem(1024)">1G</div>
+                <div class="hw-preset act" onclick="cvmSetMem(2048)">2G</div>
+                <div class="hw-preset" onclick="cvmSetMem(4096)">4G</div>
+                <div class="hw-preset" onclick="cvmSetMem(8192)">8G</div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="form-row"><label>Disk Formatı</label>
-          <select id="vm-disk-fmt"><option value="qcow2">qcow2 (Önerilen)</option><option value="raw">raw</option></select>
-        </div>
-        <div class="form-row"><label>Disk Arabirimi</label>
-          <select id="vm-disk-bus">
-            <option value="sata">SATA (Uyumlu — Windows/Linux)</option>
-            <option value="virtio">VirtIO (Hızlı — yalnızca Linux)</option>
-            <option value="ide">IDE (Eski — max uyumluluk)</option>
-          </select>
-          <div class="form-hint">Windows ve Ubuntu kurulumu için SATA seçin</div>
-        </div>
-      </div>
-      <div class="form-row"><label>ISO (Opsiyonel)</label>
-        <select id="vm-iso"><option value="">— ISO seçme —</option></select>
-        <div class="form-hint">Kurulum için ISO seçin veya boş disk ile başlayın</div>
-      </div>
-      <div class="form-row"><label>Ağ</label>
-        <select id="vm-net"><option value="default">default (NAT)</option></select>
-      </div>
-      <div class="form-row"><label>İşletim Sistemi</label>
-        <select id="vm-os">
-          <option value="generic">Genel</option>
-          <option value="ubuntu20.04">Ubuntu 20.04</option>
-          <option value="ubuntu22.04">Ubuntu 22.04</option>
-          <option value="debian11">Debian 11</option>
-          <option value="centos8">CentOS 8</option>
-          <option value="win10">Windows 10</option>
-          <option value="win2019">Windows Server 2019</option>
-        </select>
-      </div>
-      <div class="form-row"><label>VM Tipi</label>
-        <select id="vm-type">
-          <option value="vps">VPS — Paylaşımlı (host-model CPU, esnek kaynak)</option>
-          <option value="vds">VDS — Özel (host-passthrough CPU, tam fiziksel performans)</option>
-        </select>
-        <div class="form-hint">VDS için host CPU sanallaştırma desteği gerekli</div>
-      </div>
-      <div class="form-row"><label>Otomatik IP Havuzu</label>
-        <select id="vm-autoip-pool">
-          <option value="">— Yok (Manuel IP) —</option>
-        </select>
-        <div class="form-hint">Seçilirse VM oluşturulurken otomatik IP atanır</div>
-      </div>
-      <div class="form-row"><label>Açılış Sırası</label>
-        <select id="vm-boot">
-          <option value="cdrom,hd">CD-ROM → Disk</option>
-          <option value="hd,cdrom">Disk → CD-ROM</option>
-          <option value="hd">Yalnızca Disk</option>
-        </select>
-      </div>
-      <!-- Gelişmiş Seçenekler (SSH Key / Başlangıç Script / Statik IP) -->
-      <details style="margin-top:10px">
-          <summary style="font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;padding:4px 0">☁️ Gelişmiş (SSH Key / Başlangıç Script / Statik IP)</summary>
-          <div style="margin-top:8px;padding:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px">
-            <div class="form-row"><label>SSH Public Key</label><input id="ci-sshkey" placeholder="ssh-rsa AAAA..."></div>
-            <div class="form-row"><label>Başlangıç Script'i</label>
-              <textarea id="ci-userdata" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px;padding:7px 10px;resize:vertical;font-family:monospace" placeholder="#!/bin/bash&#10;apt-get update"></textarea>
+
+        <!-- 4. Depolama -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Depolama</div>
+          <div class="hw-grid" style="margin-bottom:12px">
+            <div class="hw-card">
+              <div class="hw-card-header">
+                <div class="hw-card-label">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5V12c0 .066.013.13.035.187l4.5-2.25A.5.5 0 0 1 6 10h4a.5.5 0 0 1 .465.313l4.5 2.25A.5.5 0 0 0 15.5 12V10.4a.5.5 0 0 1 1 0V12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 .5 12v-1.6a.5.5 0 0 1 .5-.5zm0-4.9a.5.5 0 0 1 .5.5V7c0 .066.013.13.035.187l4.5-2.25A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .465.313l4.5 2.25A.5.5 0 0 0 15.5 7V5.4a.5.5 0 0 1 1 0V7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 .5 7V5.4A.5.5 0 0 1 1 5a.5.5 0 0 1 0-1z"/></svg>
+                  Disk Boyutu
+                </div>
+                <div>
+                  <span class="hw-val" id="disk-val-disp">20</span>
+                  <span class="hw-val-unit"> GB</span>
+                </div>
+              </div>
+              <input type="range" class="hw-slider" id="vm-disk" min="1" max="2000" step="1" value="20"
+                     oninput="cvmDiskChange(this.value)">
+              <input type="hidden" id="vm-disk-input" value="20">
+              <div class="hw-presets">
+                <div class="hw-preset" onclick="cvmSetDisk(10)">10G</div>
+                <div class="hw-preset act" onclick="cvmSetDisk(20)">20G</div>
+                <div class="hw-preset" onclick="cvmSetDisk(50)">50G</div>
+                <div class="hw-preset" onclick="cvmSetDisk(100)">100G</div>
+                <div class="hw-preset" onclick="cvmSetDisk(500)">500G</div>
+              </div>
             </div>
-            <!-- Statik IP — Bridge ağlar için -->
-            <div style="margin-top:10px;padding:10px;background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.2);border-radius:6px">
-              <div style="font-size:11px;font-weight:700;color:var(--accent-lt);margin-bottom:8px">🌐 Statik IP (Bridge Ağ)</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Bridge ağ seçildiğinde VM kendi gerçek IP'siyle açılır.</div>
-              <div class="form-row" style="margin:0 0 6px 0">
-                <label style="min-width:80px">IP Adresi</label>
+            <div>
+              <div class="cvm-row">
+                <label>Disk Formatı</label>
+                <select id="vm-disk-fmt">
+                  <option value="qcow2">qcow2 — Anlık görüntü, sıkıştırma (Önerilen)</option>
+                  <option value="raw">raw — Ham blok, maksimum performans</option>
+                </select>
+              </div>
+              <div class="cvm-row">
+                <label>Disk Arabirimi</label>
+                <select id="vm-disk-bus">
+                  <option value="sata">SATA — Geniş uyumluluk (Windows/Linux)</option>
+                  <option value="virtio">VirtIO — Yüksek performans (Linux)</option>
+                  <option value="ide">IDE — Eski maksimum uyumluluk</option>
+                </select>
+                <div class="hint">Windows için SATA seçin</div>
+              </div>
+            </div>
+          </div>
+          <div class="cvm-row">
+            <label>Kurulum ISO'su (Opsiyonel)</label>
+            <select id="vm-iso"><option value="">— ISO bağlama —</option></select>
+            <div class="hint">Boş disk ile başlamak için seçme</div>
+          </div>
+        </div>
+
+        <!-- 5. Ağ & Güvenlik -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Ağ & Güvenlik</div>
+          <div class="cvm-grid2">
+            <div class="cvm-row">
+              <label>Ağ / vSwitch</label>
+              <select id="vm-net"><option value="default">default (NAT)</option></select>
+            </div>
+            <div class="cvm-row">
+              <label>Otomatik IP Havuzu</label>
+              <select id="vm-autoip-pool">
+                <option value="">— Yok (Manuel IP) —</option>
+              </select>
+              <div class="hint">Seçilirse otomatik IP atanır</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Önyükleme & Firmware -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Önyükleme & Firmware</div>
+          <div class="cvm-grid2">
+            <div class="cvm-row">
+              <label>Firmware</label>
+              <div class="fw-pills">
+                <div class="fw-pill sel" id="fw-bios" onclick="cvmSetFw('bios')">
+                  <div class="fw-name">BIOS</div>
+                  <div class="fw-desc">SeaBIOS — Uyumlu</div>
+                </div>
+                <div class="fw-pill" id="fw-uefi" onclick="cvmSetFw('uefi')">
+                  <div class="fw-name">UEFI</div>
+                  <div class="fw-desc">OVMF — Modern</div>
+                </div>
+              </div>
+              <input type="hidden" id="vm-firmware" value="bios">
+            </div>
+            <div class="cvm-row">
+              <label>Açılış Sırası</label>
+              <select id="vm-boot">
+                <option value="cdrom,hd">CD-ROM → Disk</option>
+                <option value="hd,cdrom">Disk → CD-ROM</option>
+                <option value="hd">Yalnızca Disk</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Cloud-Init & Gelişmiş -->
+        <div class="cvm-sec">
+          <div class="cvm-sec-title">Cloud-Init & Gelişmiş (Opsiyonel)</div>
+          <div class="cvm-row">
+            <label>SSH Public Key</label>
+            <input id="ci-sshkey" placeholder="ssh-rsa AAAA…" style="font-family:monospace;font-size:11px">
+          </div>
+          <div class="cvm-row">
+            <label>Başlangıç Script</label>
+            <textarea id="ci-userdata" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder="#!/bin/bash&#10;apt-get update -y"></textarea>
+          </div>
+          <div style="padding:12px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:8px;margin-top:4px">
+            <div style="font-size:11px;font-weight:700;color:var(--accent2,#00d4ff);margin-bottom:8px">🌐 Statik IP (Bridge Ağı)</div>
+            <div class="cvm-grid2">
+              <div class="cvm-row" style="margin:0">
+                <label>IP Adresi</label>
                 <input id="ci-static-ip" placeholder="203.0.113.10" style="font-family:monospace">
               </div>
-              <div class="form-row" style="margin:0 0 6px 0">
-                <label style="min-width:80px">Gateway</label>
+              <div class="cvm-row" style="margin:0">
+                <label>Gateway</label>
                 <input id="ci-gateway" placeholder="203.0.113.1" style="font-family:monospace">
               </div>
-              <div class="form-row" style="margin:0 0 6px 0">
-                <label style="min-width:80px">Netmask</label>
+            </div>
+            <div class="cvm-grid2" style="margin-top:8px">
+              <div class="cvm-row" style="margin:0">
+                <label>Netmask</label>
                 <input id="ci-netmask" placeholder="255.255.255.0" value="255.255.255.0" style="font-family:monospace">
               </div>
-              <div class="form-row" style="margin:0">
-                <label style="min-width:80px">DNS</label>
+              <div class="cvm-row" style="margin:0">
+                <label>DNS</label>
                 <input id="ci-dns" placeholder="8.8.8.8, 1.1.1.1" value="8.8.8.8, 1.1.1.1">
               </div>
             </div>
           </div>
-        </details>
-    </div>
-      <!-- App Install -->
-      <details id="app-install-section" style="margin-top:8px">
-        <summary style="font-size:11px;font-weight:700;color:var(--text-muted);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:6px 0">📦 Uygulama Kurulumu <span style="font-weight:400;color:var(--text-dim)">(Opsiyonel)</span></summary>
-        <div style="margin-top:8px">
-          <div class="app-cat-label"><span style="color:#38bdf8">●</span> Uygulamalar</div>
-          <div class="app-chip-row">
-            <label class="app-chip" data-app="portainer" title="Docker konteyner yönetimi"><input type="radio" name="app_install" value="portainer">🐳 Portainer CE</label>
-            <label class="app-chip" data-app="nextcloud" title="Sürücü/Ofis/Takvim/Kişiler"><input type="radio" name="app_install" value="nextcloud">☁️ Nextcloud</label>
-            <label class="app-chip" data-app="vaultwarden" title="Bitwarden uyumlu şifre yöneticisi"><input type="radio" name="app_install" value="vaultwarden">🔐 Vaultwarden</label>
-            <label class="app-chip" data-app="n8n" title="400+ uygulama otomasyonu"><input type="radio" name="app_install" value="n8n">⚡ n8n</label>
+        </div>
+
+        <!-- 8. Uygulama Kurulumu -->
+        <div class="cvm-sec" id="app-install-section">
+          <div class="cvm-sec-title">Uygulama Kurulumu (Opsiyonel)</div>
+          <div style="margin-bottom:8px;font-size:11px;color:var(--text-muted,#7d8590)">VM oluşturulduktan sonra otomatik kurulur</div>
+          <div style="margin-bottom:6px;font-size:10px;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:.06em">Uygulamalar</div>
+          <div class="cvm-app-chips">
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'portainer')"><input type="radio" name="app_install" value="portainer">🐳 Portainer CE</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'nextcloud')"><input type="radio" name="app_install" value="nextcloud">☁️ Nextcloud</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'vaultwarden')"><input type="radio" name="app_install" value="vaultwarden">🔐 Vaultwarden</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'n8n')"><input type="radio" name="app_install" value="n8n">⚡ n8n</label>
           </div>
-          <div class="app-cat-label"><span style="color:#a78bfa">●</span> Geliştirici</div>
-          <div class="app-chip-row">
-            <label class="app-chip" data-app="coolify" title="Self-hosted PaaS — Heroku alternatifi"><input type="radio" name="app_install" value="coolify">🚀 Coolify</label>
-            <label class="app-chip" data-app="docker-portainer" title="Docker Engine + Portainer web UI"><input type="radio" name="app_install" value="docker-portainer">🐋 Docker + Portainer</label>
-            <label class="app-chip" data-app="gitea" title="Hafif self-hosted Git servisi"><input type="radio" name="app_install" value="gitea">🦊 Gitea</label>
+          <div style="margin:8px 0 6px;font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.06em">Geliştirici</div>
+          <div class="cvm-app-chips">
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'coolify')"><input type="radio" name="app_install" value="coolify">🚀 Coolify</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'docker-portainer')"><input type="radio" name="app_install" value="docker-portainer">🐋 Docker + Portainer</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'gitea')"><input type="radio" name="app_install" value="gitea">🦊 Gitea</label>
           </div>
-          <div class="app-cat-label"><span style="color:#22c55e">●</span> Hosting</div>
-          <div class="app-chip-row">
-            <label class="app-chip" data-app="cyberpanel" title="OpenLiteSpeed, mail, DNS, FTP"><input type="radio" name="app_install" value="cyberpanel">⚙️ CyberPanel</label>
-            <label class="app-chip" data-app="nginx-proxy-manager" title="Reverse proxy, Let's Encrypt SSL"><input type="radio" name="app_install" value="nginx-proxy-manager">🔄 Nginx Proxy Mgr</label>
-            <label class="app-chip" data-app="plesk" title="Web hosting kontrol paneli"><input type="radio" name="app_install" value="plesk">🖥️ Plesk</label>
+          <div style="margin:8px 0 6px;font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.06em">Hosting & Ağ</div>
+          <div class="cvm-app-chips">
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'cyberpanel')"><input type="radio" name="app_install" value="cyberpanel">⚙️ CyberPanel</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'nginx-proxy-manager')"><input type="radio" name="app_install" value="nginx-proxy-manager">🔄 Nginx Proxy</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'grafana')"><input type="radio" name="app_install" value="grafana">📊 Grafana</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'pihole')"><input type="radio" name="app_install" value="pihole">⬛ Pi-hole</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'wireguard')"><input type="radio" name="app_install" value="wireguard">🔒 WireGuard</label>
+            <label class="cvm-app-chip" onclick="cvmToggleApp(this,'minio')"><input type="radio" name="app_install" value="minio">🪣 MinIO</label>
           </div>
-          <div class="app-cat-label"><span style="color:#f59e0b">●</span> İzleme & Depolama</div>
-          <div class="app-chip-row">
-            <label class="app-chip" data-app="grafana" title="Analytics & dashboard"><input type="radio" name="app_install" value="grafana">📊 Grafana</label>
-            <label class="app-chip" data-app="uptime-kuma" title="HTTP/TCP/Ping izleme"><input type="radio" name="app_install" value="uptime-kuma">📡 Uptime Kuma</label>
-            <label class="app-chip" data-app="minio" title="S3 uyumlu nesne depolama"><input type="radio" name="app_install" value="minio">🪣 MinIO</label>
-          </div>
-          <div class="app-cat-label"><span style="color:#ef4444">●</span> VPN & Ağ</div>
-          <div class="app-chip-row">
-            <label class="app-chip" data-app="pihole" title="Ağ geneli reklam engelleyici"><input type="radio" name="app_install" value="pihole">⬛ Pi-hole</label>
-            <label class="app-chip" data-app="wireguard" title="Modern, hızlı VPN, web UI :51821"><input type="radio" name="app_install" value="wireguard">🔒 WireGuard VPN</label>
-          </div>
-          <div style="margin-top:6px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px">
-            Seçili: <span id="selected-app-name" style="color:var(--accent-lt);font-weight:600">Yok</span>
-            <button onclick="clearAppInstall()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-muted,#7d8590)">
+            Seçili: <span id="selected-app-name" style="color:var(--accent2,#00d4ff);font-weight:600">Yok</span>
+            <button onclick="clearAppInstall()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0 4px;line-height:1">✕</button>
           </div>
         </div>
-      </details>
-    <div class="modal-footer">
+
+      </div><!-- /cvm-sections -->
+
+      <!-- Right: Live Summary -->
+      <div class="cvm-summary">
+        <div class="sum-title">Özet</div>
+        <div class="sum-item">
+          <div class="si-label">VM Adı</div>
+          <div class="si-val" id="sum-name" style="font-size:11px;word-break:break-all">—</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">İşletim Sistemi</div>
+          <div class="si-val" id="sum-os" style="font-size:11px">Ubuntu 22.04</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">CPU</div>
+          <div class="si-val" id="sum-cpu">2 vCPU</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">Bellek</div>
+          <div class="si-val" id="sum-mem">2 GB</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">Disk</div>
+          <div class="si-val" id="sum-disk">20 GB</div>
+          <div class="si-sub" id="sum-diskfmt">qcow2 · SATA</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">Ağ</div>
+          <div class="si-val" id="sum-net" style="font-size:11px">default</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">Tip</div>
+          <div class="si-val" id="sum-type">VPS</div>
+        </div>
+        <div class="sum-item">
+          <div class="si-label">Firmware</div>
+          <div class="si-val" id="sum-fw">BIOS</div>
+        </div>
+        <div class="sum-item" id="sum-app-wrap" style="display:none">
+          <div class="si-label">Uygulama</div>
+          <div class="si-val" id="sum-app" style="font-size:11px">—</div>
+        </div>
+      </div>
+    </div><!-- /cvm-body -->
+
+    <!-- Footer -->
+    <div class="cvm-foot">
+      <span style="font-size:11px;color:var(--text-muted,#7d8590)">* zorunlu alan</span>
+      <div class="spacer"></div>
       <button class="btn" onclick="closeModal('modal-create-vm')">İptal</button>
-      <button class="btn primary" onclick="createVM()" id="btn-create-vm">VM Oluştur</button>
+      <button class="btn primary" onclick="createVM()" id="btn-create-vm">
+        🖥 VM Oluştur
+      </button>
     </div>
   </div>
 </div>
+
+<script>
+// ── VM Create Modal — JS helpers ──────────────────────────────────────────────
+function cvmUpdateSummary() {
+  const n = document.getElementById('vm-name');
+  if (n) document.getElementById('sum-name').textContent = n.value || '—';
+  const net = document.getElementById('vm-net');
+  if (net) document.getElementById('sum-net').textContent = net.value || 'default';
+  const df = document.getElementById('vm-disk-fmt');
+  const db = document.getElementById('vm-disk-bus');
+  if (df && db) document.getElementById('sum-diskfmt').textContent = df.value + ' · ' + db.value.toUpperCase();
+}
+
+function cvmSelectOS(card) {
+  document.querySelectorAll('#os-grid .os-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  const os = card.dataset.os;
+  document.getElementById('vm-os').value = os;
+  document.getElementById('sum-os').textContent = card.querySelector('.os-label').textContent;
+}
+
+function cvmSetType(t) {
+  document.getElementById('vm-type').value = t;
+  document.getElementById('tp-vps').classList.toggle('sel', t === 'vps');
+  document.getElementById('tp-vds').classList.toggle('sel', t === 'vds');
+  document.getElementById('sum-type').textContent = t.toUpperCase();
+}
+
+function cvmSetFw(fw) {
+  document.getElementById('vm-firmware').value = fw;
+  document.getElementById('fw-bios').classList.toggle('sel', fw === 'bios');
+  document.getElementById('fw-uefi').classList.toggle('sel', fw === 'uefi');
+  document.getElementById('sum-fw').textContent = fw.toUpperCase();
+}
+
+function cvmCpuChange(v) {
+  document.getElementById('cpu-val-disp').textContent = v;
+  document.getElementById('sum-cpu').textContent = v + ' vCPU';
+  document.querySelectorAll('.hw-presets .hw-preset').forEach(p => {
+    if(p.textContent === String(v)) p.classList.add('act'); else p.classList.remove('act');
+  });
+}
+function cvmSetCpu(v) {
+  const sl = document.getElementById('vm-cpu'); if(sl){sl.value=v; cvmCpuChange(v);}
+}
+
+function cvmMemChange(v) {
+  document.getElementById('vm-mem-input').value = v;
+  const gb = v >= 1024 ? (v/1024).toFixed(v%1024===0?0:1) + ' GB' : v + ' MB';
+  document.getElementById('mem-val-disp').textContent = v >= 1024 ? (v/1024).toFixed(v%1024===0?0:1) : v;
+  document.getElementById('mem-val-unit').textContent = v >= 1024 ? ' GB' : ' MB';
+  document.getElementById('sum-mem').textContent = gb;
+}
+function cvmSetMem(mb) {
+  const sl = document.getElementById('vm-mem'); if(sl){sl.value=mb; cvmMemChange(mb);}
+}
+
+function cvmDiskChange(v) {
+  document.getElementById('vm-disk-input').value = v;
+  document.getElementById('disk-val-disp').textContent = v;
+  document.getElementById('sum-disk').textContent = v + ' GB';
+  cvmUpdateSummary();
+}
+function cvmSetDisk(gb) {
+  const sl = document.getElementById('vm-disk'); if(sl){sl.value=gb; cvmDiskChange(gb);}
+}
+
+function cvmToggleApp(chip, app) {
+  document.querySelectorAll('.cvm-app-chip').forEach(c => c.classList.remove('sel-chip'));
+  chip.classList.add('sel-chip');
+  document.getElementById('selected-app-name').textContent = app;
+  const wrap = document.getElementById('sum-app-wrap');
+  if(wrap) wrap.style.display = '';
+  document.getElementById('sum-app').textContent = app;
+}
+
+function clearAppInstall() {
+  document.querySelectorAll('.cvm-app-chip input').forEach(i => i.checked = false);
+  document.querySelectorAll('.cvm-app-chip').forEach(c => c.classList.remove('sel-chip'));
+  document.getElementById('selected-app-name').textContent = 'Yok';
+  const wrap = document.getElementById('sum-app-wrap');
+  if(wrap) wrap.style.display = 'none';
+}
+
+// Wire summary updates
+['vm-net','vm-disk-fmt','vm-disk-bus'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', cvmUpdateSummary);
+});
+</script>
 
 <!-- Edit Network Modal -->
 <!-- ═══ Modal: IPv6 Ağ Yapılandırması ══════════════════════════════════════ -->
