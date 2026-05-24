@@ -280,25 +280,27 @@ MOTD_DIR="/etc/update-motd.d"
 mkdir -p "$MOTD_DIR"
 cat > "${MOTD_DIR}/99-oxware" << 'MOTDSCRIPT'
 #!/bin/bash
-R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'
-W='\033[1;37m'; G='\033[0;32m'; M='\033[0;35m'; NC='\033[0m'
+BOLD='\033[1m'; DIM='\033[2m'; RED='\033[0;31m'
+RESET='\033[0m'; LINE='\033[0;90m'
+HOST=$(hostname -f 2>/dev/null || hostname)
+DATE=$(date '+%Y-%m-%d %H:%M:%S %Z')
 printf "\n"
-printf "${C}╔══════════════════════════════════════════════════════════════════╗${NC}\n"
-printf "${C}║${W}              ⚠   OXware Hypervisor — Warning   ⚠              ${C}║${NC}\n"
-printf "${C}╠══════════════════════════════════════════════════════════════════╣${NC}\n"
-printf "${C}║${NC}                                                                  ${C}║${NC}\n"
-printf "${C}║${Y}  If you do not know what you are doing, please do NOT           ${C}║${NC}\n"
-printf "${C}║${Y}  copy-paste commands via SSH.                                   ${C}║${NC}\n"
-printf "${C}║${NC}                                                                  ${C}║${NC}\n"
-printf "${C}║${NC}  Before pasting any command, contact our support team first     ${C}║${NC}\n"
-printf "${C}║${NC}  to understand what it does.                                    ${C}║${NC}\n"
-printf "${C}║${NC}                                                                  ${C}║${NC}\n"
-printf "${C}║${G}  Need support? Reach us at:                                     ${C}║${NC}\n"
-printf "${C}║${NC}    Email  : ${W}root@oxware.top${NC}                                    ${C}║${NC}\n"
-printf "${C}║${NC}    GitHub : ${W}https://github.com/ShinnAsukha/oxware-hypervisor${NC}   ${C}║${NC}\n"
-printf "${C}║${NC}    Docs   : ${W}https://oxware.top/docs${NC}                            ${C}║${NC}\n"
-printf "${C}║${NC}                                                                  ${C}║${NC}\n"
-printf "${C}╚══════════════════════════════════════════════════════════════════╝${NC}\n"
+printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
+printf "  ${BOLD}OXware Hypervisor${RESET}  |  %s  |  %s\n" "$HOST" "$DATE"
+printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
+printf "\n"
+printf "  ${RED}NOTICE:${RESET}  This system is restricted to authorized administrators.\n"
+printf "           All sessions are monitored and logged.\n"
+printf "\n"
+printf "  Do not execute commands obtained from external sources without\n"
+printf "  first verifying their purpose with the system administrator.\n"
+printf "\n"
+printf "  ${BOLD}Support${RESET}\n"
+printf "    Email   root@oxware.top\n"
+printf "    GitHub  https://github.com/ShinnAsukha/oxware-hypervisor\n"
+printf "    Docs    https://oxware.top/docs\n"
+printf "\n"
+printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
 printf "\n"
 MOTDSCRIPT
 chmod +x "${MOTD_DIR}/99-oxware"
