@@ -87,5 +87,21 @@ LOG_LEVEL     = get("logging", "level")
 USERS_FILE    = os.path.join(DATA_DIR, "users.json")
 NOVNC_DIR     = get("server", "novnc_dir") or _defaults["novnc_dir"]
 
+# ── Güvenlik yapılandırması ───────────────────────────────────────────────────
+# CORS: virgülle ayrılmış izinli origin listesi (boşsa same-origin only)
+# Örn: cors_origins = https://panel.example.com,https://admin.example.com
+CORS_ORIGINS_RAW = get("server", "cors_origins", "") or ""
+CORS_ORIGINS = [o.strip() for o in CORS_ORIGINS_RAW.split(",") if o.strip()]
+
+# Trusted proxy CIDR listesi (XFF başlığına yalnızca bu ağlardan güvenilir)
+# Örn: trusted_proxies = 127.0.0.1/32,10.0.0.1/32
+TRUSTED_PROXIES_RAW = get("server", "trusted_proxies", "127.0.0.1/32") or "127.0.0.1/32"
+TRUSTED_PROXIES = [p.strip() for p in TRUSTED_PROXIES_RAW.split(",") if p.strip()]
+
+# Güncelleme kanalı allow-list (yalnızca bu repo URL'lerine güncelleme izni)
+UPDATE_ALLOWED_REPOS_RAW = get("server", "update_allowed_repos",
+    "https://github.com/ShinnAsukha/oxware-hypervisor") or ""
+UPDATE_ALLOWED_REPOS = [r.strip() for r in UPDATE_ALLOWED_REPOS_RAW.split(",") if r.strip()]
+
 for d in [DATA_DIR, ISO_DIR, DISK_DIR, BACKUP_DIR, TEMPLATE_DIR, LOG_DIR]:
     os.makedirs(d, exist_ok=True)

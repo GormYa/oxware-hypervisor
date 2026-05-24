@@ -6,11 +6,14 @@ OXware Hypervisor backend module
 import json
 import hmac
 import hashlib
+import ipaddress
 import logging
 import os
+import socket
 import threading
 import uuid
 import time
+from urllib.parse import urlparse
 
 log = logging.getLogger("oxware.webhooks")
 
@@ -35,6 +38,40 @@ except ImportError:
     import urllib.request
     import urllib.error
     log.debug("requests not available — using urllib.request as fallback")
+
+# OXW-2026-017 fix: Webhook SSRF block-list
+# İç ağ / loopback / link-local adreslerine webhook gönderilmez
+_WEBHOOK_BLOCK_NETS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),   # link-local / AWS metadata
+    ipaddress.ip_network("100.64.0.0/10"),    # CGNAT
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),         # ULA IPv6
+    ipaddress.ip_network("fe80::/10"),        # link-local IPv6
+]
+_WEBHOOK_ALLOWED_SCHEMES = {"https", "http"}   # http allow for internal test, https strongly preferred
+
+def _validate_webhook_url(url: str) -> tuple:
+    """OXW-2026-017: URL'nin iç ağa yönlenmediğini doğrula."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in _WEBHOOK_ALLOWED_SCHEMES:
+            return False, f"İzinsiz şema: {parsed.scheme}"
+        hostname = parsed.hostname or ""
+        if not hostname:
+            return False, "Host bulunamadı"
+        try:
+            ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        except Exception:
+            return False, f"Host çözülemedi: {hostname}"
+        if any(ip in net for net in _WEBHOOK_BLOCK_NETS):
+            return False, f"İç ağ/loopback hedefi engellendi: {ip}"
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +220,13 @@ def _send(webhook, event_name, payload):
     Logs the delivery result.
     """
     url    = webhook["url"]
+    # OXW-2026-017 fix: SSRF kontrolü
+    valid, reason = _validate_webhook_url(url)
+    if not valid:
+        log.warning("Webhook SSRF engellendi [%s] %s: %s", webhook["id"], url, reason)
+        _log_delivery(webhook_id=webhook["id"], event=event_name, url=url,
+                      status_code=None, success=False, error=f"SSRF engellendi: {reason}")
+        return
     secret = webhook.get("secret", "")
     body   = json.dumps({
         "event":   event_name,

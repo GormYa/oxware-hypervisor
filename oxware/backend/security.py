@@ -321,14 +321,22 @@ def safe_error_handlers(app):
 # ── Yardımcı ──────────────────────────────────────────────────────────────────
 
 def _get_real_ip() -> str:
-    """Proxy arkasından gerçek IP al (güvenli)."""
-    # Yalnızca localhost/trusted proxy'den gelen X-Forwarded-For'a güven
+    """Proxy arkasından gerçek IP al (güvenli).
+    OXW-2026-004 fix: XFF başlığına yalnızca config.TRUSTED_PROXIES CIDR'inden
+    gelen isteklerde güvenilir. Diğer kaynaklardan gelen XFF başlıkları IP spoofing
+    için kullanılabilir ve rate-limit/lockout bypass'a yol açar.
+    """
+    import config as _cfg
     remote = request.remote_addr or ""
     try:
-        if ipaddress.ip_address(remote).is_loopback:
+        remote_addr = ipaddress.ip_address(remote)
+        _trusted_nets = [ipaddress.ip_network(c, strict=False)
+                         for c in _cfg.TRUSTED_PROXIES]
+        if any(remote_addr in net for net in _trusted_nets):
             xff = request.headers.get("X-Forwarded-For", "")
             if xff:
-                return xff.split(",")[0].strip()
+                # En sondaki IP'yi al: client, proxy1, proxy2, ..., trusted-proxy → biz
+                return xff.split(",")[-1].strip()
     except Exception:
         pass
     return remote

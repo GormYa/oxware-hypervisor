@@ -117,11 +117,9 @@ class Servers_Oxware
             $curl_opts[CURLOPT_CAINFO] = $ca_path;
         }
 
-        // Self-signed geliştirme ortamı: sunucu ayarından kontrol et
-        if (!empty($server['serversecure']) && $server['serversecure'] == 0) {
-            $curl_opts[CURLOPT_SSL_VERIFYPEER] = false;
-            $curl_opts[CURLOPT_SSL_VERIFYHOST] = 0;
-        }
+        // OXW-2026-011 fix: TLS doğrulama devre dışı bırakma seçeneği kaldırıldı.
+        // CURLOPT_SSL_VERIFYPEER her zaman true. Özel CA için ca_path kullanın.
+        // (Önceki: serversecure==0 ile VERIFYPEER=false yapılabiliyordu — MITM riski)
 
         curl_setopt_array($ch, $curl_opts);
 

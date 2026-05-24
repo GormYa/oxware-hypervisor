@@ -226,7 +226,12 @@ def authenticate(username, password):
     try:
         base_dn     = cfg.get("base_dn", "")
         user_filter = cfg.get("user_filter", "(objectClass=person)")
-        search_filter = f"(&{user_filter}(|(sAMAccountName={username})(uid={username})(mail={username})))"
+        # OXW-2026-018 fix: RFC 4515 LDAP filter escape — enjeksiyon önleme
+        def _ldap_escape(s: str) -> str:
+            return (s.replace("\\", r"\5c").replace("*", r"\2a")
+                     .replace("(", r"\28").replace(")", r"\29").replace("\x00", r"\00"))
+        safe_user     = _ldap_escape(username)
+        search_filter = f"(&{user_filter}(|(sAMAccountName={safe_user})(uid={safe_user})(mail={safe_user})))"
 
         admin_conn.search(
             search_base=base_dn,

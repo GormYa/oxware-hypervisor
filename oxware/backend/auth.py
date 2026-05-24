@@ -86,12 +86,14 @@ def _load_users():
     with open(config.USERS_FILE) as f:
         users = json.load(f)
     # Migrate legacy plain-sha256 hashes on load
+    # OXW-2026-013 fix: migrated bayrağı artık doğru set ediliyor
     migrated = False
     for uname, udata in users.items():
         stored = udata.get("password", "")
         if stored and not stored.startswith("pbkdf2_sha256$"):
             # Can't rehash without plaintext — mark for forced reset
             udata["legacy_hash"] = True
+            migrated = True   # ← FIX: önceden bu satır yoktu, dosya hiç yazılmıyordu
     if migrated:
         _save_users(users)
     return users
@@ -139,12 +141,37 @@ def list_users():
     ]
 
 
+_COMMON_PASSWORDS = {
+    "123456", "password", "qwerty", "abc123", "111111", "12345678",
+    "1234567890", "000000", "admin", "letmein", "welcome", "monkey",
+    "dragon", "master", "sunshine", "princess", "shadow", "trustno1",
+    "oxware", "123456789", "pass", "test", "root", "toor", "changeme",
+}
+
+def _validate_password_policy(password: str):
+    """Parola politikası: min 8 karakter, karmaşık, yaygın şifreler yasak.
+    Rapor OXW / rapor.md #19 fix.
+    """
+    if not password or len(password) < 8:
+        raise ValueError("Şifre en az 8 karakter olmalı")
+    if password.lower() in _COMMON_PASSWORDS:
+        raise ValueError("Çok yaygın bir şifre. Daha güvenli bir şifre seçin.")
+    has_upper  = any(c.isupper() for c in password)
+    has_lower  = any(c.islower() for c in password)
+    has_digit  = any(c.isdigit() for c in password)
+    has_symbol = any(not c.isalnum() for c in password)
+    if sum([has_upper, has_lower, has_digit, has_symbol]) < 3:
+        raise ValueError("Şifre büyük harf, küçük harf, rakam veya sembolden en az 3'ünü içermeli")
+
 def create_user(username, password, role="operator"):
+    # rapor.md #19 fix: parola politikası zorunlu (None = LDAP kullanıcı, muaf)
+    if password is not None:
+        _validate_password_policy(password)
     users = _load_users()
     if username in users:
         raise ValueError(f"Kullanıcı zaten mevcut: {username}")
     users[username] = {
-        "password": _hash_password(password),
+        "password": _hash_password(password) if password else None,
         "role":     role,
         "created":  time.time(),
     }
@@ -162,6 +189,7 @@ def delete_user(username):
 
 
 def change_password(username, new_password):
+    _validate_password_policy(new_password)
     users = _load_users()
     if username not in users:
         raise ValueError(f"Kullanıcı bulunamadı: {username}")

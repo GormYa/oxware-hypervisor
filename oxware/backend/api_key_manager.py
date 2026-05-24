@@ -5,6 +5,7 @@ Veri: /var/lib/oxware/api_keys.json
 
 import json
 import hashlib
+import hmac
 import secrets
 import uuid
 import threading
@@ -45,9 +46,31 @@ def _save(data):
         log.error("_save hatası: %s", e)
 
 
+def _get_pepper() -> bytes:
+    """Server-side pepper — API key hash'lerini offline brute-force'a karşı korur."""
+    pepper_file = "/etc/oxware/api_key_pepper.bin"
+    if os.path.exists(pepper_file):
+        try:
+            with open(pepper_file, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    # Pepper yoksa oluştur ve kaydet
+    pepper = secrets.token_bytes(32)
+    try:
+        os.makedirs("/etc/oxware", exist_ok=True)
+        with open(pepper_file, "wb") as f:
+            f.write(pepper)
+        os.chmod(pepper_file, 0o600)
+    except Exception:
+        pass
+    return pepper
+
 def _hash(key):
-    """API key'i SHA-256 ile hash'ler; hex string döndürür."""
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+    """OXW-2026-019 fix: API key'i server-pepper HMAC-SHA256 ile hash'ler.
+    Önceki plain SHA-256 → pepper'lı HMAC ile değiştirildi.
+    """
+    return hmac.new(_get_pepper(), key.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +133,8 @@ def validate_key(raw_key):
         with _lock:
             data = _load()
             for key_id, entry in data.items():
-                if entry.get("key_hash") != key_hash:
+                # OXW-2026-019 fix: sabit-zamanlı karşılaştırma (timing oracle önleme)
+                if not hmac.compare_digest(entry.get("key_hash", ""), key_hash):
                     continue
                 if not entry.get("active", False):
                     return None

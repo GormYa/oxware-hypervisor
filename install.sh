@@ -5,7 +5,9 @@
 #  https://github.com/ShinnAsukha/oxware-hypervisor
 # ============================================================
 
-# set -e kaldırıldı — &&-guard kalıplarıyla çakışıyor, hatalar açıkça yönetiliyor
+# OXW-2026-010 fix: set -e aktif — kritik hatalar kurulumu durdurur
+# Opsiyonel adımlar için || true veya warn_skip kullanılır
+set -uo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; WHITE='\033[1;37m'; NC='\033[0m'
@@ -660,24 +662,34 @@ configure_ssh() {
     systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
     systemctl start  ssh 2>/dev/null || systemctl start  sshd 2>/dev/null || true
 
-    # SSH config — root login ve PasswordAuthentication aktif tut
+    # SSH config — güvenli yapılandırma (rapor.md #33 / OXW güvenlik fix)
+    # PermitRootLogin yes VE PasswordAuthentication yes kombinasyonu brute-force davetiyesidir.
+    # Root giriş: prohibit-password (SSH key varsa izin ver, şifre ile hayır)
+    # PasswordAuthentication: varsayılan olarak kapalı — SSH key kullanımı zorunlu
     SSH_CONF="/etc/ssh/sshd_config"
     if [ -f "$SSH_CONF" ]; then
-        # PermitRootLogin yes
+        # PermitRootLogin prohibit-password — şifre ile root girişi kapalı
         if grep -q "^#*PermitRootLogin" "$SSH_CONF"; then
-            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSH_CONF"
+            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' "$SSH_CONF"
         else
-            echo "PermitRootLogin yes" >> "$SSH_CONF"
+            echo "PermitRootLogin prohibit-password" >> "$SSH_CONF"
         fi
-        # PasswordAuthentication yes
+        # PasswordAuthentication no — yalnızca SSH key
         if grep -q "^#*PasswordAuthentication" "$SSH_CONF"; then
-            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSH_CONF"
+            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' "$SSH_CONF"
         else
-            echo "PasswordAuthentication yes" >> "$SSH_CONF"
+            echo "PasswordAuthentication no" >> "$SSH_CONF"
+        fi
+        # MaxAuthTries: brute-force'u yavaşlat
+        if grep -q "^#*MaxAuthTries" "$SSH_CONF"; then
+            sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' "$SSH_CONF"
+        else
+            echo "MaxAuthTries 3" >> "$SSH_CONF"
         fi
         systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
     fi
-    log "SSH servisi etkinleştirildi"
+    warn "SSH şifre girişi KAPALI. Sunucuya erişmek için SSH key kullanın."
+    log "SSH servisi etkinleştirildi (key-only mod)"
 }
 
 # ── Hostname Kalıcı Konfigürasyon ────────────────────────────

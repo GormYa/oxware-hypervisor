@@ -14,6 +14,7 @@ Kontrol listesi (Proxmox/KVM best practices):
  10. Account lockout (başarısız login takibi)
 """
 
+import json
 import os
 import re
 import subprocess
@@ -25,12 +26,44 @@ from typing import Optional
 log = logging.getLogger("oxware.security_hardening")
 
 # ── Başarısız login takibi (username bazlı lockout) ───────────────────────────
+# OXW-2026-006 fix: lockout state diske persist edilir — restart'ta sıfırlanmaz.
 
 _failed_lock   = threading.Lock()
 _failed_logins: dict = {}   # {username: {"count": int, "locked_until": float}}
+_LOCKOUT_FILE  = "/var/lib/oxware/lockouts.json"
 
 LOCKOUT_THRESHOLD = 5       # Bu kadar başarısız denemeden sonra kilitle
 LOCKOUT_DURATION  = 300     # 5 dakika kilit
+
+
+def _lockout_load():
+    """Disk'ten lockout state'ini yükle."""
+    global _failed_logins
+    if os.path.exists(_LOCKOUT_FILE):
+        try:
+            with open(_LOCKOUT_FILE) as f:
+                _failed_logins = json.load(f)
+        except Exception as e:
+            log.warning("lockout dosyası okunamadı: %s", e)
+            _failed_logins = {}
+
+
+def _lockout_save():
+    """Lockout state'ini atomik olarak diske yaz."""
+    try:
+        now = time.time()
+        # Süresi dolmuş girişleri temizle
+        active = {u: d for u, d in _failed_logins.items() if d.get("locked_until", 0) > now or d.get("count", 0) > 0}
+        tmp = _LOCKOUT_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(active, f)
+        os.replace(tmp, _LOCKOUT_FILE)
+    except Exception as e:
+        log.warning("lockout kayıt hatası: %s", e)
+
+
+# Başlangıçta yükle
+_lockout_load()
 
 
 def record_failed_login(username: str):
@@ -41,14 +74,16 @@ def record_failed_login(username: str):
         if entry["count"] >= LOCKOUT_THRESHOLD:
             entry["locked_until"] = now + LOCKOUT_DURATION
             log.warning("Account lockout: %s — %d başarısız deneme", username, entry["count"])
+        _lockout_save()
 
 
 def record_successful_login(username: str):
     with _failed_lock:
         _failed_logins.pop(username, None)
+        _lockout_save()
 
 
-def is_account_locked(username: str) -> tuple[bool, int]:
+def is_account_locked(username: str) -> tuple:
     """(locked: bool, seconds_remaining: int) döndür."""
     now = time.time()
     with _failed_lock:
@@ -60,6 +95,7 @@ def is_account_locked(username: str) -> tuple[bool, int]:
         # Kilit süresi geçti — sıfırla
         if entry["locked_until"] > 0:
             _failed_logins.pop(username, None)
+            _lockout_save()
     return False, 0
 
 

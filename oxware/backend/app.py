@@ -126,10 +126,20 @@ app.config["MAX_FORM_PARTS"]           = 256                 # max multipart par
 # Security: restrict JWT to HS256 only — blocks alg:none / RSA confusion attacks
 app.config["JWT_ALGORITHM"]            = "HS256"
 app.config["JWT_DECODE_ALGORITHMS"]    = ["HS256"]
+# OXW-2026-001 fix: JWT cookie security attributes (SameSite=Strict blocks CSRF)
+app.config["JWT_COOKIE_SECURE"]        = True
+app.config["JWT_COOKIE_SAMESITE"]      = "Strict"
+app.config["JWT_COOKIE_CSRF_PROTECT"]  = True
 
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+# OXW-2026-002 fix: CORS origins operatör config'inden gelir, wildcard yok
+# /etc/oxware/oxware.conf → [server] → cors_origins = https://panel.example.com
+if config.CORS_ORIGINS:
+    CORS(app, resources={r"/api/*": {"origins": config.CORS_ORIGINS}}, supports_credentials=True)
+# else: CORS yok — frontend same-origin'den serve edilir
 jwt     = JWTManager(app)
-sock    = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", logger=False)
+# OXW-2026-002 fix: SocketIO CORS da config'den gelsin
+_sock_origins = config.CORS_ORIGINS if config.CORS_ORIGINS else []
+sock    = SocketIO(app, cors_allowed_origins=_sock_origins, async_mode="eventlet", logger=False)
 
 # ── VNC WebSocket proxy — manual RFC 6455 + eventlet trampoline ───────────────
 # @_evws.WebSocketWSGI fails in eventlet 0.35.x (returns 400, handler not called).
@@ -231,6 +241,11 @@ def _ws_recv_frame(sock):
         b = _ws_recvall(sock, 8)
         if not b: return None, None
         length = _struct.unpack(">Q", b)[0]
+    # OXW-2026-016 fix: 16 MiB çerçeve sınırı — bellek bombası DoS önleme
+    _WS_MAX_FRAME = 16 * 1024 * 1024
+    if length > _WS_MAX_FRAME:
+        log.warning("VNC WS: çerçeve çok büyük (%d > %d) — bağlantı kapatılıyor", length, _WS_MAX_FRAME)
+        return None, None
     mask_key = _ws_recvall(sock, 4) if masked else b""
     if mask_key is None: return None, None
     payload  = _ws_recvall(sock, length) if length else b""
@@ -456,8 +471,12 @@ def _check_csrf():
     # Token, /api/auth/csrf endpoint'inden alınır ve localStorage'da saklanır
     csrf_header = request.headers.get("X-CSRF-Token", "")
     csrf_cookie = request.cookies.get("csrf_token", "")
+    # OXW-2026-001 fix: Authorization: Bearer header ile gelen API çağrıları
+    # cookie taşımaz, CSRF'e karşı korumalıdır — yalnızca cookie tabanlı JWT'de zorunlu
+    if request.headers.get("Authorization", "").startswith("Bearer "):
+        return  # Header-based JWT: CSRF riski yok
     if not csrf_header or not csrf_cookie:
-        return  # Token yoksa geç — backward compatibility (JWT zaten koruma sağlıyor)
+        return jsonify({"status": "error", "error": "CSRF token gerekli"}), 403
     if not hmac.compare_digest(csrf_header, csrf_cookie):
         return jsonify({"status": "error", "error": "CSRF token geçersiz"}), 403
 
@@ -763,7 +782,28 @@ def api_setup_init():
         return err(e)
 
 # ── 2FA pending store (in-memory, 5 dk TTL) ───────────────────────────────────
+# OXW-2026-020 fix: threading.Lock ile TOCTOU penceresi kapatıldı.
+# Atomik pop ile temp_token tekrar kullanımı engellendi.
+# Arka plan cleanup thread'i bellek sızıntısını önler.
+import threading as _threading
+_2fa_lock    = _threading.Lock()
 _2fa_pending: dict = {}  # temp_token → {username, expires, ip, ua}
+
+def _2fa_cleanup_worker():
+    """Süresi dolmuş 2FA pending token'larını temizle (bellek sızıntısı önleme)."""
+    while True:
+        try:
+            _time_mod.sleep(60)
+            now = _time_mod.time()
+            with _2fa_lock:
+                expired = [t for t, v in _2fa_pending.items() if v.get("expires", 0) < now]
+                for t in expired:
+                    _2fa_pending.pop(t, None)
+        except Exception:
+            pass
+
+_t_2fa_cleanup = _threading.Thread(target=_2fa_cleanup_worker, daemon=True, name="2fa-cleanup")
+_t_2fa_cleanup.start()
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/api/auth/login", methods=["POST"])
@@ -824,12 +864,13 @@ def api_login():
     if totp_mgr and totp_mgr.is_enabled(username):
         import uuid as _uuid
         temp_token = str(_uuid.uuid4())
-        _2fa_pending[temp_token] = {
-            "username": username,
-            "expires": time.time() + 300,  # 5 dakika
-            "ip": request.headers.get("X-Forwarded-For", request.remote_addr or ""),
-            "ua": request.headers.get("User-Agent", "")[:120],
-        }
+        with _2fa_lock:
+            _2fa_pending[temp_token] = {
+                "username": username,
+                "expires":  time.time() + 300,
+                "ip":       request.headers.get("X-Forwarded-For", request.remote_addr or ""),
+                "ua":       request.headers.get("User-Agent", "")[:120],
+            }
         ev.info(f"2FA bekleniyor: {username} / {request.remote_addr}", category="auth")
         return jsonify({"requires_2fa": True, "temp_token": temp_token}), 200
     # ── 2FA yok: direkt JWT ver ───────────────────────────────────────────────
@@ -866,20 +907,19 @@ def api_2fa_verify_login():
     code = data.get("code", "").strip()
     if not temp_token or not code:
         return err("temp_token ve code zorunludur", 400)
-    # Pending kaydı bul
-    pending = _2fa_pending.get(temp_token)
+    # OXW-2026-020 fix: atomik pop — temp_token tek kullanımlık, TOCTOU penceresi yok
+    with _2fa_lock:
+        pending = _2fa_pending.pop(temp_token, None)
     if not pending:
         return err("Geçersiz veya süresi dolmuş token", 401)
     if time.time() > pending["expires"]:
-        _2fa_pending.pop(temp_token, None)
         return err("2FA süresi doldu. Tekrar giriş yapın.", 401)
     username = pending["username"]
     # TOTP doğrula
     if not totp_mgr or not totp_mgr.verify_totp(username, code):
         ev.warn(f"Geçersiz 2FA kodu: {username} / {request.remote_addr}", category="auth")
         return err("Geçersiz doğrulama kodu", 401)
-    # Başarılı — temp token tüket
-    _2fa_pending.pop(temp_token, None)
+    # temp_token zaten atomik pop ile tüketildi (OXW-2026-020)
     # Gerçek JWT ver
     token = create_access_token(identity=username)
     if sess_mgr:
@@ -925,31 +965,14 @@ def api_2fa_enable():
     ok_ = totp_mgr.enable_totp(username, code)
     return ok({"success": ok_}) if ok_ else err("Geçersiz kod")
 
+# OXW-2026-005 fix: /api/auth/2fa/debug üretim ortamından kaldırıldı.
+# Anlık TOTP kodunu döndürmek 2FA'yı anlamsız kılar (same-channel ifşa).
+# Saat senkronizasyonu için yalnızca server_timestamp döndüren endpoint yeterli.
 @app.route("/api/auth/2fa/debug")
 @require_auth
 def api_2fa_debug():
-    """Sunucu saati + anlık beklenen kodu döndür (geliştirme/teşhis)."""
-    import datetime
-    username = get_jwt_identity()
-    if not totp_mgr: return err("2FA modülü yüklenemedi")
-    data  = totp_mgr._load()
-    entry = data.get(username, {})
-    secret = entry.get("secret", "")
-    current_code = ""
-    if secret:
-        try:
-            import pyotp
-            current_code = pyotp.TOTP(secret).now()
-        except Exception:
-            pass
-    return ok(
-        server_time      = datetime.datetime.utcnow().isoformat() + "Z",
-        server_timestamp = int(time.time()),
-        time_window      = int(time.time()) // 30,
-        current_totp     = current_code,   # sunucunun beklediği kod
-        has_secret       = bool(secret),
-        enabled          = entry.get("enabled", False),
-    )
+    """2FA debug endpoint — DEVRE DIŞI (OXW-2026-005)."""
+    return err("Bu endpoint üretim ortamında devre dışıdır.", 410)
 
 @app.route("/api/auth/2fa/disable", methods=["DELETE"])
 @require_auth
@@ -3226,36 +3249,49 @@ def api_test_notification():
     return ok(**result)
 
 # ── Güncelleme Sistemi ────────────────────────────────────────────────────────
+# OXW-2026-014 fix: Tüm /api/update/* endpoint'leri administrator rolü gerektirir.
+# Önceden yalnızca @require_auth vardı — herhangi bir kullanıcı kötü amaçlı
+# repo_url ile supply-chain RCE yapabiliyordu (CVSS 9.9).
 @app.route("/api/update/config")
 @require_auth
+@require_role("administrator")
 def api_update_config_get():
     return ok(**updater.get_config())
 
 @app.route("/api/update/config", methods=["POST"])
 @require_auth
+@require_role("administrator")
 def api_update_config_save():
     data = request.get_json() or {}
     repo_url   = data.get("repo_url", updater.DEFAULT_REPO_URL).strip() or updater.DEFAULT_REPO_URL
     branch     = data.get("branch", updater.DEFAULT_BRANCH).strip() or updater.DEFAULT_BRANCH
     auto_check = bool(data.get("auto_check", False))
+    # OXW-2026-015 fix: repo_url allow-list kontrolü
+    if repo_url not in config.UPDATE_ALLOWED_REPOS:
+        ev.warn(f"Güncelleme: izinsiz repo_url reddedildi: {repo_url}", category="system")
+        return err(f"Bu repo URL'si güncelleme kanalı olarak izinli değil. "
+                   f"İzinli URL'ler: {', '.join(config.UPDATE_ALLOWED_REPOS)}", 400)
     updater.save_config(repo_url, branch, auto_check)
     ev.info("Güncelleme yapılandırması kaydedildi", category="system")
     return ok(message="Kaydedildi")
 
 @app.route("/api/update/check")
 @require_auth
+@require_role("administrator")
 def api_update_check():
     result = updater.check_updates_with_ai()
     return ok(**result)
 
 @app.route("/api/update/last")
 @require_auth
+@require_role("administrator")
 def api_update_last():
     """Son otomatik kontrol sonucunu döndür (AI analizi dahil)."""
     return ok(**updater.get_last_check())
 
 @app.route("/api/update/apply", methods=["POST"])
 @require_auth
+@require_role("administrator")
 def api_update_apply():
     result = updater.apply_update()
     if result.get("success"):
@@ -3266,6 +3302,7 @@ def api_update_apply():
 
 @app.route("/api/update/history")
 @require_auth
+@require_role("administrator")
 def api_update_history():
     return ok(history=updater.get_update_history())
 
@@ -7003,6 +7040,19 @@ def api_pentest_run():
     d = request.get_json() or {}
     host = d.get("host", "127.0.0.1")
     port = int(d.get("port", config.PORT))
+    # OXW-2026-007 fix: iç ağ / loopback hedeflerini engelle (SSRF önleme)
+    import ipaddress as _ipa, socket as _sk
+    _PENTEST_BLOCK_NETS = [
+        _ipa.ip_network("10.0.0.0/8"), _ipa.ip_network("172.16.0.0/12"),
+        _ipa.ip_network("192.168.0.0/16"), _ipa.ip_network("169.254.0.0/16"),
+        _ipa.ip_network("fc00::/7"), _ipa.ip_network("::1/128"),
+    ]
+    try:
+        _target_ip = _ipa.ip_address(_sk.gethostbyname(host))
+        if _target_ip.is_loopback or any(_target_ip in n for n in _PENTEST_BLOCK_NETS):
+            return err(f"Pentest hedefi iç ağa işaret ediyor, engellendi: {host}", 400)
+    except Exception as _e:
+        return err(f"Hedef çözülemedi: {_e}", 400)
     import threading
     def _run():
         pentest._last_result = pentest.run_pentest(host, port)
