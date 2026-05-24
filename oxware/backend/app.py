@@ -11834,100 +11834,235 @@ def api_migration_esxi_import():
                 try:
                     sftp2 = client2.open_sftp()
                     try:
-                        # Determine which VMDKs to download
-                        # j_vmx_disks: absolute paths from VMX parse (may be empty)
-                        if j_vmx_disks:
-                            remote_vmdks = j_vmx_disks
-                        else:
-                            # Fallback: list directory and pick descriptor VMDKs
-                            _import_job_update(j_id, step="VMDK listesi alınıyor", percent=7)
-                            try:
-                                dir_items = sftp2.listdir(j_vmx_dir)
-                            except Exception:
-                                dir_items = []
-                            remote_vmdks = []
-                            for item in dir_items:
-                                il = item.lower()
-                                if (il.endswith(".vmdk") and
-                                        "-flat" not in il and
-                                        not _re_vmdk_extent.search(il)):
-                                    remote_vmdks.append(j_vmx_dir.rstrip("/") + "/" + item)
-                            if not remote_vmdks:
-                                _import_job_update(j_id, status="error",
-                                                   step="Hata: VMDK bulunamadı",
-                                                   percent=0, finished=time.time())
-                                return
+                        # ── PRIMARY METHOD: OVA export via ovftool ────────────────────────
+                        # ovftool goes through ESXi's proper storage stack → no sparse grain
+                        # misread → STREAMOPTIMIZED VMDK inside OVA is complete & correct.
+                        # Falls back to direct VMDK SFTP if ovftool not available.
+                        _ova_method_used = False
+                        _import_job_update(j_id, step="ovftool kontrol ediliyor", percent=6)
+                        try:
+                            _ot_chk_stdin, _ot_chk_out, _ot_chk_err = client2.exec_command(
+                                "ls /usr/lib/vmware/ovftool/ovftool 2>/dev/null && echo OVF_OK || echo OVF_NO",
+                                timeout=15)
+                            _ot_avail = _ot_chk_out.read().decode(errors="replace").strip() == "OVF_OK"
+                        except Exception:
+                            _ot_avail = False
 
-                        total_vmdks = len(remote_vmdks)
-                        for vd_idx, remote_vmdk in enumerate(remote_vmdks):
-                            vd_name = remote_vmdk.rsplit("/", 1)[-1]
-                            pct_base = 8 + vd_idx * 62 // max(total_vmdks, 1)
-                            pct_end  = 8 + (vd_idx + 1) * 62 // max(total_vmdks, 1)
-                            try:
-                                remote_size = sftp2.stat(remote_vmdk).st_size or 1
-                            except Exception:
-                                remote_size = 1
-                            sz_gb = round(remote_size / (1024 ** 3), 1)
+                        if _ot_avail:
+                            log.info("ESXi ovftool mevcut, OVA export denenecek")
+                            # Determine datastore from VMX directory path
+                            # j_vmx_dir example: /vmfs/volumes/datastore1/vmname
+                            if "/vmfs/volumes/" in j_vmx_dir:
+                                _ds_name = j_vmx_dir.split("/vmfs/volumes/")[1].split("/")[0]
+                            else:
+                                _ds_name = "datastore1"
+                            _ova_rem = f"/vmfs/volumes/{_ds_name}/oxw_export_{j_vmid}.ova"
                             _import_job_update(j_id,
-                                               step=f"VMDK [{vd_idx+1}/{total_vmdks}]: {vd_name} ({sz_gb} GB)",
-                                               percent=pct_base)
-                            local_tmp = _IMPORT_DIR / f"esxi_{j_vmid}_disk{vd_idx}.vmdk"
-
-                            def _make_prg_e(base, end, vd_n):
-                                def _prg_e(tx, tot):
-                                    pct = min(end, int(base + (end - base) * tx / max(tot, 1)))
-                                    mb = round(tx / 1048576, 1)
-                                    tot_mb = round(tot / 1048576, 1)
+                                               step=f"OVA export başlatılıyor: {j_vm_name}",
+                                               percent=8)
+                            import urllib.parse as _urlp
+                            _enc_pass = _urlp.quote(str(password), safe="")
+                            _enc_user = _urlp.quote(str(user), safe="")
+                            _ot_cmd = (
+                                f"/usr/lib/vmware/ovftool/ovftool "
+                                f"--noSSLVerify --skipManifestCheck --overwrite "
+                                f"'vi://{_enc_user}:{_enc_pass}@localhost/{j_vm_name}' "
+                                f"'{_ova_rem}'"
+                            )
+                            try:
+                                _ot_stdin, _ot_stdout, _ot_stderr = client2.exec_command(
+                                    _ot_cmd, timeout=14400)  # 4h max for large VMs
+                                # Stream stdout for progress updates
+                                _ot_pct = 8
+                                for _ot_line in _ot_stdout:
+                                    _ot_line = _ot_line.strip()
+                                    if not _ot_line:
+                                        continue
+                                    log.info("ovftool: %s", _ot_line)
+                                    # ovftool prints "Transfer Completed" at end
+                                    # and progress like "Disk progress: 45%"
+                                    if "%" in _ot_line:
+                                        import re as _re_ot
+                                        _m = _re_ot.search(r"(\d+)%", _ot_line)
+                                        if _m:
+                                            _ot_pct = 8 + int(_m.group(1)) * 42 // 100
                                     _import_job_update(j_id,
-                                                       step=f"İndirilıyor [{vd_n}]: {mb}/{tot_mb} MB",
-                                                       percent=pct)
-                                return _prg_e
+                                                       step=f"OVA export: {_ot_line[:80]}",
+                                                       percent=min(50, _ot_pct))
+                                _ot_exit = _ot_stdout.channel.recv_exit_status()
+                                if _ot_exit != 0:
+                                    _ot_err_txt = _ot_stderr.read().decode(errors="replace")
+                                    log.warning("ovftool çıkış kodu %d: %s", _ot_exit, _ot_err_txt)
+                                    ev.warn(f"ovftool başarısız (kod {_ot_exit}), VMDK fallback'e geçiliyor",
+                                            category="vm")
+                                else:
+                                    # Download OVA from ESXi
+                                    _import_job_update(j_id, step="OVA indiriliyor", percent=51)
+                                    _ova_local = _IMPORT_DIR / f"esxi_{j_vmid}.ova"
+                                    try:
+                                        _ova_stat = sftp2.stat(_ova_rem)
+                                        _ova_size = _ova_stat.st_size or 1
+                                    except Exception:
+                                        _ova_size = 1
+                                    _ova_gb = round(_ova_size / (1024 ** 3), 1)
+                                    log.info("OVA boyutu: %s GB", _ova_gb)
 
-                            sftp2.get(remote_vmdk, str(local_tmp),
-                                      callback=_make_prg_e(pct_base, pct_end, vd_name))
+                                    def _ova_prg(tx, _tot):
+                                        _p = min(70, 51 + int(19 * tx / max(_ova_size, 1)))
+                                        _mb = round(tx / 1048576, 1)
+                                        _tmb = round(_ova_size / 1048576, 1)
+                                        _import_job_update(j_id,
+                                                           step=f"OVA indiriliyor: {_mb}/{_tmb} MB",
+                                                           percent=_p)
 
-                            # ── ESXi VMDK flat file: descriptor referans ettiği veri dosyasını da indir ──
-                            # VMDK descriptor (.vmdk) → veri: testoxware-flat.vmdk
-                            # qemu-img descriptor'ı açar, flat dosyayı aynı dizinde arar.
-                            # Flat dosya OLMADAN: "Could not open 'testoxware-flat.vmdk': No such file"
-                            # Cancellation check after descriptor download
-                            with _import_jobs_lock:
-                                if _import_jobs.get(j_id, {}).get("status") == "cancelled":
+                                    sftp2.get(_ova_rem, str(_ova_local), callback=_ova_prg)
+                                    # Cleanup OVA from ESXi to free space
+                                    try:
+                                        client2.exec_command(f"rm -f '{_ova_rem}'", timeout=30)
+                                    except Exception:
+                                        pass
+
+                                    # Extract VMDK(s) from OVA (tar archive)
+                                    _import_job_update(j_id, step="OVA açılıyor", percent=71)
+                                    import tarfile as _tarf
+                                    _ova_disk_idx = 0
+                                    try:
+                                        with _tarf.open(str(_ova_local), "r") as _tar:
+                                            for _tm in _tar.getmembers():
+                                                if _tm.name.lower().endswith(".vmdk"):
+                                                    _ova_vmdk_dest = _IMPORT_DIR / f"esxi_{j_vmid}_disk{_ova_disk_idx}.vmdk"
+                                                    _import_job_update(
+                                                        j_id,
+                                                        step=f"OVA: {_tm.name} çıkartılıyor",
+                                                        percent=72 + _ova_disk_idx)
+                                                    _tf_src = _tar.extractfile(_tm)
+                                                    if _tf_src is None:
+                                                        continue
+                                                    import shutil as _sh_ova
+                                                    with open(str(_ova_vmdk_dest), "wb") as _tf_dst:
+                                                        _sh_ova.copyfileobj(_tf_src, _tf_dst)
+                                                    _tf_src.close()
+                                                    local_vmdks.append(str(_ova_vmdk_dest))
+                                                    log.info("OVA VMDK çıkartıldı: %s → %s",
+                                                             _tm.name, _ova_vmdk_dest)
+                                                    _ova_disk_idx += 1
+                                    finally:
+                                        try:
+                                            _ova_local.unlink()
+                                        except Exception:
+                                            pass
+
+                                    if local_vmdks:
+                                        _ova_method_used = True
+                                        ev.info(
+                                            f"OVA export: {j_vm_name} → {len(local_vmdks)} disk(ler) hazır",
+                                            category="vm")
+                                    else:
+                                        log.warning("OVA içinde VMDK bulunamadı, fallback")
+                            except Exception as _ot_err:
+                                log.warning("ovftool export hatası: %s — fallback VMDK SFTP", _ot_err)
+                                ev.warn(f"ovftool hatası: {_ot_err} — VMDK fallback",
+                                        category="vm")
+                        else:
+                            log.info("ovftool bulunamadı, VMDK SFTP fallback")
+
+                        # ── FALLBACK: Direct VMDK SFTP download ──────────────────────────
+                        # Used when ovftool unavailable or OVA export failed.
+                        if not local_vmdks:
+                            # Determine which VMDKs to download
+                            # j_vmx_disks: absolute paths from VMX parse (may be empty)
+                            if j_vmx_disks:
+                                remote_vmdks = j_vmx_disks
+                            else:
+                                # Fallback: list directory and pick descriptor VMDKs
+                                _import_job_update(j_id, step="VMDK listesi alınıyor", percent=7)
+                                try:
+                                    dir_items = sftp2.listdir(j_vmx_dir)
+                                except Exception:
+                                    dir_items = []
+                                remote_vmdks = []
+                                for item in dir_items:
+                                    il = item.lower()
+                                    if (il.endswith(".vmdk") and
+                                            "-flat" not in il and
+                                            not _re_vmdk_extent.search(il)):
+                                        remote_vmdks.append(j_vmx_dir.rstrip("/") + "/" + item)
+                                if not remote_vmdks:
+                                    _import_job_update(j_id, status="error",
+                                                       step="Hata: VMDK bulunamadı",
+                                                       percent=0, finished=time.time())
                                     return
 
-                            _flat_refs = _parse_vmdk_extents(local_tmp)
-                            _remote_vmdk_dir = remote_vmdk.rsplit("/", 1)[0]
-                            for _flat_ref in _flat_refs:
-                                _flat_remote = _remote_vmdk_dir + "/" + _flat_ref
-                                # Save flat with original name — qemu-img looks for it by name from descriptor
-                                _flat_local  = _IMPORT_DIR / _flat_ref
-                                if _flat_local.exists():
-                                    log.info("ESXi flat zaten mevcut: %s", _flat_local)
-                                    continue
+                            total_vmdks = len(remote_vmdks)
+                            for vd_idx, remote_vmdk in enumerate(remote_vmdks):
+                                vd_name = remote_vmdk.rsplit("/", 1)[-1]
+                                pct_base = 8 + vd_idx * 62 // max(total_vmdks, 1)
+                                pct_end  = 8 + (vd_idx + 1) * 62 // max(total_vmdks, 1)
                                 try:
-                                    _flat_sz = sftp2.stat(_flat_remote).st_size or 1
-                                    _flat_gb = round(_flat_sz / (1024**3), 1)
-                                    _import_job_update(j_id,
-                                                       step=f"Flat disk [{_flat_ref}] indiriliyor ({_flat_gb} GB)",
-                                                       percent=pct_base)
-                                    def _make_flat_prg(_base, _end, _ref, _tot_bytes):
-                                        def _flat_cb(tx, _ignored):
-                                            _pct = min(_end, int(_base + (_end - _base) * tx / max(_tot_bytes, 1)))
-                                            _mb = round(tx / 1048576, 1)
-                                            _tmb = round(_tot_bytes / 1048576, 1)
-                                            _import_job_update(j_id,
-                                                               step=f"Flat [{_ref}]: {_mb}/{_tmb} MB",
-                                                               percent=_pct)
-                                        return _flat_cb
-                                    sftp2.get(_flat_remote, str(_flat_local),
-                                              callback=_make_flat_prg(pct_base, pct_end, _flat_ref, _flat_sz))
-                                    log.info("ESXi flat indirildi: %s → %s", _flat_remote, _flat_local)
-                                    ev.info(f"ESXi flat download: {_flat_ref} ({_flat_gb} GB)", category="vm")
-                                except Exception as _flat_err:
-                                    log.warning("ESXi flat indirilemedi: %s — %s", _flat_remote, _flat_err)
-                                    ev.warn(f"ESXi flat indirilemedi: {_flat_ref}: {_flat_err}", category="vm")
+                                    remote_size = sftp2.stat(remote_vmdk).st_size or 1
+                                except Exception:
+                                    remote_size = 1
+                                sz_gb = round(remote_size / (1024 ** 3), 1)
+                                _import_job_update(j_id,
+                                                   step=f"VMDK [{vd_idx+1}/{total_vmdks}]: {vd_name} ({sz_gb} GB)",
+                                                   percent=pct_base)
+                                local_tmp = _IMPORT_DIR / f"esxi_{j_vmid}_disk{vd_idx}.vmdk"
 
-                            local_vmdks.append(str(local_tmp))
+                                def _make_prg_e(base, end, vd_n):
+                                    def _prg_e(tx, tot):
+                                        pct = min(end, int(base + (end - base) * tx / max(tot, 1)))
+                                        mb = round(tx / 1048576, 1)
+                                        tot_mb = round(tot / 1048576, 1)
+                                        _import_job_update(j_id,
+                                                           step=f"İndirilıyor [{vd_n}]: {mb}/{tot_mb} MB",
+                                                           percent=pct)
+                                    return _prg_e
+
+                                sftp2.get(remote_vmdk, str(local_tmp),
+                                          callback=_make_prg_e(pct_base, pct_end, vd_name))
+
+                                # ── ESXi VMDK flat file: descriptor referans ettiği veri dosyasını da indir ──
+                                # VMDK descriptor (.vmdk) → veri: testoxware-flat.vmdk
+                                # qemu-img descriptor'ı açar, flat dosyayı aynı dizinde arar.
+                                # Flat dosya OLMADAN: "Could not open 'testoxware-flat.vmdk': No such file"
+                                # Cancellation check after descriptor download
+                                with _import_jobs_lock:
+                                    if _import_jobs.get(j_id, {}).get("status") == "cancelled":
+                                        return
+
+                                _flat_refs = _parse_vmdk_extents(local_tmp)
+                                _remote_vmdk_dir = remote_vmdk.rsplit("/", 1)[0]
+                                for _flat_ref in _flat_refs:
+                                    _flat_remote = _remote_vmdk_dir + "/" + _flat_ref
+                                    # Save flat with original name — qemu-img looks for it by name from descriptor
+                                    _flat_local  = _IMPORT_DIR / _flat_ref
+                                    if _flat_local.exists():
+                                        log.info("ESXi flat zaten mevcut: %s", _flat_local)
+                                        continue
+                                    try:
+                                        _flat_sz = sftp2.stat(_flat_remote).st_size or 1
+                                        _flat_gb = round(_flat_sz / (1024**3), 1)
+                                        _import_job_update(j_id,
+                                                           step=f"Flat disk [{_flat_ref}] indiriliyor ({_flat_gb} GB)",
+                                                           percent=pct_base)
+                                        def _make_flat_prg(_base, _end, _ref, _tot_bytes):
+                                            def _flat_cb(tx, _ignored):
+                                                _pct = min(_end, int(_base + (_end - _base) * tx / max(_tot_bytes, 1)))
+                                                _mb = round(tx / 1048576, 1)
+                                                _tmb = round(_tot_bytes / 1048576, 1)
+                                                _import_job_update(j_id,
+                                                                   step=f"Flat [{_ref}]: {_mb}/{_tmb} MB",
+                                                                   percent=_pct)
+                                            return _flat_cb
+                                        sftp2.get(_flat_remote, str(_flat_local),
+                                                  callback=_make_flat_prg(pct_base, pct_end, _flat_ref, _flat_sz))
+                                        log.info("ESXi flat indirildi: %s → %s", _flat_remote, _flat_local)
+                                        ev.info(f"ESXi flat download: {_flat_ref} ({_flat_gb} GB)", category="vm")
+                                    except Exception as _flat_err:
+                                        log.warning("ESXi flat indirilemedi: %s — %s", _flat_remote, _flat_err)
+                                        ev.warn(f"ESXi flat indirilemedi: {_flat_ref}: {_flat_err}", category="vm")
+
+                                local_vmdks.append(str(local_tmp))
                     finally:
                         sftp2.close()
                 finally:
