@@ -11981,10 +11981,17 @@ def api_migration_esxi_import():
                     # ESXi thin VMDKs have sparse inode-table blocks (never physically
                     # written on ESXi → zeros after conversion → ext4 metadata_csum
                     # rejects them → "UNEXPECTED INCONSISTENCY" → VM unbootable).
-                    # Fix: disable metadata_csum feature on every ext4/ext3/ext2 fs.
+                    #
+                    # Fix: e2fsck -E fix_csum_errors recalculates correct checksums
+                    # for zero-filled inode blocks WITHOUT deleting their contents.
+                    # (plain e2fsck -fy treats bad-checksum inodes as corrupt → deletes)
+                    #
+                    # Uses guestfish "debug sh" (not "sh") — guestfish's sh chroots
+                    # into mounted guest and requires mount first; debug sh runs in
+                    # the appliance shell directly, accessing unmounted block devices.
                     try:
                         _import_job_update(j_id,
-                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: metadata_csum",
+                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: checksum onarımı",
                                            percent=min(91, pct_conv + 5))
                         # List all filesystems in the converted qcow2
                         _gf_list = subprocess.run(
@@ -11997,22 +12004,22 @@ def api_migration_esxi_import():
                             if ": ext4" in _l or ": ext3" in _l or ": ext2" in _l
                         ]
                         for _edev in _ext4_devs:
-                            # Use "debug sh" (not "sh") — guestfish's sh chroots
-                            # into the mounted guest and requires mount first.
-                            # debug sh runs directly in the appliance shell,
-                            # so tune2fs can access unmounted block devices.
-                            subprocess.run(
+                            # fix_csum_errors: recalculate checksums for zero inode
+                            # blocks instead of clearing (deleting) them. Preserves
+                            # all file/directory data that was valid on ESXi.
+                            _fix_res = subprocess.run(
                                 ["guestfish", "-a", str(final_qcow2)],
                                 input=(
                                     f"run\nvg-activate-all true\n"
-                                    f"debug sh \"tune2fs -O ^metadata_csum,^orphan_file {_edev} 2>/dev/null || true\"\n"
+                                    f"debug sh \"e2fsck -fy -E fix_csum_errors {_edev} 2>&1\"\n"
                                 ).encode(),
-                                capture_output=True, timeout=120)
+                                capture_output=True, timeout=600)
+                            _fix_out = (_fix_res.stdout or b"").decode(errors="replace")
+                            log.info("ESXi ext4 fixup [%s]: %s", _edev,
+                                     _fix_out[:500] if _fix_out else "(no output)")
                         if _ext4_devs:
-                            log.info("ESXi ext4 fixup: metadata_csum disabled on %s",
-                                     ", ".join(_ext4_devs))
                             ev.info(
-                                f"ESXi ext4 fixup: {', '.join(_ext4_devs)} → metadata_csum kapatıldı",
+                                f"ESXi ext4 fixup: {', '.join(_ext4_devs)} → checksum onarımı tamamlandı",
                                 category="vm")
                         else:
                             log.info("ESXi ext4 fixup: ext4 bulunamadı (%s)", final_qcow2.name)
