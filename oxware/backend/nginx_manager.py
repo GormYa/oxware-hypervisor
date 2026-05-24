@@ -158,6 +158,19 @@ def get_site(name):
     }
 
 
+def _sanitize_nginx_token(value: str, field: str = "value") -> str:
+    """rapor #61 fix: nginx config injection önleme.
+    server_name, upstream_host, proxy_pass gibi alanlara
+    yalnızca güvenli karakterler geçer. Newline, ';', '{', '}' yasak.
+    """
+    import re as _re
+    if not value:
+        raise ValueError(f"nginx config: {field} boş olamaz")
+    # Sadece hostname/IP karakterlerine izin ver: harf, rakam, nokta, tire, alt çizgi, iki nokta, köşeli parantez
+    if not _re.match(r'^[a-zA-Z0-9._:\-\[\]]+$', value):
+        raise ValueError(f"nginx config: {field} geçersiz karakter içeriyor: {value!r}")
+    return value
+
 def create_site(name, server_name, upstream_host, upstream_port,
                 ssl=False, ssl_cert=None, ssl_key=None,
                 websocket=False, extra_locations=None):
@@ -167,6 +180,12 @@ def create_site(name, server_name, upstream_host, upstream_port,
     Returns:
         dict: success, message, path
     """
+    # rapor #61 fix: injection sanitize
+    try:
+        server_name   = _sanitize_nginx_token(server_name, "server_name")
+        upstream_host = _sanitize_nginx_token(upstream_host, "upstream_host")
+    except ValueError as e:
+        return {"success": False, "message": str(e), "path": None}
     config = _generate_config(
         name, server_name, upstream_host, upstream_port,
         ssl, ssl_cert, ssl_key, websocket, extra_locations or []

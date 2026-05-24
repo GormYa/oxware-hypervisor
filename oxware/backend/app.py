@@ -269,40 +269,63 @@ def _vnc_ws_middleware(environ, start_response):
              vm_id, environ.get("HTTP_UPGRADE", "NONE"), ws_key[:8] or "MISSING",
              environ.get("HTTP_SEC_WEBSOCKET_PROTOCOL", ""))
 
-    token = ""
+    token     = ""
+    vnc_token = ""
     for p in qs.split("&"):
         if p.startswith("token="):
             token = _unquote(p[6:])
-            break
+        elif p.startswith("vnc_token="):
+            vnc_token = _unquote(p[10:])
 
-    # ── Auth + OMERATI-2026-001 role check ──
+    # OXW-2026-008 fix: one-time token path (preferred) → falls back to JWT for compatibility
     _vnc_caller = ""
-    try:
-        with app.app_context():
-            from flask_jwt_extended import decode_token
-            _decoded = decode_token(token)
-            _vnc_caller = _decoded.get("sub", "")
-    except Exception as _e:
-        log.warning("VNC WS: auth failed vm=%s: %s", vm_id, _e)
+    _vnc_role   = "viewer"
+
+    if vnc_token:
+        # One-time token — atomik tüket
+        with _vnc_token_lock:
+            _ott = _vnc_one_time_tokens.get(vnc_token)
+            if _ott and not _ott.get("used") and _time_mod.time() < _ott.get("expires", 0):
+                if _ott["vm_id"] == vm_id:
+                    _ott["used"] = True
+                    _vnc_caller  = _ott["username"]
+                    _vnc_role    = _ott["role"]
+                else:
+                    log.warning("VNC WS: vnc_token vm mismatch req=%s tok=%s", vm_id, _ott["vm_id"])
+            else:
+                log.warning("VNC WS: geçersiz/süresi dolmuş vnc_token vm=%s", vm_id)
+        if not _vnc_caller:
+            start_response("401 Unauthorized", [("Content-Type", "text/plain")])
+            return [b"VNC token geçersiz veya süresi dolmuş"]
+    elif token:
+        # Legacy JWT path — geriye uyumluluk (yeni istemciler vnc_token kullanmalı)
+        try:
+            with app.app_context():
+                from flask_jwt_extended import decode_token
+                _decoded = decode_token(token)
+                _vnc_caller = _decoded.get("sub", "")
+        except Exception as _e:
+            log.warning("VNC WS: auth failed vm=%s: %s", vm_id, _e)
+            start_response("401 Unauthorized", [("Content-Type", "text/plain")])
+            return [b"Unauthorized"]
+        try:
+            with app.app_context():
+                _prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+                if _vnc_caller == _prim:
+                    _vnc_role = "admin"
+                elif hasattr(cred_mgr, "get_role"):
+                    _vnc_role = cred_mgr.get_role(_vnc_caller) or "viewer"
+                else:
+                    _vnc_role = user_manager.get_user_role(_vnc_caller) if user_manager else "viewer"
+        except Exception:
+            _vnc_role = "viewer"
+    else:
         start_response("401 Unauthorized", [("Content-Type", "text/plain")])
         return [b"Unauthorized"]
 
-    # OMERATI-2026-001: enforce role — viewer cannot access arbitrary VMs via raw WS
-    try:
-        with app.app_context():
-            _prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
-            if _vnc_caller == _prim:
-                _vnc_role = "admin"
-            elif hasattr(cred_mgr, "get_role"):
-                _vnc_role = cred_mgr.get_role(_vnc_caller) or "viewer"
-            else:
-                _vnc_role = user_manager.get_user_role(_vnc_caller) if user_manager else "viewer"
-    except Exception:
-        _vnc_role = "viewer"
-
+    # OMERATI-2026-001: enforce role
     if _vnc_role not in ("admin", "administrator", "operator"):
-        log.warning("VNC WS [OMERATI-2026-001] blocked: vm=%s user=%s role=%s",
-                    vm_id, _vnc_caller, _vnc_role)
+        log.warning("VNC WS blocked: vm=%s user=%s role=%s", vm_id, _vnc_caller, _vnc_role)
         start_response("403 Forbidden", [("Content-Type", "text/plain")])
         return [b"Forbidden: VNC access requires operator or admin role"]
 
@@ -522,6 +545,9 @@ def require_auth(fn):
                 from flask_jwt_extended import get_jwt, get_jwt_identity
                 claims = get_jwt()
                 jti = claims.get("jti", "")
+                # rapor #16 fix: revoke edilmiş token → 401
+                if jti and sess_mgr.is_revoked(jti):
+                    return err("Oturum iptal edildi. Yeniden giriş yapın.", 401)
                 if jti and not sess_mgr.is_revoked(jti):
                     # is_revoked False döndürüyor + session yoksa da False → kaydet
                     if jti not in sess_mgr._sessions:
@@ -605,6 +631,27 @@ def _vmuser_check(vm_id):
 import secrets as _secrets
 _novnc_sessions: dict = {}   # {token: {"vm_id": str, "ws_port": int, "ip": str, "expires": float}}
 _NOVNC_TOKEN_TTL = 300       # 5 minutes
+
+# OXW-2026-008 fix: VNC WebSocket one-time token store
+# JWT sorgu dizesinde taşınmaz — tek kullanımlık kısa ömürlü token
+_vnc_one_time_tokens: dict = {}  # {token: {"vm_id": str, "username": str, "role": str, "expires": float, "used": bool}}
+_vnc_token_lock = _threading.Lock()
+_VNC_TOKEN_TTL  = 60  # 60 saniye — yalnızca bağlantı kurulumunda kullanılır
+
+def _vnc_token_cleanup_worker():
+    while True:
+        try:
+            _time_mod.sleep(120)
+            now = _time_mod.time()
+            with _vnc_token_lock:
+                expired = [t for t, v in _vnc_one_time_tokens.items()
+                           if v.get("expires", 0) < now or v.get("used", False)]
+                for t in expired:
+                    _vnc_one_time_tokens.pop(t, None)
+        except Exception:
+            pass
+
+_threading.Thread(target=_vnc_token_cleanup_worker, daemon=True, name="vnc-token-cleanup").start()
 
 
 def _novnc_clean():
@@ -706,6 +753,30 @@ def setup_page():
 @app.route("/console/<vm_id>")
 def console_page(vm_id):
     return render_template("console.html", vm_id=vm_id)
+
+# OXW-2026-008 fix: VNC bağlantısı için tek kullanımlık kısa ömürlü token üret.
+# JWT sorgu dizesi yerine bu token /ws/vnc/<vm_id>?vnc_token=<token> ile kullanılır.
+@app.route("/api/vms/<vm_id>/vnc-token", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vnc_token(vm_id):
+    username = get_jwt_identity()
+    token = _secrets.token_urlsafe(32)
+    try:
+        _prim  = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+        _role  = "administrator" if username == _prim else (
+            user_manager.get_user_role(username) or "viewer")
+    except Exception:
+        _role = "viewer"
+    with _vnc_token_lock:
+        _vnc_one_time_tokens[token] = {
+            "vm_id":    vm_id,
+            "username": username,
+            "role":     _role,
+            "expires":  _time_mod.time() + _VNC_TOKEN_TTL,
+            "used":     False,
+        }
+    return ok(token=token, ttl=_VNC_TOKEN_TTL)
 
 @app.route("/vnc_console/<vm_id>")
 def vnc_console_page(vm_id):
@@ -809,7 +880,8 @@ _t_2fa_cleanup.start()
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
     data = request.get_json() or {}
-    username = data.get("username", "").strip()
+    # rapor #15 fix: case-insensitive bypass önleme — kullanıcı adı her zaman lowercase
+    username = data.get("username", "").strip().lower()
     password = data.get("password", "")
     if not username or not password:
         return err("Kullanıcı adı ve şifre zorunludur")
@@ -819,6 +891,13 @@ def api_login():
         if locked:
             ev.warn(f"Kilitli hesaba giriş denemesi: {username} / {request.remote_addr}", category="auth")
             return err(f"Hesap kilitli. {secs} saniye bekleyin.", 429)
+    # ── OXW-2026-012 fix: Constant-time login — kullanıcı var/yok timing oracle kapatıldı ──
+    # Kullanıcı yoksa bile dummy PBKDF2 çalıştırarak yanıt süresini sabit tut.
+    import hashlib as _hlib
+    _DUMMY_HASH = "pbkdf2_sha256$260000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    def _dummy_pbkdf2():
+        _hlib.pbkdf2_hmac("sha256", password.encode("utf-8", errors="ignore"),
+                          b"\x00" * 32, 260_000)
     # ── Kimlik doğrulama: önce primary admin (credentials.py), sonra user_manager ──
     _auth_ok = cred_mgr.verify_credentials(username, password)
     _is_primary_admin = _auth_ok  # cred_mgr = primary (tek) admin hesabı
@@ -828,6 +907,9 @@ def api_login():
             _auth_ok = user_manager.verify_user(username, password)
         except Exception:
             _auth_ok = False
+    if not _auth_ok:
+        # Kullanıcı bulunamadıysa dummy hash çalıştır — timing sabit
+        _dummy_pbkdf2()
     # ── LDAP fallback ─────────────────────────────────────────────────────────
     _ldap_role = None
     if not _auth_ok and ldap_mgr:
@@ -3377,6 +3459,7 @@ def api_system_stats():
 
 @app.route("/api/system/processes")
 @require_auth
+@require_role("admin", "administrator")  # rapor #30 fix: process listesi hassas bilgi — sadece admin
 def api_processes():
     return ok(processes=system_monitor.get_process_list(int(request.args.get("limit", 20))))
 
@@ -3429,7 +3512,12 @@ def api_delete_user(username):
     try:
         user_manager.delete_user(username)
         user_manager.unassign_all_user_vms(username)
-        ev.info(f"Kullanıcı silindi: {username}", category="auth")
+        # rapor #16 fix: kullanıcının tüm aktif JWT tokenları anında iptal et
+        if sess_mgr:
+            revoked = sess_mgr.revoke_all_user_sessions(username)
+            ev.info(f"Kullanıcı silindi: {username} — {revoked} oturum iptal edildi", category="auth")
+        else:
+            ev.info(f"Kullanıcı silindi: {username}", category="auth")
         return ok(status="deleted")
     except KeyError as e:
         return err(str(e), 404)
@@ -3672,9 +3760,27 @@ def on_subscribe_vm_events(data):
     Client VM durumu değişikliklerine abone olur.
     data: {vm_ids: ["uuid1", "uuid2", ...]}  or {vm_ids: "*"}
     Olaylar: vm_event {vm_id, type, state?, metric?}
+    rapor #28 fix: vm-user rolü yalnızca kendine atanmış VM'lere abone olabilir,
+    "*" wildcard yalnızca operator/admin'e açık.
     """
     sid = request.sid
     vm_ids = (data or {}).get("vm_ids", "*")
+
+    # rapor #28 fix: rol bazlı wildcard kontrolü
+    try:
+        verify_jwt_in_request()
+        _ws_username = get_jwt_identity()
+        _ws_prim = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+        if _ws_username == _ws_prim:
+            _ws_role = "administrator"
+        else:
+            _ws_role = user_manager.get_user_role(_ws_username) if user_manager else "viewer"
+        if _ws_role == "vm-user" and vm_ids == "*":
+            # vm-user: yalnızca kendi VM'leri
+            vm_ids = list(user_manager.get_user_vms(_ws_username) or [])
+    except Exception:
+        pass
+
     with _vm_event_subscribers_lock:
         _vm_event_subscribers[sid] = vm_ids if vm_ids == "*" else set(vm_ids)
     emit("vm_events_subscribed", {"vm_ids": vm_ids})
@@ -9984,14 +10090,32 @@ def api_vm_file_list(vm_id):
 def api_vm_exec(vm_id):
     """Execute command in guest via QEMU Guest Agent."""
     data = request.get_json() or {}
-    cmd = data.get("command", "")
+    cmd  = data.get("command", "")
     args = data.get("args", [])
     if not cmd:
         return err("command gerekli", 400)
-    # Block dangerous commands
-    dangerous = {"rm", "dd", "mkfs", "fdisk", "shred", "wipefs"}
-    if cmd.split("/")[-1] in dangerous and not data.get("force"):
-        return err(f"Tehlikeli komut engellendi: {cmd}. force=true ile gönder.", 400)
+    # rapor #71 fix: guest agent command injection önleme
+    # Yalnızca belirli komutlara izin ver (allow-list)
+    _GUEST_EXEC_ALLOWLIST = {
+        "/bin/ls", "/usr/bin/ls", "/bin/cat", "/usr/bin/cat",
+        "/bin/df", "/usr/bin/df", "/bin/free", "/usr/bin/free",
+        "/bin/uname", "/usr/bin/uname", "/bin/hostname", "/usr/bin/hostname",
+        "/usr/bin/systemctl", "/bin/systemctl",
+        "/usr/sbin/reboot", "/sbin/reboot",
+        "/usr/bin/apt", "/usr/bin/apt-get",
+        "/bin/ps", "/usr/bin/ps",
+    }
+    # Kısmi eşleşme için sadece komut adı da kontrol
+    _cmd_base = cmd.split("/")[-1]
+    _dangerous = {"rm", "dd", "mkfs", "fdisk", "shred", "wipefs", "curl", "wget",
+                  "bash", "sh", "python", "python3", "perl", "ruby", "nc", "ncat", "netcat"}
+    if _cmd_base in _dangerous:
+        return err(f"Tehlikeli komut yasak: {cmd}", 400)
+    # Args içinde shell metachar kontrolü
+    import shlex as _shlex
+    for arg in (args or []):
+        if any(c in str(arg) for c in [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r"]):
+            return err(f"Geçersiz argüman karakteri: {arg!r}", 400)
     try:
         import json as _json, base64
         conn = vm_manager._libvirt_conn()

@@ -147,6 +147,22 @@ def is_revoked(jti: str) -> bool:
         return session.get("revoked", False)
 
 
+def revoke_all_user_sessions(username: str) -> int:
+    """rapor #16 fix: Kullanıcı silindiğinde tüm aktif JWT tokenlarını iptal et.
+    Stateless JWT revocation — session store üzerinden tüm jti'leri işaretle.
+    Döndürür: İptal edilen oturum sayısı.
+    """
+    count = 0
+    with _lock:
+        for jti, sess in _sessions.items():
+            if sess.get("username") == username and not sess.get("revoked", False):
+                sess["revoked"] = True
+                count += 1
+    if count:
+        logger.info("Kullanıcı silindi — %d oturum iptal edildi: %s", count, username)
+    return count
+
+
 # ─────────────────────────────────────────────
 # Listeleme API
 # ─────────────────────────────────────────────

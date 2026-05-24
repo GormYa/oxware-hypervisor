@@ -23,9 +23,12 @@ log = logging.getLogger("oxware.security")
 # ── 1. Rate Limiter ───────────────────────────────────────────────────────────
 
 class RateLimiter:
+    # rapor #44 fix: OOM önleme — maksimum bucket sayısı
+    _MAX_BUCKETS = 50_000
+
     def __init__(self):
         self._lock    = threading.Lock()
-        self._buckets: dict[str, dict] = {}
+        self._buckets: dict = {}
 
     def _key(self, ip: str, endpoint: str) -> str:
         return f"{ip}:{endpoint}"
@@ -36,7 +39,7 @@ class RateLimiter:
         endpoint: str,
         max_calls: int = 30,
         window_secs: int = 60,
-    ) -> tuple[bool, int]:
+    ) -> tuple:
         """
         Döndürür: (allowed: bool, retry_after: int)
         """
@@ -44,6 +47,15 @@ class RateLimiter:
         now = time.time()
 
         with self._lock:
+            # rapor #44 fix: bucket cap — çok fazla unique IP → en eskiyi at
+            if len(self._buckets) >= self._MAX_BUCKETS and key not in self._buckets:
+                # LRU benzeri: en eski blocked_until olan bucket'ı sil
+                try:
+                    oldest = min(self._buckets, key=lambda k: self._buckets[k]["blocked_until"])
+                    del self._buckets[oldest]
+                except Exception:
+                    pass
+
             bucket = self._buckets.get(key, {"calls": [], "blocked_until": 0})
 
             if bucket["blocked_until"] > now:
