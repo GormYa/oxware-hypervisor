@@ -10363,6 +10363,8 @@ async function loadMonitor() {
     loadDiskUsage();
     // Load perf history chart (lightweight, uses backend cache)
     loadPerfHistory('1h');
+    loadHAStatus();
+    loadSmartData();
   } catch (e) { toast(e.message, "error"); }
 }
 
