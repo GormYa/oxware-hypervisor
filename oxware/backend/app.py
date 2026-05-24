@@ -11997,11 +11997,15 @@ def api_migration_esxi_import():
                             if ": ext4" in _l or ": ext3" in _l or ": ext2" in _l
                         ]
                         for _edev in _ext4_devs:
+                            # Use "debug sh" (not "sh") — guestfish's sh chroots
+                            # into the mounted guest and requires mount first.
+                            # debug sh runs directly in the appliance shell,
+                            # so tune2fs can access unmounted block devices.
                             subprocess.run(
                                 ["guestfish", "-a", str(final_qcow2)],
                                 input=(
                                     f"run\nvg-activate-all true\n"
-                                    f"sh tune2fs -O ^metadata_csum,^orphan_file {_edev} 2>/dev/null || true\n"
+                                    f"debug sh \"tune2fs -O ^metadata_csum,^orphan_file {_edev} 2>/dev/null || true\"\n"
                                 ).encode(),
                                 capture_output=True, timeout=120)
                         if _ext4_devs:
