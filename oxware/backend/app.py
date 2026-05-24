@@ -11408,7 +11408,7 @@ def _proxmox_ssh_export_all(ssh_host, ssh_port, ssh_user, ssh_password,
 
 @app.route("/api/migration/proxmox/scan", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_proxmox_scan():
     """Proxmox API ile node ve VM listesi döndür."""
     d = request.get_json() or {}
@@ -11488,7 +11488,7 @@ def api_migration_proxmox_scan():
 
 @app.route("/api/migration/proxmox/import", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_proxmox_import():
     """Proxmox VM'lerini OXware'e toplu aktar."""
     d = request.get_json() or {}
@@ -11634,7 +11634,7 @@ def api_migration_proxmox_import():
 
 @app.route("/api/migration/esxi/scan", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_esxi_scan():
     """ESXi SSH ile VM listesi döndür (vim-cmd vmsvc/getallvms)."""
     d = request.get_json() or {}
@@ -11719,7 +11719,7 @@ def api_migration_esxi_scan():
 
 @app.route("/api/migration/esxi/import", methods=["POST"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_esxi_import():
     """ESXi VM'lerini OXware'e toplu aktar (SSH SFTP + qemu-img convert)."""
     d = request.get_json() or {}
@@ -11916,7 +11916,7 @@ def api_migration_esxi_import():
 
 @app.route("/api/migration/jobs", methods=["GET"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_jobs_list():
     """Tüm migration job'larını listele (Proxmox + ESXi + OVA)."""
     with _import_jobs_lock:
@@ -11927,7 +11927,7 @@ def api_migration_jobs_list():
 
 @app.route("/api/migration/jobs/<job_id>", methods=["GET"])
 @require_auth
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_migration_job_get(job_id):
     """Tek migration job durumu."""
     with _import_jobs_lock:
