@@ -9534,7 +9534,10 @@ async function loadVMs() {
       return;
     }
     tbody.innerHTML = vms.map(v => {
-      const disks   = v.disks?.map(d => d.device).join(", ") || "—";
+      const disks   = v.disks?.map(d => {
+        const sz = d.capacity_gb ? `<span style="color:var(--text-muted);font-size:10px"> ${d.capacity_gb} GB</span>` : "";
+        return escHtml(d.device) + sz;
+      }).join("<br>") || "—";
       const nets    = v.networks?.map(n => n.network || n.type).join(", ") || "—";
       const vmIp    = v.networks?.map(n => n.ip).find(ip => ip) || "";
       const ipHtml  = vmIp
@@ -9568,7 +9571,7 @@ async function loadVMs() {
         <td>${stateBadge(v.state)}</td>
         <td>${v.vcpus} vCPU</td>
         <td>${v.memory_mb.toLocaleString()} MB</td>
-        <td style="font-size:11px">${escHtml(disks)}</td>
+        <td style="font-size:11px;line-height:1.8">${disks}</td>
         <td style="font-size:11px">${ipHtml}</td>
         <td>
           <div class="action-btns">
