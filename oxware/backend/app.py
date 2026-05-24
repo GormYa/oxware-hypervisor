@@ -11870,6 +11870,33 @@ def api_migration_esxi_import():
 
                             sftp2.get(remote_vmdk, str(local_tmp),
                                       callback=_make_prg_e(pct_base, pct_end, vd_name))
+
+                            # ── ESXi VMDK flat file: descriptor referans ettiği veri dosyasını da indir ──
+                            # VMDK descriptor (.vmdk) → veri: testoxware-flat.vmdk
+                            # qemu-img descriptor'ı açar, flat dosyayı aynı dizinde arar.
+                            # Flat dosya OLMADAN: "Could not open 'testoxware-flat.vmdk': No such file"
+                            _flat_refs = _parse_vmdk_extents(local_tmp)
+                            _remote_vmdk_dir = remote_vmdk.rsplit("/", 1)[0]
+                            for _flat_ref in _flat_refs:
+                                _flat_remote = _remote_vmdk_dir + "/" + _flat_ref
+                                # Save flat with original name — qemu-img looks for it by name from descriptor
+                                _flat_local  = _IMPORT_DIR / _flat_ref
+                                if _flat_local.exists():
+                                    log.info("ESXi flat zaten mevcut: %s", _flat_local)
+                                    continue
+                                try:
+                                    _flat_sz = sftp2.stat(_flat_remote).st_size or 1
+                                    _flat_gb = round(_flat_sz / (1024**3), 1)
+                                    _import_job_update(j_id,
+                                                       step=f"Flat disk [{_flat_ref}] indiriliyor ({_flat_gb} GB)",
+                                                       percent=pct_base)
+                                    sftp2.get(_flat_remote, str(_flat_local))
+                                    log.info("ESXi flat indirildi: %s → %s", _flat_remote, _flat_local)
+                                    ev.info(f"ESXi flat download: {_flat_ref} ({_flat_gb} GB)", category="vm")
+                                except Exception as _flat_err:
+                                    log.warning("ESXi flat indirilemedi: %s — %s", _flat_remote, _flat_err)
+                                    ev.warn(f"ESXi flat indirilemedi: {_flat_ref}: {_flat_err}", category="vm")
+
                             local_vmdks.append(str(local_tmp))
                     finally:
                         sftp2.close()
