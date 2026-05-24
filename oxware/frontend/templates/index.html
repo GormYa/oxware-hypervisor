@@ -2262,20 +2262,6 @@
               <div style="height:200px;position:relative"><canvas id="perfHistoryChart"></canvas></div>
             </div>
 
-            <!-- Trend Analysis -->
-            <div class="section-header" style="margin-top:14px">
-              <h2>Trend Analizi</h2>
-              <div class="spacer"></div>
-              <button class="btn sm" onclick="loadTrendAnalysis()">&#x21BB; Yükle</button>
-              <button class="btn sm" onclick="openModal('modal-backup-schedule')" style="margin-left:4px">&#x23F0; Yedekleme Planı</button>
-            </div>
-            <div id="trend-container" style="margin-bottom:14px">
-              <div class="card" style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
-                Trend analizini yüklemek için <strong>&#x21BB; Yükle</strong> butonuna tıklayın.
-                <br><small>7 günlük ve 30 günlük CPU/RAM verisini çeker.</small>
-              </div>
-            </div>
-
             <!-- HA Status -->
             <div class="section-header">
               <h2>Yüksek Kullanılabilirlik (HA)</h2>
@@ -9298,46 +9284,6 @@ async function loadHAStatus() {
     const el = document.getElementById('ha-status-container');
     if (el) el.innerHTML = '<div class="empty-state" style="padding:20px"><p>HA durumu alınamadı. Tek node modunda çalışıyor.</p></div>';
   }
-}
-
-/* ══════════ Trend Analysis ══════════ */
-let _trendCharts = {};
-async function loadTrendAnalysis(periods=['7d','30d']) {
-  const el = document.getElementById('trend-container');
-  if (!el) return;
-  el.innerHTML = '<div class="spinner-sm" style="margin:20px auto"></div>';
-  try {
-    const datasets7 = [], datasets30 = [];
-    const [d7, d30] = await Promise.all([
-      _api('/api/metrics/system?period=7d'),
-      _api('/api/metrics/system?period=30d')
-    ]);
-    const fmt = (ts) => new Date(ts*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-    const makeChart = (id, data, title) => {
-      const labels = data.map(p=>fmt(p.ts||p.timestamp||0));
-      const cpuD = data.map(p=>p.cpu_pct||p.cpu||0);
-      const memD = data.map(p=>p.mem_pct||p.mem||0);
-      if (_trendCharts[id]) _trendCharts[id].destroy();
-      const ctx = document.getElementById(id);
-      if (!ctx) return;
-      _trendCharts[id] = new Chart(ctx, {
-        type:'line',data:{labels,datasets:[
-          {label:'CPU %',data:cpuD,borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.08)',tension:.3,fill:true,pointRadius:0},
-          {label:'RAM %',data:memD,borderColor:'#3fb950',backgroundColor:'rgba(63,185,80,0.08)',tension:.3,fill:true,pointRadius:0}
-        ]},
-        options:{responsive:true,maintainAspectRatio:false,animation:false,
-          plugins:{legend:{labels:{color:'#e6edf3'}},title:{display:true,text:title,color:'#8b949e',font:{size:11}}},
-          scales:{x:{ticks:{color:'#8b949e',maxTicksLimit:8,maxRotation:0,autoSkip:true},grid:{color:'#30363d'}},
-            y:{ticks:{color:'#8b949e'},grid:{color:'#30363d'},min:0,max:100}}}
-      });
-    };
-    el.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div class="card"><div class="card-title">Son 7 Gün</div><div style="height:160px"><canvas id="trend7"></canvas></div></div>
-        <div class="card"><div class="card-title">Son 30 Gün</div><div style="height:160px"><canvas id="trend30"></canvas></div></div>
-      </div>`;
-    setTimeout(() => { makeChart('trend7', d7.data||[], '7 Günlük Trend'); makeChart('trend30', d30.data||[], '30 Günlük Trend'); }, 50);
-  } catch(e) { el.innerHTML = `<p class="text-muted">Trend verisi alınamadı: ${escHtml(e.message||String(e))}</p>`; }
 }
 
 async function deleteVM(id, name) {
