@@ -8323,6 +8323,11 @@ def api_vm_spice(vm_id):
 _IMPORT_DIR = _pathlib.Path("/var/lib/oxware/imports")
 _import_jobs: dict = {}          # job_id → job dict
 _import_jobs_lock = threading.Lock()
+# ESXi SSH lockout prevention: limit concurrent SSH connections per host.
+# ESXi vSphere locks accounts after N failed auth attempts (default 10-20).
+# Paramiko with concurrent threads creates one SSH login per thread.
+# Semaphore caps parallel ESXi connections to 2 — avoids flooding auth attempts.
+_esxi_ssh_sem = threading.Semaphore(2)
 
 def _import_job_update(job_id: str, **kw):
     with _import_jobs_lock:
@@ -11702,8 +11707,10 @@ def api_migration_esxi_scan():
         import paramiko as _pmesxi
         client = _pmesxi.SSHClient()
         client.set_missing_host_key_policy(_pmesxi.AutoAddPolicy())
+        # gss_auth=False, gss_kex=False: skip Kerberos probe (counts as failed login on ESXi)
         client.connect(host, port=port, username=user, password=password,
-                       timeout=20, look_for_keys=False, allow_agent=False)
+                       timeout=20, look_for_keys=False, allow_agent=False,
+                       gss_auth=False, gss_kex=False)
         try:
             _, stdout, _ = client.exec_command("vim-cmd vmsvc/getallvms 2>/dev/null", timeout=30)
             raw = stdout.read().decode(errors="replace")
@@ -11809,12 +11816,25 @@ def api_migration_esxi_import():
         def _run_esxi(j_id, j_vmid, j_vm_name, j_vmx_dir, j_os_type,
                       j_vcpus, j_ram_mb, j_firmware, j_vmx_disks, j_vmx_nets, j_net_map):
             try:
+                # Check cancellation before connecting
+                with _import_jobs_lock:
+                    if _import_jobs.get(j_id, {}).get("status") == "cancelled":
+                        return
                 import paramiko as _pme2
+                _import_job_update(j_id, step=f"ESXi SSH bekleniyor: {host}", percent=3)
+                # Limit concurrent ESXi SSH logins to prevent account lockout.
+                # ESXi locks accounts after N failed auth attempts; multiple threads
+                # connecting simultaneously each count as a separate auth attempt.
+                _esxi_ssh_sem.acquire()
+                _esxi_sem_held = True  # track so outer except doesn't double-release
                 _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
                 client2 = _pme2.SSHClient()
                 client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
+                # gss_auth=False, gss_kex=False: skip Kerberos auth probe
+                # (failed probe counted as failed login on ESXi → triggers lockout)
                 client2.connect(host, port=port, username=user, password=password,
-                                timeout=30, look_for_keys=False, allow_agent=False)
+                                timeout=30, look_for_keys=False, allow_agent=False,
+                                gss_auth=False, gss_kex=False)
                 local_vmdks = []   # list of local tmp paths
                 try:
                     sftp2 = client2.open_sftp()
@@ -11875,6 +11895,11 @@ def api_migration_esxi_import():
                             # VMDK descriptor (.vmdk) → veri: testoxware-flat.vmdk
                             # qemu-img descriptor'ı açar, flat dosyayı aynı dizinde arar.
                             # Flat dosya OLMADAN: "Could not open 'testoxware-flat.vmdk': No such file"
+                            # Cancellation check after descriptor download
+                            with _import_jobs_lock:
+                                if _import_jobs.get(j_id, {}).get("status") == "cancelled":
+                                    return
+
                             _flat_refs = _parse_vmdk_extents(local_tmp)
                             _remote_vmdk_dir = remote_vmdk.rsplit("/", 1)[0]
                             for _flat_ref in _flat_refs:
@@ -11890,7 +11915,17 @@ def api_migration_esxi_import():
                                     _import_job_update(j_id,
                                                        step=f"Flat disk [{_flat_ref}] indiriliyor ({_flat_gb} GB)",
                                                        percent=pct_base)
-                                    sftp2.get(_flat_remote, str(_flat_local))
+                                    def _make_flat_prg(_base, _end, _ref, _tot_bytes):
+                                        def _flat_cb(tx, _ignored):
+                                            _pct = min(_end, int(_base + (_end - _base) * tx / max(_tot_bytes, 1)))
+                                            _mb = round(tx / 1048576, 1)
+                                            _tmb = round(_tot_bytes / 1048576, 1)
+                                            _import_job_update(j_id,
+                                                               step=f"Flat [{_ref}]: {_mb}/{_tmb} MB",
+                                                               percent=_pct)
+                                        return _flat_cb
+                                    sftp2.get(_flat_remote, str(_flat_local),
+                                              callback=_make_flat_prg(pct_base, pct_end, _flat_ref, _flat_sz))
                                     log.info("ESXi flat indirildi: %s → %s", _flat_remote, _flat_local)
                                     ev.info(f"ESXi flat download: {_flat_ref} ({_flat_gb} GB)", category="vm")
                                 except Exception as _flat_err:
@@ -11902,6 +11937,13 @@ def api_migration_esxi_import():
                         sftp2.close()
                 finally:
                     client2.close()
+                    _esxi_ssh_sem.release()
+                    _esxi_sem_held = False
+
+                # Cancellation check after download — skip conversion if cancelled
+                with _import_jobs_lock:
+                    if _import_jobs.get(j_id, {}).get("status") == "cancelled":
+                        return
 
                 # Deduplicate VM name
                 import libvirt as _lv_esxi
@@ -11971,6 +12013,10 @@ def api_migration_esxi_import():
                 ev.info(f"ESXi migration tamamlandı: {final_name} vmid={j_vmid} ({disk_summary})",
                         category="migration")
             except Exception as ex:
+                # Release semaphore only if connect() failed before the inner
+                # finally block ran (which would have already released it)
+                if locals().get("_esxi_sem_held"):
+                    _esxi_ssh_sem.release()
                 _import_job_update(j_id, status="error",
                                    step=f"Hata: {ex}", percent=0,
                                    message=str(ex), finished=time.time())
@@ -12016,6 +12062,26 @@ def api_migration_job_get(job_id):
     if not job:
         return err("Job bulunamadı", 404)
     return ok(job=dict(job))
+
+
+@app.route("/api/migration/jobs/<job_id>/cancel", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_migration_job_cancel(job_id):
+    """Running migration job'unu iptal et.
+    Thread'e sinyal: status='cancelled' → thread aktif adımı bitince durur."""
+    with _import_jobs_lock:
+        job = _import_jobs.get(job_id)
+        if not job:
+            return err("Job bulunamadı", 404)
+        if job.get("status") not in ("running", "pending"):
+            return err(f"Job iptal edilemez (durum: {job.get('status')})", 400)
+        job["status"] = "cancelled"
+        job["step"] = "İptal edildi"
+        job["finished"] = time.time()
+    log.info("Migration job iptal edildi: %s", job_id)
+    ev.warn(f"Migration job iptal edildi: {job_id}", category="migration")
+    return ok(message="Job iptal edildi")
 
 
 # ── Auto SSL cert — runs at import time (works with systemd/gunicorn too) ──────

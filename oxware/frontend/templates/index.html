@@ -5171,21 +5171,21 @@ function cvmSetCpu(v) {
 }
 
 function cvmMemChange(v) {
-  document.getElementById('vm-mem-input').value = v;
   const gb = v >= 1024 ? (v/1024).toFixed(v%1024===0?0:1) + ' GB' : v + ' MB';
-  document.getElementById('mem-val-disp').textContent = v >= 1024 ? (v/1024).toFixed(v%1024===0?0:1) : v;
-  document.getElementById('mem-val-unit').textContent = v >= 1024 ? ' GB' : ' MB';
-  document.getElementById('sum-mem').textContent = gb;
+  const _inp = document.getElementById('vm-mem-input'); if(_inp) _inp.value = v;
+  const _disp = document.getElementById('mem-val-disp'); if(_disp) _disp.textContent = v >= 1024 ? (v/1024).toFixed(v%1024===0?0:1) : v;
+  const _unit = document.getElementById('mem-val-unit'); if(_unit) _unit.textContent = v >= 1024 ? ' GB' : ' MB';
+  const _sm = document.getElementById('sum-mem'); if(_sm) _sm.textContent = gb;
 }
 function cvmSetMem(mb) {
   const sl = document.getElementById('vm-mem'); if(sl){sl.value=mb; cvmMemChange(mb);}
 }
 
 function cvmDiskChange(v) {
-  document.getElementById('vm-disk-input').value = v;
-  document.getElementById('disk-val-disp').textContent = v;
-  document.getElementById('sum-disk').textContent = v + ' GB';
-  cvmUpdateSummary();
+  const _di = document.getElementById('vm-disk-input'); if(_di) _di.value = v;
+  const _dd = document.getElementById('disk-val-disp'); if(_dd) _dd.textContent = v;
+  const _sd = document.getElementById('sum-disk'); if(_sd) _sd.textContent = v + ' GB';
+  if(typeof cvmUpdateSummary === 'function') cvmUpdateSummary();
 }
 function cvmSetDisk(gb) {
   const sl = document.getElementById('vm-disk'); if(sl){sl.value=gb; cvmDiskChange(gb);}
@@ -14865,7 +14865,28 @@ function _migBuildJobEl(j) {
     msgEl.textContent = j.message;
     wrap.appendChild(msgEl);
   }
+  // Cancel button — only for running jobs
+  if (j.status === 'running') {
+    const actRow = document.createElement('div');
+    actRow.style.cssText = 'margin-top:8px;display:flex;justify-content:flex-end';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn sm';
+    cancelBtn.style.cssText = 'color:#f87171;font-size:10px';
+    cancelBtn.textContent = '✕ İptal';
+    cancelBtn.onclick = function() { migCancelJob(j.id); };
+    actRow.appendChild(cancelBtn); wrap.appendChild(actRow);
+  }
   return wrap;
+}
+
+async function migCancelJob(jobId) {
+  if (!confirm('Bu migration job iptal edilsin mi?')) return;
+  try {
+    await _api('/api/migration/jobs/' + jobId + '/cancel', 'POST');
+    migRefreshJobs();
+  } catch(e) {
+    alert('İptal hatası: ' + (e.message || String(e)));
+  }
 }
 
 async function migRefreshJobs() {
