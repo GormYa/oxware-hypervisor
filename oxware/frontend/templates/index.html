@@ -10578,7 +10578,7 @@ async function _initVNC(vmId) {
 /* ══════════════════ Networks ══════════════════ */
 
 function switchNetTab(tab, btn) {
-  ['vnets','ifaces','leases','routes','bridge'].forEach(t => {
+  ['vnets','ifaces','leases','routes','bridge','vswitch'].forEach(t => {
     const el = document.getElementById('net-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
