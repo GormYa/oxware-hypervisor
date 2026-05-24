@@ -70,23 +70,23 @@
     <div class="oxw-cred-row">
       <div>
         <div class="oxw-card-label">Kullanıcı Adı</div>
-        <div class="oxw-card-value">{$ssh_user}</div>
+        <div class="oxw-card-value">{$ssh_user|escape:'htmlall'}</div>
       </div>
-      <button class="oxw-copy" onclick="navigator.clipboard.writeText('{$ssh_user}');this.textContent='Kopyalandı!';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+      <button class="oxw-copy" data-val="{$ssh_user|escape:'htmlall'}" onclick="oxwCopy(this)">Kopyala</button>
     </div>
     <div class="oxw-cred-row">
       <div>
         <div class="oxw-card-label">Şifre <span style="font-size:10px;color:#6b7280">(görmek için tıkla)</span></div>
-        <div class="oxw-card-value oxw-blur" onclick="this.classList.toggle('oxw-blur')">{$ssh_pass}</div>
+        <div class="oxw-card-value oxw-blur" onclick="this.classList.toggle('oxw-blur')">{$ssh_pass|escape:'htmlall'}</div>
       </div>
-      <button class="oxw-copy" onclick="navigator.clipboard.writeText('{$ssh_pass}');this.textContent='Kopyalandı!';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+      <button class="oxw-copy" data-val="{$ssh_pass|escape:'htmlall'}" onclick="oxwCopy(this)">Kopyala</button>
     </div>
     <div class="oxw-cred-row">
       <div>
         <div class="oxw-card-label">IP / Host</div>
-        <div class="oxw-card-value">{$vm_ip}</div>
+        <div class="oxw-card-value">{$vm_ip|escape:'htmlall'}</div>
       </div>
-      <button class="oxw-copy" onclick="navigator.clipboard.writeText('{$vm_ip}');this.textContent='Kopyalandı!';setTimeout(()=>this.textContent='Kopyala',2000)">Kopyala</button>
+      <button class="oxw-copy" data-val="{$vm_ip|escape:'htmlall'}" onclick="oxwCopy(this)">Kopyala</button>
     </div>
   </div>
 
@@ -143,4 +143,25 @@
   <p style="font-size:11px;color:#6b7280;margin-top:6px;">Link 5 dakika geçerlidir. Her sayfada yenilenir.</p>
   {/if}
 </div>
+<script>
+// XSS-safe clipboard helper — değer inline JS string değil, data attribute'dan okunur
+function oxwCopy(btn) {
+  var v = btn.getAttribute('data-val') || '';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(v).then(function() {
+      btn.textContent = 'Kopyalandı!';
+      setTimeout(function() { btn.textContent = 'Kopyala'; }, 2000);
+    }).catch(function() { btn.textContent = 'Hata'; });
+  } else {
+    // Fallback: execCommand (eski tarayıcılar)
+    var ta = document.createElement('textarea');
+    ta.value = v; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); btn.textContent = 'Kopyalandı!'; }
+    catch(e) { btn.textContent = 'Hata'; }
+    document.body.removeChild(ta);
+    setTimeout(function() { btn.textContent = 'Kopyala'; }, 2000);
+  }
+}
+</script>
 {/if}
