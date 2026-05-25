@@ -12264,9 +12264,11 @@ def api_migration_esxi_import():
                         pct_base = 5 + d_idx * 60 // max(total_disks, 1)
                         pct_end  = 5 + (d_idx + 1) * 60 // max(total_disks, 1)
 
-                        # Cleanup stale thick files from any previous failed run
+                        # Cleanup stale thick + lock files from any previous failed run
                         client2.exec_command(
-                            f"rm -f '{thick_desc}' '{thick_flat}' 2>/dev/null",
+                            f"rm -f '{thick_desc}' '{thick_flat}'"
+                            f" '{thick_desc}.lck' '{thick_flat}.lck'"
+                            f" 2>/dev/null",
                             timeout=15)
 
                         # ── vmkfstools: thin → eagerzeroedthick ──────────────────────
@@ -12282,10 +12284,12 @@ def api_migration_esxi_import():
                         )
                         _, _vmkf_out, _ = client2.exec_command(_vmkf_cmd, timeout=14400)
                         _vmkf_local_pct = 0
+                        _vmkf_lines = []
                         for _vl in _vmkf_out:
                             _vl = _vl.strip()
                             if not _vl:
                                 continue
+                            _vmkf_lines.append(_vl)
                             log.info("vmkfstools [%s]: %s", desc_name, _vl)
                             if "%" in _vl:
                                 try:
@@ -12301,8 +12305,10 @@ def api_migration_esxi_import():
                                     pct_base + _vmkf_local_pct * 18 // 100))
                         _vmkf_exit = _vmkf_out.channel.recv_exit_status()
                         if _vmkf_exit != 0:
+                            _vmkf_err_tail = " | ".join(_vmkf_lines[-4:]) or "(çıktı yok)"
                             raise RuntimeError(
-                                f"vmkfstools başarısız (exit {_vmkf_exit}): {desc_name}")
+                                f"vmkfstools exit={_vmkf_exit} [{desc_path}]: "
+                                f"{_vmkf_err_tail}")
 
                         # Get thick flat file size via ls -l (ESXi BusyBox)
                         _, _sz_out, _ = client2.exec_command(
