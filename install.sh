@@ -683,17 +683,17 @@ configure_ssh() {
     # PasswordAuthentication: varsayılan olarak kapalı — SSH key kullanımı zorunlu
     SSH_CONF="/etc/ssh/sshd_config"
     if [ -f "$SSH_CONF" ]; then
-        # PermitRootLogin prohibit-password — şifre ile root girişi kapalı
+        # PermitRootLogin yes — şifre ile root girişi açık
         if grep -q "^#*PermitRootLogin" "$SSH_CONF"; then
-            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' "$SSH_CONF"
+            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSH_CONF"
         else
-            echo "PermitRootLogin prohibit-password" >> "$SSH_CONF"
+            echo "PermitRootLogin yes" >> "$SSH_CONF"
         fi
-        # PasswordAuthentication no — yalnızca SSH key
+        # PasswordAuthentication yes — şifre girişi açık
         if grep -q "^#*PasswordAuthentication" "$SSH_CONF"; then
-            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' "$SSH_CONF"
+            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSH_CONF"
         else
-            echo "PasswordAuthentication no" >> "$SSH_CONF"
+            echo "PasswordAuthentication yes" >> "$SSH_CONF"
         fi
         # MaxAuthTries: brute-force'u yavaşlat
         if grep -q "^#*MaxAuthTries" "$SSH_CONF"; then
