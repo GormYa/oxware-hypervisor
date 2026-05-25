@@ -352,8 +352,18 @@ NETPLANCFG
         chmod 600 "$NP"
         for f in /etc/netplan/*.yaml; do
             [ "$f" = "$NP" ] && continue
-            grep -q "$PIFACE" "$f" 2>/dev/null && \
-                sed -i "s/dhcp4: true/dhcp4: false/g" "$f" 2>/dev/null || true
+            grep -q "$PIFACE" "$f" 2>/dev/null || continue
+            python3 - "$f" "$PIFACE" << 'PYCLEAN'
+import sys, yaml
+fpath, iface = sys.argv[1], sys.argv[2]
+with open(fpath) as fp:
+    cfg = yaml.safe_load(fp) or {}
+eth = cfg.get('network', {}).get('ethernets', {})
+if iface in eth:
+    eth[iface] = {'dhcp4': False}
+with open(fpath, 'w') as fp:
+    yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
+PYCLEAN
         done
         netplan apply && sleep 3
         ip link show oxbr0 &>/dev/null && log "oxbr0 oluşturuldu ✓" || warn "oxbr0 oluşturulamadı"

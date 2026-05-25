@@ -800,11 +800,23 @@ network:
 NETPLANCFG
     chmod 600 "$NP"
 
-    # Disable conflicting DHCP on same iface in other netplan files
+    # Strip all IP/route/gateway config from PIFACE in other netplan files.
+    # Iface becomes a bridge slave — no addresses, no routes, no gateway.
     for f in /etc/netplan/*.yaml; do
         [ "$f" = "$NP" ] && continue
-        grep -q "$PIFACE" "$f" 2>/dev/null && \
-            sed -i "s/dhcp4: true/dhcp4: false/g" "$f" 2>/dev/null || true
+        grep -q "$PIFACE" "$f" 2>/dev/null || continue
+        python3 - "$f" "$PIFACE" << 'PYCLEAN'
+import sys, yaml
+fpath, iface = sys.argv[1], sys.argv[2]
+with open(fpath) as fp:
+    cfg = yaml.safe_load(fp) or {}
+eth = cfg.get('network', {}).get('ethernets', {})
+if iface in eth:
+    eth[iface] = {'dhcp4': False}
+with open(fpath, 'w') as fp:
+    yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
+print(f"Cleaned {iface} config in {fpath}")
+PYCLEAN
     done
 
     netplan apply
