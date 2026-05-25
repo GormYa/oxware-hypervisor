@@ -736,6 +736,109 @@ configure_hostname() {
     log "Hostname: $NEW_HOST"
 }
 
+# ── Host Linux Bridge (oxbr0) ────────────────────────────────
+# VMs bridge üzerinden fiziksel ağa çıkar. Host da VM'lere ulaşabilir.
+# ip link komutları yerine netplan kullanır → bağlantı kesilmez.
+setup_host_bridge() {
+    step "Host Bridge (oxbr0) Kurulumu"
+
+    # Already fully configured?
+    if ip link show oxbr0 &>/dev/null && ip link show master oxbr0 &>/dev/null 2>/dev/null; then
+        log "oxbr0 bridge zaten mevcut ve üyesi var, atlanıyor"
+        _register_oxbridge_libvirt
+        return 0
+    fi
+
+    # Detect primary physical interface from default route
+    local PIFACE PIP PIP_PREFIX PGW
+    PIFACE=$(ip route show default 2>/dev/null \
+        | awk '/^default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+    [ -z "$PIFACE" ] && PIFACE="ens160"
+
+    # Skip if already virtual/bridge
+    case "$PIFACE" in
+        virbr*|oxbr*|br*|vnet*|tap*|tun*|lo)
+            warn "Primary iface '$PIFACE' sanal görünüyor, bridge atlanıyor"
+            return 0
+            ;;
+    esac
+
+    # Get current IP with prefix (e.g. 31.58.236.82/24)
+    PIP=$(ip addr show "$PIFACE" 2>/dev/null \
+        | awk '/inet /{print $2; exit}')
+    PGW=$(ip route show default 2>/dev/null \
+        | awk '/^default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+
+    if [ -z "$PIP" ] || [ -z "$PGW" ]; then
+        warn "IP/gateway tespit edilemedi ($PIFACE), bridge kurulumu atlanıyor"
+        return 1
+    fi
+
+    log "Bridge: $PIFACE ($PIP) → oxbr0, gw: $PGW"
+
+    # Write netplan bridge config
+    local NP="/etc/netplan/60-oxware-bridge.yaml"
+    cat > "$NP" << NETPLANCFG
+network:
+  version: 2
+  ethernets:
+    ${PIFACE}:
+      dhcp4: false
+  bridges:
+    oxbr0:
+      interfaces: [${PIFACE}]
+      dhcp4: false
+      addresses: [${PIP}]
+      routes:
+        - to: default
+          via: ${PGW}
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]
+      parameters:
+        stp: false
+        forward-delay: 0
+NETPLANCFG
+    chmod 600 "$NP"
+
+    # Disable conflicting DHCP on same iface in other netplan files
+    for f in /etc/netplan/*.yaml; do
+        [ "$f" = "$NP" ] && continue
+        grep -q "$PIFACE" "$f" 2>/dev/null && \
+            sed -i "s/dhcp4: true/dhcp4: false/g" "$f" 2>/dev/null || true
+    done
+
+    netplan apply
+    sleep 3
+
+    if ip link show oxbr0 &>/dev/null; then
+        log "oxbr0 bridge aktif ✓ ($PIP üzerinde, $PIFACE bağlı)"
+    else
+        warn "oxbr0 oluşturulamadı — netplan apply kontrol edin"
+        return 1
+    fi
+
+    _register_oxbridge_libvirt
+}
+
+_register_oxbridge_libvirt() {
+    # Register oxbridge with libvirt (idempotent)
+    if virsh net-info oxbridge &>/dev/null; then
+        virsh net-autostart oxbridge &>/dev/null || true
+        virsh net-start oxbridge &>/dev/null || true
+        return 0
+    fi
+    virsh net-define /dev/stdin << 'LIBVIRTNET' && \
+<network>
+  <name>oxbridge</name>
+  <forward mode='bridge'/>
+  <bridge name='oxbr0'/>
+</network>
+LIBVIRTNET
+    virsh net-autostart oxbridge
+    virsh net-start oxbridge
+    log "libvirt oxbridge network kayıt edildi ✓"
+}
+
 # ── Reboot Sonrası Ağ/Servis Kararlılığı ─────────────────────
 fix_reboot_stability() {
     step "Reboot Kararlılığı"
@@ -1034,6 +1137,7 @@ main() {
     configure_hostname
     configure_firewall
     configure_fail2ban
+    setup_host_bridge
     fix_reboot_stability
     install_ovs
     install_suricata

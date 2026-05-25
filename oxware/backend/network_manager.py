@@ -413,19 +413,27 @@ def _detect_primary_iface() -> str:
 
 def ensure_physnet() -> dict:
     """
-    Ensure at least one passthrough/bridge libvirt network exists so VMs can
-    reach the physical network (31.58.236.x / DHCP from upstream router).
+    Ensure oxbridge (Linux bridge) or fallback network exists for VMs to reach
+    the physical network.
 
-    Steps:
-    1. Check if any active passthrough/bridge libvirt network already exists →
-       return it (idempotent, no duplicate).
-    2. If none exists: detect primary physical interface, create 'physnet' with
-       forward mode='passthrough'.
-    3. On any error: return {ok: False, error: <msg>} — caller logs, never raises.
+    Priority:
+    1. oxbridge already active in libvirt → return it
+    2. oxbr0 Linux bridge exists on host → register with libvirt as oxbridge
+    3. Any other passthrough/bridge libvirt network → return it
+    4. Fallback: macvtap passthrough on detected interface (single-VM only)
+
+    Never raises — caller logs result.
     """
     try:
         conn = _connect()
         try:
+            # Priority 1: oxbridge already registered and active
+            for net in conn.listAllNetworks():
+                if net.name() == "oxbridge" and net.isActive():
+                    return {"ok": True, "existing": True, "name": "oxbridge", "mode": "bridge"}
+
+            # Priority 3: any other passthrough/bridge network
+            _fallback = None
             for net in conn.listAllNetworks():
                 if not net.isActive():
                     continue
@@ -433,23 +441,56 @@ def ensure_physnet() -> dict:
                 forward = root.find("forward")
                 if forward is not None and forward.get("mode") in (
                         "passthrough", "bridge", "private", "vepa"):
-                    return {
-                        "ok": True,
-                        "existing": True,
-                        "name": net.name(),
-                        "mode": forward.get("mode"),
-                    }
+                    _fallback = {"ok": True, "existing": True,
+                                 "name": net.name(), "mode": forward.get("mode")}
         finally:
             conn.close()
     except Exception as _e:
         return {"ok": False, "error": f"libvirt scan failed: {_e}"}
 
-    # No passthrough network found — create physnet
+    # Priority 2: oxbr0 exists on host but not registered in libvirt
+    _br_check = subprocess.run(["ip", "link", "show", "oxbr0"], capture_output=True)
+    if _br_check.returncode == 0:
+        _xml = """<network>
+  <name>oxbridge</name>
+  <forward mode='bridge'/>
+  <bridge name='oxbr0'/>
+</network>"""
+        try:
+            conn = _connect()
+            try:
+                # Remove stale unstarted definition if exists
+                try:
+                    _old = conn.networkLookupByName("oxbridge")
+                    if not _old.isActive():
+                        _old.undefine()
+                except Exception:
+                    pass
+                net = conn.networkDefineXML(_xml)
+                net.setAutostart(1)
+                net.create()
+                return {"ok": True, "created": True, "name": "oxbridge", "mode": "bridge"}
+            finally:
+                conn.close()
+        except Exception as e:
+            # oxbr0 exists but libvirt registration failed — still usable
+            if _fallback:
+                return _fallback
+            return {"ok": False, "error": f"oxbridge register failed: {e}"}
+
+    if _fallback:
+        return _fallback
+
+    # Priority 4: macvtap passthrough fallback (single-VM only, host can't reach VM)
     iface = _detect_primary_iface()
     try:
         result = create_network("physnet", forward_mode="bridge", bridge_iface=iface)
         result["created"] = True
         result["iface"] = iface
+        result["warning"] = (
+            "macvtap passthrough kullanılıyor — host VM'lere ulaşamaz. "
+            "Kalıcı çözüm için install.sh çalıştırın (oxbr0 bridge kurar)."
+        )
         return result
     except Exception as e:
         return {"ok": False, "error": str(e), "iface": iface}

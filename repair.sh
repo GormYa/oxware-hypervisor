@@ -313,6 +313,70 @@ sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || true
 echo "" > /etc/motd 2>/dev/null || true
 log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
 
+# ── 10c. Host Bridge (oxbr0) ──────────────────────────────────
+step "Host Bridge (oxbr0) Kontrolü"
+PIFACE=$(ip route show default 2>/dev/null \
+    | awk '/^default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+[ -z "$PIFACE" ] && PIFACE="ens160"
+
+if ip link show oxbr0 &>/dev/null; then
+    log "oxbr0 mevcut"
+    ip link set ens160 master oxbr0 2>/dev/null || true
+else
+    PIP=$(ip addr show "$PIFACE" 2>/dev/null | awk '/inet /{print $2; exit}')
+    PGW=$(ip route show default 2>/dev/null \
+        | awk '/^default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+
+    if [ -n "$PIP" ] && [ -n "$PGW" ]; then
+        NP="/etc/netplan/60-oxware-bridge.yaml"
+        cat > "$NP" << NETPLANCFG
+network:
+  version: 2
+  ethernets:
+    ${PIFACE}:
+      dhcp4: false
+  bridges:
+    oxbr0:
+      interfaces: [${PIFACE}]
+      dhcp4: false
+      addresses: [${PIP}]
+      routes:
+        - to: default
+          via: ${PGW}
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]
+      parameters:
+        stp: false
+        forward-delay: 0
+NETPLANCFG
+        chmod 600 "$NP"
+        for f in /etc/netplan/*.yaml; do
+            [ "$f" = "$NP" ] && continue
+            grep -q "$PIFACE" "$f" 2>/dev/null && \
+                sed -i "s/dhcp4: true/dhcp4: false/g" "$f" 2>/dev/null || true
+        done
+        netplan apply && sleep 3
+        ip link show oxbr0 &>/dev/null && log "oxbr0 oluşturuldu ✓" || warn "oxbr0 oluşturulamadı"
+    else
+        warn "IP/gateway tespit edilemedi, bridge atlandı"
+    fi
+fi
+
+# libvirt oxbridge
+if ! virsh net-info oxbridge &>/dev/null; then
+    virsh net-define /dev/stdin << 'LIBVIRTNET' && virsh net-autostart oxbridge && virsh net-start oxbridge && log "libvirt oxbridge kayıt edildi ✓" || true
+<network>
+  <name>oxbridge</name>
+  <forward mode='bridge'/>
+  <bridge name='oxbr0'/>
+</network>
+LIBVIRTNET
+else
+    virsh net-autostart oxbridge &>/dev/null || true
+    virsh net-start oxbridge &>/dev/null || true
+    log "oxbridge aktif"
+fi
+
 # ── 11. Servis Başlat ─────────────────────────────────────────
 step "Servis Başlatılıyor"
 systemctl stop oxware 2>/dev/null || true
