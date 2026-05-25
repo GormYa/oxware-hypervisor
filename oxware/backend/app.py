@@ -8329,9 +8329,12 @@ _import_jobs_lock = threading.Lock()
 # Semaphore caps to 1 parallel ESXi SSH connection — ESXi locks root after
 # ~5-18 failed auth attempts; serializing connections prevents lockout.
 _esxi_ssh_sem = threading.Semaphore(1)
-# Full pipeline concurrency: limit to 2 simultaneous ESXi migrations
-# (vmkfstools + stream + qemu-img) to avoid saturating disk/network.
+# Full pipeline concurrency: limit to 2 simultaneous ESXi migrations.
 _esxi_pipeline_sem = threading.Semaphore(2)
+# Lockout guard: when ESXi locks the account, block all new connections
+# until the lockout window expires (ESXi default: 900s).
+_esxi_lockout_until: float = 0.0   # epoch seconds; 0 = not locked
+_esxi_lockout_lock = threading.Lock()
 
 def _import_job_update(job_id: str, **kw):
     with _import_jobs_lock:
@@ -12144,14 +12147,29 @@ def api_migration_esxi_import():
                 _pipeline_held = True
                 import paramiko as _pme2
                 _import_job_update(j_id, step=f"ESXi SSH bekleniyor: {host}", percent=3)
+                # Check lockout guard before acquiring semaphore
+                with _esxi_lockout_lock:
+                    _lo_remaining = _esxi_lockout_until - time.time()
+                if _lo_remaining > 0:
+                    raise RuntimeError(
+                        f"ESXi SSH hesabı kilitli — {int(_lo_remaining)}s sonra tekrar dene")
                 # Limit concurrent ESXi SSH logins to prevent account lockout.
                 _esxi_ssh_sem.acquire()
                 _esxi_sem_held = True
                 _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
                 client2 = _pme2.SSHClient()
                 client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
-                client2.connect(host, port=port, username=user, password=password,
-                                timeout=30, look_for_keys=False, allow_agent=False)
+                try:
+                    client2.connect(host, port=port, username=user, password=password,
+                                    timeout=30, look_for_keys=False, allow_agent=False)
+                except _pme2.AuthenticationException as _ae:
+                    # Mark lockout: ESXi locks for 900s after repeated failures
+                    with _esxi_lockout_lock:
+                        global _esxi_lockout_until
+                        _esxi_lockout_until = time.time() + 900
+                    raise RuntimeError(
+                        f"ESXi SSH kimlik doğrulama hatası — hesap kilitlenmiş olabilir. "
+                        f"15 dakika bekleyip tekrar dene. ({_ae})")
                 local_raws = []  # [(local_raw_path, disk_size_bytes), ...]
                 try:
                     # ── Auto-shutdown running VM ──────────────────────────────────────
