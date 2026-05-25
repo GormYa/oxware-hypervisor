@@ -11909,16 +11909,19 @@ def api_migration_esxi_scan():
                 vmx_path = parts[3] if len(parts) > 3 else ""
                 guestid = parts[4] if len(parts) > 4 else ""
                 # ── Resolve actual VMX directory ─────────────────────────────────
-                # ESXi datastore friendly name (e.g. "datastore1") is a symlink
-                # to UUID path. ESXi SSH shell does not reliably follow symlinks
-                # with cat/grep/find. Use find by VMX filename to get real path.
-                _, _vmx_find, _ = client.exec_command(
-                    f"find /vmfs/volumes -maxdepth 3 -name '{name}.vmx'"
-                    f" 2>/dev/null | head -1",
-                    timeout=12)
-                _vmx_real = _vmx_find.read().decode(errors="replace").strip()
-                if _vmx_real:
-                    vmx_dir = _vmx_real.rsplit("/", 1)[0]
+                # datastore1 is a symlink → UUID path. ESXi BusyBox SSH does not
+                # follow symlinks with cat/grep; find -maxdepth also unreliable.
+                # Shell glob expansion IS reliable: ls /vmfs/volumes/*/<rel> works
+                # because the shell expands * over real UUID directories.
+                # vmx_path (parts[3]) = relative path e.g. "vmname/vmname.vmx"
+                _vmx_rel = vmx_path.strip() if vmx_path.strip() \
+                    else f"{name}/{name}.vmx"
+                _, _gl_out, _ = client.exec_command(
+                    f"ls /vmfs/volumes/*/{_vmx_rel} 2>/dev/null | head -1",
+                    timeout=8)
+                _vmx_abs = _gl_out.read().decode(errors="replace").strip()
+                if _vmx_abs:
+                    vmx_dir = _vmx_abs.rsplit("/", 1)[0]
                 else:
                     vmx_dir = "/vmfs/volumes/" + datastore + "/" + name
                 # Power state
@@ -11929,13 +11932,21 @@ def api_migration_esxi_scan():
                 # Parse VMX for full config (networks, disks, CPU, RAM, firmware)
                 vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
                 # ── Disk virtual size from VMDK extent header ─────────────────────
-                # VMDK descriptor line: "RW <sectors> VMFS ..."
-                # Virtual size = sectors * 512 bytes. More accurate than du.
+                # VMDK descriptor: "RW <sectors> VMFS ..." — virtual size in sectors
                 disk_gb = 0
                 _scan_disks = vmx_info.get("disks", [])
+                # If VMX parse missed disks, find first VMDK via glob
+                if not _scan_disks:
+                    _, _vdk_gl, _ = client.exec_command(
+                        f"ls /vmfs/volumes/*/{name}/*.vmdk 2>/dev/null"
+                        f" | grep -v flat | grep -v '[0-9]\\.' | head -1",
+                        timeout=8)
+                    _vdk_path = _vdk_gl.read().decode(errors="replace").strip()
+                    if _vdk_path:
+                        _scan_disks = [_vdk_path]
                 if _scan_disks:
                     _, _ext_out, _ = client.exec_command(
-                        f"grep -i '^RW ' '{_scan_disks[0]}' 2>/dev/null"
+                        f"grep -iE '^RW |^RDONLY ' '{_scan_disks[0]}' 2>/dev/null"
                         f" | head -1 | awk '{{print $2}}'",
                         timeout=5)
                     _sec_txt = _ext_out.read().decode(errors="replace").strip()
@@ -11944,7 +11955,7 @@ def api_migration_esxi_scan():
                     except (ValueError, TypeError):
                         pass
                 if not disk_gb:
-                    # Fallback: sum VMDK file sizes
+                    # Fallback: sum VMDK file sizes (thin = small, but better than 0)
                     _, _lsz_out, _ = client.exec_command(
                         f"ls -la '{vmx_dir}'/*.vmdk 2>/dev/null"
                         f" | awk 'NF>4 {{sum+=$5}} END {{if(sum>0) print sum}}'",
@@ -12079,11 +12090,11 @@ def api_migration_esxi_import():
                         desc_paths = list(j_vmx_disks)
                     else:
                         _import_job_update(j_id, step="VMDK listesi alınıyor", percent=6)
-                        # Resolve actual dir: find VMX by name, get its directory
+                        # Resolve actual dir via shell glob (BusyBox find -maxdepth unreliable)
                         _, _vmx_f, _ = client2.exec_command(
-                            f"find /vmfs/volumes -maxdepth 3 -name '{j_vm_name}.vmx'"
+                            f"ls /vmfs/volumes/*/{j_vm_name}/{j_vm_name}.vmx"
                             f" 2>/dev/null | head -1",
-                            timeout=12)
+                            timeout=8)
                         _vmx_fp = _vmx_f.read().decode(errors="replace").strip()
                         _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else j_vmx_dir
                         # Use ls glob (not find) — avoids BusyBox symlink traversal issue
