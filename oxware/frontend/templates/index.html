@@ -14852,10 +14852,7 @@ function _migBuildJobEl(j) {
   idSpan.textContent = '#' + j.id;
   const leftDiv = document.createElement('div');
   leftDiv.appendChild(nameSpan); leftDiv.appendChild(srcSpan); leftDiv.appendChild(idSpan);
-  const elSpan = document.createElement('span');
-  elSpan.style.cssText = 'font-size:10px;color:var(--text-muted)';
-  elSpan.textContent = elapsed;
-  hdr.appendChild(leftDiv); hdr.appendChild(elSpan); wrap.appendChild(hdr);
+  hdr.appendChild(leftDiv); wrap.appendChild(hdr);
 
   const barRow = document.createElement('div');
   barRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
@@ -14869,8 +14866,13 @@ function _migBuildJobEl(j) {
   barWrap.appendChild(barFill); barRow.appendChild(barWrap); barRow.appendChild(pctLabel); wrap.appendChild(barRow);
 
   const stepEl = document.createElement('div');
-  stepEl.style.cssText = 'font-size:11px;color:var(--text-muted)';
-  stepEl.textContent = j.step || '';
+  stepEl.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);margin-top:2px';
+  const stepTxt = document.createElement('span');
+  stepTxt.textContent = j.step || '';
+  const stepMeta = document.createElement('span');
+  stepMeta.style.cssText = 'font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:8px;color:' + statusColor;
+  stepMeta.textContent = pct + '%  ·  ' + elapsed;
+  stepEl.appendChild(stepTxt); stepEl.appendChild(stepMeta);
   wrap.appendChild(stepEl);
   if (j.message) {
     const msgEl = document.createElement('div');
