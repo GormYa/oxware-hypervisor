@@ -394,6 +394,67 @@ def list_host_bridges() -> list:
     return bridges
 
 
+def _detect_primary_iface() -> str:
+    """Detect primary physical interface from default route (e.g. ens160)."""
+    result = subprocess.run(["ip", "route", "show", "default"],
+                            capture_output=True, text=True)
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if "dev" in parts:
+            idx = parts.index("dev")
+            if idx + 1 < len(parts):
+                candidate = parts[idx + 1]
+                # Skip virtual/bridge ifaces
+                if not any(candidate.startswith(p) for p in
+                           ("virbr", "vnet", "vif", "tap", "br", "lo", "tun", "wg")):
+                    return candidate
+    return "ens160"
+
+
+def ensure_physnet() -> dict:
+    """
+    Ensure at least one passthrough/bridge libvirt network exists so VMs can
+    reach the physical network (31.58.236.x / DHCP from upstream router).
+
+    Steps:
+    1. Check if any active passthrough/bridge libvirt network already exists →
+       return it (idempotent, no duplicate).
+    2. If none exists: detect primary physical interface, create 'physnet' with
+       forward mode='passthrough'.
+    3. On any error: return {ok: False, error: <msg>} — caller logs, never raises.
+    """
+    try:
+        conn = _connect()
+        try:
+            for net in conn.listAllNetworks():
+                if not net.isActive():
+                    continue
+                root = ET.fromstring(net.XMLDesc())
+                forward = root.find("forward")
+                if forward is not None and forward.get("mode") in (
+                        "passthrough", "bridge", "private", "vepa"):
+                    return {
+                        "ok": True,
+                        "existing": True,
+                        "name": net.name(),
+                        "mode": forward.get("mode"),
+                    }
+        finally:
+            conn.close()
+    except Exception as _e:
+        return {"ok": False, "error": f"libvirt scan failed: {_e}"}
+
+    # No passthrough network found — create physnet
+    iface = _detect_primary_iface()
+    try:
+        result = create_network("physnet", forward_mode="bridge", bridge_iface=iface)
+        result["created"] = True
+        result["iface"] = iface
+        return result
+    except Exception as e:
+        return {"ok": False, "error": str(e), "iface": iface}
+
+
 def get_host_interfaces():
     result = subprocess.run(
         ["ip", "-j", "addr"],

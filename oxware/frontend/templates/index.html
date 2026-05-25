@@ -14683,6 +14683,9 @@ async function migEsxiScan() {
     st.textContent = '✓ ' + d.vms.length + ' VM bulundu';
     st.style.color = '#22c55e';
     migRenderVmList();
+    // Auto-fill network dropdown on scan success
+    const _netSel = document.getElementById('mig-network');
+    if (_netSel) _fillImportNetworkSelect(_netSel);
   } catch(e) {
     st.textContent = '✗ ' + (e.message || String(e));
     st.style.color = '#f43f5e';
@@ -14933,15 +14936,23 @@ function openImportOvaModal() {
 async function _fillImportNetworkSelect(sel) {
   try {
     const d = await _api('/api/networks', 'GET');
-    const nets = (d.networks || []).filter(function(n) { return n.active && n.name !== 'default'; });
+    const nets = (d.networks || []).filter(function(n) { return n.active; });
     // Remove all options except first default
     while (sel.options.length > 1) sel.remove(1);
+    let physnetIdx = -1;
     nets.forEach(function(n) {
+      if (n.name === 'default') return; // already option[0]
       const opt = document.createElement('option');
       opt.value = n.name;
       opt.textContent = n.name + ' (' + (n.forward_mode || n.mode || 'nat') + ')';
       sel.appendChild(opt);
+      // Auto-select physnet or any passthrough/bridge network
+      const mode = (n.forward_mode || n.mode || '').toLowerCase();
+      if (n.name === 'physnet' || mode === 'passthrough' || mode === 'bridge') {
+        physnetIdx = sel.options.length - 1;
+      }
     });
+    if (physnetIdx >= 0) sel.selectedIndex = physnetIdx;
   } catch(e) { /* keep default option */ }
 }
 

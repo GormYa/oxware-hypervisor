@@ -12571,6 +12571,25 @@ if config.SSL_ENABLED:
     _ensure_ssl_cert(config.SSL_CERT, config.SSL_KEY)
 
 
+# ── Ensure physical passthrough network exists (runs at import time) ──────────
+def _startup_ensure_physnet():
+    try:
+        _r = network_manager.ensure_physnet()
+        if _r.get("ok"):
+            if _r.get("existing"):
+                log.info("physnet: mevcut passthrough ağ bulundu → %s (%s)",
+                         _r.get("name"), _r.get("mode"))
+            else:
+                log.info("physnet oluşturuldu: %s üzerinde %s",
+                         _r.get("iface"), _r.get("name", "physnet"))
+        else:
+            log.warning("physnet oluşturulamadı: %s", _r.get("error"))
+    except Exception as _e:
+        log.warning("ensure_physnet başlatma hatası: %s", _e)
+
+_startup_ensure_physnet()
+
+
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.0 başlatılıyor")
     if ssh_watchdog:
