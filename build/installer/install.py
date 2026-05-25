@@ -819,6 +819,17 @@ def do_install(progress_cb):
         return f"{disk}{n}"
 
     progress_cb(2, "Partitioning disk …")
+
+    # Ensure parted is available in the live environment (some minimal ISOs lack it)
+    import shutil as _shutil_inst
+    if not _shutil_inst.which("parted"):
+        run("apt-get install -y --no-install-recommends parted", check=False)
+    if not _shutil_inst.which("parted"):
+        raise RuntimeError(
+            "parted bulunamadı ve kurulamadı. "
+            "Lütfen 'apt-get install parted' çalıştırın veya Ubuntu/Debian tabanlı bir live ISO kullanın."
+        )
+
     run(f"wipefs -a {disk}")
     run(f"parted -s {disk} mklabel gpt")
     run(f"parted -s {disk} mkpart primary 1MiB 2MiB")      # BIOS boot

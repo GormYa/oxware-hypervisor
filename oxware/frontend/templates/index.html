@@ -2701,6 +2701,7 @@
             <h2>Güncellemeler</h2>
             <div class="spacer"></div>
             <span id="upd-auto-badge" style="display:none;font-size:10px;color:var(--text-muted);margin-right:8px">🕐 Otomatik kontrol aktif</span>
+            <span id="upd-header-avail" style="display:none;background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.4);color:#fb923c;border-radius:20px;font-size:11px;font-weight:700;padding:3px 10px;margin-right:6px;cursor:pointer" onclick="document.getElementById('update-commits-area').scrollIntoView({behavior:'smooth'})">⬇️ <span id="upd-header-count">0</span> güncelleme mevcut</span>
             <button class="btn" onclick="checkUpdates()" id="btn-check-update">🔍 Şimdi Kontrol Et</button>
           </div>
 
@@ -2722,9 +2723,12 @@
 
           <div id="update-status-area"><div class="empty-state"><div class="icon">🔄</div><h3>Durum bilinmiyor</h3><p>"Şimdi Kontrol Et" butonuna tıklayın veya otomatik kontrol bekleniyor</p></div></div>
           <div id="update-commits-area" style="display:none;margin-top:14px">
-            <div class="section-header"><h2>Yeni Güncellemeler</h2></div>
+            <div class="section-header">
+              <h2>Yeni Güncellemeler</h2>
+              <div class="spacer"></div>
+              <button class="btn primary" onclick="applyUpdate()" id="btn-apply-update">⬇️ Güncellemeyi Uygula</button>
+            </div>
             <div id="update-commits-list"></div>
-            <div style="margin-top:10px"><button class="btn primary" onclick="applyUpdate()" id="btn-apply-update">⬇️ Uygula</button></div>
           </div>
           <div id="update-history-area" style="margin-top:18px;display:none">
             <div class="section-header"><h2>Güncelleme Geçmişi</h2></div>
@@ -12250,6 +12254,16 @@ function _renderUpdateResult(data) {
     return;
   }
   document.getElementById("update-badge").style.display = data.up_to_date ? "none" : "inline";
+  // Header inline badge
+  const _hdrAvail = document.getElementById("upd-header-avail");
+  if (_hdrAvail) {
+    if (!data.up_to_date && data.new_count > 0) {
+      document.getElementById("upd-header-count").textContent = data.new_count;
+      _hdrAvail.style.display = "";
+    } else {
+      _hdrAvail.style.display = "none";
+    }
+  }
   const checkedAt = data.checked_at ? new Date(data.checked_at).toLocaleString("tr-TR") : "";
   document.getElementById("update-status-area").innerHTML = `
     <div class="card" style="border-left:3px solid ${data.up_to_date ? "var(--green-lt)" : "var(--orange)"}">
