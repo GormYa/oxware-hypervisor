@@ -12032,7 +12032,7 @@ def api_migration_esxi_scan():
                     cfg_nets = vmx_info.get("networks", [])
                 if not disk_gb:
                     disk_gb = vmx_info.get("disk_gb", 0)
-                # get.config capacityInKB/Bytes as last resort
+                # get.config capacityInKB/Bytes
                 if not disk_gb:
                     _m_db  = _re_vc.search(r'capacityInBytes\s*=\s*(\d+)', _cfg_txt)
                     _m_dkb = _re_vc.search(r'capacityInKB\s*=\s*(\d+)', _cfg_txt)
@@ -12040,6 +12040,27 @@ def api_migration_esxi_scan():
                         disk_gb = round(int(_m_db.group(1)) / (1024 ** 3), 1)
                     elif _m_dkb:
                         disk_gb = round(int(_m_dkb.group(1)) / (1024 * 1024), 1)
+
+                # ── 4. Derive VMDK path from getallvms data (vmkfstools accepts symlinks) ──
+                # vmx_path = "ubuntuoxware/ubuntuoxware.vmx" → stem + ".vmdk"
+                if not cfg_disks and vmx_path:
+                    _stem = vmx_path.strip().rsplit(".", 1)[0]  # "ubuntuoxware/ubuntuoxware"
+                    _derived = f"/vmfs/volumes/{datastore}/{_stem}.vmdk"
+                    cfg_disks = [_derived]
+
+                # ── 5. Disk size from flat VMDK ls -l ─────────────────────────────
+                if not disk_gb and cfg_disks:
+                    try:
+                        _flat = cfg_disks[0].rsplit(".", 1)[0] + "-flat.vmdk"
+                        _, _lz, _ = client.exec_command(
+                            f"ls -la '{_flat}' 2>/dev/null | awk '{{print $5}}'",
+                            timeout=6)
+                        _sz = _lz.read().decode().strip()
+                        if _sz.isdigit() and int(_sz) > 0:
+                            disk_gb = round(int(_sz) / (1024 ** 3), 1)
+                    except Exception:
+                        pass
+
                 disk_gb = disk_gb or 1
 
                 # OS type
@@ -12215,9 +12236,22 @@ def api_migration_esxi_import():
                                 if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
                                     desc_paths.append(_ln)
 
+                        # ── Last resort: derive from vmx_dir + vm_name ───────────
+                        # vmkfstools is an ESXi-native tool — it CAN follow
+                        # /vmfs/volumes/datastore1 symlinks directly.
+                        if not desc_paths:
+                            _derived2 = j_vmx_dir.rstrip("/") + "/" + j_vm_name + ".vmdk"
+                            _, _dv, _ = client2.exec_command(
+                                f"ls '{_derived2}' 2>/dev/null", timeout=5)
+                            if _dv.read().decode().strip():
+                                desc_paths = [_derived2]
+
                         if not desc_paths:
                             raise RuntimeError(
-                                f"VMDK bulunamadı: vmid={j_vmid} dir={j_vmx_dir}")
+                                f"VMDK bulunamadı: vmid={j_vmid} "
+                                f"dir={j_vmx_dir} "
+                                f"derived={j_vmx_dir.rstrip('/')}/{j_vm_name}.vmdk"
+                            )
 
                     total_disks = len(desc_paths)
                     for d_idx, desc_path in enumerate(desc_paths):
