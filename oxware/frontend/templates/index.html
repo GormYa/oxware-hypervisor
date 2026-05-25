@@ -5058,8 +5058,34 @@ systemctl enable --now qemu-guest-agent</pre>
               </div>
             </div>
           </div>
-          <!-- Cloud Image Toggle -->
+          <!-- Linked Clone Toggle -->
           <div class="cvm-row" style="margin-bottom:6px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="vm-use-clone" onchange="cvmToggleClone(this.checked)" style="width:15px;height:15px;accent-color:#a78bfa">
+              <span>🔗 Şablondan Klonla <span style="font-size:10px;color:#a78bfa;font-weight:600">(anlık)</span></span>
+            </label>
+            <div id="clone-options" style="display:none;margin-top:8px;padding:10px;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.25);border-radius:6px">
+              <div class="cvm-row" style="margin-bottom:8px">
+                <label>Şablon Seç</label>
+                <select id="vm-clone-template">
+                  <option value="">— Yükleniyor... —</option>
+                </select>
+              </div>
+              <div class="cvm-row" style="margin-bottom:0">
+                <label>Klonlama Tipi</label>
+                <div style="display:flex;gap:8px">
+                  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+                    <input type="radio" name="clone-type" value="linked" checked style="accent-color:#a78bfa"> 🔗 Linked Clone <span style="color:var(--text-muted);font-size:10px">(anlık, paylaşımlı temel disk)</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+                    <input type="radio" name="clone-type" value="full" style="accent-color:#a78bfa"> 📋 Full Clone <span style="color:var(--text-muted);font-size:10px">(bağımsız kopya)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Cloud Image Toggle -->
+          <div id="cloud-image-row" class="cvm-row" style="margin-bottom:6px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
               <input type="checkbox" id="vm-use-cloud-image" onchange="cvmToggleCloudImage(this.checked)" style="width:15px;height:15px;accent-color:var(--accent)">
               <span>☁️ Cloud Image Kullan <span style="font-size:10px;color:var(--accent-lt);font-weight:600">(önerilen)</span></span>
@@ -6334,8 +6360,40 @@ function _updateCiUser() {
   }
 }
 
+async function loadCloneTemplateOptions() {
+  const sel = document.getElementById('vm-clone-template');
+  if (!sel) return;
+  try {
+    const data = await api('/templates');
+    const templates = data.templates || data || [];
+    const avail = templates.filter(t => !t.download_required && !t.predefined);
+    sel.innerHTML = avail.length
+      ? avail.map(t => `<option value="${t.id}">${t.name}${t.disk_size_gb ? ' ('+t.disk_size_gb.toFixed(1)+'GB)':''}</option>`).join('')
+      : '<option value="">— Şablon bulunamadı (önce import edin) —</option>';
+  } catch(e) {
+    sel.innerHTML = '<option value="">— Şablon yüklenemedi —</option>';
+  }
+}
+
+function cvmToggleClone(on) {
+  document.getElementById('clone-options').style.display = on ? '' : 'none';
+  // Disable incompatible options when cloning
+  const cloudRow = document.getElementById('cloud-image-row');
+  const isoRow   = document.getElementById('vm-iso-row');
+  if (cloudRow) cloudRow.style.opacity = on ? '.4' : '';
+  if (isoRow)   isoRow.style.opacity   = on ? '.4' : '';
+  if (on) {
+    const ci = document.getElementById('vm-use-cloud-image');
+    if (ci) { ci.checked = false; cvmToggleCloudImage(false); }
+    loadCloneTemplateOptions();
+  }
+}
+
 async function openCreateVMModal() {
   loadISOOptions(); loadIpPoolOptions(); loadNetworkOptions();
+  // Reset clone toggle
+  const cloneChk = document.getElementById('vm-use-clone');
+  if (cloneChk) { cloneChk.checked = false; cvmToggleClone(false); }
   openModal("modal-create-vm");
   // Reset manual flag so auto-fill works fresh each open
   window._ciUserManual = false;
@@ -10133,19 +10191,25 @@ async function createVM() {
   const name = document.getElementById("vm-name").value.trim();
   if (!name) return toast("VM adı boş olamaz", "error");
   const useCloudImage = document.getElementById("vm-use-cloud-image")?.checked || false;
+  const useClone  = document.getElementById("vm-use-clone")?.checked || false;
+  const templateId = useClone ? (document.getElementById("vm-clone-template")?.value || "") : "";
+  const cloneType  = useClone ? (document.querySelector('input[name="clone-type"]:checked')?.value || "linked") : "linked";
+  if (useClone && !templateId) return toast("Klonlama için şablon seçin", "error");
   const body = {
     name,
     vcpus: parseInt(document.getElementById("vm-cpu").value),
     memory_mb: parseInt(document.getElementById("vm-mem").value),
     disk_gb: parseInt(document.getElementById("vm-disk").value),
     disk_format: document.getElementById("vm-disk-fmt").value,
-    iso_path: useCloudImage ? null : (document.getElementById("vm-iso").value || null),
+    iso_path: (useCloudImage || useClone) ? null : (document.getElementById("vm-iso").value || null),
     network: document.getElementById("vm-net").value,
     os_variant: document.getElementById("vm-os").value,
     boot_order: document.getElementById("vm-boot").value,
     disk_bus: document.getElementById("vm-disk-bus")?.value || "sata",
     vm_type: document.getElementById("vm-type")?.value || "vps",
     use_cloud_image: useCloudImage,
+    template_id: templateId || undefined,
+    clone_type: cloneType,
   };
   // Auto IP
   const autoIpPool = document.getElementById("vm-autoip-pool")?.value || "";
@@ -10172,7 +10236,7 @@ async function createVM() {
   }
   const btn = document.getElementById('btn-create-vm');
   const origTxt = btn?.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = useCloudImage ? '⏳ Cloud image hazırlanıyor...' : '⏳ Oluşturuluyor...'; }
+  if (btn) { btn.disabled = true; btn.textContent = useClone ? '⏳ Klonlanıyor...' : useCloudImage ? '⏳ Cloud image hazırlanıyor...' : '⏳ Oluşturuluyor...'; }
   try {
     await api("/vms", { method: "POST", body });
     toast(`"${name}" oluşturuldu`, "success");

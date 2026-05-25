@@ -1301,6 +1301,10 @@ def api_create_vm():
             }
 
         use_cloud_image = bool(data.get("use_cloud_image", False))
+        template_id = security.sanitize_str(data.get("template_id", "") or "", 64) or None
+        clone_type  = data.get("clone_type", "linked") or "linked"
+        if clone_type not in ("linked", "full"):
+            clone_type = "linked"
 
         create_kwargs = dict(
             name=name, memory_mb=memory_mb, vcpus=vcpus, disk_gb=disk_gb,
@@ -1308,6 +1312,7 @@ def api_create_vm():
             os_variant=os_variant, boot_order=boot_order, disk_bus=disk_bus,
             cpu_mode=cpu_mode, cloud_init=cloud_init,
             use_cloud_image=use_cloud_image,
+            template_id=template_id, clone_type=clone_type,
         )
 
         result = vm_manager.create_vm(**create_kwargs)

@@ -716,8 +716,8 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
         safe_password = _safe(ci.get("password", "") or "")
         safe_ssh_key  = _safe(ci.get("ssh_key", "") or "")
 
-        # meta-data
-        meta = f"instance-id: {vm_name}\nlocal-hostname: {safe_hostname}\n"
+        # meta-data — unique instance-id forces cloud-init to re-run on every attach
+        meta = f"instance-id: {vm_name}-{int(time.time())}\nlocal-hostname: {safe_hostname}\n"
 
         # user-data YAML
         lines = ["#cloud-config"]
@@ -906,7 +906,8 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
               network="default", disk_format="qcow2", os_variant="generic",
               boot_order="cdrom,hd", mac: str = None, disk_bus: str = "sata",
               cpu_mode: str = "host-model", cloud_init: dict = None,
-              use_cloud_image: bool = False):
+              use_cloud_image: bool = False,
+              template_id: str = None, clone_type: str = "linked"):
 
     vm_uuid  = str(uuid.uuid4())
     vm_mac   = mac or _generate_mac()          # stable MAC for DHCP static entry
@@ -930,7 +931,33 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
         ci_iso_path = _build_cloud_init_iso(name, cloud_init)
 
     # Disk oluştur
-    if use_cloud_image:
+    if template_id:
+        # Linked clone veya full clone şablondan
+        import sys as _sys
+        _tpl_dir = os.path.join(os.path.dirname(__file__))
+        if _tpl_dir not in _sys.path:
+            _sys.path.insert(0, _tpl_dir)
+        try:
+            import template_manager as _tplmgr
+            _tpl_disk = _tplmgr._disk_path(template_id)
+        except Exception:
+            _tpl_disk = os.path.join("/var/lib/oxware/templates", template_id, "disk.qcow2")
+        if not os.path.exists(_tpl_disk):
+            raise ValueError(f"Şablon diski bulunamadı: {_tpl_disk}")
+        if clone_type == "full":
+            subprocess.run(
+                ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2", _tpl_disk, disk_path],
+                check=True, capture_output=True, timeout=7200
+            )
+        else:  # linked (default) — instant copy-on-write
+            subprocess.run(
+                ["qemu-img", "create", "-f", "qcow2", "-b", _tpl_disk, "-F", "qcow2", disk_path],
+                check=True, capture_output=True
+            )
+        if not iso_path:
+            boot_order = "hd"
+        disk_format = "qcow2"
+    elif use_cloud_image:
         # Cloud image'dan bağımsız disk kopyası oluştur + resize
         _prepare_cloud_image(os_variant, disk_gb, disk_path)
         # Cloud image ile ISO boot'a gerek yok — disk'ten boot et
