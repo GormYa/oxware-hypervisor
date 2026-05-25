@@ -8333,7 +8333,7 @@ _esxi_ssh_sem = threading.Semaphore(1)
 _esxi_pipeline_sem = threading.Semaphore(2)
 # Lockout guard: when ESXi locks the account, block all new connections
 # until the lockout window expires (ESXi default: 900s).
-_esxi_lockout_until: float = 0.0   # epoch seconds; 0 = not locked
+_esxi_lockout_until = [0.0]   # mutable: [epoch_seconds]; 0 = not locked
 _esxi_lockout_lock = threading.Lock()
 
 def _import_job_update(job_id: str, **kw):
@@ -12149,7 +12149,7 @@ def api_migration_esxi_import():
                 _import_job_update(j_id, step=f"ESXi SSH bekleniyor: {host}", percent=3)
                 # Check lockout guard before acquiring semaphore
                 with _esxi_lockout_lock:
-                    _lo_remaining = _esxi_lockout_until - time.time()
+                    _lo_remaining = _esxi_lockout_until[0] - time.time()
                 if _lo_remaining > 0:
                     raise RuntimeError(
                         f"ESXi SSH hesabı kilitli — {int(_lo_remaining)}s sonra tekrar dene")
@@ -12165,8 +12165,7 @@ def api_migration_esxi_import():
                 except _pme2.AuthenticationException as _ae:
                     # Mark lockout: ESXi locks for 900s after repeated failures
                     with _esxi_lockout_lock:
-                        global _esxi_lockout_until
-                        _esxi_lockout_until = time.time() + 900
+                        _esxi_lockout_until[0] = time.time() + 900
                     raise RuntimeError(
                         f"ESXi SSH kimlik doğrulama hatası — hesap kilitlenmiş olabilir. "
                         f"15 dakika bekleyip tekrar dene. ({_ae})")
