@@ -11310,6 +11310,185 @@ def _esxi_parse_vmx_ssh(client, vmx_dir: str, vm_name: str) -> dict:
     return result
 
 
+def _qcow2_ext4_fixup(qcow2_path: str, log_fn=None) -> str:
+    """
+    qcow2 içindeki tüm ext4 filesystemlerini tara (LVM dahil) ve
+    metadata_csum + INODE_UNINIT flag'larını temizle.
+    ESXi thin-VMDK → KVM migrate sonrası 'iget: checksum invalid' hatasını çözer.
+    """
+    import struct as _st
+    import re as _re_lvm
+    OMASK = 0x00fffffffffffe00
+    CBIT  = 1 << 62  # compressed bit (bit 63 = COPIED, normal)
+    results = []
+
+    def _lg(msg):
+        if log_fn:
+            log_fn("ext4fixup: %s", msg)
+
+    def _open_q(path):
+        f = open(path, 'r+b')
+        h = f.read(104)
+        if h[:4] != b'QFI\xfb':
+            raise ValueError("Not qcow2")
+        cb = _st.unpack_from('>I', h, 20)[0]; cs = 1 << cb
+        l1sz = _st.unpack_from('>I', h, 36)[0]
+        l1of = _st.unpack_from('>Q', h, 40)[0]
+        f.seek(l1of); l1r = f.read(l1sz * 8)
+        l1 = [_st.unpack_from('>Q', l1r, i*8)[0] for i in range(l1sz)]
+        return {'f': f, 'cb': cb, 'cs': cs, 'l2n': cs//8, 'l2b': cb-3, 'l1': l1, 'l2c': {}}
+
+    def _v2p(q, v):
+        l1i = v >> (q['cb'] + q['l2b'])
+        l2i = (v >> q['cb']) & (q['l2n'] - 1)
+        if l1i >= len(q['l1']): return None
+        l2b = q['l1'][l1i] & OMASK
+        if not l2b: return None
+        if l2b not in q['l2c']:
+            q['f'].seek(l2b); r = q['f'].read(q['l2n'] * 8)
+            q['l2c'][l2b] = [_st.unpack_from('>Q', r, i*8)[0] for i in range(q['l2n'])]
+        e = q['l2c'][l2b][l2i]
+        if not e or (e & 1) or (e & CBIT): return None
+        return (e & OMASK) + (v & (q['cs'] - 1))
+
+    def _vr(q, virt, size):
+        out = bytearray(); pos = virt; end = virt + size; cs = q['cs']
+        while pos < end:
+            chunk = min(cs - (pos % cs), end - pos); p = _v2p(q, pos)
+            if p is None: out += b'\x00' * chunk
+            else: q['f'].seek(p); out += q['f'].read(chunk)
+            pos += chunk
+        return bytes(out)
+
+    def _vw(q, virt, data):
+        pos = virt; src = 0; size = len(data); cs = q['cs']
+        while src < size:
+            chunk = min(cs - (pos % cs), size - src); p = _v2p(q, pos)
+            if p is None: raise IOError(f"vw unallocated @ 0x{pos:x}")
+            q['f'].seek(p); q['f'].write(data[src:src+chunk])
+            pos += chunk; src += chunk
+
+    EXT4_META_CSUM       = 0x400
+    EXT4_BG_INODE_UNINIT = 0x0001
+    EXT4_BG_BLOCK_UNINIT = 0x0002
+
+    def _patch_ext4(q, base, label=""):
+        sb_off = base + 1024
+        sb = bytearray(_vr(q, sb_off, 1024))
+        if _st.unpack_from('<H', sb, 56)[0] != 0xEF53:
+            return False
+        ro = _st.unpack_from('<I', sb, 100)[0]
+        if not (ro & EXT4_META_CSUM):
+            _lg(f"[{label}] already clear ro={ro:#x}")
+            return True
+        new_ro = ro & ~EXT4_META_CSUM & ~0x10000  # also clear orphan_present
+        _st.pack_into('<I', sb, 100, new_ro)
+        log_bs = _st.unpack_from('<I', sb, 24)[0]; bs = 1024 << log_bs
+        total_blks = _st.unpack_from('<I', sb, 4)[0]
+        bpg = _st.unpack_from('<I', sb, 32)[0]
+        incompat = _st.unpack_from('<I', sb, 96)[0]
+        gdt_esz = 64 if (incompat & 0x80) else 32
+        ngroups = (total_blks + bpg - 1) // bpg
+        gdt_blk = 1 if bs > 1024 else 2
+        gdt_base = base + gdt_blk * bs
+        fixed = 0
+        for g in range(ngroups):
+            gd_off = gdt_base + g * gdt_esz
+            gd = bytearray(_vr(q, gd_off, gdt_esz))
+            fl = _st.unpack_from('<H', gd, 18)[0]
+            changed = False
+            if fl & EXT4_BG_INODE_UNINIT: fl &= ~EXT4_BG_INODE_UNINIT; changed = True
+            if fl & EXT4_BG_BLOCK_UNINIT: fl &= ~EXT4_BG_BLOCK_UNINIT; changed = True
+            if changed:
+                _st.pack_into('<H', gd, 18, fl)
+                _st.pack_into('<H', gd, 30, 0)
+                try: _vw(q, gd_off, bytes(gd)); fixed += 1
+                except IOError: pass
+        _vw(q, sb_off, bytes(sb))
+        msg = f"[{label}] PATCHED ro={ro:#x}→{new_ro:#x} bgs={fixed}"
+        _lg(msg); results.append(msg)
+        return True
+
+    def _lvm_lv_offsets(q, part_base):
+        label_off = None
+        for sec in range(4):
+            if _vr(q, part_base + sec*512, 8) == b'LABELONE':
+                label_off = part_base + sec*512; break
+        if label_off is None: return {}
+        label = _vr(q, label_off, 512)
+        body_off = _st.unpack_from('<I', label, 20)[0]
+        pvh = _vr(q, label_off + body_off, 512)
+        pos = 40
+        while True:
+            da_off = _st.unpack_from('<Q', pvh, pos)[0]
+            da_sz  = _st.unpack_from('<Q', pvh, pos+8)[0]
+            pos += 16
+            if da_off == 0 and da_sz == 0: break
+        mda_abs = None
+        while True:
+            ma_off = _st.unpack_from('<Q', pvh, pos)[0]
+            ma_sz  = _st.unpack_from('<Q', pvh, pos+8)[0]
+            pos += 16
+            if ma_off == 0 and ma_sz == 0: break
+            if mda_abs is None: mda_abs = part_base + ma_off
+        if mda_abs is None: return {}
+        mdah = _vr(q, mda_abs, 512)
+        if mdah[4:20] != b' LVM2 x[5A%r0N*>': return {}
+        rl_pos = 40; raw_off = raw_sz = None
+        while True:
+            ro2 = _st.unpack_from('<Q', mdah, rl_pos)[0]
+            rs  = _st.unpack_from('<Q', mdah, rl_pos+8)[0]
+            fl  = _st.unpack_from('<I', mdah, rl_pos+20)[0]
+            rl_pos += 24
+            if ro2 == 0 and rs == 0: break
+            if fl == 0: raw_off = ro2; raw_sz = rs; break
+        if raw_off is None: return {}
+        meta = _vr(q, mda_abs + raw_off, min(raw_sz, 2*1024*1024)).decode('ascii', errors='replace')
+        m = _re_lvm.search(r'extent_size\s*=\s*(\d+)', meta)
+        if not m: return {}
+        extent_size = int(m.group(1))
+        m2 = _re_lvm.search(r'pe_start\s*=\s*(\d+)', meta)
+        pe_start = int(m2.group(1)) if m2 else 2048
+        lv_offs = {}
+        for lv_name, stripes_str in _re_lvm.findall(
+                r'(\w[\w-]*)\s*\{[^}]*?segment\d+\s*\{.*?stripes\s*=\s*\[([^\]]+)\]',
+                meta, _re_lvm.DOTALL):
+            if lv_name in ('physical_volumes', 'logical_volumes', 'metadata', 'global'): continue
+            nums = _re_lvm.findall(r'\b(\d+)\b', stripes_str)
+            if nums:
+                pvo = int(nums[0])
+                lv_offs[lv_name] = part_base + (pe_start + pvo * extent_size) * 512
+        return lv_offs
+
+    try:
+        q = _open_q(qcow2_path)
+        step  = 1 * 1024 * 1024        # 1 MB
+        limit = 64 * 1024 * 1024 * 1024  # 64 GB
+        seen  = set()
+        for off in range(0, limit, step):
+            if _v2p(q, off) is None and _v2p(q, off + 1024) is None:
+                continue
+            # ext4 magic at off+1024+56
+            if _st.unpack_from('<H', _vr(q, off + 1024 + 56, 2))[0] == 0xEF53:
+                if off not in seen:
+                    seen.add(off)
+                    _patch_ext4(q, off, f"ext4@{off // 1024 // 1024}MB")
+                continue
+            # LVM LABELONE
+            for _sec in range(4):
+                if _vr(q, off + _sec*512, 8) == b'LABELONE':
+                    if off not in seen:
+                        seen.add(off)
+                        for _lv_name, _lv_off in _lvm_lv_offsets(q, off).items():
+                            _patch_ext4(q, _lv_off, f"lv:{_lv_name}")
+                    break
+        q['f'].flush(); q['f'].close()
+    except Exception as _e:
+        return f"fixup error: {_e}"
+
+    return "; ".join(results) if results else "no ext4 patched"
+
+
 def _build_import_xml_multi(vm_name: str, disk_paths: list, vcpus: int, ram_mb: int,
                              os_type: str, firmware: str = "bios",
                              networks: list = None) -> str:
@@ -11821,256 +12000,175 @@ def api_migration_esxi_import():
                 import paramiko as _pme2
                 _import_job_update(j_id, step=f"ESXi SSH bekleniyor: {host}", percent=3)
                 # Limit concurrent ESXi SSH logins to prevent account lockout.
-                # ESXi locks accounts after N failed auth attempts; multiple threads
-                # connecting simultaneously each count as a separate auth attempt.
                 _esxi_ssh_sem.acquire()
-                _esxi_sem_held = True  # track so outer except doesn't double-release
+                _esxi_sem_held = True
                 _import_job_update(j_id, step=f"ESXi SSH: {host}", percent=5)
                 client2 = _pme2.SSHClient()
                 client2.set_missing_host_key_policy(_pme2.AutoAddPolicy())
                 client2.connect(host, port=port, username=user, password=password,
                                 timeout=30, look_for_keys=False, allow_agent=False)
-                local_vmdks = []   # list of local tmp paths
+                local_raws = []  # [(local_raw_path, disk_size_bytes), ...]
                 try:
-                    sftp2 = client2.open_sftp()
-                    try:
-                        # ── PRIMARY METHOD: OVA export via ovftool ────────────────────────
-                        # ovftool goes through ESXi's proper storage stack → no sparse grain
-                        # misread → STREAMOPTIMIZED VMDK inside OVA is complete & correct.
-                        # Falls back to direct VMDK SFTP if ovftool not available.
-                        _ova_method_used = False
-                        _import_job_update(j_id, step="ovftool kontrol ediliyor", percent=6)
+                    # ── Determine VMDK descriptor paths ──────────────────────────────
+                    # j_vmx_disks: absolute paths from VMX scan (preferred).
+                    # Fallback: find *.vmdk in VMX directory, skip -flat files.
+                    if j_vmx_disks:
+                        desc_paths = list(j_vmx_disks)
+                    else:
+                        _import_job_update(j_id, step="VMDK listesi alınıyor", percent=6)
+                        _, _ls_out, _ = client2.exec_command(
+                            f"find '{j_vmx_dir}' -maxdepth 1 -name '*.vmdk' 2>/dev/null",
+                            timeout=15)
+                        _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
+                        desc_paths = []
+                        for _ln in _ls_lines:
+                            _ln = _ln.strip()
+                            if not _ln:
+                                continue
+                            _bn = _ln.rsplit("/", 1)[-1].lower()
+                            if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
+                                desc_paths.append(_ln)
+                        if not desc_paths:
+                            raise RuntimeError(
+                                f"VMX dizininde VMDK bulunamadı: {j_vmx_dir}")
+
+                    total_disks = len(desc_paths)
+                    for d_idx, desc_path in enumerate(desc_paths):
+                        desc_dir  = desc_path.rsplit("/", 1)[0]
+                        desc_name = desc_path.rsplit("/", 1)[-1]
+                        # Unique names for the thick clone on ESXi
+                        thick_stem = f"oxw_thick_{j_vmid}_{d_idx}"
+                        thick_desc = f"{desc_dir}/{thick_stem}.vmdk"
+                        thick_flat = f"{desc_dir}/{thick_stem}-flat.vmdk"
+                        pct_base = 5 + d_idx * 60 // max(total_disks, 1)
+                        pct_end  = 5 + (d_idx + 1) * 60 // max(total_disks, 1)
+
+                        # Cleanup stale thick files from any previous failed run
+                        client2.exec_command(
+                            f"rm -f '{thick_desc}' '{thick_flat}' 2>/dev/null",
+                            timeout=15)
+
+                        # ── vmkfstools: thin → eagerzeroedthick ──────────────────────
+                        # This writes every grain explicitly → qemu-img reads all blocks
+                        # correctly → no zero inode tables from unallocated thin grains.
+                        _import_job_update(
+                            j_id,
+                            step=f"vmkfstools flatten [{d_idx+1}/{total_disks}]: {desc_name}",
+                            percent=pct_base)
+                        _vmkf_cmd = (
+                            f"vmkfstools -i '{desc_path}' -d eagerzeroedthick"
+                            f" '{thick_desc}' 2>&1"
+                        )
+                        _, _vmkf_out, _ = client2.exec_command(_vmkf_cmd, timeout=14400)
+                        _vmkf_local_pct = 0
+                        for _vl in _vmkf_out:
+                            _vl = _vl.strip()
+                            if not _vl:
+                                continue
+                            log.info("vmkfstools [%s]: %s", desc_name, _vl)
+                            if "%" in _vl:
+                                try:
+                                    _vmkf_local_pct = int(
+                                        _vl.split("%")[0].split()[-1])
+                                except Exception:
+                                    pass
+                            _import_job_update(
+                                j_id,
+                                step=f"vmkfstools [{d_idx+1}/{total_disks}]: {_vl[:80]}",
+                                percent=min(
+                                    pct_base + 18,
+                                    pct_base + _vmkf_local_pct * 18 // 100))
+                        _vmkf_exit = _vmkf_out.channel.recv_exit_status()
+                        if _vmkf_exit != 0:
+                            raise RuntimeError(
+                                f"vmkfstools başarısız (exit {_vmkf_exit}): {desc_name}")
+
+                        # Get thick flat file size via ls -l (ESXi BusyBox)
+                        _, _sz_out, _ = client2.exec_command(
+                            f"ls -l '{thick_flat}' 2>/dev/null | awk '{{print $5}}'",
+                            timeout=10)
+                        _sz_txt = _sz_out.read().decode(errors="replace").strip()
                         try:
-                            _ot_chk_stdin, _ot_chk_out, _ot_chk_err = client2.exec_command(
-                                "ls /usr/lib/vmware/ovftool/ovftool 2>/dev/null && echo OVF_OK || echo OVF_NO",
-                                timeout=15)
-                            _ot_avail = _ot_chk_out.read().decode(errors="replace").strip() == "OVF_OK"
-                        except Exception:
-                            _ot_avail = False
+                            disk_size = int(_sz_txt)
+                        except (ValueError, TypeError):
+                            disk_size = 0
+                        if not disk_size:
+                            raise RuntimeError(
+                                f"thick flat boyutu alınamadı: {thick_flat}")
+                        _sz_gb = round(disk_size / (1024 ** 3), 1)
+                        log.info("thick flat: %d bytes (%.1f GB)", disk_size, _sz_gb)
 
-                        if _ot_avail:
-                            log.info("ESXi ovftool mevcut, OVA export denenecek")
-                            # Determine datastore from VMX directory path
-                            # j_vmx_dir example: /vmfs/volumes/datastore1/vmname
-                            if "/vmfs/volumes/" in j_vmx_dir:
-                                _ds_name = j_vmx_dir.split("/vmfs/volumes/")[1].split("/")[0]
-                            else:
-                                _ds_name = "datastore1"
-                            _ova_rem = f"/vmfs/volumes/{_ds_name}/oxw_export_{j_vmid}.ova"
-                            _import_job_update(j_id,
-                                               step=f"OVA export başlatılıyor: {j_vm_name}",
-                                               percent=8)
-                            import urllib.parse as _urlp
-                            _enc_pass = _urlp.quote(str(password), safe="")
-                            _enc_user = _urlp.quote(str(user), safe="")
-                            _ot_cmd = (
-                                f"/usr/lib/vmware/ovftool/ovftool "
-                                f"--noSSLVerify --skipManifestCheck --overwrite "
-                                f"'vi://{_enc_user}:{_enc_pass}@localhost/{j_vm_name}' "
-                                f"'{_ova_rem}'"
-                            )
-                            try:
-                                _ot_stdin, _ot_stdout, _ot_stderr = client2.exec_command(
-                                    _ot_cmd, timeout=14400)  # 4h max for large VMs
-                                # Stream stdout for progress updates
-                                _ot_pct = 8
-                                for _ot_line in _ot_stdout:
-                                    _ot_line = _ot_line.strip()
-                                    if not _ot_line:
-                                        continue
-                                    log.info("ovftool: %s", _ot_line)
-                                    # ovftool prints "Transfer Completed" at end
-                                    # and progress like "Disk progress: 45%"
-                                    if "%" in _ot_line:
-                                        import re as _re_ot
-                                        _m = _re_ot.search(r"(\d+)%", _ot_line)
-                                        if _m:
-                                            _ot_pct = 8 + int(_m.group(1)) * 42 // 100
-                                    _import_job_update(j_id,
-                                                       step=f"OVA export: {_ot_line[:80]}",
-                                                       percent=min(50, _ot_pct))
-                                _ot_exit = _ot_stdout.channel.recv_exit_status()
-                                if _ot_exit != 0:
-                                    _ot_err_txt = _ot_stderr.read().decode(errors="replace")
-                                    log.warning("ovftool çıkış kodu %d: %s", _ot_exit, _ot_err_txt)
-                                    ev.warn(f"ovftool başarısız (kod {_ot_exit}), VMDK fallback'e geçiliyor",
-                                            category="vm")
-                                else:
-                                    # Download OVA from ESXi
-                                    _import_job_update(j_id, step="OVA indiriliyor", percent=51)
-                                    _ova_local = _IMPORT_DIR / f"esxi_{j_vmid}.ova"
-                                    try:
-                                        _ova_stat = sftp2.stat(_ova_rem)
-                                        _ova_size = _ova_stat.st_size or 1
-                                    except Exception:
-                                        _ova_size = 1
-                                    _ova_gb = round(_ova_size / (1024 ** 3), 1)
-                                    log.info("OVA boyutu: %s GB", _ova_gb)
-
-                                    def _ova_prg(tx, _tot):
-                                        _p = min(70, 51 + int(19 * tx / max(_ova_size, 1)))
-                                        _mb = round(tx / 1048576, 1)
-                                        _tmb = round(_ova_size / 1048576, 1)
-                                        _import_job_update(j_id,
-                                                           step=f"OVA indiriliyor: {_mb}/{_tmb} MB",
-                                                           percent=_p)
-
-                                    sftp2.get(_ova_rem, str(_ova_local), callback=_ova_prg)
-                                    # Cleanup OVA from ESXi to free space
-                                    try:
-                                        client2.exec_command(f"rm -f '{_ova_rem}'", timeout=30)
-                                    except Exception:
-                                        pass
-
-                                    # Extract VMDK(s) from OVA (tar archive)
-                                    _import_job_update(j_id, step="OVA açılıyor", percent=71)
-                                    import tarfile as _tarf
-                                    _ova_disk_idx = 0
-                                    try:
-                                        with _tarf.open(str(_ova_local), "r") as _tar:
-                                            for _tm in _tar.getmembers():
-                                                if _tm.name.lower().endswith(".vmdk"):
-                                                    _ova_vmdk_dest = _IMPORT_DIR / f"esxi_{j_vmid}_disk{_ova_disk_idx}.vmdk"
-                                                    _import_job_update(
-                                                        j_id,
-                                                        step=f"OVA: {_tm.name} çıkartılıyor",
-                                                        percent=72 + _ova_disk_idx)
-                                                    _tf_src = _tar.extractfile(_tm)
-                                                    if _tf_src is None:
-                                                        continue
-                                                    import shutil as _sh_ova
-                                                    with open(str(_ova_vmdk_dest), "wb") as _tf_dst:
-                                                        _sh_ova.copyfileobj(_tf_src, _tf_dst)
-                                                    _tf_src.close()
-                                                    local_vmdks.append(str(_ova_vmdk_dest))
-                                                    log.info("OVA VMDK çıkartıldı: %s → %s",
-                                                             _tm.name, _ova_vmdk_dest)
-                                                    _ova_disk_idx += 1
-                                    finally:
-                                        try:
-                                            _ova_local.unlink()
-                                        except Exception:
-                                            pass
-
-                                    if local_vmdks:
-                                        _ova_method_used = True
-                                        ev.info(
-                                            f"OVA export: {j_vm_name} → {len(local_vmdks)} disk(ler) hazır",
-                                            category="vm")
+                        # ── Stream thick flat → OXware (sparse write) ─────────────────
+                        # dd on ESXi sends raw bytes; we seek over zero 4MB blocks
+                        # locally → sparse file → significantly faster qemu-img convert.
+                        local_raw = _IMPORT_DIR / f"esxi_{j_vmid}_disk{d_idx}.raw"
+                        _import_job_update(
+                            j_id,
+                            step=f"SSH stream [{d_idx+1}/{total_disks}]: {_sz_gb} GB",
+                            percent=pct_base + 18)
+                        _dd_stdin, _dd_stdout, _dd_stderr = client2.exec_command(
+                            f"dd if='{thick_flat}' bs=4M 2>/dev/null")
+                        _dd_chan = _dd_stdout.channel
+                        _dd_chan.settimeout(None)  # blocking recv — no channel timeout
+                        _CHUNK = 4 * 1024 * 1024   # 4 MB
+                        _ZERO  = b'\x00' * _CHUNK
+                        _streamed = 0
+                        with open(str(local_raw), 'wb') as _rf:
+                            _buf = b''
+                            while True:
+                                _data = _dd_chan.recv(_CHUNK)
+                                if not _data:
+                                    break
+                                _buf += _data
+                                # Process complete 4MB chunks
+                                while len(_buf) >= _CHUNK:
+                                    _blk  = _buf[:_CHUNK]
+                                    _buf  = _buf[_CHUNK:]
+                                    if _blk == _ZERO:
+                                        _rf.seek(_CHUNK, 1)   # sparse skip
                                     else:
-                                        log.warning("OVA içinde VMDK bulunamadı, fallback")
-                            except Exception as _ot_err:
-                                log.warning("ovftool export hatası: %s — fallback VMDK SFTP", _ot_err)
-                                ev.warn(f"ovftool hatası: {_ot_err} — VMDK fallback",
-                                        category="vm")
-                        else:
-                            log.info("ovftool bulunamadı, VMDK SFTP fallback")
+                                        _rf.write(_blk)
+                                    _streamed += _CHUNK
+                                    # Progress every 64 MB
+                                    if (_streamed % (64 * 1024 * 1024)) == 0:
+                                        _mb  = round(_streamed / 1048576, 1)
+                                        _tmb = round(disk_size / 1048576, 1)
+                                        _sp  = pct_base + 18 + int(
+                                            37 * _streamed / max(disk_size, 1))
+                                        _import_job_update(
+                                            j_id,
+                                            step=(f"Stream [{d_idx+1}/{total_disks}]:"
+                                                  f" {_mb}/{_tmb} MB"),
+                                            percent=min(pct_end - 2, _sp))
+                            # Write remaining partial block
+                            if _buf:
+                                _rf.write(_buf)
+                                _streamed += len(_buf)
+                            # Ensure file is exactly disk_size bytes
+                            _rf.truncate(disk_size)
+                        _dd_chan.recv_exit_status()
+                        log.info("SSH stream tamamlandı: %s → %s (%.1f GB)",
+                                 thick_flat, local_raw, _sz_gb)
+                        ev.info(
+                            f"ESXi SSH stream: {_sz_gb} GB → {local_raw.name}",
+                            category="vm")
 
-                        # ── FALLBACK: Direct VMDK SFTP download ──────────────────────────
-                        # Used when ovftool unavailable or OVA export failed.
-                        if not local_vmdks:
-                            # Determine which VMDKs to download
-                            # j_vmx_disks: absolute paths from VMX parse (may be empty)
-                            if j_vmx_disks:
-                                remote_vmdks = j_vmx_disks
-                            else:
-                                # Fallback: list directory and pick descriptor VMDKs
-                                _import_job_update(j_id, step="VMDK listesi alınıyor", percent=7)
-                                try:
-                                    dir_items = sftp2.listdir(j_vmx_dir)
-                                except Exception:
-                                    dir_items = []
-                                remote_vmdks = []
-                                for item in dir_items:
-                                    il = item.lower()
-                                    if (il.endswith(".vmdk") and
-                                            "-flat" not in il and
-                                            not _re_vmdk_extent.search(il)):
-                                        remote_vmdks.append(j_vmx_dir.rstrip("/") + "/" + item)
-                                if not remote_vmdks:
-                                    _import_job_update(j_id, status="error",
-                                                       step="Hata: VMDK bulunamadı",
-                                                       percent=0, finished=time.time())
-                                    return
+                        # Free ESXi space: remove thick clone
+                        try:
+                            client2.exec_command(
+                                f"rm -f '{thick_desc}' '{thick_flat}' 2>/dev/null",
+                                timeout=30)
+                            log.info("ESXi thick temizlendi: %s", thick_stem)
+                        except Exception:
+                            pass
 
-                            total_vmdks = len(remote_vmdks)
-                            for vd_idx, remote_vmdk in enumerate(remote_vmdks):
-                                vd_name = remote_vmdk.rsplit("/", 1)[-1]
-                                pct_base = 8 + vd_idx * 62 // max(total_vmdks, 1)
-                                pct_end  = 8 + (vd_idx + 1) * 62 // max(total_vmdks, 1)
-                                try:
-                                    remote_size = sftp2.stat(remote_vmdk).st_size or 1
-                                except Exception:
-                                    remote_size = 1
-                                sz_gb = round(remote_size / (1024 ** 3), 1)
-                                _import_job_update(j_id,
-                                                   step=f"VMDK [{vd_idx+1}/{total_vmdks}]: {vd_name} ({sz_gb} GB)",
-                                                   percent=pct_base)
-                                local_tmp = _IMPORT_DIR / f"esxi_{j_vmid}_disk{vd_idx}.vmdk"
-
-                                def _make_prg_e(base, end, vd_n):
-                                    def _prg_e(tx, tot):
-                                        pct = min(end, int(base + (end - base) * tx / max(tot, 1)))
-                                        mb = round(tx / 1048576, 1)
-                                        tot_mb = round(tot / 1048576, 1)
-                                        _import_job_update(j_id,
-                                                           step=f"İndirilıyor [{vd_n}]: {mb}/{tot_mb} MB",
-                                                           percent=pct)
-                                    return _prg_e
-
-                                sftp2.get(remote_vmdk, str(local_tmp),
-                                          callback=_make_prg_e(pct_base, pct_end, vd_name))
-
-                                # ── ESXi VMDK flat file: descriptor referans ettiği veri dosyasını da indir ──
-                                # VMDK descriptor (.vmdk) → veri: testoxware-flat.vmdk
-                                # qemu-img descriptor'ı açar, flat dosyayı aynı dizinde arar.
-                                # Flat dosya OLMADAN: "Could not open 'testoxware-flat.vmdk': No such file"
-                                # Cancellation check after descriptor download
-                                with _import_jobs_lock:
-                                    if _import_jobs.get(j_id, {}).get("status") == "cancelled":
-                                        return
-
-                                _flat_refs = _parse_vmdk_extents(local_tmp)
-                                _remote_vmdk_dir = remote_vmdk.rsplit("/", 1)[0]
-                                for _flat_ref in _flat_refs:
-                                    _flat_remote = _remote_vmdk_dir + "/" + _flat_ref
-                                    # Save flat with original name — qemu-img looks for it by name from descriptor
-                                    _flat_local  = _IMPORT_DIR / _flat_ref
-                                    if _flat_local.exists():
-                                        log.info("ESXi flat zaten mevcut: %s", _flat_local)
-                                        continue
-                                    try:
-                                        _flat_sz = sftp2.stat(_flat_remote).st_size or 1
-                                        _flat_gb = round(_flat_sz / (1024**3), 1)
-                                        _import_job_update(j_id,
-                                                           step=f"Flat disk [{_flat_ref}] indiriliyor ({_flat_gb} GB)",
-                                                           percent=pct_base)
-                                        def _make_flat_prg(_base, _end, _ref, _tot_bytes):
-                                            def _flat_cb(tx, _ignored):
-                                                _pct = min(_end, int(_base + (_end - _base) * tx / max(_tot_bytes, 1)))
-                                                _mb = round(tx / 1048576, 1)
-                                                _tmb = round(_tot_bytes / 1048576, 1)
-                                                _import_job_update(j_id,
-                                                                   step=f"Flat [{_ref}]: {_mb}/{_tmb} MB",
-                                                                   percent=_pct)
-                                            return _flat_cb
-                                        sftp2.get(_flat_remote, str(_flat_local),
-                                                  callback=_make_flat_prg(pct_base, pct_end, _flat_ref, _flat_sz))
-                                        log.info("ESXi flat indirildi: %s → %s", _flat_remote, _flat_local)
-                                        ev.info(f"ESXi flat download: {_flat_ref} ({_flat_gb} GB)", category="vm")
-                                    except Exception as _flat_err:
-                                        log.warning("ESXi flat indirilemedi: %s — %s", _flat_remote, _flat_err)
-                                        ev.warn(f"ESXi flat indirilemedi: {_flat_ref}: {_flat_err}", category="vm")
-
-                                local_vmdks.append(str(local_tmp))
-                    finally:
-                        sftp2.close()
+                        local_raws.append((str(local_raw), disk_size))
                 finally:
                     client2.close()
                     _esxi_ssh_sem.release()
                     _esxi_sem_held = False
 
-                # Cancellation check after download — skip conversion if cancelled
+                # Cancellation check after SSH session
                 with _import_jobs_lock:
                     if _import_jobs.get(j_id, {}).get("status") == "cancelled":
                         return
@@ -12091,126 +12189,64 @@ def api_migration_esxi_import():
                 finally:
                     _conn_esxi.close()
 
-                # Convert each VMDK → qcow2
+                # ── Convert raw → qcow2 + ext4 fixup ────────────────────────────
                 img_dir = _pathlib.Path("/var/lib/libvirt/images")
                 final_disks = []
-                for vd_idx, local_vmdk_path in enumerate(local_vmdks):
+                for vd_idx, (local_raw_path, _disk_sz) in enumerate(local_raws):
                     suffix = "" if vd_idx == 0 else f"-disk{vd_idx}"
                     final_qcow2 = img_dir / f"{final_name}{suffix}.qcow2"
-                    pct_conv = 72 + vd_idx * 18 // max(len(local_vmdks), 1)
-                    _import_job_update(j_id,
-                                       step=f"qemu-img dönüştürülüyor [{vd_idx+1}/{len(local_vmdks)}]",
-                                       percent=pct_conv)
+                    pct_conv = 72 + vd_idx * 15 // max(len(local_raws), 1)
+                    _import_job_update(
+                        j_id,
+                        step=f"qemu-img dönüştürülüyor [{vd_idx+1}/{len(local_raws)}]",
+                        percent=pct_conv)
                     conv = subprocess.run(
-                        ["qemu-img", "convert", "-f", "vmdk", "-O", "qcow2",
-                         local_vmdk_path, str(final_qcow2)],
+                        ["qemu-img", "convert", "-f", "raw", "-O", "qcow2",
+                         local_raw_path, str(final_qcow2)],
                         capture_output=True, text=True, timeout=7200)
                     try:
-                        _pathlib.Path(local_vmdk_path).unlink()
+                        _pathlib.Path(local_raw_path).unlink()
                     except Exception:
                         pass
                     if conv.returncode != 0:
-                        raise RuntimeError(f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
+                        raise RuntimeError(
+                            f"qemu-img [{vd_idx}]: {conv.stderr[:300]}")
 
-                    # ── ESXi thin-disk ext4 fixup via guestfish ──────────────────────
-                    # Root cause: ESXi thin VMDK sparse blocks → zero inode tables →
-                    # ext4 metadata_csum + INODE_UNINIT flags → "iget: checksum invalid"
-                    # on KVM boot.
-                    #
-                    # Fix: guestfish isolated appliance activates guest LVM without
-                    # host VG name conflict, then patches every ext4 filesystem:
-                    #   1. Superblock: clear metadata_csum (0x400) + orphan_present (0x10000)
-                    #   2. GDT: clear INODE_UNINIT (0x1) + BLOCK_UNINIT (0x2) per block group
-                    #   3. bg_checksum: zero (no longer needed without metadata_csum)
+                    # ext4 fixup: clear metadata_csum + INODE_UNINIT flags in qcow2
+                    # (pure-Python qcow2 parser — no guestfish/python3 in appliance)
                     try:
-                        _import_job_update(j_id,
-                                           step=f"ext4 fixup [{vd_idx+1}/{len(local_vmdks)}]: guestfish patch",
-                                           percent=min(91, pct_conv + 5))
-                        import base64 as _b64m
-                        # Python script runs INSIDE guestfish appliance (not host, not guest chroot)
-                        _GF_PY = (
-                            "import struct,subprocess,glob,sys,time\n"
-                            "def patch(dev):\n"
-                            " try:\n"
-                            "  with open(dev,'r+b') as f:\n"
-                            "   f.seek(1024); sb=bytearray(f.read(1024))\n"
-                            "   blksz=1024<<struct.unpack_from('<I',sb,24)[0]\n"
-                            "   bpg=struct.unpack_from('<I',sb,32)[0]\n"
-                            "   bclo=struct.unpack_from('<I',sb,4)[0]\n"
-                            "   bchi=struct.unpack_from('<I',sb,80)[0]\n"
-                            "   total=bclo|(bchi<<32)\n"
-                            "   ng=max(1,(total+bpg-1)//bpg)\n"
-                            "   fi=struct.unpack_from('<I',sb,96)[0]\n"
-                            "   ds=struct.unpack_from('<H',sb,254)[0] if fi&0x80 else 32\n"
-                            "   if ds<32: ds=32\n"
-                            "   rv=struct.unpack_from('<I',sb,100)[0]\n"
-                            "   if not(rv&0x400):\n"
-                            "    print('skip',dev,'no metadata_csum',flush=True); return\n"
-                            "   rv&=~0x400; rv&=~0x10000\n"
-                            "   struct.pack_into('<I',sb,100,rv)\n"
-                            "   f.seek(1024); f.write(bytes(sb))\n"
-                            "   gb=2 if blksz==1024 else 1\n"
-                            "   go=gb*blksz; fb=0\n"
-                            "   for bg in range(ng):\n"
-                            "    do=go+bg*ds; f.seek(do); d=bytearray(f.read(ds))\n"
-                            "    if len(d)<20: continue\n"
-                            "    fl=struct.unpack_from('<H',d,18)[0]\n"
-                            "    if fl&3:\n"
-                            "     fl&=~3; struct.pack_into('<H',d,18,fl)\n"
-                            "     if ds>=32: struct.pack_into('<H',d,30,0)\n"
-                            "     f.seek(do); f.write(bytes(d)); fb+=1\n"
-                            "   f.flush()\n"
-                            "  print('patched',dev,'ro=%#x'%rv,'blksz=%d'%blksz,'ng=%d'%ng,'fbg=%d'%fb,flush=True)\n"
-                            " except Exception as e: print('ERR',dev,e,file=sys.stderr,flush=True)\n"
-                            "subprocess.run(['vgchange','-ay'],capture_output=True,timeout=30)\n"
-                            "time.sleep(1)\n"
-                            "r=subprocess.run(['lvs','--noheadings','-o','lv_dm_path'],capture_output=True,text=True,timeout=30)\n"
-                            "done=[]\n"
-                            "for dev in r.stdout.splitlines():\n"
-                            " dev=dev.strip()\n"
-                            " if not dev: continue\n"
-                            " bt=subprocess.run(['blkid','-o','value','-s','TYPE',dev],capture_output=True,text=True,timeout=10)\n"
-                            " if 'ext' in bt.stdout: patch(dev); done.append(dev)\n"
-                            "for dev in sorted(glob.glob('/dev/sda*'))[1:]:\n"
-                            " if dev in done: continue\n"
-                            " bt=subprocess.run(['blkid','-o','value','-s','TYPE',dev],capture_output=True,text=True,timeout=10)\n"
-                            " if 'ext' in bt.stdout: patch(dev)\n"
-                        )
-                        _gf_b64 = _b64m.b64encode(_GF_PY.encode()).decode()
-                        # Pass script via base64 to avoid any shell escaping issues
-                        _gf_sh = f"printf '%s' '{_gf_b64}' | base64 -d | python3"
-                        _gf_r = subprocess.run(
-                            ["guestfish", "-a", str(final_qcow2),
-                             "--", "run", ":", "debug", "sh", _gf_sh],
-                            capture_output=True, text=True, timeout=600)
-                        log.info("guestfish ext4 fixup exit=%d stdout=%s stderr=%s",
-                                 _gf_r.returncode,
-                                 _gf_r.stdout[:500],
-                                 _gf_r.stderr[:200])
-                        if _gf_r.returncode == 0 and "patched" in _gf_r.stdout:
+                        _import_job_update(
+                            j_id,
+                            step=f"ext4 fixup [{vd_idx+1}/{len(local_raws)}]",
+                            percent=min(91, pct_conv + 5))
+                        _fx_result = _qcow2_ext4_fixup(
+                            str(final_qcow2), log_fn=log.info)
+                        if _fx_result and _fx_result != "no ext4 patched":
                             ev.info(
-                                f"ESXi ext4 fixup: {_gf_r.stdout.strip()[:200]}",
+                                f"ESXi ext4 fixup: {_fx_result[:200]}",
                                 category="vm")
-                        elif _gf_r.returncode != 0:
-                            log.warning("guestfish ext4 fixup başarısız — VM boot etmeyebilir")
+                            log.info("ext4 fixup: %s", _fx_result)
                     except Exception as _fx_err:
                         log.warning("ESXi ext4 fixup (non-critical): %s", _fx_err)
 
                     final_disks.append((str(final_qcow2), "qcow2"))
 
-                # Map ESXi networks → libvirt
+                # Map ESXi networks → libvirt.
+                # Force e1000: ESXi guests use vmxnet3 driver which has no KVM
+                # equivalent; e1000 works out-of-box with any guest OS.
                 libvirt_nets = []
                 for en in j_vmx_nets:
                     pg = en.get("network_name", "VM Network")
                     mapped = j_net_map.get(pg) or _map_source_network(pg, network)
-                    libvirt_nets.append({"libvirt_network": mapped, "model": en.get("model", "virtio")})
+                    libvirt_nets.append({"libvirt_network": mapped, "model": "e1000"})
                 if not libvirt_nets:
-                    libvirt_nets = [{"libvirt_network": network,
-                                     "model": "virtio" if j_os_type == "linux" else "e1000"}]
+                    libvirt_nets = [{"libvirt_network": network, "model": "e1000"}]
 
-                _import_job_update(j_id,
-                                   step=f"libvirt'e kaydediliyor ({len(final_disks)} disk, {len(libvirt_nets)} NIC)",
-                                   percent=92)
+                _import_job_update(
+                    j_id,
+                    step=(f"libvirt'e kaydediliyor"
+                          f" ({len(final_disks)} disk, {len(libvirt_nets)} NIC)"),
+                    percent=92)
                 xml_esxi = _build_import_xml_multi(
                     final_name, final_disks, j_vcpus, j_ram_mb,
                     j_os_type, j_firmware, libvirt_nets)
@@ -12225,11 +12261,11 @@ def api_migration_esxi_import():
                 _import_job_update(j_id, vm_name=final_name, status="completed",
                                    step=f"Tamamlandı: {final_name} ({disk_summary})",
                                    percent=100, finished=time.time())
-                ev.info(f"ESXi migration tamamlandı: {final_name} vmid={j_vmid} ({disk_summary})",
-                        category="migration")
+                ev.info(
+                    f"ESXi migration tamamlandı: {final_name} vmid={j_vmid}"
+                    f" ({disk_summary})",
+                    category="migration")
             except Exception as ex:
-                # Release semaphore only if connect() failed before the inner
-                # finally block ran (which would have already released it)
                 if locals().get("_esxi_sem_held"):
                     _esxi_ssh_sem.release()
                 _import_job_update(j_id, status="error",
