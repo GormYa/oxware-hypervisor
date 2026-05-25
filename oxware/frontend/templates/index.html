@@ -2741,13 +2741,15 @@
           <div class="section-header">
             <h2>VM Şablonları</h2>
             <div class="spacer"></div>
+            <button class="btn" onclick="loadTemplates()">↻ Yenile</button>
           </div>
           <div class="card-grid" id="templateList"></div>
 
+          <!-- VM'den Şablon -->
           <div class="section-header" style="margin-top:24px">
             <h2>VM'den Şablon Oluştur</h2>
           </div>
-          <div class="card">
+          <div class="card" style="margin-bottom:14px">
             <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
               <div class="form-group">
                 <label>VM Seç</label>
@@ -2761,7 +2763,59 @@
                 <label>Açıklama</label>
                 <input id="templateDesc" type="text" class="form-control" placeholder="Şablon açıklaması" style="min-width:200px">
               </div>
-              <button class="btn-primary" onclick="createTemplateFromVm()">Şablon Oluştur</button>
+              <button class="btn-primary" onclick="createTemplateFromVm()">📷 Şablon Oluştur</button>
+            </div>
+          </div>
+
+          <!-- OVA / qcow2 Import -->
+          <div class="section-header" style="margin-top:8px">
+            <h2>İçe Aktar</h2>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <!-- OVA Import -->
+            <div class="card">
+              <div class="card-title">📦 OVA İçe Aktar</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">OVA Dosya Yolu (sunucuda)</label>
+                  <input id="tpl-ova-path" class="form-control" placeholder="/var/lib/oxware/isos/win10.ova">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Şablon Adı</label>
+                  <input id="tpl-ova-name" class="form-control" placeholder="Windows 10 Pro">
+                </div>
+                <div style="display:flex;gap:8px">
+                  <select id="tpl-ova-os" class="form-control" style="flex:1">
+                    <option value="linux">Linux</option>
+                    <option value="windows">Windows</option>
+                  </select>
+                  <button class="btn-primary" onclick="importOvaTemplate()">⬆ İçe Aktar</button>
+                </div>
+                <div id="tpl-ova-status" style="font-size:11px;color:var(--text-muted)"></div>
+              </div>
+            </div>
+
+            <!-- qcow2 Import -->
+            <div class="card">
+              <div class="card-title">💾 qcow2 İçe Aktar</div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">qcow2 Dosya Yolu (sunucuda)</label>
+                  <input id="tpl-q2-path" class="form-control" placeholder="/var/lib/libvirt/images/ubuntu-22.04-cloud.qcow2">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Şablon Adı</label>
+                  <input id="tpl-q2-name" class="form-control" placeholder="Ubuntu 22.04 Temiz">
+                </div>
+                <div style="display:flex;gap:8px">
+                  <select id="tpl-q2-os" class="form-control" style="flex:1">
+                    <option value="linux">Linux</option>
+                    <option value="windows">Windows</option>
+                  </select>
+                  <button class="btn-primary" onclick="importQcow2Template()">⬆ İçe Aktar</button>
+                </div>
+                <div id="tpl-q2-status" style="font-size:11px;color:var(--text-muted)"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -13089,16 +13143,30 @@ async function loadTemplates() {
   const d = await _api('/api/templates');
   const list = document.getElementById('templateList');
   if (!list) return;
-  list.innerHTML = (d.templates || []).map(t => `
-    <div class="card template-card">
-      <div class="template-icon">${t.os_type === 'windows' ? '🪟' : '🐧'}</div>
-      <h3>${escHtml(t.name)}</h3>
-      <p class="text-muted">${escHtml(t.description || '')}</p>
-      <div class="tags">${(t.tags||[]).map(tag => `<span class="badge-muted">${escHtml(tag)}</span>`).join('')}</div>
-      ${t.download_required ? '<span class="badge-warning">İndirme Gerekli</span>' :
-        `<button class="btn-primary btn-sm" onclick="deployTemplate('${escHtml(t.id)}')">VM Oluştur</button>`}
-    </div>
-  `).join('') || '<div class="empty-state"><p>Şablon yok</p></div>';
+  const templates = d.templates || [];
+  list.innerHTML = templates.length ? templates.map(t => {
+    const icon = t.os_type === 'windows' ? '🪟' : (t.os_type === 'freebsd' ? '😈' : '🐧');
+    const diskInfo = t.disk_size_gb ? `${t.disk_size_gb.toFixed ? t.disk_size_gb.toFixed(1) : t.disk_size_gb} GB` : '—';
+    const src = t.source ? `<span style="font-size:10px;color:var(--text-dim)">${t.source === 'ova' ? '📦 OVA' : t.source === 'qcow2' ? '💾 qcow2' : '📷 VM'}</span>` : '';
+    const tagHtml = (t.tags||[]).map(tag => `<span class="badge-muted" style="font-size:10px">${escHtml(tag)}</span>`).join(' ');
+    return `
+    <div class="card template-card" style="position:relative">
+      <div style="font-size:28px;margin-bottom:6px">${icon}</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">${escHtml(t.name)}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${escHtml(t.description || '')}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${tagHtml} ${src}</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:10px">
+        💾 ${diskInfo} &nbsp;·&nbsp; 🖥 ${t.vcpus||'?'} vCPU &nbsp;·&nbsp; 🧠 ${t.memory_mb ? (t.memory_mb/1024).toFixed(1)+'GB' : '?'}
+      </div>
+      ${t.download_required
+        ? '<span class="badge-warning" style="font-size:11px">⚠ Disk eksik</span>'
+        : `<div style="display:flex;gap:6px">
+            <button class="btn-primary btn-sm" style="flex:1" onclick="openDeployTemplate('${escHtml(t.id)}','${escHtml(t.name)}',${t.vcpus||2},${t.memory_mb||2048})">▶ VM Oluştur</button>
+            <button class="btn sm danger" onclick="deleteTemplateConfirm('${escHtml(t.id)}','${escHtml(t.name)}')">✕</button>
+           </div>`
+      }
+    </div>`;
+  }).join('') : '<div class="empty-state"><div class="icon">📋</div><h3>Şablon yok</h3><p>VM\'den şablon oluşturun veya OVA/qcow2 dosyası içe aktarın</p></div>';
 
   // Template kaynak VM seçimi için VM listesi
   try {
@@ -13115,18 +13183,75 @@ async function loadTemplates() {
 
 async function createTemplateFromVm() {
   const vm_id = document.getElementById('templateSourceVm').value;
-  const name = document.getElementById('templateName').value;
-  const description = document.getElementById('templateDesc').value;
+  const name  = document.getElementById('templateName').value.trim();
+  const description = document.getElementById('templateDesc').value.trim();
   if (!vm_id || !name) { toast('VM ve şablon adı gerekli', 'error'); return; }
+  toast('Şablon oluşturuluyor (disk kopyalanıyor)...', 'info');
   const d = await _api('/api/templates', 'POST', {vm_id, name, description});
-  toast(d.status === 'ok' ? 'Şablon oluşturuluyor...' : (d.error || 'Hata'), d.status === 'ok' ? 'success' : 'error');
+  if (d?.error) { toast('Hata: ' + d.error, 'error'); return; }
+  toast('Şablon oluşturuldu', 'success');
+  loadTemplates();
 }
 
-async function deployTemplate(tid) {
-  const vmName = prompt('Yeni VM adı:');
+// Deploy modal state
+let _deployTid = null;
+function openDeployTemplate(tid, tname, vcpus, memory_mb) {
+  _deployTid = tid;
+  const vmName = (tname.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-') + '-' + Date.now().toString(36)).slice(0,32);
+  const name   = prompt(`"${tname}" şablonundan VM oluştur\nVM Adı:`, vmName);
+  if (!name) return;
+  deployFromTemplate(tid, name.trim(), vcpus, memory_mb);
+}
+
+async function deployFromTemplate(tid, vmName, vcpus, memory_mb) {
   if (!vmName) return;
-  const d = await _api(`/api/templates/${tid}/deploy`, 'POST', {vm_name: vmName});
-  toast(d.status === 'ok' ? `VM oluşturuldu: ${vmName}` : (d.error || 'Hata'), d.status === 'ok' ? 'success' : 'error');
+  toast('Şablondan VM oluşturuluyor (linked clone — anlık)...', 'info');
+  const d = await _api(`/api/templates/${tid}/deploy`, 'POST',
+    { vm_name: vmName, vcpus, memory_mb });
+  if (d?.error) { toast('Hata: ' + d.error, 'error'); return; }
+  if (d?.success || d?.vm_id) {
+    toast(`✅ VM oluşturuldu: ${vmName}` + (d.started ? ' — başlatıldı' : ''), 'success');
+    loadVMs(); refreshTreeVMs();
+  } else {
+    toast('Hata: ' + JSON.stringify(d), 'error');
+  }
+}
+
+async function deleteTemplateConfirm(tid, name) {
+  if (!await showConfirm(`"${name}" şablonu silinecek. Disk dosyası da kaldırılır.`, 'Şablonu Sil', true)) return;
+  const d = await _api(`/api/templates/${tid}`, 'DELETE');
+  toast(d?.success ? 'Şablon silindi' : ('Hata: ' + (d?.error||'')), d?.success ? 'success' : 'error');
+  loadTemplates();
+}
+
+async function importOvaTemplate() {
+  const path = document.getElementById('tpl-ova-path').value.trim();
+  const name = document.getElementById('tpl-ova-name').value.trim() || path.split('/').pop();
+  const os_type = document.getElementById('tpl-ova-os').value;
+  const st = document.getElementById('tpl-ova-status');
+  if (!path) { toast('OVA yolu zorunlu', 'error'); return; }
+  st.style.color = '#67e8f9';
+  st.textContent = '⏳ VMDK → qcow2 dönüştürülüyor... (büyük diskler 5-15 dk sürebilir)';
+  const d = await _api('/api/templates/import-ova', 'POST', { ova_path: path, name, os_type });
+  if (d?.error) { st.style.color='#fca5a5'; st.textContent = '✗ ' + d.error; return; }
+  st.style.color = '#86efac';
+  st.textContent = '✅ OVA import başlatıldı — arka planda çalışıyor. Birkaç dakika sonra Yenile.';
+  setTimeout(() => loadTemplates(), 8000);
+}
+
+async function importQcow2Template() {
+  const path = document.getElementById('tpl-q2-path').value.trim();
+  const name = document.getElementById('tpl-q2-name').value.trim() || path.split('/').pop();
+  const os_type = document.getElementById('tpl-q2-os').value;
+  const st = document.getElementById('tpl-q2-status');
+  if (!path) { toast('qcow2 yolu zorunlu', 'error'); return; }
+  st.style.color = '#67e8f9';
+  st.textContent = '⏳ qcow2 kopyalanıyor...';
+  const d = await _api('/api/templates/import-qcow2', 'POST', { qcow2_path: path, name, os_type });
+  if (d?.error) { st.style.color='#fca5a5'; st.textContent = '✗ ' + d.error; return; }
+  st.style.color = '#86efac';
+  st.textContent = '✅ Import başlatıldı — arka planda çalışıyor. Birkaç saniye sonra Yenile.';
+  setTimeout(() => loadTemplates(), 5000);
 }
 
 /* ══════════════════ Backup ══════════════════ */

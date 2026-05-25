@@ -364,6 +364,152 @@ def deploy(template_id, vm_name, vcpus=None, memory_mb=None, disk_path=None):
             return {"success": False, "error": str(exc)}
 
 
+def import_from_ova(ova_path: str, name: str, description: str = "",
+                    tags=None, os_type: str = "linux") -> dict:
+    """
+    OVA dosyasından şablon oluştur.
+    OVA = TAR içinde OVF (XML) + VMDK disk.
+    VMDK → qemu-img convert → qcow2 → template.
+    """
+    with _lock:
+        try:
+            if not os.path.exists(ova_path):
+                return {"success": False, "error": f"OVA dosyası bulunamadı: {ova_path}"}
+
+            template_id = str(uuid.uuid4())
+            tdir = os.path.join(TEMPLATE_DIR, template_id)
+            os.makedirs(tdir, exist_ok=True)
+            extract_dir = os.path.join(tdir, "ova_extract")
+            os.makedirs(extract_dir, exist_ok=True)
+
+            log.info("OVA çıkartılıyor: %s", ova_path)
+            with tarfile.open(ova_path, "r") as tar:
+                # Güvenlik: path traversal engelle
+                for m in tar.getmembers():
+                    if ".." in m.name or m.name.startswith("/"):
+                        return {"success": False, "error": "Güvensiz OVA içeriği"}
+                tar.extractall(extract_dir)
+
+            # VMDK dosyasını bul
+            vmdk_file = None
+            for fname in os.listdir(extract_dir):
+                if fname.lower().endswith(".vmdk"):
+                    vmdk_file = os.path.join(extract_dir, fname)
+                    break
+
+            if not vmdk_file:
+                shutil.rmtree(tdir, ignore_errors=True)
+                return {"success": False, "error": "OVA içinde VMDK bulunamadı"}
+
+            # VMDK → qcow2 dönüştür
+            dest_disk = _disk_path(template_id)
+            log.info("VMDK → qcow2 dönüştürülüyor: %s → %s", vmdk_file, dest_disk)
+            r = subprocess.run(
+                ["qemu-img", "convert", "-f", "vmdk", "-O", "qcow2",
+                 "-p", vmdk_file, dest_disk],
+                capture_output=True, timeout=7200
+            )
+            if r.returncode != 0:
+                shutil.rmtree(tdir, ignore_errors=True)
+                return {"success": False,
+                        "error": "qemu-img convert hatası: " + r.stderr.decode(errors="replace")}
+
+            # Geçici çıkarma dizinini temizle
+            shutil.rmtree(extract_dir, ignore_errors=True)
+
+            # OVF'den CPU/RAM bilgisi almayı dene
+            vcpus, memory_mb = 2, 2048
+            ovf_file = None
+            for fname in os.listdir(tdir) if os.path.isdir(tdir) else []:
+                if fname.lower().endswith(".ovf"):
+                    ovf_file = os.path.join(tdir, fname)
+                    break
+            if ovf_file and os.path.exists(ovf_file):
+                try:
+                    ovf_root = ET.parse(ovf_file).getroot()
+                    ns = {"rasd": "http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData"}
+                    for item in ovf_root.iter("{http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData}Item"):
+                        rtype = item.findtext("{http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData}ResourceType")
+                        qty   = item.findtext("{http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData}VirtualQuantity")
+                        if rtype == "3" and qty:   # CPU
+                            vcpus = int(qty)
+                        elif rtype == "4" and qty: # RAM (MB)
+                            memory_mb = int(qty)
+                except Exception as _ovf_e:
+                    log.warning("OVF parse hatası: %s", _ovf_e)
+
+            disk_size_gb = round(os.path.getsize(dest_disk) / (1024**3), 2) if os.path.exists(dest_disk) else 0
+            meta = {
+                "id": template_id,
+                "name": name,
+                "description": description,
+                "tags": tags or [],
+                "os_type": os_type,
+                "created_at": int(time.time()),
+                "disk_size_gb": disk_size_gb,
+                "vcpus": vcpus,
+                "memory_mb": memory_mb,
+                "source": "ova",
+                "source_file": os.path.basename(ova_path),
+            }
+            _save_meta(template_id, meta)
+            log.info("OVA şablon oluşturuldu: %s (%s)", name, template_id)
+            return {"success": True, "template_id": template_id, "meta": meta}
+        except Exception as exc:
+            log.exception("import_from_ova hatası: %s", exc)
+            return {"success": False, "error": str(exc)}
+
+
+def import_from_qcow2(qcow2_path: str, name: str, description: str = "",
+                      tags=None, os_type: str = "linux",
+                      vcpus: int = 2, memory_mb: int = 2048) -> dict:
+    """
+    Mevcut qcow2 dosyasından şablon oluştur.
+    Dosya template dizinine kopyalanır (bağımsız kopya).
+    """
+    with _lock:
+        try:
+            if not os.path.exists(qcow2_path):
+                return {"success": False, "error": f"qcow2 dosyası bulunamadı: {qcow2_path}"}
+
+            template_id = str(uuid.uuid4())
+            tdir = os.path.join(TEMPLATE_DIR, template_id)
+            os.makedirs(tdir, exist_ok=True)
+            dest_disk = _disk_path(template_id)
+
+            log.info("qcow2 → template kopyalanıyor: %s → %s", qcow2_path, dest_disk)
+            r = subprocess.run(
+                ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2",
+                 "-p", qcow2_path, dest_disk],
+                capture_output=True, timeout=7200
+            )
+            if r.returncode != 0:
+                shutil.rmtree(tdir, ignore_errors=True)
+                return {"success": False,
+                        "error": "qemu-img convert hatası: " + r.stderr.decode(errors="replace")}
+
+            disk_size_gb = round(os.path.getsize(dest_disk) / (1024**3), 2)
+            meta = {
+                "id": template_id,
+                "name": name,
+                "description": description,
+                "tags": tags or [],
+                "os_type": os_type,
+                "created_at": int(time.time()),
+                "disk_size_gb": disk_size_gb,
+                "vcpus": vcpus,
+                "memory_mb": memory_mb,
+                "source": "qcow2",
+                "source_file": os.path.basename(qcow2_path),
+            }
+            _save_meta(template_id, meta)
+            log.info("qcow2 şablon oluşturuldu: %s (%s)", name, template_id)
+            return {"success": True, "template_id": template_id, "meta": meta}
+        except Exception as exc:
+            log.exception("import_from_qcow2 hatası: %s", exc)
+            return {"success": False, "error": str(exc)}
+
+
 def get_disk_size(template_id):
     """Şablon disk boyutunu GB cinsinden döner."""
     try:

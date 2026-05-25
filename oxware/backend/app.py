@@ -5743,6 +5743,71 @@ def api_template_deploy(tid):
     d = request.json or {}
     return ok(template_mgr.deploy(tid, d["vm_name"], d.get("vcpus"), d.get("memory_mb")))
 
+@app.route("/api/templates/import-ova", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_template_import_ova():
+    """OVA dosyasından şablon oluştur (sunucu yolunu alır)."""
+    if not template_mgr: return err("Template modülü yüklenemedi")
+    d = request.get_json(force=True, silent=True) or {}
+    ova_path    = security.validate_path_safe(
+        d.get("ova_path", ""),
+        ["/var/lib/oxware/isos", "/var/lib/libvirt/images",
+         "/tmp", config.ISO_DIR]
+    )
+    name        = security.sanitize_str(d.get("name", ""), 128) or os.path.basename(ova_path or "")
+    description = security.sanitize_str(d.get("description", ""), 256)
+    os_type     = d.get("os_type", "linux")
+    tags        = [security.sanitize_str(t, 32) for t in (d.get("tags") or [])]
+    if not ova_path:
+        return err("ova_path zorunlu")
+
+    # Uzun işlem — background thread
+    import threading as _th_ova
+    job = {"status": "running", "template_id": None, "error": None}
+    def _do():
+        r = template_mgr.import_from_ova(ova_path, name, description, tags, os_type)
+        job["status"] = "done" if r.get("success") else "error"
+        job["template_id"] = r.get("template_id")
+        job["error"] = r.get("error")
+        job["meta"]  = r.get("meta")
+    _th_ova.Thread(target=_do, daemon=True).start()
+    ev.info(f"OVA import başlatıldı: {ova_path} → {name}", category="template")
+    return ok({"status": "running", "message": "OVA dönüştürme arka planda çalışıyor"}), 202
+
+@app.route("/api/templates/import-qcow2", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_template_import_qcow2():
+    """qcow2 dosyasından şablon oluştur."""
+    if not template_mgr: return err("Template modülü yüklenemedi")
+    d = request.get_json(force=True, silent=True) or {}
+    qcow2_path  = security.validate_path_safe(
+        d.get("qcow2_path", ""),
+        ["/var/lib/oxware/disks", "/var/lib/oxware/isos",
+         "/var/lib/libvirt/images", "/tmp", config.DISK_DIR]
+    )
+    name        = security.sanitize_str(d.get("name", ""), 128) or os.path.basename(qcow2_path or "")
+    description = security.sanitize_str(d.get("description", ""), 256)
+    os_type     = d.get("os_type", "linux")
+    tags        = [security.sanitize_str(t, 32) for t in (d.get("tags") or [])]
+    vcpus       = int(d.get("vcpus") or 2)
+    memory_mb   = int(d.get("memory_mb") or 2048)
+    if not qcow2_path:
+        return err("qcow2_path zorunlu")
+
+    import threading as _th_q
+    job = {"status": "running"}
+    def _do():
+        r = template_mgr.import_from_qcow2(qcow2_path, name, description, tags,
+                                            os_type, vcpus, memory_mb)
+        job["status"] = "done" if r.get("success") else "error"
+        job["error"]  = r.get("error")
+        job["meta"]   = r.get("meta")
+    _th_q.Thread(target=_do, daemon=True).start()
+    ev.info(f"qcow2 import başlatıldı: {qcow2_path} → {name}", category="template")
+    return ok({"status": "running", "message": "qcow2 kopyalanıyor arka planda"}), 202
+
 # ── SMART Disk ────────────────────────────────────────────────────────────────
 @app.route("/api/smart/summary", methods=["GET"])
 @require_auth
