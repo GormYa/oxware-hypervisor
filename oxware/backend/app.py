@@ -1300,11 +1300,14 @@ def api_create_vm():
                 "dns":       vm_dns,
             }
 
+        use_cloud_image = bool(data.get("use_cloud_image", False))
+
         create_kwargs = dict(
             name=name, memory_mb=memory_mb, vcpus=vcpus, disk_gb=disk_gb,
             iso_path=iso_path, network=network, disk_format=disk_format,
             os_variant=os_variant, boot_order=boot_order, disk_bus=disk_bus,
             cpu_mode=cpu_mode, cloud_init=cloud_init,
+            use_cloud_image=use_cloud_image,
         )
 
         result = vm_manager.create_vm(**create_kwargs)

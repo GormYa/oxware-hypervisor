@@ -5004,7 +5004,19 @@ systemctl enable --now qemu-guest-agent</pre>
               </div>
             </div>
           </div>
-          <div class="cvm-row">
+          <!-- Cloud Image Toggle -->
+          <div class="cvm-row" style="margin-bottom:6px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="vm-use-cloud-image" onchange="cvmToggleCloudImage(this.checked)" style="width:15px;height:15px;accent-color:var(--accent)">
+              <span>☁️ Cloud Image Kullan <span style="font-size:10px;color:var(--accent-lt);font-weight:600">(önerilen)</span></span>
+            </label>
+            <div id="cloud-image-info" style="display:none;margin-top:6px;padding:8px 10px;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.25);border-radius:6px;font-size:11px;color:#67e8f9;line-height:1.6">
+              ✅ Seçili OS'e ait Ubuntu/Debian cloud image otomatik indirilir ve disk olarak kullanılır.<br>
+              Boş disk yerine <strong>önceden kurulu OS</strong> gelir — ISO takmanıza gerek yok.<br>
+              <span style="color:#94a3b8">İlk indirimde ~500MB–1GB bant genişliği kullanılır, sonraki VM'lerde cache'den çalışır.</span>
+            </div>
+          </div>
+          <div id="vm-iso-row" class="cvm-row">
             <label>Kurulum ISO'su (Opsiyonel)</label>
             <select id="vm-iso"><option value="">— ISO bağlama —</option></select>
             <div class="hint">Boş disk ile başlamak için seçme</div>
@@ -10053,21 +10065,33 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('vm-disk')) resSliderDisk(document.getElementById('vm-disk').value);
 });
 
+function cvmToggleCloudImage(on) {
+  const isoRow   = document.getElementById('vm-iso-row');
+  const infoBox  = document.getElementById('cloud-image-info');
+  const bootSel  = document.getElementById('vm-boot');
+  if (isoRow)  isoRow.style.display  = on ? 'none' : '';
+  if (infoBox) infoBox.style.display = on ? '' : 'none';
+  if (bootSel && on)  bootSel.value = 'hd';
+  if (bootSel && !on) bootSel.value = 'cdrom,hd';
+}
+
 async function createVM() {
   const name = document.getElementById("vm-name").value.trim();
   if (!name) return toast("VM adı boş olamaz", "error");
+  const useCloudImage = document.getElementById("vm-use-cloud-image")?.checked || false;
   const body = {
     name,
     vcpus: parseInt(document.getElementById("vm-cpu").value),
     memory_mb: parseInt(document.getElementById("vm-mem").value),
     disk_gb: parseInt(document.getElementById("vm-disk").value),
     disk_format: document.getElementById("vm-disk-fmt").value,
-    iso_path: document.getElementById("vm-iso").value || null,
+    iso_path: useCloudImage ? null : (document.getElementById("vm-iso").value || null),
     network: document.getElementById("vm-net").value,
     os_variant: document.getElementById("vm-os").value,
     boot_order: document.getElementById("vm-boot").value,
     disk_bus: document.getElementById("vm-disk-bus")?.value || "sata",
     vm_type: document.getElementById("vm-type")?.value || "vps",
+    use_cloud_image: useCloudImage,
   };
   // Auto IP
   const autoIpPool = document.getElementById("vm-autoip-pool")?.value || "";
@@ -10092,12 +10116,16 @@ async function createVM() {
   if (ciStaticIp) { body.static_ip = ciStaticIp; body.gateway = ciGateway; body.netmask = ciNetmask; body.dns = ciDns; }
   if (false) { // legacy block — kept to avoid syntax break
   }
+  const btn = document.getElementById('btn-create-vm');
+  const origTxt = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = useCloudImage ? '⏳ Cloud image hazırlanıyor...' : '⏳ Oluşturuluyor...'; }
   try {
     await api("/vms", { method: "POST", body });
     toast(`"${name}" oluşturuldu`, "success");
     closeModal("modal-create-vm");
     loadVMs(); refreshTreeVMs();
   } catch (e) { toast(e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = origTxt; } }
 }
 
 

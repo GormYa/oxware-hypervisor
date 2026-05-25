@@ -830,10 +830,83 @@ ethernets:
         return None
 
 
+# ── Cloud Image URL map ───────────────────────────────────────────────────────
+_CLOUD_IMAGE_URLS: dict[str, str] = {
+    "ubuntu22.04": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
+    "ubuntu20.04": "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img",
+    "ubuntu24.04": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+    "debian12":    "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2",
+    "debian11":    "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-generic-amd64.qcow2",
+}
+_CLOUD_CACHE_DIR = "/var/lib/libvirt/images"
+
+
+def _prepare_cloud_image(os_variant: str, disk_gb: int, dest_path: str) -> None:
+    """
+    Cloud image'ı hazırla:
+      1. Cache'de varsa kullan (/var/lib/libvirt/images/{os_variant}-cloud.qcow2)
+      2. Yoksa indir (wget)
+      3. qemu-img convert ile dest_path'e kopyala (bağımsız qcow2)
+      4. dest_path'i disk_gb'ye resize et
+    """
+    url = _CLOUD_IMAGE_URLS.get(os_variant)
+    if not url:
+        raise ValueError(f"Cloud image desteklenmiyor: {os_variant}. "
+                         "Desteklenenler: " + ", ".join(_CLOUD_IMAGE_URLS.keys()))
+
+    cache_path = os.path.join(_CLOUD_CACHE_DIR, f"{os_variant}-cloud.qcow2")
+    os.makedirs(_CLOUD_CACHE_DIR, exist_ok=True)
+
+    if not os.path.exists(cache_path):
+        _log.info("Cloud image indiriliyor: %s → %s", url, cache_path)
+        tmp_dl = cache_path + ".downloading"
+        try:
+            subprocess.run(
+                ["wget", "-q", "--show-progress", "-O", tmp_dl, url],
+                check=True, timeout=3600
+            )
+            os.rename(tmp_dl, cache_path)
+        except Exception as e:
+            try:
+                os.unlink(tmp_dl)
+            except Exception:
+                pass
+            raise RuntimeError(f"Cloud image indirilemedi ({url}): {e}") from e
+    else:
+        _log.info("Cloud image cache'den kullanılıyor: %s", cache_path)
+
+    # Bağımsız kopyayı oluştur (convert — backing file bağımlılığı yok)
+    _log.info("Cloud image kopyalanıyor → %s", dest_path)
+    subprocess.run(
+        ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2", cache_path, dest_path],
+        check=True, capture_output=True, timeout=600
+    )
+
+    # İstenilen boyuta resize et
+    img_info = subprocess.run(
+        ["qemu-img", "info", "--output=json", dest_path],
+        capture_output=True, text=True
+    )
+    try:
+        import json as _j
+        _vsize_bytes = _j.loads(img_info.stdout).get("virtual-size", 0)
+        _vsize_gb    = _vsize_bytes / (1024 ** 3)
+    except Exception:
+        _vsize_gb = 0
+
+    if disk_gb > _vsize_gb:
+        subprocess.run(
+            ["qemu-img", "resize", dest_path, f"{disk_gb}G"],
+            check=True, capture_output=True
+        )
+        _log.info("Cloud image resize edildi → %dG", disk_gb)
+
+
 def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
               network="default", disk_format="qcow2", os_variant="generic",
               boot_order="cdrom,hd", mac: str = None, disk_bus: str = "sata",
-              cpu_mode: str = "host-model", cloud_init: dict = None):
+              cpu_mode: str = "host-model", cloud_init: dict = None,
+              use_cloud_image: bool = False):
 
     vm_uuid  = str(uuid.uuid4())
     vm_mac   = mac or _generate_mac()          # stable MAC for DHCP static entry
@@ -857,10 +930,17 @@ def create_vm(name, memory_mb, vcpus, disk_gb, iso_path=None,
         ci_iso_path = _build_cloud_init_iso(name, cloud_init)
 
     # Disk oluştur
-    subprocess.run(
-        ["qemu-img", "create", "-f", disk_format, disk_path, f"{disk_gb}G"],
-        check=True, capture_output=True
-    )
+    if use_cloud_image:
+        # Cloud image'dan bağımsız disk kopyası oluştur + resize
+        _prepare_cloud_image(os_variant, disk_gb, disk_path)
+        # Cloud image ile ISO boot'a gerek yok — disk'ten boot et
+        if not iso_path:
+            boot_order = "hd"
+    else:
+        subprocess.run(
+            ["qemu-img", "create", "-f", disk_format, disk_path, f"{disk_gb}G"],
+            check=True, capture_output=True
+        )
 
     # XML şablonu — kullanıcı girdilerini XML attribute injection'dan koru
     import html as _html
