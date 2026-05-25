@@ -503,6 +503,179 @@ def remove_dhcp_host(network: str, mac: str, ip: str) -> bool:
         return False
 
 
+def _build_cidata_iso_python(iso_path: str, ci_dir: str, has_network_config: bool) -> str | None:
+    """
+    Pure-Python minimal ISO 9660 writer for cloud-init NoCloud.
+    No external tools required.
+    Writes meta-data, user-data, and optionally network-config
+    into a valid ISO 9660 image with volume label 'cidata'.
+    """
+    import struct, math, os as _os
+
+    SECTOR = 2048
+
+    def _pad(data: bytes, size: int) -> bytes:
+        return data + b'\x00' * (size - len(data))
+
+    def _both16(n: int) -> bytes:
+        """Both-endian 16-bit."""
+        return struct.pack('<H', n) + struct.pack('>H', n)
+
+    def _both32(n: int) -> bytes:
+        """Both-endian 32-bit."""
+        return struct.pack('<I', n) + struct.pack('>I', n)
+
+    def _datetime_field(zeros: bool = True) -> bytes:
+        """17-byte date/time field — all zeros = unspecified."""
+        return b'0' * 16 + b'\x00'  # '0000000000000000' + tz=0
+
+    def _dir_datetime() -> bytes:
+        """7-byte directory record date/time."""
+        import time
+        t = time.localtime()
+        return bytes([
+            t.tm_year - 1900, t.tm_mon, t.tm_mday,
+            t.tm_hour, t.tm_min, t.tm_sec, 0
+        ])
+
+    def _build_dir_record(name_bytes: bytes, extent: int, size: int,
+                           is_dir: bool = False) -> bytes:
+        flags = 0x02 if is_dir else 0x00
+        name_len = len(name_bytes)
+        # Record length must be even
+        rec_len = 33 + name_len
+        if rec_len % 2 == 1:
+            rec_len += 1
+        rec = bytearray(rec_len)
+        rec[0]  = rec_len
+        rec[1]  = 0           # extended attribute length
+        rec[2:10]  = _both32(extent)
+        rec[10:18] = _both32(size)
+        rec[18:25] = _dir_datetime()
+        rec[25] = flags
+        rec[26] = 0
+        rec[27] = 0
+        rec[28:32] = _both16(1)  # volume sequence number
+        rec[32] = name_len
+        rec[33:33+name_len] = name_bytes
+        return bytes(rec)
+
+    # Collect files
+    files = []
+    for fname in ("meta-data", "user-data"):
+        fpath = _os.path.join(ci_dir, fname)
+        if _os.path.exists(fpath):
+            with open(fpath, "rb") as f:
+                data = f.read()
+            files.append((fname.upper().replace("-", "_") + ";1", fname, data))
+    if has_network_config:
+        fpath = _os.path.join(ci_dir, "network-config")
+        if _os.path.exists(fpath):
+            with open(fpath, "rb") as f:
+                data = f.read()
+            files.append(("NETWORK_CONFIG;1", "network-config", data))
+
+    if not files:
+        return None
+
+    # Layout:
+    # Sector 0:    system area (16 sectors × 2048 = 32768 bytes, unused)
+    # Sector 16:   Primary Volume Descriptor
+    # Sector 17:   Volume Descriptor Set Terminator
+    # Sector 18:   Root directory (1 sector)
+    # Sector 19+:  File data
+
+    SYSTEM_AREA_SECTORS = 16
+    PVD_SECTOR          = 16
+    TERMINATOR_SECTOR   = 17
+    ROOT_DIR_SECTOR     = 18
+    FILE_START_SECTOR   = 19
+
+    # Assign extents to files
+    file_extents = []
+    cur = FILE_START_SECTOR
+    for iso_name, real_name, data in files:
+        file_extents.append((iso_name, real_name, data, cur))
+        cur += math.ceil(len(data) / SECTOR) if data else 1
+
+    total_sectors = cur
+
+    # ── Build root directory ──────────────────────────────────────────────────
+    # "." entry
+    dot = _build_dir_record(b'\x00', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
+    # ".." entry (same as root since root IS root)
+    dotdot = _build_dir_record(b'\x01', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
+
+    dir_data = bytearray(dot + dotdot)
+    for iso_name, _, data, extent in file_extents:
+        name_bytes = iso_name.encode("ascii")
+        rec = _build_dir_record(name_bytes, extent, len(data), is_dir=False)
+        if len(dir_data) + len(rec) > SECTOR:
+            break  # shouldn't happen for 3 small files
+        dir_data.extend(rec)
+    root_dir_sector_data = _pad(bytes(dir_data), SECTOR)
+
+    # ── Build Primary Volume Descriptor (sector 16) ───────────────────────────
+    pvd = bytearray(SECTOR)
+    pvd[0]  = 1                        # type: PVD
+    pvd[1:6] = b'CD001'
+    pvd[6]  = 1                        # version
+    # System identifier (32 bytes, space-padded)
+    pvd[8:40]  = b' ' * 32
+    # Volume identifier (32 bytes) — MUST be "cidata" for cloud-init NoCloud
+    vol_id = b'cidata' + b' ' * 26
+    pvd[40:72] = vol_id
+    # Volume space size
+    pvd[80:88] = _both32(total_sectors)
+    pvd[120:122] = _both16(1)  # volume set size
+    pvd[122:124] = _both16(1)  # volume sequence number
+    pvd[124:126] = _both16(SECTOR)  # logical block size
+    # Path table size (minimal)
+    pvd[132:140] = _both32(10)
+    # Location of type-L path table (sector after terminator+root dir)
+    pvd[140:144] = struct.pack('<I', total_sectors)   # placeholder, not needed by cloud-init
+    pvd[148:152] = struct.pack('>I', total_sectors)
+    # Root directory record (34 bytes at offset 156)
+    root_rec = _build_dir_record(b'\x00', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
+    pvd[156:156+34] = root_rec[:34]
+    # Volume set, publisher, data preparer, application identifiers (128/128/128/128 bytes, space-padded)
+    for off, length in [(190,128),(318,128),(446,128),(574,128)]:
+        pvd[off:off+length] = b' ' * length
+    # Copyright, abstract, bibliographic file identifiers (37/37/37 bytes)
+    for off, length in [(702,37),(739,37),(776,37)]:
+        pvd[off:off+length] = b' ' * length
+    # Volume creation / modification date
+    pvd[813:830] = _datetime_field()
+    pvd[830:847] = _datetime_field()
+    pvd[847:864] = _datetime_field(zeros=True)
+    pvd[864:881] = _datetime_field(zeros=True)
+    pvd[881] = 1  # file structure version
+
+    # ── Volume Descriptor Set Terminator (sector 17) ─────────────────────────
+    vdst = bytearray(SECTOR)
+    vdst[0] = 255
+    vdst[1:6] = b'CD001'
+    vdst[6] = 1
+
+    # ── Assemble ISO ──────────────────────────────────────────────────────────
+    with open(iso_path, "wb") as f:
+        # System area: 16 empty sectors
+        f.write(b'\x00' * (SYSTEM_AREA_SECTORS * SECTOR))
+        # PVD
+        f.write(bytes(pvd))
+        # Terminator
+        f.write(bytes(vdst))
+        # Root directory
+        f.write(root_dir_sector_data)
+        # File data
+        for iso_name, _, data, extent in file_extents:
+            padded = data + b'\x00' * (SECTOR - len(data) % SECTOR if len(data) % SECTOR else 0)
+            f.write(padded)
+
+    _log.info("cloud-init ISO oluşturuldu (Python fallback): %s", iso_path)
+    return iso_path
+
+
 def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
     """
     cloud-init NoCloud ISO oluştur.
@@ -598,6 +771,15 @@ ethernets:
         nc_path = os.path.join(ci_dir, "network-config")
         nc_args = [nc_path] if network_config_str else []
 
+        # Auto-install genisoimage if none of the tools available
+        import shutil as _sh2
+        if not (_sh2.which("genisoimage") or _sh2.which("mkisofs") or _sh2.which("cloud-localds")):
+            _log.info("cloud-init araçları bulunamadı, genisoimage kuruluyor...")
+            subprocess.run(
+                ["apt-get", "install", "-y", "-qq", "genisoimage"],
+                capture_output=True, timeout=120
+            )
+
         for cmd in (
             ["genisoimage", "-output", iso_path, "-volid", "cidata", "-joliet", "-rock",
              os.path.join(ci_dir, "user-data"), os.path.join(ci_dir, "meta-data")] + nc_args,
@@ -611,6 +793,17 @@ ethernets:
             if r.returncode == 0 and os.path.exists(iso_path):
                 _sh.rmtree(ci_dir, ignore_errors=True)
                 return iso_path
+
+        # Pure-Python fallback: minimal ISO 9660 with "cidata" label
+        # Works for cloud-init NoCloud — no external tools needed
+        try:
+            _py_iso = _build_cidata_iso_python(iso_path, ci_dir, network_config_str)
+            if _py_iso:
+                _sh.rmtree(ci_dir, ignore_errors=True)
+                return _py_iso
+        except Exception as _pie:
+            _log.warning("Python ISO fallback hatası: %s", _pie)
+
         _sh.rmtree(ci_dir, ignore_errors=True)
         _log.warning("cloud-init ISO oluşturulamadı (genisoimage/mkisofs/cloud-localds bulunamadı)")
         return None
