@@ -13214,9 +13214,33 @@ async function loadBackupDisks() {
       <td><code>${escHtml(disk.target_dev || '—')}</code></td>
       <td style="font-size:11px">${created}</td>
       <td><span class="badge-${exists ? 'success' : 'danger'}">${exists ? 'Mevcut' : 'Eksik'}</span></td>
-      <td><button class="btn sm danger" onclick="deleteBackupDisk('${escHtml(disk.id)}')">✕ Sil</button></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn sm" style="color:#22c55e;border-color:#22c55e33" onclick="restoreBackupDisk('${escHtml(disk.id)}','${escHtml(disk.vm_name||disk.vm_id)}','${escHtml(disk.label||'')}')">↩ Geri Yükle</button>
+        <button class="btn sm danger" onclick="deleteBackupDisk('${escHtml(disk.id)}')">✕ Sil</button>
+      </td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:12px">Yedekleme diski yok</td></tr>';
+}
+
+async function restoreBackupDisk(diskId, vmName, label) {
+  const confirmed = await showConfirm(
+    `"${vmName}" VM'inin ana diski "${label}" yedeğiyle geri yüklenecek.\n` +
+    `⚠️ VM durdurulacak, mevcut disk içeriği ÜZERİNE YAZILACAK ve ardından yeniden başlatılacak.\n` +
+    `Bu işlem geri alınamaz.`,
+    'Yedeği Geri Yükle', true
+  );
+  if (!confirmed) return;
+  toast('Geri yükleniyor — VM durduruluyor, disk yazılıyor...', 'info');
+  const d = await _api(`/api/backup/disks/${diskId}/restore`, 'POST', { restart_after: true });
+  if (!d) { toast('Sunucu yanıt vermedi', 'error'); return; }
+  if (d.error) { toast(`Hata: ${d.error}`, 'error'); return; }
+  toast(
+    `Geri yükleme tamamlandı → ${d.main_disk?.split('/').pop() || ''}` +
+    (d.vm_restarted ? ' — VM yeniden başlatıldı' : ''),
+    'success'
+  );
+  loadBackupDisks();
+  loadVMs();
 }
 
 async function createBackupDisk() {

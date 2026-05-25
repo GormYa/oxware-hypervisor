@@ -4640,6 +4640,104 @@ def api_backup_disk_create():
     ev.info(f"Yedekleme diski oluşturuldu: {disk_name} → VM {vm_id}", category="backup")
     return ok({"disk": entry}), 201
 
+@app.route("/api/backup/disks/<disk_id>/restore", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_backup_disk_restore(disk_id):
+    """
+    Yedekleme diskinden VM'in ana diskini geri yükle.
+    1. VM durdurulur (çalışıyorsa)
+    2. qemu-img convert backup → ana disk
+    3. İsteğe bağlı olarak VM yeniden başlatılır
+    """
+    import subprocess as _sp_r
+    import xml.etree.ElementTree as _ET_r
+    import libvirt as _lv_r
+
+    data = request.get_json(force=True, silent=True) or {}
+    restart_after = bool(data.get("restart_after", True))
+
+    registry = _load_backup_disk_registry()
+    entry = next((d for d in registry if d.get("id") == disk_id), None)
+    if not entry:
+        return err("Yedekleme diski kaydı bulunamadı", 404)
+
+    backup_path = entry.get("path", "")
+    vm_id       = entry.get("vm_id", "")
+
+    if not backup_path or not os.path.isfile(backup_path):
+        return err("Yedekleme dosyası bulunamadı: " + backup_path)
+    if not vm_id:
+        return err("Yedekleme kaydında vm_id yok")
+
+    try:
+        # VM'in ana diskini bul (ilk disk[@device='disk'] source)
+        _conn_r = _lv_r.open(config.LIBVIRT_URI)
+        _dom_r  = _conn_r.lookupByUUIDString(vm_id)
+        _xml_r  = _dom_r.XMLDesc(0)
+        _root_r = _ET_r.fromstring(_xml_r)
+
+        main_disk_path = None
+        for _disk in _root_r.findall(".//disk[@device='disk']"):
+            _src = _disk.find("source")
+            if _src is not None and _src.get("file"):
+                # Yedekleme diskini skip et
+                if _src.get("file") != backup_path:
+                    main_disk_path = _src.get("file")
+                    break
+
+        if not main_disk_path:
+            _conn_r.close()
+            return err("VM'in ana diski bulunamadı (yedekleme diski hariç)")
+
+        # VM çalışıyorsa durdur
+        _was_running = bool(_dom_r.isActive())
+        _conn_r.close()
+
+        if _was_running:
+            log.info("Geri yükleme: VM durduruluyor: %s", vm_id)
+            _conn_s = _lv_r.open(config.LIBVIRT_URI)
+            _dom_s  = _conn_s.lookupByUUIDString(vm_id)
+            _dom_s.destroy()
+            _conn_s.close()
+            import time as _t_r
+            _t_r.sleep(2)
+
+        # qemu-img convert: backup → ana disk (üzerine yaz)
+        log.info("Geri yükleme: %s → %s", backup_path, main_disk_path)
+        _r = _sp_r.run(
+            ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2",
+             "-p", backup_path, main_disk_path],
+            capture_output=True, timeout=7200
+        )
+        if _r.returncode != 0:
+            stderr = _r.stderr.decode(errors="replace")
+            return err(f"qemu-img convert başarısız: {stderr}", 500)
+
+        ev.info(f"Yedek geri yüklendi: {backup_path} → {main_disk_path} (VM: {vm_id})",
+                category="backup")
+
+        # İstenirse VM'i yeniden başlat
+        if restart_after and _was_running:
+            import time as _t_r2
+            _t_r2.sleep(1)
+            _conn_rs = _lv_r.open(config.LIBVIRT_URI)
+            _dom_rs  = _conn_rs.lookupByUUIDString(vm_id)
+            _dom_rs.create()
+            _conn_rs.close()
+            log.info("Geri yükleme sonrası VM başlatıldı: %s", vm_id)
+
+        return ok({
+            "status":        "ok",
+            "backup_path":   backup_path,
+            "main_disk":     main_disk_path,
+            "vm_restarted":  restart_after and _was_running,
+        })
+    except Exception as e:
+        log.exception("Yedek geri yükleme hatası disk_id=%s", disk_id)
+        return err(str(e), 500)
+
+
 @app.route("/api/backup/disks/<disk_id>", methods=["DELETE"])
 @require_auth
 def api_backup_disk_delete(disk_id):
