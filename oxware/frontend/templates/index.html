@@ -3202,8 +3202,11 @@
                 </div>
                 <div class="form-row">
                   <label>Libvirt Ağ Adı</label>
-                  <input id="ipam-pool-libvirt-net" type="text" placeholder="default" value="default">
-                  <div class="form-hint">DHCP static entry eklenecek libvirt ağı. Terminalde: <code>virsh net-list</code></div>
+                  <select id="ipam-pool-libvirt-net-sel" style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px" onchange="document.getElementById('ipam-pool-libvirt-net').value=this.value">
+                    <option value="">Yükleniyor…</option>
+                  </select>
+                  <input id="ipam-pool-libvirt-net" type="text" placeholder="default" value="default" style="margin-top:4px">
+                  <div class="form-hint">Bridge ağlar (oxbridge) için cloud-init ile statik IP. NAT ağlar (default) için DHCP static entry.</div>
                 </div>
               </div>
             </div>
@@ -5431,8 +5434,16 @@ function clearAppInstall() {
         <span>Bridge: <code id="edit-net-bridge">—</code></span>
         <span>Durum: <span id="edit-net-status">—</span></span>
       </div>
-      <!-- Editable fields -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <!-- Bridge mode notice (shown when network is bridge/passthrough) -->
+      <div id="edit-net-bridge-notice" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(61,130,240,.08);border:1px solid rgba(61,130,240,.25);border-radius:6px;font-size:12px;color:var(--accent-lt)">
+        🌉 <strong>Köprü Ağı</strong> — Gateway ve DHCP bu ağ tipi için libvirt üzerinden yapılandırılamaz.<br>
+        <span style="color:var(--text-muted)">VM'lere IP atamak için:</span>
+        <strong style="color:var(--text)">IPAM → IP Havuzu Ekle</strong> →
+        Libvirt Ağ = <code id="edit-net-name-badge" style="background:var(--surface3);padding:1px 5px;border-radius:3px"></code> seçin.<br>
+        <span style="color:var(--text-muted)">VM oluşturma sırasında "Otomatik IP" seçenek aktif edin.</span>
+      </div>
+      <!-- Editable fields (hidden for bridge networks) -->
+      <div id="edit-net-ip-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
           <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Gateway</label>
           <input id="edit-net-gateway" type="text" placeholder="192.168.100.1"
@@ -5454,7 +5465,7 @@ function clearAppInstall() {
             style="width:100%;padding:6px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:12px;box-sizing:border-box;font-family:monospace">
         </div>
       </div>
-      <div style="font-size:11px;color:var(--orange);margin-bottom:10px;padding:7px 10px;background:rgba(245,158,11,.08);border-radius:5px;border:1px solid rgba(245,158,11,.2)">
+      <div id="edit-net-ip-warn" style="font-size:11px;color:var(--orange);margin-bottom:10px;padding:7px 10px;background:rgba(245,158,11,.08);border-radius:5px;border:1px solid rgba(245,158,11,.2)">
         ⚠ IP/DHCP değişikliği ağı yeniden başlatır (bağlı VM'ler etkilenebilir).
       </div>
       <div class="form-group" style="margin-bottom:14px">
@@ -8094,8 +8105,21 @@ async function loadIpamPools() {
   }
 }
 
-function ipamOpenCreatePool() {
+async function ipamOpenCreatePool() {
   document.getElementById('modal-ipam-pool').classList.add('open');
+  // Populate libvirt network dropdown
+  const sel = document.getElementById('ipam-pool-libvirt-net-sel');
+  try {
+    const d = await api('/networks');
+    const nets = d.networks || d.data || [];
+    sel.innerHTML = nets.map(n => {
+      const mode = (n.forward_mode || n.mode || 'nat').toLowerCase();
+      const tag = _BRIDGE_MODES && _BRIDGE_MODES.has(mode) ? ' [bridge]' : ' [NAT]';
+      return `<option value="${escHtml(n.name)}">${escHtml(n.name)}${tag}</option>`;
+    }).join('');
+    // Sync text input with first option
+    if (nets.length) document.getElementById('ipam-pool-libvirt-net').value = nets[0].name;
+  } catch(_) { sel.innerHTML = '<option value="default">default</option>'; }
 }
 function ipamCloseCreatePool() {
   document.getElementById('modal-ipam-pool').classList.remove('open');
@@ -10872,6 +10896,7 @@ async function netAction(uuid, action) {
 }
 
 let _editNetActive = false;
+const _BRIDGE_MODES = new Set(['bridge', 'passthrough', 'private', 'vepa']);
 async function openEditNetwork(uuid, name) {
   document.getElementById('edit-net-uuid').value = uuid;
   document.getElementById('edit-net-name-label').textContent = name;
@@ -10880,10 +10905,23 @@ async function openEditNetwork(uuid, name) {
   document.getElementById('edit-net-dhcp-start').value = '';
   document.getElementById('edit-net-dhcp-end').value = '';
   document.getElementById('edit-net-bridge').textContent = '...';
+  // Reset bridge notice
+  document.getElementById('edit-net-bridge-notice').style.display = 'none';
+  document.getElementById('edit-net-ip-fields').style.display = 'grid';
+  document.getElementById('edit-net-ip-warn').style.display = '';
   openModal('modal-edit-net');
   try {
     const d = await api(`/networks/${uuid}`);
     const n = d.network || d;
+    const isBridge = _BRIDGE_MODES.has((n.mode || '').toLowerCase());
+    // Toggle IP fields visibility based on network type
+    document.getElementById('edit-net-bridge-notice').style.display = isBridge ? '' : 'none';
+    document.getElementById('edit-net-ip-fields').style.display     = isBridge ? 'none' : 'grid';
+    document.getElementById('edit-net-ip-warn').style.display       = isBridge ? 'none' : '';
+    if (isBridge) {
+      const nb = document.getElementById('edit-net-name-badge');
+      if (nb) nb.textContent = n.name || name;
+    }
     document.getElementById('edit-net-gateway').value    = n.gateway || '';
     document.getElementById('edit-net-netmask').value    = n.netmask || '';
     document.getElementById('edit-net-dhcp-start').value = n.dhcp_start || '';

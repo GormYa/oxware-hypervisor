@@ -153,6 +153,7 @@ def update_network(net_uuid: str, dhcp_start: str = None, dhcp_end: str = None,
     """
     Edit a libvirt network's IP/DHCP config.
     Must stop → redefine → start because libvirt doesn't support live DHCP edits.
+    Bridge/passthrough networks don't support IP/DHCP via libvirt XML — autostart only.
     """
     conn = _connect()
     try:
@@ -162,6 +163,25 @@ def update_network(net_uuid: str, dhcp_start: str = None, dhcp_end: str = None,
 
         xml_str = net.XMLDesc(0)
         root = ET.fromstring(xml_str)
+
+        # Detect bridge/passthrough — these networks have no <ip> element in libvirt XML
+        fwd_el = root.find("forward")
+        fwd_mode = fwd_el.get("mode", "nat") if fwd_el is not None else "nat"
+        is_bridge = fwd_mode in ("bridge", "passthrough", "private", "vepa")
+
+        if is_bridge:
+            # Bridge networks: libvirt XML has no <ip> — can't configure gateway/DHCP here.
+            # IP addressing is handled by physical network or OXware IPAM pools.
+            # Only save autostart (handled by caller via separate endpoint).
+            return {
+                "ok": True,
+                "active": bool(net.isActive()),
+                "autostart": bool(net.autostart()),
+                "bridge_note": (
+                    "Bu ağ bir köprü ağıdır. Gateway ve DHCP libvirt üzerinden "
+                    "yapılandırılamaz. IPAM → IP Havuzu oluşturun ve bu ağı seçin."
+                ),
+            }
 
         ip_el = root.find("ip")
         if ip_el is not None:
@@ -179,6 +199,16 @@ def update_network(net_uuid: str, dhcp_start: str = None, dhcp_end: str = None,
                 if dhcp_end:
                     range_el.set("end", dhcp_end)
             elif dhcp_start and dhcp_end:
+                dhcp_el = ET.SubElement(ip_el, "dhcp")
+                range_el = ET.SubElement(dhcp_el, "range")
+                range_el.set("start", dhcp_start)
+                range_el.set("end", dhcp_end)
+        elif ip_address and netmask:
+            # No <ip> element yet — create one (for NAT/route networks)
+            ip_el = ET.SubElement(root, "ip")
+            ip_el.set("address", ip_address)
+            ip_el.set("netmask", netmask)
+            if dhcp_start and dhcp_end:
                 dhcp_el = ET.SubElement(ip_el, "dhcp")
                 range_el = ET.SubElement(dhcp_el, "range")
                 range_el.set("start", dhcp_start)
@@ -213,13 +243,23 @@ def get_network_info(net_uuid):
         ip_el = root.find("ip")
         dhcp_el = ip_el.find("dhcp") if ip_el is not None else None
         range_el = dhcp_el.find("range") if dhcp_el is not None else None
+        # forward mode — use .get() on element, NOT findtext("forward/@mode")
+        # (stdlib ET doesn't support @attr in findtext path → SyntaxError)
+        fwd_el = root.find("forward")
+        fwd_mode = fwd_el.get("mode", "nat") if fwd_el is not None else "nat"
+        # bridge name
+        try:
+            bridge_name = net.bridgeName() if net.isActive() else ""
+        except Exception:
+            br_el = root.find("bridge")
+            bridge_name = br_el.get("name", "") if br_el is not None else ""
         return {
             "name": net.name(),
             "uuid": net_uuid,
             "active": bool(net.isActive()),
             "autostart": bool(net.autostart()),
-            "bridge": net.bridgeName() if net.isActive() else "",
-            "mode": root.findtext("forward/@mode") or (root.find("forward").get("mode") if root.find("forward") is not None else "nat"),
+            "bridge": bridge_name,
+            "mode": fwd_mode,
             "gateway": ip_el.get("address") if ip_el is not None else None,
             "netmask": ip_el.get("netmask") if ip_el is not None else None,
             "dhcp_start": range_el.get("start") if range_el is not None else None,
