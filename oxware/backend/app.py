@@ -11924,70 +11924,84 @@ def api_migration_esxi_scan():
                     vmx_dir = _vmx_abs.rsplit("/", 1)[0]
                 else:
                     vmx_dir = "/vmfs/volumes/" + datastore + "/" + name
-                # Power state
+                # ── Power state ───────────────────────────────────────────────────
                 _, ps_out, _ = client.exec_command(
                     f"vim-cmd vmsvc/power.getstate {vmid} 2>/dev/null", timeout=8)
                 ps_text = ps_out.read().decode(errors="replace").lower()
-                status = "running" if "on" in ps_text else ("off" if "off" in ps_text else "unknown")
-                # Parse VMX for full config (networks, disks, CPU, RAM, firmware)
-                vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
-                # ── Disk virtual size from VMDK extent header ─────────────────────
-                # VMDK descriptor: "RW <sectors> VMFS ..." — virtual size in sectors
+                status = ("running" if "on" in ps_text
+                          else ("off" if "off" in ps_text else "unknown"))
+
+                # ── Authoritative config via vim-cmd vmsvc/get.config ─────────────
+                # VMX file cat is unreliable (datastore symlink, ESXi BusyBox quirks).
+                # vim-cmd is ESXi's own API — always returns correct values.
+                _, _cfg_out, _ = client.exec_command(
+                    f"vim-cmd vmsvc/get.config {vmid} 2>/dev/null", timeout=10)
+                _cfg_txt = _cfg_out.read().decode(errors="replace")
+                import re as _re_vc
+                _m_cpu  = _re_vc.search(r'numCpus\s*=\s*(\d+)', _cfg_txt)
+                _m_ram  = _re_vc.search(r'memoryMB\s*=\s*(\d+)', _cfg_txt)
+                _m_dkb  = _re_vc.search(r'capacityInKB\s*=\s*(\d+)', _cfg_txt)
+                _m_db   = _re_vc.search(r'capacityInBytes\s*=\s*(\d+)', _cfg_txt)
+                _m_fw   = _re_vc.search(r'firmware\s*=\s*"([^"]+)"', _cfg_txt)
+                _m_gos  = _re_vc.search(r'guestId\s*=\s*"([^"]+)"', _cfg_txt)
+                # Disk file paths from config (fileName = "[ds] path/disk.vmdk")
+                _m_disks = _re_vc.findall(
+                    r'fileName\s*=\s*"\[([^\]]+)\]\s*([^"]+\.vmdk)"', _cfg_txt)
+                # Network names
+                _m_nets = _re_vc.findall(r'networkName\s*=\s*"([^"]+)"', _cfg_txt)
+
+                vcpus   = int(_m_cpu.group(1))  if _m_cpu  else 2
+                ram_mb  = int(_m_ram.group(1))  if _m_ram  else 2048
+                firmware = "efi" if (_m_fw and "efi" in _m_fw.group(1).lower()) else "bios"
+
+                # Disk virtual size
                 disk_gb = 0
-                _scan_disks = vmx_info.get("disks", [])
-                # If VMX parse missed disks, find first VMDK via glob
-                if not _scan_disks:
-                    _, _vdk_gl, _ = client.exec_command(
-                        f"ls /vmfs/volumes/*/{name}/*.vmdk 2>/dev/null"
-                        f" | grep -v flat | grep -v '[0-9]\\.' | head -1",
-                        timeout=8)
-                    _vdk_path = _vdk_gl.read().decode(errors="replace").strip()
-                    if _vdk_path:
-                        _scan_disks = [_vdk_path]
-                if _scan_disks:
-                    _, _ext_out, _ = client.exec_command(
-                        f"grep -iE '^RW |^RDONLY ' '{_scan_disks[0]}' 2>/dev/null"
-                        f" | head -1 | awk '{{print $2}}'",
-                        timeout=5)
-                    _sec_txt = _ext_out.read().decode(errors="replace").strip()
-                    try:
-                        disk_gb = round(int(_sec_txt) * 512 / (1024 ** 3), 1)
-                    except (ValueError, TypeError):
-                        pass
-                if not disk_gb:
-                    # Fallback: sum VMDK file sizes (thin = small, but better than 0)
-                    _, _lsz_out, _ = client.exec_command(
-                        f"ls -la '{vmx_dir}'/*.vmdk 2>/dev/null"
-                        f" | awk 'NF>4 {{sum+=$5}} END {{if(sum>0) print sum}}'",
-                        timeout=8)
-                    try:
-                        disk_gb = round(
-                            int(_lsz_out.read().decode(errors="replace").strip())
-                            / (1024 ** 3), 1) or 1
-                    except (ValueError, TypeError):
-                        disk_gb = 1
-                # OS type: prefer VMX parse, fallback to guestid, then filename
-                os_type = vmx_info.get("os_type", "unknown")
-                if os_type == "unknown":
-                    gl = guestid.lower()
-                    if any(x in gl for x in ["win", "w10", "w11"]):
-                        os_type = "windows"
-                    elif any(x in gl for x in ["linux", "ubuntu", "centos", "rhel",
-                                                "fedora", "debian", "suse", "oracle"]):
-                        os_type = "linux"
-                    else:
-                        os_type = _detect_os_from_name(name)
+                if _m_db:
+                    disk_gb = round(int(_m_db.group(1)) / (1024 ** 3), 1)
+                elif _m_dkb:
+                    disk_gb = round(int(_m_dkb.group(1)) / (1024 * 1024), 1)
+                disk_gb = disk_gb or 1
+
+                # Disk absolute paths
+                cfg_disks = []
+                for _ds, _rel in _m_disks:
+                    if "-flat" not in _rel.lower():
+                        cfg_disks.append(f"/vmfs/volumes/{_ds}/{_rel}")
+
+                # Network list
+                cfg_nets = [{"key": f"ethernet{i}",
+                             "network_name": n, "model": "e1000"}
+                            for i, n in enumerate(_m_nets)]
+
+                # Fallback: VMX parse for anything vim-cmd missed
+                vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
+                if not cfg_disks:
+                    cfg_disks = vmx_info.get("disks", [])
+                if not cfg_nets:
+                    cfg_nets = vmx_info.get("networks", [])
+
+                # OS type
+                _gos = (_m_gos.group(1) if _m_gos else guestid).lower()
+                if any(x in _gos for x in ["win", "windows", "server2"]):
+                    os_type = "windows"
+                elif any(x in _gos for x in ["linux", "ubuntu", "centos", "rhel",
+                                              "fedora", "debian", "suse", "oracle",
+                                              "rocky", "alma", "freebsd"]):
+                    os_type = "linux"
+                else:
+                    os_type = vmx_info.get("os_type") or _detect_os_from_name(name)
+
                 vms.append({
                     "vmid": vmid, "name": name, "datastore": datastore,
                     "vmx_path": vmx_path, "vmx_dir": vmx_dir,
                     "status": status, "guestid": guestid,
                     "os_type": os_type, "disk_gb": disk_gb,
-                    "vcpus": vmx_info.get("vcpus", 2),
-                    "memory_mb": vmx_info.get("ram_mb", 2048),
-                    "firmware": vmx_info.get("firmware", "bios"),
-                    "networks": vmx_info.get("networks", []),
-                    "disks": vmx_info.get("disks", []),
-                    "disk_count": len(vmx_info.get("disks", [])) or 1,
+                    "vcpus": vcpus,
+                    "memory_mb": ram_mb,
+                    "firmware": firmware,
+                    "networks": cfg_nets,
+                    "disks": cfg_disks,
+                    "disk_count": len(cfg_disks) or 1,
                 })
         finally:
             client.close()
