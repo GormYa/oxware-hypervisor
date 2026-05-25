@@ -11938,7 +11938,8 @@ def api_migration_esxi_scan():
                     f"vim-cmd vmsvc/get.config {vmid} 2>/dev/null", timeout=10)
                 _cfg_txt = _cfg_out.read().decode(errors="replace")
                 import re as _re_vc
-                _m_cpu  = _re_vc.search(r'numCpus\s*=\s*(\d+)', _cfg_txt)
+                # numCPU (VirtualHardware) or numCpus (ConfigInfo) — case-insensitive
+                _m_cpu  = _re_vc.search(r'(?i)numcpus?\s*=\s*(\d+)', _cfg_txt)
                 _m_ram  = _re_vc.search(r'memoryMB\s*=\s*(\d+)', _cfg_txt)
                 _m_dkb  = _re_vc.search(r'capacityInKB\s*=\s*(\d+)', _cfg_txt)
                 _m_db   = _re_vc.search(r'capacityInBytes\s*=\s*(\d+)', _cfg_txt)
@@ -11947,8 +11948,8 @@ def api_migration_esxi_scan():
                 # Disk file paths from config (fileName = "[ds] path/disk.vmdk")
                 _m_disks = _re_vc.findall(
                     r'fileName\s*=\s*"\[([^\]]+)\]\s*([^"]+\.vmdk)"', _cfg_txt)
-                # Network names
-                _m_nets = _re_vc.findall(r'networkName\s*=\s*"([^"]+)"', _cfg_txt)
+                # Network backing: ESXi uses deviceName (NetworkBackingInfo), not networkName
+                _m_nets = _re_vc.findall(r'deviceName\s*=\s*"([^"]+)"', _cfg_txt)
 
                 vcpus   = int(_m_cpu.group(1))  if _m_cpu  else 2
                 ram_mb  = int(_m_ram.group(1))  if _m_ram  else 2048
@@ -12103,30 +12104,42 @@ def api_migration_esxi_import():
                     if j_vmx_disks:
                         desc_paths = list(j_vmx_disks)
                     else:
-                        _import_job_update(j_id, step="VMDK listesi alınıyor", percent=6)
-                        # Resolve actual dir via shell glob (BusyBox find -maxdepth unreliable)
-                        _, _vmx_f, _ = client2.exec_command(
-                            f"ls /vmfs/volumes/*/{j_vm_name}/{j_vm_name}.vmx"
-                            f" 2>/dev/null | head -1",
-                            timeout=8)
-                        _vmx_fp = _vmx_f.read().decode(errors="replace").strip()
-                        _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else j_vmx_dir
-                        # Use ls glob (not find) — avoids BusyBox symlink traversal issue
-                        _, _ls_out, _ = client2.exec_command(
-                            f"ls '{_real_dir}'/*.vmdk 2>/dev/null",
-                            timeout=15)
-                        _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
+                        _import_job_update(j_id, step="VMDK listesi alınıyor (vim-cmd)", percent=6)
+                        # Use vim-cmd get.config — authoritative, no symlink issues
+                        _, _cfg2_out, _ = client2.exec_command(
+                            f"vim-cmd vmsvc/get.config {j_vmid} 2>/dev/null",
+                            timeout=10)
+                        _cfg2_txt = _cfg2_out.read().decode(errors="replace")
+                        import re as _re_fb
+                        _fb_disks = _re_fb.findall(
+                            r'fileName\s*=\s*"\[([^\]]+)\]\s*([^"]+\.vmdk)"', _cfg2_txt)
                         desc_paths = []
-                        for _ln in _ls_lines:
-                            _ln = _ln.strip()
-                            if not _ln:
-                                continue
-                            _bn = _ln.rsplit("/", 1)[-1].lower()
-                            if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
-                                desc_paths.append(_ln)
+                        for _ds2, _rel2 in _fb_disks:
+                            _rel2 = _rel2.strip()
+                            if "-flat" not in _rel2.lower():
+                                desc_paths.append(f"/vmfs/volumes/{_ds2}/{_rel2}")
+                        if not desc_paths:
+                            # Last resort: shell glob on real dir
+                            _, _vmx_f, _ = client2.exec_command(
+                                f"ls /vmfs/volumes/*/{j_vm_name}/{j_vm_name}.vmx"
+                                f" 2>/dev/null | head -1",
+                                timeout=8)
+                            _vmx_fp = _vmx_f.read().decode(errors="replace").strip()
+                            _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else j_vmx_dir
+                            _, _ls_out, _ = client2.exec_command(
+                                f"ls '{_real_dir}'/*.vmdk 2>/dev/null",
+                                timeout=15)
+                            _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
+                            for _ln in _ls_lines:
+                                _ln = _ln.strip()
+                                if not _ln:
+                                    continue
+                                _bn = _ln.rsplit("/", 1)[-1].lower()
+                                if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
+                                    desc_paths.append(_ln)
                         if not desc_paths:
                             raise RuntimeError(
-                                f"VMX dizininde VMDK bulunamadı: {_real_dir}")
+                                f"VMDK bulunamadı: vmid={j_vmid} dir={j_vmx_dir}")
 
                     total_disks = len(desc_paths)
                     for d_idx, desc_path in enumerate(desc_paths):
