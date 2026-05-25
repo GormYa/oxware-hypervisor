@@ -304,9 +304,12 @@ printf "${LINE}─────────────────────�
 printf "\n"
 MOTDSCRIPT
 chmod +x "${MOTD_DIR}/99-oxware"
-for f in 10-help-text 50-motd-news 80-livepatch 91-release-upgrade; do
-    [ -f "${MOTD_DIR}/${f}" ] && chmod -x "${MOTD_DIR}/${f}" 2>/dev/null || true
-done
+# Disable ALL Ubuntu default MOTD scripts — keep only 99-oxware
+find "$MOTD_DIR" -type f ! -name "99-oxware" -exec chmod -x {} \;
+# Disable motd-news background service/timer
+systemctl disable motd-news.service motd-news.timer 2>/dev/null || true
+sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || true
+# Clear static /etc/motd
 echo "" > /etc/motd 2>/dev/null || true
 log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
 
