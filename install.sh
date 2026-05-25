@@ -827,13 +827,15 @@ _register_oxbridge_libvirt() {
         virsh net-start oxbridge &>/dev/null || true
         return 0
     fi
-    virsh net-define /dev/stdin << 'LIBVIRTNET' && \
+    cat > /tmp/_oxbridge_net.xml << 'LIBVIRTNET'
 <network>
   <name>oxbridge</name>
   <forward mode='bridge'/>
   <bridge name='oxbr0'/>
 </network>
 LIBVIRTNET
+    virsh net-define /tmp/_oxbridge_net.xml
+    rm -f /tmp/_oxbridge_net.xml
     virsh net-autostart oxbridge
     virsh net-start oxbridge
     log "libvirt oxbridge network kayıt edildi ✓"
