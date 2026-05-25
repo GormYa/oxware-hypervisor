@@ -9616,11 +9616,39 @@ async function cloneVM(vmId, vmName) {
   const taskId = 'clone-' + Date.now();
   addTaskToPanel(taskId, `Klon: ${vmName} → ${newName.trim()}`, 'running');
   try {
+    // Clone runs async on server (qemu-img convert for large disks can take minutes)
     const d = await api(`/vms/${vmId}/clone`, { method: 'POST', body: { new_name: newName.trim() } });
     if (d.error) throw new Error(d.error);
-    completeTaskPanel(taskId, 'success');
-    toast(`"${newName.trim()}" klonlandı`, 'success');
-    loadVMs(); refreshTreeVMs();
+    const jobId = d.job_id;
+    // Poll until done
+    const _pollClone = async () => {
+      let tries = 0;
+      while (tries < 360) {  // max ~30 min
+        await new Promise(r => setTimeout(r, 5000));
+        tries++;
+        try {
+          const s = await api(`/vms/clone-jobs/${jobId}`);
+          if (s.status === 'done') {
+            completeTaskPanel(taskId, 'success');
+            toast(`"${newName.trim()}" klonlandı ✓`, 'success');
+            loadVMs(); refreshTreeVMs();
+            return;
+          } else if (s.status === 'error') {
+            throw new Error(s.error || 'Klonlama başarısız');
+          }
+          // still running — continue polling
+        } catch(pollErr) {
+          if (pollErr.message && pollErr.message !== 'Klonlama başarısız') {
+            // network error — retry
+            continue;
+          }
+          throw pollErr;
+        }
+      }
+      throw new Error('Klonlama zaman aşımına uğradı (30 dk)');
+    };
+    toast(`"${newName.trim()}" klonlanıyor… (büyük diskler birkaç dakika sürebilir)`, 'info');
+    await _pollClone();
   } catch(e) {
     completeTaskPanel(taskId, 'error');
     toast('Klonlama başarısız: ' + e.message, 'error');

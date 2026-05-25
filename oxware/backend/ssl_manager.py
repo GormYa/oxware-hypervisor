@@ -163,18 +163,26 @@ def request_letsencrypt(domain, email):
     Returns:
         dict: success, cert_path, message
     """
+    # Certbot binary — try common paths
+    _certbot = shutil.which("certbot") or "/usr/bin/certbot" or "/usr/local/bin/certbot"
+    if not os.path.isfile(_certbot):
+        return {"success": False, "cert_path": None,
+                "message": "certbot bulunamadı — 'apt install certbot' ile kurun"}
+
     try:
         result = subprocess.run(
             [
-                "certbot", "certonly", "--standalone",
+                _certbot, "certonly", "--standalone",
                 "--non-interactive", "--agree-tos",
+                "--preferred-challenges", "http",
                 "-m", email, "-d", domain,
             ],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=180
         )
         if result.returncode != 0:
-            return {"success": False, "cert_path": None,
-                    "message": result.stderr.strip() or result.stdout.strip()}
+            _out = (result.stderr.strip() or result.stdout.strip())
+            log.warning("certbot failed for %s: %s", domain, _out[:500])
+            return {"success": False, "cert_path": None, "message": _out}
 
         # Copy certs to SSL_DIR
         le_dir = f"/etc/letsencrypt/live/{domain}"
@@ -183,17 +191,34 @@ def request_letsencrypt(domain, email):
         src_cert = os.path.join(le_dir, "fullchain.pem")
         src_key  = os.path.join(le_dir, "privkey.pem")
 
-        with _lock:
-            shutil.copy2(src_cert, CERT_PATH)
-            shutil.copy2(src_key,  KEY_PATH)
+        if not os.path.isfile(src_cert):
+            # certbot sometimes uses a different dir name (e.g. domain-0001)
+            _found = _copy_letsencrypt_certs()
+            if not _found:
+                return {"success": False, "cert_path": None,
+                        "message": f"Sertifika kopyalanamadı: {le_dir} bulunamadı"}
+        else:
+            with _lock:
+                shutil.copy2(src_cert, CERT_PATH)
+                shutil.copy2(src_key,  KEY_PATH)
+            os.chmod(KEY_PATH, 0o600)
 
         log.info("Let's Encrypt cert for %s installed to %s", domain, SSL_DIR)
+
+        # Restart oxware so the new cert is loaded
+        try:
+            subprocess.run(["systemctl", "restart", "oxware"],
+                           capture_output=True, timeout=30)
+            log.info("oxware restarted with new Let's Encrypt cert")
+        except Exception as _ex:
+            log.warning("oxware restart failed after certbot: %s", _ex)
+
         return {"success": True, "cert_path": CERT_PATH,
-                "message": "Certificate obtained and installed successfully"}
+                "message": "Sertifika alındı ve yüklendi. Sayfa birkaç saniye içinde yenileniyor…"}
 
     except FileNotFoundError:
         return {"success": False, "cert_path": None,
-                "message": "certbot not found — install certbot"}
+                "message": "certbot bulunamadı — 'apt install certbot' ile kurun"}
     except Exception as exc:
         log.exception("request_letsencrypt error: %s", exc)
         return {"success": False, "cert_path": None, "message": str(exc)}

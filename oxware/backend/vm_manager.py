@@ -5,6 +5,7 @@ import os
 import time
 import json
 import uuid
+import random
 import logging
 import threading
 import config
@@ -936,11 +937,42 @@ def get_vm_stats(vm_id):
                         except Exception:
                             pass
 
+        # ── Real guest RAM usage via virtio-balloon stats ──────────────────
+        # info[2] = current balloon size (allocated, NOT actual guest usage)
+        # info[1] = max configured memory
+        # If balloon driver is installed in guest, memoryStats() provides real data:
+        #   "available" = total memory visible to guest OS
+        #   "unused"    = free memory in guest OS
+        #   "rss"       = QEMU process RSS on host (always present)
+        mem_stats = {}
+        try:
+            mem_stats = dom.memoryStats()
+        except Exception:
+            pass
+
+        _avail_kb = mem_stats.get("available", 0)
+        _unused_kb = mem_stats.get("unused", 0)
+        _rss_kb   = mem_stats.get("rss", 0)
+
+        if _avail_kb > 0 and "unused" in mem_stats:
+            # Balloon driver reports real guest usage
+            _used_kb = _avail_kb - _unused_kb
+            _max_kb  = _avail_kb
+        elif _rss_kb > 0:
+            # No balloon driver — use QEMU RSS as best approximation
+            _used_kb = _rss_kb
+            _max_kb  = info[1]
+        else:
+            # No data at all — show 0 (better than always 100%)
+            _used_kb = 0
+            _max_kb  = info[1]
+
         return {
             "state":         STATE_MAP.get(info[0], "unknown"),
             "cpu_time_ns":   cpu_stats.get("cpu_time", 0),
-            "memory_kb":     info[2],   # current balloon memory
-            "max_memory_kb": info[1],   # max memory configured
+            "memory_kb":     _used_kb,
+            "max_memory_kb": _max_kb,
+            "balloon_kb":    info[2],   # raw balloon allocation (for diagnostics)
             "vcpus":         info[3],
             "disk_stats":    disk_stats,
             "net_stats":     net_stats,
@@ -1427,15 +1459,18 @@ def create_extra_disk(vm_id: str, size_gb: int, fmt: str = "qcow2") -> str:
 
 
 def clone_vm(vm_id, new_name):
+    """Full independent clone — qemu-img convert (not backing-file snapshot).
+    Clone disk is self-contained; original can be deleted without affecting clone."""
     source = get_vm(vm_id)
     src_disk = source["disks"][0]["path"] if source["disks"] else None
 
     if not src_disk:
         raise ValueError("Kaynak VM diski bulunamadı")
+    if not os.path.isfile(src_disk):
+        raise ValueError(f"Kaynak disk dosyası bulunamadı: {src_disk}")
 
     conn = _connect()
     try:
-        # ── Unique name: if 'new_name' already taken, append -2, -3, … ──────
         import uuid as _uuid
 
         def _name_exists(conn, name):
@@ -1453,9 +1488,12 @@ def clone_vm(vm_id, new_name):
             final_name = f"{new_name}-{counter}"
 
         new_disk = os.path.join(config.DISK_DIR, f"{final_name}.qcow2")
+
+        # Full independent copy — not a backing-file snapshot
         subprocess.run(
-            ["qemu-img", "create", "-f", "qcow2", "-b", src_disk, "-F", "qcow2", new_disk],
-            check=True, capture_output=True
+            ["qemu-img", "convert", "-f", "qcow2", "-O", "qcow2", src_disk, new_disk],
+            check=True, capture_output=True,
+            timeout=7200   # 2h max for large disks
         )
 
         dom = conn.lookupByUUIDString(vm_id)
@@ -1465,12 +1503,29 @@ def clone_vm(vm_id, new_name):
         root.find("name").text = final_name
         root.find("uuid").text = str(_uuid.uuid4())
 
+        # Update disk source to new disk
         for source_el in root.findall(".//disk[@device='disk']/source"):
             source_el.set("file", new_disk)
 
+        # Eject cloud-init CD-ROM so clone doesn't re-run cloud-init on first boot
+        for disk_el in root.findall(".//disk[@device='cdrom']"):
+            src_el = disk_el.find("source")
+            if src_el is not None and "cloud-init" in (src_el.get("file", "") or "").lower():
+                disk_el.remove(src_el)
+
+        # Assign new unique VNC port
         vnc_port = _next_vnc_port()
         for g in root.findall(".//graphics[@type='vnc']"):
             g.set("port", str(vnc_port))
+
+        # Assign fresh random MAC addresses to avoid conflicts with original VM
+        for iface_el in root.findall(".//interface"):
+            mac_el = iface_el.find("mac")
+            if mac_el is not None:
+                new_mac = "52:54:00:%02x:%02x:%02x" % (
+                    random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)
+                )
+                mac_el.set("address", new_mac)
 
         new_xml = ET.tostring(root, encoding="unicode")
         new_dom = conn.defineXML(new_xml)
@@ -1478,8 +1533,10 @@ def clone_vm(vm_id, new_name):
         reg = _load_vnc_registry()
         reg[new_dom.UUIDString()] = vnc_port
         _save_vnc_registry(reg)
+        _invalidate_list_cache()
 
-        return {"id": new_dom.UUIDString(), "name": final_name, "cloned_from": vm_id}
+        return {"id": new_dom.UUIDString(), "name": final_name, "cloned_from": vm_id,
+                "disk": new_disk}
     finally:
         conn.close()
 

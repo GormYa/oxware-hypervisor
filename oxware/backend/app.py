@@ -1671,6 +1671,11 @@ def api_vm_perf(vm_id):
     except Exception as e:
         return err(e, 500)
 
+# ── Clone job store ──────────────────────────────────────────────────────────
+_clone_jobs: dict = {}   # job_id → {status, name, result, error, started_at}
+_clone_jobs_lock = threading.Lock()
+
+
 @app.route("/api/vms/<vm_id>/clone", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
@@ -1679,12 +1684,45 @@ def api_clone_vm(vm_id):
     new_name = (data.get("new_name") or data.get("name") or "").strip()
     if not new_name:
         return err("Yeni VM adı zorunludur")
-    try:
-        result = vm_manager.clone_vm(vm_id, new_name)
-        ev.info(f"VM klonlandı: {vm_id} → {new_name}", category="vm")
-        return ok(**(result if isinstance(result, dict) else {}), status="ok", name=new_name), 201
-    except Exception as e:
-        return err(e, 500)
+
+    import uuid as _clone_uuid
+    job_id = str(_clone_uuid.uuid4())[:12]
+
+    with _clone_jobs_lock:
+        _clone_jobs[job_id] = {
+            "status":     "running",
+            "name":       new_name,
+            "vm_id":      vm_id,
+            "started_at": _time_mod.time(),
+            "result":     None,
+            "error":      None,
+        }
+
+    def _do_clone():
+        try:
+            result = vm_manager.clone_vm(vm_id, new_name)
+            ev.info(f"VM klonlandı: {vm_id} → {new_name}", category="vm")
+            with _clone_jobs_lock:
+                _clone_jobs[job_id]["status"] = "done"
+                _clone_jobs[job_id]["result"] = result
+        except Exception as _ce:
+            log.error("clone_vm failed: vm=%s new_name=%s: %s", vm_id, new_name, _ce)
+            with _clone_jobs_lock:
+                _clone_jobs[job_id]["status"] = "error"
+                _clone_jobs[job_id]["error"]  = str(_ce)
+
+    threading.Thread(target=_do_clone, daemon=True, name=f"clone-{job_id}").start()
+    return ok(job_id=job_id, status="running", name=new_name), 202
+
+
+@app.route("/api/vms/clone-jobs/<job_id>", methods=["GET"])
+@require_auth
+def api_clone_job_status(job_id):
+    with _clone_jobs_lock:
+        job = _clone_jobs.get(job_id)
+    if not job:
+        return err("Klon görevi bulunamadı", 404)
+    return ok(**job)
 
 # ── Hardware Tuning & Hot-Plug ────────────────────────────────────────────────
 

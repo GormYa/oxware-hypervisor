@@ -544,11 +544,13 @@
           headers: { Authorization: "Bearer " + _jwtToken }
         });
 
-        const { host, websocket_port } = info;
+        // Flask WS proxy — same host:port as the page, no websockify needed
+        const wsPath   = "ws/vnc/" + vmId + "?token=" + encodeURIComponent(_jwtToken);
+        const wsPort   = location.port || (isHttps ? "443" : "80");
         const novncUrl = "/novnc/vnc.html?" +
-          "host="     + host +
-          "&port="    + websocket_port +
-          "&path=websockify" +
+          "host="     + encodeURIComponent(location.hostname) +
+          "&port="    + wsPort +
+          "&path="    + encodeURIComponent(wsPath) +
           "&encrypt=" + (isHttps ? "1" : "0") +
           "&autoconnect=1&resize=scale&show_dot=1";
 
