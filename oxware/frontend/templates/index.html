@@ -10235,6 +10235,214 @@ function cvmToggleCloudImage(on) {
   }
 }
 
+/* ══ Global Right-Click Context Menu — all pages ═════════════════════════ */
+
+const _PAGE_CTX_MAP = {
+  'summary': { title:'🏠 Ana Sayfa', items:[
+    {i:'↻', l:'Yenile', f:()=>document.querySelector('[onclick*="loadSummary"],[onclick*="refreshSummary"]')?.click()||window.location.reload()},
+    null,
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+    {i:'💾', l:'Depolama', f:()=>navigate('storage')},
+    {i:'📊', l:'İzleme', f:()=>navigate('monitor')},
+    null,
+    {i:'➕', l:'Yeni VM Oluştur', f:()=>openCreateVMModal()},
+    {i:'📋', l:'Şablonlar', f:()=>navigate('tab-templates')},
+  ]},
+  'vms': { title:'🖥 Sanal Makineler', items:[
+    {i:'➕', l:'Yeni VM Oluştur', f:()=>openCreateVMModal()},
+    {i:'↻', l:'Yenile', f:()=>loadVMs()},
+    {i:'📋', l:'Şablonlar', f:()=>openModal('modal-vm-template')},
+    {i:'⬆', l:'OVA Import', f:()=>typeof openImportOvaModal==='function'&&openImportOvaModal()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+  ]},
+  'networks': { title:'🌐 Ağlar', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadNetworks==='function'&&loadNetworks()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+    {i:'🗂', l:'IPAM', f:()=>navigate('tab-ipam')},
+  ]},
+  'storage': { title:'💾 Depolama', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadStorage==='function'&&loadStorage()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+    {i:'📋', l:'Şablonlar', f:()=>navigate('tab-templates')},
+  ]},
+  'snapshots': { title:'📸 Anlık Görüntüler', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadSnapshots==='function'&&loadSnapshots()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'monitor': { title:'📊 Sistem İzleme', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadMonitor==='function'&&loadMonitor()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'users': { title:'👤 Kullanıcı Yönetimi', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadUsers==='function'&&loadUsers()},
+    {i:'➕', l:'Yeni Kullanıcı', f:()=>openModal('modal-create-user')},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+  ]},
+  'updates': { title:'🔄 Güncellemeler', items:[
+    {i:'↻', l:'Güncelleme Kontrol Et', f:()=>typeof checkUpdates==='function'&&checkUpdates()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'tab-templates': { title:'📋 Şablonlar', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadTemplates==='function'&&loadTemplates()},
+    {i:'⬆', l:'OVA Import', f:()=>typeof openImportOvaModal==='function'&&openImportOvaModal()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Yeni VM (Şablondan)', f:()=>openCreateVMModal()},
+  ]},
+  'tab-backup': { title:'🗄 Yedekleme', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadBackups==='function'&&loadBackups()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'tab-firewall': { title:'🛡 Güvenlik Duvarı', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadFirewallRules==='function'&&loadFirewallRules()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+  ]},
+  'tab-vpn': { title:'🔒 VPN', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadVpn==='function'&&loadVpn()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+  ]},
+  'tab-dns': { title:'🌍 DNS', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadDnsZones==='function'&&loadDnsZones()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+  ]},
+  'tab-ipam': { title:'🗂 IPAM', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadIpamPools==='function'&&loadIpamPools()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'tab-proxy': { title:'🔄 Reverse Proxy', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadProxyHosts==='function'&&loadProxyHosts()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+  ]},
+  'tab-ai': { title:'🤖 AI Asistan', items:[
+    {i:'🤖', l:'AI ile VM Oluştur', f:()=>typeof openAiVmModal==='function'&&openAiVmModal()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'tab-security': { title:'🔐 Güvenlik', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadSecurityEvents==='function'&&loadSecurityEvents()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🛡', l:'Firewall', f:()=>navigate('tab-firewall')},
+  ]},
+  'tab-integrations': { title:'🔌 Entegrasyonlar', items:[
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'⚙', l:'Ayarlar', f:()=>navigate('tab-settings')},
+  ]},
+  'tab-hosting': { title:'🌐 Hosting', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadHosting==='function'&&loadHosting()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌍', l:'DNS', f:()=>navigate('tab-dns')},
+  ]},
+  'tab-settings': { title:'⚙ Ayarlar', items:[
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+    {i:'👤', l:'Kullanıcılar', f:()=>navigate('users')},
+    {i:'🔌', l:'Entegrasyonlar', f:()=>navigate('tab-integrations')},
+  ]},
+  'topology': { title:'🗺 Topoloji', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadTopology==='function'&&loadTopology()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+  ]},
+  'containers': { title:'🐳 Konteynerler', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadContainers==='function'&&loadContainers()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+  'ha': { title:'⚡ Yüksek Erişilebilirlik', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadHa==='function'&&loadHa()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+  ]},
+  'cf-tunnels': { title:'☁ Cloudflare Tunnels', items:[
+    {i:'↻', l:'Yenile', f:()=>typeof loadCfTunnels==='function'&&loadCfTunnels()},
+    null,
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+  ]},
+  'console': { title:'🖥 Konsol', items:[
+    {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+    {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+  ]},
+};
+
+let _gCtxFns = [];
+
+function _showGlobalCtxMenu(page, x, y) {
+  const menu = document.getElementById('vm-ctx-menu');
+  if (!menu) return;
+  const cfg = _PAGE_CTX_MAP[page] || {
+    title: '📄 ' + (page || 'OXware'),
+    items: [
+      {i:'↻', l:'Yenile', f:()=>window.location.reload()},
+      null,
+      {i:'🏠', l:'Ana Sayfa', f:()=>navigate('summary')},
+      {i:'🖥', l:'Sanal Makineler', f:()=>navigate('vms')},
+      {i:'🌐', l:'Ağlar', f:()=>navigate('networks')},
+      {i:'💾', l:'Depolama', f:()=>navigate('storage')},
+      {i:'📊', l:'İzleme', f:()=>navigate('monitor')},
+    ]
+  };
+  _gCtxFns = [];
+  let html = `<div class="ctx-hdr">${cfg.title}</div><div class="ctx-sep"></div>`;
+  cfg.items.forEach((item, idx) => {
+    if (!item) { html += '<div class="ctx-sep"></div>'; }
+    else {
+      html += `<div class="ctx-item" data-gci="${idx}">${item.i} ${escHtml(item.l)}</div>`;
+      _gCtxFns[idx] = item.f;
+    }
+  });
+  menu.innerHTML = html;
+  menu.querySelectorAll('[data-gci]').forEach(el => {
+    const i = +el.dataset.gci;
+    el.addEventListener('click', () => { closeVmCtxMenu(); try{_gCtxFns[i]?.();}catch(e){} });
+  });
+  const mx = Math.min(x, window.innerWidth - 222);
+  const my = Math.min(y, window.innerHeight - Math.min(cfg.items.length * 34 + 40, 500));
+  menu.style.left = Math.max(4, mx) + 'px';
+  menu.style.top  = Math.max(4, my) + 'px';
+  menu.style.display = '';
+}
+
+// Global document-level handler
+// .table-wrap already calls vmTableContextMenu via oncontextmenu attr — skip here
+document.addEventListener('contextmenu', e => {
+  if (e.target.closest('input,textarea,select,code')) return;  // native
+  if (e.target.closest('#vm-ctx-menu')) return;
+  if (e.target.closest('.table-wrap')) return;  // handled per-table
+  e.preventDefault();
+  _showGlobalCtxMenu(typeof currentPage !== 'undefined' ? currentPage : 'summary', e.clientX, e.clientY);
+});
+
 /* ══ VM Right-Click Context Menu ══════════════════════════════════════════ */
 let _ctxVmId = null, _ctxVmName = null, _ctxVmState = null;
 
