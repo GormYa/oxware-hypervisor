@@ -12265,6 +12265,26 @@ def api_migration_esxi_import():
                         pct_base = 5 + d_idx * 60 // max(total_disks, 1)
                         pct_end  = 5 + (d_idx + 1) * 60 // max(total_disks, 1)
 
+                        # ── Resolve datastore symlink → real UUID path ───────────────
+                        # BusyBox cat/grep can't read file contents through
+                        # /vmfs/volumes/datastore1 symlinks in exec_command context.
+                        # readlink resolves to real UUID path; use that for all reads.
+                        import re as _rw_re
+                        _desc_ds = desc_dir.strip("/").split("/")[2] \
+                            if desc_dir.count("/") >= 3 else ""
+                        _real_desc_dir = desc_dir
+                        if _desc_ds:
+                            _, _rl_d, _ = client2.exec_command(
+                                f"readlink /vmfs/volumes/{_desc_ds} 2>/dev/null",
+                                timeout=5)
+                            _rl_dv = _rl_d.read().decode().strip()
+                            if _rl_dv:
+                                _rl_vol = _rl_dv if _rl_dv.startswith("/") \
+                                    else f"/vmfs/volumes/{_rl_dv}"
+                                _real_desc_dir = desc_dir.replace(
+                                    f"/vmfs/volumes/{_desc_ds}", _rl_vol, 1)
+                        real_desc_path = _real_desc_dir.rstrip("/") + "/" + desc_name
+
                         # ── Find thin flat extent from VMDK descriptor ────────────────
                         # Read "RW <sectors> VMFS \"filename-flat.vmdk\"" line.
                         # No vmkfstools needed: VMFS returns zeros for unallocated thin
@@ -12273,19 +12293,18 @@ def api_migration_esxi_import():
                             j_id,
                             step=f"VMDK descriptor okunuyor [{d_idx+1}/{total_disks}]",
                             percent=pct_base)
-                        import re as _rw_re
                         _, _rw_out, _ = client2.exec_command(
-                            f"grep '^RW' '{desc_path}' 2>/dev/null | head -1",
+                            f"grep '^RW' '{real_desc_path}' 2>/dev/null | head -1",
                             timeout=8)
                         _rw_line = _rw_out.read().decode(errors="replace").strip()
                         _rw_m = _rw_re.search(
                             r'RW\s+(\d+)\s+\w+\s+"([^"]+)"', _rw_line)
                         if _rw_m:
                             disk_size = int(_rw_m.group(1)) * 512
-                            thin_flat = desc_dir + "/" + _rw_m.group(2)
+                            thin_flat = _real_desc_dir.rstrip("/") + "/" + _rw_m.group(2)
                         else:
-                            # Fallback: derive flat name, get size from ls -l
-                            thin_flat = desc_path.rsplit(".", 1)[0] + "-flat.vmdk"
+                            # Fallback: derive flat name, get size from ls -l (real path)
+                            thin_flat = real_desc_path.rsplit(".", 1)[0] + "-flat.vmdk"
                             _, _lz, _ = client2.exec_command(
                                 f"ls -l '{thin_flat}' 2>/dev/null | awk '{{print $5}}'",
                                 timeout=6)
@@ -12293,8 +12312,8 @@ def api_migration_esxi_import():
                             disk_size = int(_lz_txt) if _lz_txt.isdigit() else 0
                         if not disk_size:
                             raise RuntimeError(
-                                f"Disk boyutu alınamadı: {desc_path} "
-                                f"| RW='{_rw_line}'")
+                                f"Disk boyutu alınamadı: {real_desc_path} "
+                                f"| RW='{_rw_line}' | readlink={_real_desc_dir}")
                         _sz_gb = round(disk_size / (1024 ** 3), 1)
                         log.info("thin flat: %s  size=%d (%.1f GB)",
                                  thin_flat, disk_size, _sz_gb)
