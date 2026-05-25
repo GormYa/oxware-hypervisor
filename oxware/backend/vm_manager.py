@@ -1549,6 +1549,10 @@ def hot_attach_disk(vm_id: str, disk_path: str, bus: str = "virtio") -> dict:
         state_val, _ = dom.state()
         running = (state_val == libvirt.VIR_DOMAIN_RUNNING)
 
+        # IDE/SATA hotplug desteklemez — çalışan VM'e virtio kullan
+        if running and bus in ("ide", "sata"):
+            bus = "virtio"
+
         # Hedef aygıt adı bul (vda,vdb,... veya sda,sdb,...)
         prefix = "vd" if bus == "virtio" else "sd"
         existing = set()
