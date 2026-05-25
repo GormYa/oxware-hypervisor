@@ -557,6 +557,8 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
         dns_list   = ci.get("dns") or ["8.8.8.8", "1.1.1.1"]
         prefix     = ci.get("prefix", "")
 
+        iface = _safe(ci.get("interface", "") or "eth0") or "eth0"
+
         network_config_str = None
         if static_ip and gateway:
             # Prefix hesapla
@@ -571,7 +573,7 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
             dns_yaml = "\n".join(f"      - {d}" for d in dns_list)
             network_config_str = f"""version: 2
 ethernets:
-  eth0:
+  {iface}:
     dhcp4: false
     addresses:
       - {static_ip}/{prefix}

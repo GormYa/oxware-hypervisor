@@ -1339,6 +1339,12 @@
                   <table style="width:100%;border-collapse:collapse;font-size:12px" id="ov-net-table">
                     <tr><td colspan="2" style="padding:12px;color:var(--text-muted)">Yükleniyor...</td></tr>
                   </table>
+                  <div style="padding:8px 12px;border-top:1px solid var(--border)">
+                    <button class="btn sm" style="color:#06b6d4;font-size:11px" onclick="openInjectIpModal()">
+                      📡 Statik IP Ata
+                    </button>
+                    <span style="font-size:10px;color:var(--text-muted);margin-left:8px">Bridge VM'lere cloud-init ile IP enjekte et</span>
+                  </div>
                 </div>
               </div>
 
@@ -1917,6 +1923,51 @@
           <div class="modal-footer">
             <button class="btn" onclick="hwCloseAddNic()">İptal</button>
             <button class="btn-primary" onclick="hwConfirmAddNic()">🌐 Ekle</button>
+          </div>
+        </div>
+
+        <!-- Inject Static IP Modal -->
+        <div class="modal-overlay open" id="modal-inject-ip" style="display:none" onclick="if(event.target===this)closeInjectIpModal()">
+          <div class="modal" style="max-width:420px">
+            <div class="modal-header">
+              <h3>📡 Statik IP Ata</h3>
+              <button class="modal-close" onclick="closeInjectIpModal()">✕</button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:13px">
+              <div style="background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.3);border-radius:4px;padding:10px 12px;font-size:11px;color:#67e8f9;line-height:1.6">
+                Bridge ağına bağlı VM'lere cloud-init ISO aracılığıyla statik IP enjekte eder.<br>
+                <strong>ISO takıldıktan sonra VM'yi yeniden başlatın.</strong>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">IP Adresi <span style="color:#f87171">*</span></label>
+                <input type="text" id="inj-ip" class="hw-input" style="width:100%" placeholder="Örn: 192.168.1.100">
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">Gateway <span style="color:#f87171">*</span></label>
+                <input type="text" id="inj-gw" class="hw-input" style="width:100%" placeholder="Örn: 192.168.1.1">
+              </div>
+              <div style="display:flex;gap:10px">
+                <div class="form-group" style="flex:1">
+                  <label style="font-size:12px">Subnet Mask</label>
+                  <input type="text" id="inj-mask" class="hw-input" style="width:100%" placeholder="255.255.255.0">
+                </div>
+                <div class="form-group" style="flex:1">
+                  <label style="font-size:12px">DNS</label>
+                  <input type="text" id="inj-dns" class="hw-input" style="width:100%" placeholder="8.8.8.8,1.1.1.1">
+                </div>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">Ağ Arayüzü (interface)</label>
+                <input type="text" id="inj-iface" class="hw-input" style="width:100%" placeholder="eth0 (veya enp1s0, ens3...)">
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px">VM içinde <code>ip link</code> veya <code>nmcli</code> ile öğrenin. Boş bırakırsanız eth0 kullanılır.</div>
+              </div>
+              <div id="inj-result" style="display:none;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:10px 12px;font-size:11px;color:#86efac;line-height:1.6"></div>
+              <div id="inj-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:10px 12px;font-size:11px;color:#fca5a5"></div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn" onclick="closeInjectIpModal()">İptal</button>
+              <button class="btn-primary" id="inj-submit-btn" onclick="submitInjectIp()">📡 ISO Oluştur &amp; Tak</button>
+            </div>
           </div>
         </div>
 
@@ -9464,6 +9515,70 @@ async function hwConfirmAddNic() {
     hwCloseAddNic();
     loadHardwareConfig(_hwVmId);
   } catch(e) { toast('NIC eklenemedi: ' + e.message, 'error'); }
+}
+
+/* ══════ Inject Static IP ══════ */
+let _injectIpVmId = null;
+
+function openInjectIpModal() {
+  // currentVmId set when overview panel opens
+  _injectIpVmId = currentVmId || null;
+  if (!_injectIpVmId) { toast('Önce bir VM açın', 'error'); return; }
+  // clear state
+  ['inj-ip','inj-gw','inj-mask','inj-dns','inj-iface'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  const res = document.getElementById('inj-result');
+  const err = document.getElementById('inj-error');
+  res.style.display = 'none';
+  err.style.display = 'none';
+  document.getElementById('inj-submit-btn').disabled = false;
+  const m = document.getElementById('modal-inject-ip');
+  m.style.display = 'flex';
+  m.classList.add('open');
+}
+
+function closeInjectIpModal() {
+  const m = document.getElementById('modal-inject-ip');
+  m.style.display = 'none';
+  m.classList.remove('open');
+}
+
+async function submitInjectIp() {
+  const ip    = document.getElementById('inj-ip').value.trim();
+  const gw    = document.getElementById('inj-gw').value.trim();
+  const mask  = document.getElementById('inj-mask').value.trim();
+  const dns   = document.getElementById('inj-dns').value.trim();
+  const iface = document.getElementById('inj-iface').value.trim() || 'eth0';
+  const res   = document.getElementById('inj-result');
+  const errEl = document.getElementById('inj-error');
+  const btn   = document.getElementById('inj-submit-btn');
+
+  res.style.display = 'none';
+  errEl.style.display = 'none';
+
+  if (!ip)  { errEl.textContent = 'IP adresi zorunlu'; errEl.style.display=''; return; }
+  if (!gw)  { errEl.textContent = 'Gateway zorunlu'; errEl.style.display=''; return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ İşleniyor...';
+
+  try {
+    const dnsList = dns ? dns.split(/[,\s]+/).filter(Boolean) : ['8.8.8.8','1.1.1.1'];
+    const r = await api(`/vms/${_injectIpVmId}/inject-ip`, {
+      method: 'POST',
+      body: { ip, gateway: gw, netmask: mask || '255.255.255.0', dns: dnsList, interface: iface }
+    });
+    res.innerHTML = `✅ ${escHtml(r.message || 'ISO takıldı.')}<br>` +
+      `<strong>VM'yi yeniden başlatın</strong> — açılışta cloud-init devreye girecek.`;
+    res.style.display = '';
+    btn.textContent = '✅ Tamam';
+  } catch(e) {
+    errEl.textContent = 'Hata: ' + (e.message || String(e));
+    errEl.style.display = '';
+    btn.disabled = false;
+    btn.textContent = '📡 ISO Oluştur & Tak';
+  }
 }
 
 /* ══════════════════ VMs ══════════════════ */

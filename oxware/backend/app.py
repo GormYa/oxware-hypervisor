@@ -7495,6 +7495,127 @@ def api_vm_cdrom(vm_id):
         log.exception("CDROM işlemi hatası vm=%s", vm_id)
         return err(str(e), 500)
 
+# ── Inject Static IP (cloud-init ISO hot-swap) ───────────────────────────────
+@app.route("/api/vms/<vm_id>/inject-ip", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_inject_ip(vm_id):
+    """
+    Çalışan bir VM'ye cloud-init ISO aracılığıyla statik IP enjekte eder.
+    Body: { ip, gateway, netmask (veya prefix), dns (list veya string), interface (varsayılan eth0) }
+    VM yeniden başlatıldığında cloud-init network-config devreye girer.
+    """
+    import libvirt as _lv_ip
+    import xml.etree.ElementTree as _ET_ip
+
+    d = request.get_json(force=True, silent=True) or {}
+    ip_addr   = (d.get("ip") or "").strip()
+    gateway   = (d.get("gateway") or "").strip()
+    netmask   = (d.get("netmask") or "").strip()
+    prefix    = str(d.get("prefix") or "").strip()
+    interface = (d.get("interface") or "eth0").strip() or "eth0"
+    dns_raw   = d.get("dns") or ["8.8.8.8", "1.1.1.1"]
+    if isinstance(dns_raw, str):
+        dns_list = [x.strip() for x in dns_raw.replace(",", " ").split() if x.strip()]
+    else:
+        dns_list = [str(x).strip() for x in dns_raw if str(x).strip()]
+    if not dns_list:
+        dns_list = ["8.8.8.8", "1.1.1.1"]
+
+    if not ip_addr:
+        return err("ip alanı zorunlu")
+    if not gateway:
+        return err("gateway alanı zorunlu")
+
+    try:
+        # VM adını bul
+        _conn_ip = _lv_ip.open(config.LIBVIRT_URI)
+        _dom_ip  = _conn_ip.lookupByUUIDString(vm_id)
+        vm_name  = _dom_ip.name()
+        _xml_ip  = _dom_ip.XMLDesc()
+        _conn_ip.close()
+
+        # cloud-init ISO oluştur (sadece network-config içerir)
+        ci_params = {
+            "hostname":   vm_name,
+            "static_ip":  ip_addr,
+            "gateway":    gateway,
+            "netmask":    netmask,
+            "prefix":     prefix,
+            "dns":        dns_list,
+            "interface":  interface,
+            # user-data minimal — boş config, mevcut kullanıcıları değiştirme
+            "user":       "",
+            "password":   "",
+            "ssh_key":    "",
+        }
+        iso_path = vm_manager._build_cloud_init_iso(vm_name + "-inject", ci_params)
+        if not iso_path:
+            return err("cloud-init ISO oluşturulamadı (genisoimage/mkisofs/cloud-localds yüklü mü?)", 500)
+
+        # Mevcut CDROM cihazını bul
+        _root_ip = _ET_ip.fromstring(_xml_ip)
+        _cdrom_el = None
+        for _disk in _root_ip.findall(".//disk[@device='cdrom']"):
+            _cdrom_el = _disk
+            break
+
+        if _cdrom_el is None:
+            # CDROM yoksa ekle (sata bus, sdb)
+            _devices_el = _root_ip.find("devices")
+            _cdrom_el = _ET_ip.SubElement(_devices_el, "disk")
+            _cdrom_el.set("type", "file")
+            _cdrom_el.set("device", "cdrom")
+            _ET_ip.SubElement(_cdrom_el, "driver").set("name", "qemu")
+            _tgt2 = _ET_ip.SubElement(_cdrom_el, "target")
+            _tgt2.set("dev", "sdb")
+            _tgt2.set("bus", "sata")
+            _ET_ip.SubElement(_cdrom_el, "readonly")
+
+        # ISO'yu source olarak set et
+        _src_el = _cdrom_el.find("source")
+        if _src_el is None:
+            _src_el = _ET_ip.SubElement(_cdrom_el, "source")
+        _src_el.set("file", iso_path)
+
+        _disk_xml = _ET_ip.tostring(_cdrom_el, encoding="unicode")
+
+        # Hot-swap: live + config
+        _conn2_ip = _lv_ip.open(config.LIBVIRT_URI)
+        _dom2_ip  = _conn2_ip.lookupByUUIDString(vm_id)
+        _running  = _dom2_ip.isActive()
+        try:
+            if _running:
+                _dom2_ip.updateDeviceFlags(
+                    _disk_xml,
+                    _lv_ip.VIR_DOMAIN_DEVICE_MODIFY_LIVE |
+                    _lv_ip.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+            else:
+                _dom2_ip.updateDeviceFlags(
+                    _disk_xml,
+                    _lv_ip.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+        except _lv_ip.libvirtError as _le:
+            log.warning("inject-ip live update başarısız, config-only: %s", _le)
+            _dom2_ip.updateDeviceFlags(
+                _disk_xml,
+                _lv_ip.VIR_DOMAIN_DEVICE_MODIFY_CONFIG)
+        finally:
+            _conn2_ip.close()
+
+        ev.info(f"Statik IP ISO enjekte edildi: {vm_id} → {ip_addr}", category="vm")
+        return ok({
+            "status": "ok",
+            "iso_path": iso_path,
+            "message": (
+                "cloud-init ISO takıldı. "
+                "VM'yi yeniden başlatın — açılışta cloud-init network-config devreye girecek."
+            ),
+            "needs_reboot": True,
+        })
+    except Exception as e:
+        log.exception("inject-ip hatası vm=%s", vm_id)
+        return err(str(e), 500)
+
 # ── CPU Pinning ───────────────────────────────────────────────────────────────
 @app.route("/api/vms/<vm_id>/cpu-pinning", methods=["GET"])
 @require_auth
