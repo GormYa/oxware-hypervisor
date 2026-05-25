@@ -11228,22 +11228,34 @@ def _map_source_network(name_or_bridge: str, fallback: str = "default") -> str:
 
 def _esxi_parse_vmx_ssh(client, vmx_dir: str, vm_name: str) -> dict:
     """SSH-cat the VMX file and parse networks, disks, CPU, RAM, firmware.
-    Returns dict with: vcpus, ram_mb, firmware, os_type, networks, disks (relative paths)."""
+    Returns dict with: vcpus, ram_mb, firmware, os_type, networks, disks, disk_gb."""
     import re as _re_vmx
     result = {"vcpus": 2, "ram_mb": 2048, "firmware": "bios",
-              "os_type": "unknown", "networks": [], "disks": []}
+              "os_type": "unknown", "networks": [], "disks": [], "disk_gb": 0}
     vmx_path = vmx_dir.rstrip("/") + "/" + vm_name + ".vmx"
+    real_dir = vmx_dir.rstrip("/")  # updated below if symlink resolved
     try:
         _, out, _ = client.exec_command(f"cat '{vmx_path}' 2>/dev/null", timeout=10)
         content = out.read().decode(errors="replace")
         if not content.strip():
-            # Try with glob — some VMs have different VMX name
+            # datastore1 is a symlink — resolve real VMFS path via find (no -maxdepth needed)
+            _, _fo, _ = client.exec_command(
+                f"find /vmfs/volumes -name '{vm_name}.vmx' 2>/dev/null | head -1",
+                timeout=12)
+            real_vmx = _fo.read().decode(errors="replace").strip()
+            if real_vmx:
+                real_dir = real_vmx.rsplit("/", 1)[0]
+                _, out2, _ = client.exec_command(f"cat '{real_vmx}' 2>/dev/null", timeout=10)
+                content = out2.read().decode(errors="replace")
+        if not content.strip():
+            # last resort: glob on symlink dir
             _, gl_out, _ = client.exec_command(
                 f"ls '{vmx_dir}'/*.vmx 2>/dev/null | head -1", timeout=5)
             alt_path = gl_out.read().decode(errors="replace").strip()
             if alt_path:
-                _, out2, _ = client.exec_command(f"cat '{alt_path}' 2>/dev/null", timeout=10)
-                content = out2.read().decode(errors="replace")
+                real_dir = alt_path.rsplit("/", 1)[0]
+                _, out3, _ = client.exec_command(f"cat '{alt_path}' 2>/dev/null", timeout=10)
+                content = out3.read().decode(errors="replace")
     except Exception:
         return result
 
@@ -11303,12 +11315,27 @@ def _esxi_parse_vmx_ssh(client, vmx_dir: str, vm_name: str) -> dict:
     if result["os_type"] == "unknown":
         result["os_type"] = _detect_os_from_name(vm_name)
 
-    # Deduplicate disk files preserving order
+    # Deduplicate disk files, build absolute paths using real_dir
     seen = set()
     for df in disk_files:
         if df not in seen:
-            result["disks"].append(vmx_dir.rstrip("/") + "/" + df)
+            abs_path = real_dir + "/" + df
+            result["disks"].append(abs_path)
             seen.add(df)
+
+    # Disk virtual size: read RW sector count from VMDK descriptor
+    if result["disks"] and result["disk_gb"] == 0:
+        try:
+            _, _rw_out, _ = client.exec_command(
+                f"grep '^RW' '{result['disks'][0]}' 2>/dev/null | head -1",
+                timeout=8)
+            _rw_line = _rw_out.read().decode(errors="replace").strip()
+            # format: RW <sectors> VMFS "name-flat.vmdk"
+            _rw_parts = _rw_line.split()
+            if len(_rw_parts) >= 2 and _rw_parts[1].isdigit():
+                result["disk_gb"] = round(int(_rw_parts[1]) * 512 / (1024 ** 3), 1)
+        except Exception:
+            pass
 
     return result
 
@@ -11955,31 +11982,33 @@ def api_migration_esxi_scan():
                 ram_mb  = int(_m_ram.group(1))  if _m_ram  else 2048
                 firmware = "efi" if (_m_fw and "efi" in _m_fw.group(1).lower()) else "bios"
 
-                # Disk virtual size
+                # Disk virtual size from vim-cmd
                 disk_gb = 0
                 if _m_db:
                     disk_gb = round(int(_m_db.group(1)) / (1024 ** 3), 1)
                 elif _m_dkb:
                     disk_gb = round(int(_m_dkb.group(1)) / (1024 * 1024), 1)
-                disk_gb = disk_gb or 1
 
-                # Disk absolute paths
+                # Disk absolute paths from vim-cmd
                 cfg_disks = []
                 for _ds, _rel in _m_disks:
                     if "-flat" not in _rel.lower():
-                        cfg_disks.append(f"/vmfs/volumes/{_ds}/{_rel}")
+                        cfg_disks.append(f"/vmfs/volumes/{_ds}/{_rel.strip()}")
 
-                # Network list
+                # Network list from vim-cmd
                 cfg_nets = [{"key": f"ethernet{i}",
                              "network_name": n, "model": "e1000"}
                             for i, n in enumerate(_m_nets)]
 
-                # Fallback: VMX parse for anything vim-cmd missed
+                # Fallback: VMX parse (resolves real VMFS path, reads sector count)
                 vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
                 if not cfg_disks:
                     cfg_disks = vmx_info.get("disks", [])
                 if not cfg_nets:
                     cfg_nets = vmx_info.get("networks", [])
+                if not disk_gb:
+                    disk_gb = vmx_info.get("disk_gb", 0)
+                disk_gb = disk_gb or 1
 
                 # OS type
                 _gos = (_m_gos.group(1) if _m_gos else guestid).lower()
@@ -12119,24 +12148,25 @@ def api_migration_esxi_import():
                             if "-flat" not in _rel2.lower():
                                 desc_paths.append(f"/vmfs/volumes/{_ds2}/{_rel2}")
                         if not desc_paths:
-                            # Last resort: shell glob on real dir
+                            # find without -maxdepth works on ESXi BusyBox
                             _, _vmx_f, _ = client2.exec_command(
-                                f"ls /vmfs/volumes/*/{j_vm_name}/{j_vm_name}.vmx"
+                                f"find /vmfs/volumes -name '{j_vm_name}.vmx'"
                                 f" 2>/dev/null | head -1",
-                                timeout=8)
+                                timeout=12)
                             _vmx_fp = _vmx_f.read().decode(errors="replace").strip()
-                            _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else j_vmx_dir
-                            _, _ls_out, _ = client2.exec_command(
-                                f"ls '{_real_dir}'/*.vmdk 2>/dev/null",
-                                timeout=15)
-                            _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
-                            for _ln in _ls_lines:
-                                _ln = _ln.strip()
-                                if not _ln:
-                                    continue
-                                _bn = _ln.rsplit("/", 1)[-1].lower()
-                                if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
-                                    desc_paths.append(_ln)
+                            _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else ""
+                            if _real_dir:
+                                _, _ls_out, _ = client2.exec_command(
+                                    f"ls '{_real_dir}'/*.vmdk 2>/dev/null",
+                                    timeout=15)
+                                _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
+                                for _ln in _ls_lines:
+                                    _ln = _ln.strip()
+                                    if not _ln:
+                                        continue
+                                    _bn = _ln.rsplit("/", 1)[-1].lower()
+                                    if "-flat" not in _bn and not _re_vmdk_extent.search(_bn):
+                                        desc_paths.append(_ln)
                         if not desc_paths:
                             raise RuntimeError(
                                 f"VMDK bulunamadı: vmid={j_vmid} dir={j_vmx_dir}")
