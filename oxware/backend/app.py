@@ -1253,6 +1253,39 @@ def api_create_vm():
             static_ip = ""
             vm_gateway = ""
 
+        # ── Early IPAM allocation for bridge pools (before cloud-init ISO build) ──
+        # Bridge ağlarda IP cloud-init'e gömülmesi gerekiyor. IPAM'dan erken al,
+        # cloud-init static_ip'ye yaz. Sonraki auto_ip bloğu DHCP/NAT işlemlerini atlar.
+        _early_alloc     = None
+        _early_pool_name = security.sanitize_str(data.get("ip_pool", ""), 64)
+        _early_auto_ip   = data.get("auto_ip", False)
+        if _early_auto_ip and _early_pool_name and not static_ip:
+            try:
+                _early_pool_net_name = None
+                try:
+                    _ep = ip_pool_mgr._load()["pools"].get(_early_pool_name, {})
+                    _early_pool_net_name = _ep.get("libvirt_network", "")
+                except Exception:
+                    pass
+                # Only do early allocation for bridge/passthrough pools
+                if _early_pool_net_name:
+                    _lv_nets_e = network_manager.list_networks()
+                    _pl_net_e  = next((n for n in _lv_nets_e
+                                       if n["name"] == _early_pool_net_name), None)
+                    if _pl_net_e and _pl_net_e.get("forward_mode") in (
+                            "bridge", "passthrough", "private", "vepa"):
+                        # Allocate now — use a temporary vm_id (will be updated after create)
+                        _early_alloc = ip_pool_mgr.allocate_ip(
+                            _early_pool_name, f"__pre__{name}", name, ""
+                        )
+                        static_ip  = _early_alloc["ip"]
+                        vm_gateway = vm_gateway or _early_alloc.get("gateway", "")
+                        vm_netmask = vm_netmask or _early_alloc.get("netmask", "255.255.255.0")
+                        vm_dns     = vm_dns     or _early_alloc.get("dns", ["8.8.8.8"])
+                        log.info("Bridge IPAM erken tahsis: %s → %s", name, static_ip)
+            except Exception as _ea_e:
+                log.warning("Bridge IPAM erken tahsis başarısız: %s", _ea_e)
+
         cloud_init = None
         if any([ci_user, ci_password, ci_ssh_key, ci_hostname, ci_userdata, static_ip]):
             cloud_init = {
@@ -1283,48 +1316,85 @@ def api_create_vm():
         pool_name = security.sanitize_str(data.get("ip_pool", ""), 64)
         if auto_ip and pool_name and vm_mac:
             try:
-                alloc        = ip_pool_mgr.allocate_ip(pool_name, vm_id, name, vm_mac)
-                assigned_ip  = alloc["ip"]
-                dhcp_net     = alloc.get("libvirt_network") or network
+                if _early_alloc:
+                    # Bridge pool: already allocated early — update vm_id + mac in IPAM
+                    alloc = _early_alloc
+                    alloc["ip"] = static_ip
+                    ip_pool_mgr.release_ip(f"__pre__{name}")   # remove temp entry
+                    ip_pool_mgr.manual_assign(
+                        ip=static_ip, mac=vm_mac, vm_name=name,
+                        pool_name=pool_name, vm_id=vm_id
+                    )
+                    assigned_ip = static_ip
+                    dhcp_net    = alloc.get("libvirt_network") or network
+                else:
+                    alloc        = ip_pool_mgr.allocate_ip(pool_name, vm_id, name, vm_mac)
+                    assigned_ip  = alloc["ip"]
+                    dhcp_net     = alloc.get("libvirt_network") or network
 
-                # NAT gerekli mi? (public IP libvirt subnet dışındaysa)
-                _nat_needed   = False
-                _internal_ip  = assigned_ip
+                # Bridge ağ mı kontrol et (oxbridge / passthrough) — bridge'de NAT yapma
+                _is_bridge_net = False
                 try:
-                    _lv_nets  = network_manager.list_networks()
-                    _virbr    = next((n for n in _lv_nets if n["name"] == "default"), None)
-                    if _virbr:
-                        _virbr_net = ipaddress.IPv4Network(
-                            f"{_virbr['ip']}/{_virbr.get('netmask','255.255.255.0')}", strict=False
-                        )
-                        if ipaddress.IPv4Address(assigned_ip) not in _virbr_net:
-                            _nat_needed  = True
-                            _internal_ip = _mac_to_internal_ip(vm_mac)
-                            dhcp_net     = "default"
+                    _lv_nets_chk = network_manager.list_networks()
+                    _pool_net    = next((n for n in _lv_nets_chk if n["name"] == dhcp_net), None)
+                    if _pool_net and _pool_net.get("forward_mode") in (
+                            "bridge", "passthrough", "private", "vepa"):
+                        _is_bridge_net = True
                 except Exception:
                     pass
 
-                vm_manager.add_dhcp_host(dhcp_net, vm_mac, _internal_ip, name)
+                _nat_needed  = False
+                _internal_ip = assigned_ip
 
-                if _nat_needed:
-                    _setup_nat(assigned_ip, _internal_ip)
-                    ip_pool_mgr.manual_assign(ip=_internal_ip, mac=vm_mac, vm_name=name,
-                                              pool_name="__internal__", vm_id=vm_id)
-                    threading.Thread(
-                        target=_post_install_nat_sync,
-                        args=(vm_id, name, vm_mac, assigned_ip),
-                        daemon=True,
-                        name=f"post-install-nat-{name}"
-                    ).start()
-                    log.info("Auto IP + NAT kuruldu: %s → %s (internal: %s)", name, assigned_ip, _internal_ip)
+                if _is_bridge_net:
+                    # Bridge ağ: DHCP reservation yok, cloud-init ile IP enjekte et
+                    log.info("Bridge ağ tespit edildi (%s) — NAT atlanıyor, cloud-init ile IP: %s",
+                             dhcp_net, assigned_ip)
+                    ev.vm_event(
+                        f"IP atandı: {assigned_ip} ({pool_name}) [bridge/cloud-init]",
+                        vm_id, level="INFO"
+                    )
+                else:
+                    # NAT ağ: public IP libvirt subnet dışındaysa NAT gerekli
+                    try:
+                        _lv_nets  = network_manager.list_networks()
+                        _virbr    = next((n for n in _lv_nets if n["name"] == "default"), None)
+                        if _virbr:
+                            _virbr_net = ipaddress.IPv4Network(
+                                f"{_virbr['ip']}/{_virbr.get('netmask','255.255.255.0')}",
+                                strict=False
+                            )
+                            if ipaddress.IPv4Address(assigned_ip) not in _virbr_net:
+                                _nat_needed  = True
+                                _internal_ip = _mac_to_internal_ip(vm_mac)
+                                dhcp_net     = "default"
+                    except Exception:
+                        pass
+
+                    vm_manager.add_dhcp_host(dhcp_net, vm_mac, _internal_ip, name)
+
+                    if _nat_needed:
+                        _setup_nat(assigned_ip, _internal_ip)
+                        ip_pool_mgr.manual_assign(ip=_internal_ip, mac=vm_mac, vm_name=name,
+                                                  pool_name="__internal__", vm_id=vm_id)
+                        threading.Thread(
+                            target=_post_install_nat_sync,
+                            args=(vm_id, name, vm_mac, assigned_ip),
+                            daemon=True,
+                            name=f"post-install-nat-{name}"
+                        ).start()
+                        log.info("Auto IP + NAT kuruldu: %s → %s (internal: %s)",
+                                 name, assigned_ip, _internal_ip)
+                    else:
+                        ev.vm_event(f"IP atandı: {assigned_ip} ({pool_name})", vm_id, level="INFO")
 
                 result["assigned_ip"]  = assigned_ip
                 result["internal_ip"]  = _internal_ip if _nat_needed else None
                 result["nat_mode"]     = _nat_needed
+                result["bridge_mode"]  = _is_bridge_net
                 result["gateway"]      = alloc["gateway"]
                 result["dns"]          = alloc["dns"]
                 result["netmask"]      = alloc["netmask"]
-                ev.vm_event(f"IP atandı: {assigned_ip} ({pool_name}){' [NAT]' if _nat_needed else ''}", vm_id, level="INFO")
             except Exception as _ip_e:
                 log.warning("Auto IP atama başarısız vm=%s: %s", vm_id, _ip_e)
                 result["auto_ip_error"] = str(_ip_e)
