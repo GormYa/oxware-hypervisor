@@ -488,7 +488,7 @@ def _check_csrf():
     if request.method in ("GET", "HEAD", "OPTIONS"):
         return
     path = request.path
-    if path in _csrf_exempt_paths or path.startswith("/static"):
+    if path in _csrf_exempt_paths or path.startswith("/static") or path.startswith("/api/setup"):
         return
     # API istekleri için X-CSRF-Token header kontrolü
     # Token, /api/auth/csrf endpoint'inden alınır ve localStorage'da saklanır
