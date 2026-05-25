@@ -8326,8 +8326,9 @@ _import_jobs_lock = threading.Lock()
 # ESXi SSH lockout prevention: limit concurrent SSH connections per host.
 # ESXi vSphere locks accounts after N failed auth attempts (default 10-20).
 # Paramiko with concurrent threads creates one SSH login per thread.
-# Semaphore caps parallel ESXi connections to 2 — avoids flooding auth attempts.
-_esxi_ssh_sem = threading.Semaphore(2)
+# Semaphore caps to 1 parallel ESXi SSH connection — ESXi locks root after
+# ~5-18 failed auth attempts; serializing connections prevents lockout.
+_esxi_ssh_sem = threading.Semaphore(1)
 # Full pipeline concurrency: limit to 2 simultaneous ESXi migrations
 # (vmkfstools + stream + qemu-img) to avoid saturating disk/network.
 _esxi_pipeline_sem = threading.Semaphore(2)
@@ -12264,77 +12265,50 @@ def api_migration_esxi_import():
                         pct_base = 5 + d_idx * 60 // max(total_disks, 1)
                         pct_end  = 5 + (d_idx + 1) * 60 // max(total_disks, 1)
 
-                        # Cleanup stale thick + lock files from any previous failed run
-                        client2.exec_command(
-                            f"rm -f '{thick_desc}' '{thick_flat}'"
-                            f" '{thick_desc}.lck' '{thick_flat}.lck'"
-                            f" 2>/dev/null",
-                            timeout=15)
-
-                        # ── vmkfstools: thin → eagerzeroedthick ──────────────────────
-                        # This writes every grain explicitly → qemu-img reads all blocks
-                        # correctly → no zero inode tables from unallocated thin grains.
+                        # ── Find thin flat extent from VMDK descriptor ────────────────
+                        # Read "RW <sectors> VMFS \"filename-flat.vmdk\"" line.
+                        # No vmkfstools needed: VMFS returns zeros for unallocated thin
+                        # blocks on read, so dd gives a complete raw image directly.
                         _import_job_update(
                             j_id,
-                            step=f"vmkfstools flatten [{d_idx+1}/{total_disks}]: {desc_name}",
+                            step=f"VMDK descriptor okunuyor [{d_idx+1}/{total_disks}]",
                             percent=pct_base)
-                        _vmkf_cmd = (
-                            f"vmkfstools -i '{desc_path}' -d eagerzeroedthick"
-                            f" '{thick_desc}' 2>&1"
-                        )
-                        _, _vmkf_out, _ = client2.exec_command(_vmkf_cmd, timeout=14400)
-                        _vmkf_local_pct = 0
-                        _vmkf_lines = []
-                        for _vl in _vmkf_out:
-                            _vl = _vl.strip()
-                            if not _vl:
-                                continue
-                            _vmkf_lines.append(_vl)
-                            log.info("vmkfstools [%s]: %s", desc_name, _vl)
-                            if "%" in _vl:
-                                try:
-                                    _vmkf_local_pct = int(
-                                        _vl.split("%")[0].split()[-1])
-                                except Exception:
-                                    pass
-                            _import_job_update(
-                                j_id,
-                                step=f"vmkfstools [{d_idx+1}/{total_disks}]: {_vl[:80]}",
-                                percent=min(
-                                    pct_base + 18,
-                                    pct_base + _vmkf_local_pct * 18 // 100))
-                        _vmkf_exit = _vmkf_out.channel.recv_exit_status()
-                        if _vmkf_exit != 0:
-                            _vmkf_err_tail = " | ".join(_vmkf_lines[-4:]) or "(çıktı yok)"
-                            raise RuntimeError(
-                                f"vmkfstools exit={_vmkf_exit} [{desc_path}]: "
-                                f"{_vmkf_err_tail}")
-
-                        # Get thick flat file size via ls -l (ESXi BusyBox)
-                        _, _sz_out, _ = client2.exec_command(
-                            f"ls -l '{thick_flat}' 2>/dev/null | awk '{{print $5}}'",
-                            timeout=10)
-                        _sz_txt = _sz_out.read().decode(errors="replace").strip()
-                        try:
-                            disk_size = int(_sz_txt)
-                        except (ValueError, TypeError):
-                            disk_size = 0
+                        import re as _rw_re
+                        _, _rw_out, _ = client2.exec_command(
+                            f"grep '^RW' '{desc_path}' 2>/dev/null | head -1",
+                            timeout=8)
+                        _rw_line = _rw_out.read().decode(errors="replace").strip()
+                        _rw_m = _rw_re.search(
+                            r'RW\s+(\d+)\s+\w+\s+"([^"]+)"', _rw_line)
+                        if _rw_m:
+                            disk_size = int(_rw_m.group(1)) * 512
+                            thin_flat = desc_dir + "/" + _rw_m.group(2)
+                        else:
+                            # Fallback: derive flat name, get size from ls -l
+                            thin_flat = desc_path.rsplit(".", 1)[0] + "-flat.vmdk"
+                            _, _lz, _ = client2.exec_command(
+                                f"ls -l '{thin_flat}' 2>/dev/null | awk '{{print $5}}'",
+                                timeout=6)
+                            _lz_txt = _lz.read().decode().strip()
+                            disk_size = int(_lz_txt) if _lz_txt.isdigit() else 0
                         if not disk_size:
                             raise RuntimeError(
-                                f"thick flat boyutu alınamadı: {thick_flat}")
+                                f"Disk boyutu alınamadı: {desc_path} "
+                                f"| RW='{_rw_line}'")
                         _sz_gb = round(disk_size / (1024 ** 3), 1)
-                        log.info("thick flat: %d bytes (%.1f GB)", disk_size, _sz_gb)
+                        log.info("thin flat: %s  size=%d (%.1f GB)",
+                                 thin_flat, disk_size, _sz_gb)
 
-                        # ── Stream thick flat → OXware (sparse write) ─────────────────
-                        # dd on ESXi sends raw bytes; we seek over zero 4MB blocks
-                        # locally → sparse file → significantly faster qemu-img convert.
+                        # ── Stream thin flat → OXware (sparse write) ─────────────────
+                        # VMFS transparently returns zeros for unallocated thin grains.
+                        # Sparse write skips zero 4 MB blocks → compact local raw file.
                         local_raw = _IMPORT_DIR / f"esxi_{j_vmid}_disk{d_idx}.raw"
                         _import_job_update(
                             j_id,
                             step=f"SSH stream [{d_idx+1}/{total_disks}]: {_sz_gb} GB",
-                            percent=pct_base + 18)
+                            percent=pct_base + 5)
                         _dd_stdin, _dd_stdout, _dd_stderr = client2.exec_command(
-                            f"dd if='{thick_flat}' bs=4M 2>/dev/null")
+                            f"dd if='{thin_flat}' bs=4M 2>/dev/null")
                         _dd_chan = _dd_stdout.channel
                         _dd_chan.settimeout(None)  # blocking recv — no channel timeout
                         _CHUNK = 4 * 1024 * 1024   # 4 MB
@@ -12347,7 +12321,7 @@ def api_migration_esxi_import():
                                 if not _data:
                                     break
                                 _buf += _data
-                                # Process complete 4MB chunks
+                                # Process complete 4 MB chunks
                                 while len(_buf) >= _CHUNK:
                                     _blk  = _buf[:_CHUNK]
                                     _buf  = _buf[_CHUNK:]
@@ -12360,8 +12334,8 @@ def api_migration_esxi_import():
                                     if (_streamed % (64 * 1024 * 1024)) == 0:
                                         _mb  = round(_streamed / 1048576, 1)
                                         _tmb = round(disk_size / 1048576, 1)
-                                        _sp  = pct_base + 18 + int(
-                                            37 * _streamed / max(disk_size, 1))
+                                        _sp  = pct_base + 5 + int(
+                                            55 * _streamed / max(disk_size, 1))
                                         _import_job_update(
                                             j_id,
                                             step=(f"Stream [{d_idx+1}/{total_disks}]:"
@@ -12375,19 +12349,10 @@ def api_migration_esxi_import():
                             _rf.truncate(disk_size)
                         _dd_chan.recv_exit_status()
                         log.info("SSH stream tamamlandı: %s → %s (%.1f GB)",
-                                 thick_flat, local_raw, _sz_gb)
+                                 thin_flat, local_raw, _sz_gb)
                         ev.info(
                             f"ESXi SSH stream: {_sz_gb} GB → {local_raw.name}",
                             category="vm")
-
-                        # Free ESXi space: remove thick clone
-                        try:
-                            client2.exec_command(
-                                f"rm -f '{thick_desc}' '{thick_flat}' 2>/dev/null",
-                                timeout=30)
-                            log.info("ESXi thick temizlendi: %s", thick_stem)
-                        except Exception:
-                            pass
 
                         local_raws.append((str(local_raw), disk_size))
                 finally:
