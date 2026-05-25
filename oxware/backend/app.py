@@ -8328,6 +8328,9 @@ _import_jobs_lock = threading.Lock()
 # Paramiko with concurrent threads creates one SSH login per thread.
 # Semaphore caps parallel ESXi connections to 2 — avoids flooding auth attempts.
 _esxi_ssh_sem = threading.Semaphore(2)
+# Full pipeline concurrency: limit to 2 simultaneous ESXi migrations
+# (vmkfstools + stream + qemu-img) to avoid saturating disk/network.
+_esxi_pipeline_sem = threading.Semaphore(2)
 
 def _import_job_update(job_id: str, **kw):
     with _import_jobs_lock:
@@ -11905,7 +11908,19 @@ def api_migration_esxi_scan():
                 datastore = parts[2].strip("[]")
                 vmx_path = parts[3] if len(parts) > 3 else ""
                 guestid = parts[4] if len(parts) > 4 else ""
-                vmx_dir = "/vmfs/volumes/" + datastore + "/" + name
+                # ── Resolve actual VMX directory ─────────────────────────────────
+                # ESXi datastore friendly name (e.g. "datastore1") is a symlink
+                # to UUID path. ESXi SSH shell does not reliably follow symlinks
+                # with cat/grep/find. Use find by VMX filename to get real path.
+                _, _vmx_find, _ = client.exec_command(
+                    f"find /vmfs/volumes -maxdepth 3 -name '{name}.vmx'"
+                    f" 2>/dev/null | head -1",
+                    timeout=12)
+                _vmx_real = _vmx_find.read().decode(errors="replace").strip()
+                if _vmx_real:
+                    vmx_dir = _vmx_real.rsplit("/", 1)[0]
+                else:
+                    vmx_dir = "/vmfs/volumes/" + datastore + "/" + name
                 # Power state
                 _, ps_out, _ = client.exec_command(
                     f"vim-cmd vmsvc/power.getstate {vmid} 2>/dev/null", timeout=8)
@@ -11913,16 +11928,33 @@ def api_migration_esxi_scan():
                 status = "running" if "on" in ps_text else ("off" if "off" in ps_text else "unknown")
                 # Parse VMX for full config (networks, disks, CPU, RAM, firmware)
                 vmx_info = _esxi_parse_vmx_ssh(client, vmx_dir, name)
-                # Disk size estimate via du (as fallback for total size display)
-                _, du_out, _ = client.exec_command(
-                    f"du -sh '{vmx_dir}' 2>/dev/null | awk '{{print $1}}'", timeout=10)
-                du_text = du_out.read().decode(errors="replace").strip()
+                # ── Disk virtual size from VMDK extent header ─────────────────────
+                # VMDK descriptor line: "RW <sectors> VMFS ..."
+                # Virtual size = sectors * 512 bytes. More accurate than du.
                 disk_gb = 0
-                m = _re_esxi.match(r"([\d.]+)([GMTgmt])", du_text)
-                if m:
-                    sz, unit = float(m.group(1)), m.group(2).upper()
-                    disk_gb = int(sz) if unit == "G" else (
-                        max(1, int(sz // 1024)) if unit == "M" else int(sz * 1024))
+                _scan_disks = vmx_info.get("disks", [])
+                if _scan_disks:
+                    _, _ext_out, _ = client.exec_command(
+                        f"grep -i '^RW ' '{_scan_disks[0]}' 2>/dev/null"
+                        f" | head -1 | awk '{{print $2}}'",
+                        timeout=5)
+                    _sec_txt = _ext_out.read().decode(errors="replace").strip()
+                    try:
+                        disk_gb = round(int(_sec_txt) * 512 / (1024 ** 3), 1)
+                    except (ValueError, TypeError):
+                        pass
+                if not disk_gb:
+                    # Fallback: sum VMDK file sizes
+                    _, _lsz_out, _ = client.exec_command(
+                        f"ls -la '{vmx_dir}'/*.vmdk 2>/dev/null"
+                        f" | awk 'NF>4 {{sum+=$5}} END {{if(sum>0) print sum}}'",
+                        timeout=8)
+                    try:
+                        disk_gb = round(
+                            int(_lsz_out.read().decode(errors="replace").strip())
+                            / (1024 ** 3), 1) or 1
+                    except (ValueError, TypeError):
+                        disk_gb = 1
                 # OS type: prefer VMX parse, fallback to guestid, then filename
                 os_type = vmx_info.get("os_type", "unknown")
                 if os_type == "unknown":
@@ -11997,6 +12029,10 @@ def api_migration_esxi_import():
                 with _import_jobs_lock:
                     if _import_jobs.get(j_id, {}).get("status") == "cancelled":
                         return
+                # Limit total concurrent migrations (disk + network saturation guard)
+                _import_job_update(j_id, step="Migration sırası bekleniyor...", percent=1)
+                _esxi_pipeline_sem.acquire()
+                _pipeline_held = True
                 import paramiko as _pme2
                 _import_job_update(j_id, step=f"ESXi SSH bekleniyor: {host}", percent=3)
                 # Limit concurrent ESXi SSH logins to prevent account lockout.
@@ -12009,15 +12045,50 @@ def api_migration_esxi_import():
                                 timeout=30, look_for_keys=False, allow_agent=False)
                 local_raws = []  # [(local_raw_path, disk_size_bytes), ...]
                 try:
+                    # ── Auto-shutdown running VM ──────────────────────────────────────
+                    # vmkfstools on a running VM can produce inconsistent disk snapshot.
+                    # Graceful shutdown first; force-off after 90s if needed.
+                    _, _ps_chk, _ = client2.exec_command(
+                        f"vim-cmd vmsvc/power.getstate {j_vmid} 2>/dev/null", timeout=8)
+                    _ps_chk_txt = _ps_chk.read().decode(errors="replace").lower()
+                    if "on" in _ps_chk_txt:
+                        _import_job_update(
+                            j_id, step="VM çalışıyor — kapatılıyor...", percent=4)
+                        ev.info(f"ESXi VM kapatılıyor: {j_vm_name} vmid={j_vmid}",
+                                category="migration")
+                        client2.exec_command(
+                            f"vim-cmd vmsvc/power.shutdown {j_vmid} 2>/dev/null",
+                            timeout=10)
+                        for _wi in range(18):  # wait up to 90s
+                            time.sleep(5)
+                            _, _ps2, _ = client2.exec_command(
+                                f"vim-cmd vmsvc/power.getstate {j_vmid} 2>/dev/null",
+                                timeout=5)
+                            if "off" in _ps2.read().decode(errors="replace").lower():
+                                break
+                        else:
+                            client2.exec_command(
+                                f"vim-cmd vmsvc/power.off {j_vmid} 2>/dev/null",
+                                timeout=10)
+                            time.sleep(5)
+
                     # ── Determine VMDK descriptor paths ──────────────────────────────
                     # j_vmx_disks: absolute paths from VMX scan (preferred).
-                    # Fallback: find *.vmdk in VMX directory, skip -flat files.
+                    # Fallback: resolve real VMFS path (skip datastore symlink), then ls.
                     if j_vmx_disks:
                         desc_paths = list(j_vmx_disks)
                     else:
                         _import_job_update(j_id, step="VMDK listesi alınıyor", percent=6)
+                        # Resolve actual dir: find VMX by name, get its directory
+                        _, _vmx_f, _ = client2.exec_command(
+                            f"find /vmfs/volumes -maxdepth 3 -name '{j_vm_name}.vmx'"
+                            f" 2>/dev/null | head -1",
+                            timeout=12)
+                        _vmx_fp = _vmx_f.read().decode(errors="replace").strip()
+                        _real_dir = _vmx_fp.rsplit("/", 1)[0] if _vmx_fp else j_vmx_dir
+                        # Use ls glob (not find) — avoids BusyBox symlink traversal issue
                         _, _ls_out, _ = client2.exec_command(
-                            f"find '{j_vmx_dir}' -maxdepth 1 -name '*.vmdk' 2>/dev/null",
+                            f"ls '{_real_dir}'/*.vmdk 2>/dev/null",
                             timeout=15)
                         _ls_lines = _ls_out.read().decode(errors="replace").strip().splitlines()
                         desc_paths = []
@@ -12030,7 +12101,7 @@ def api_migration_esxi_import():
                                 desc_paths.append(_ln)
                         if not desc_paths:
                             raise RuntimeError(
-                                f"VMX dizininde VMDK bulunamadı: {j_vmx_dir}")
+                                f"VMX dizininde VMDK bulunamadı: {_real_dir}")
 
                     total_disks = len(desc_paths)
                     for d_idx, desc_path in enumerate(desc_paths):
@@ -12272,6 +12343,9 @@ def api_migration_esxi_import():
                                    step=f"Hata: {ex}", percent=0,
                                    message=str(ex), finished=time.time())
                 ev.error(f"ESXi migration hata vmid={j_vmid}: {ex}", category="migration")
+            finally:
+                if locals().get("_pipeline_held"):
+                    _esxi_pipeline_sem.release()
 
         # Pass VMX scan data so import uses correct CPU/RAM/firmware/networks/disks
         esxi_net_map = vm_spec.get("net_map") or d.get("net_map") or {}
