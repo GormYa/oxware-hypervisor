@@ -4882,6 +4882,18 @@ systemctl enable --now qemu-guest-agent</pre>
 #vm-ctx-menu .ctx-item.success{color:#4ade80}
 #vm-ctx-menu .ctx-item.muted{color:var(--text-muted);font-style:italic;cursor:default}
 #vm-ctx-menu .ctx-item.muted:hover{background:none}
+/* ── Mobile responsive VM table ── */
+@media(max-width:900px){
+  .col-disk{display:none}
+  .col-cpu,.col-mem{font-size:11px}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+@media(max-width:600px){
+  .col-check,.col-cpu{display:none}
+  .col-mem{display:none}
+  #vm-select-all{display:none}
+  .action-btns{flex-wrap:nowrap!important}
+}
 </style>
 
 <div class="cvm-overlay" id="modal-create-vm" onclick="if(event.target===this)closeModal('modal-create-vm')">
@@ -9875,35 +9887,23 @@ async function loadVMs() {
         </tr>`;
       }
 
-      // Full admin/operator row
+      // Full admin/operator row — 3 primary + ⋯ more + ✕ delete
       return `<tr data-vmid="${v.id}">
-        <td style="width:32px"><input type="checkbox" class="vm-checkbox" data-vmid="${v.id}" ${checked} onchange="toggleVmSelection('${v.id}',this.checked)"></td>
+        <td style="width:32px" class="col-check"><input type="checkbox" class="vm-checkbox" data-vmid="${v.id}" ${checked} onchange="toggleVmSelection('${v.id}',this.checked)"></td>
         <td><a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted)">${v.id.slice(0, 8)}</small></td>
         <td>${stateBadge(v.state)}</td>
-        <td>${v.vcpus} vCPU</td>
-        <td>${v.memory_mb.toLocaleString()} MB</td>
-        <td style="font-size:11px;line-height:1.8">${disks}</td>
+        <td class="col-cpu">${v.vcpus} vCPU</td>
+        <td class="col-mem">${v.memory_mb.toLocaleString()} MB</td>
+        <td class="col-disk" style="font-size:11px;line-height:1.8">${disks}</td>
         <td style="font-size:11px">${ipHtml}</td>
         <td>
-          <div class="action-btns">
+          <div class="action-btns" style="flex-wrap:nowrap;gap:3px">
             ${v.state !== "running"
               ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat">▶</button>`
-              : `<button class="btn sm danger" onclick="vmForceStop('${v.id}')" title="Zorla Durdur">⏻</button>`}
-            <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat">↺</button>
-            ${v.state === "running" ? `<button class="btn sm" onclick="openConsole('${v.id}')" title="Konsol">▣</button>` : ""}
-            <button class="btn sm" onclick="openLiveMigrate('${v.id}','${escHtml(v.name)}')" title="Canlı Geçiş">🚀</button>
-            <button class="btn sm" onclick="cloneVM('${v.id}','${escHtml(v.name)}')" title="Klonla" style="color:var(--accent-lt)">⧉</button>
-            <button class="btn sm" onclick="openDiskResize('${v.id}','${escHtml(v.name)}')" title="Disk Genişlet" style="color:#f59e0b">⊞</button>
-            <button class="btn sm" onclick="openVmMetaModal('${v.id}','${escHtml(v.name)}')" title="Not & Etiket" style="color:#a78bfa">📝</button>
-            <button class="btn sm" onclick="openCdromModal('${v.id}','${escHtml(v.name)}')" title="CD-ROM">💿</button>
-            <button class="btn sm" onclick="exportVM('${v.id}','${escHtml(v.name)}')" title="OVA Export" style="color:#34d399">⬇</button>
-            <button class="btn sm" onclick="sendWoL('${v.id}','${escHtml(v.name)}')" title="Wake-on-LAN" style="color:#60a5fa">⚡</button>
-            <button class="btn sm" onclick="openPciModal('${v.id}','${escHtml(v.name)}')" title="PCI/USB Passthrough" style="color:#f97316">🔌</button>
-            <button class="btn sm" onclick="openCpuPinModal('${v.id}','${escHtml(v.name)}')" title="CPU Pinning" style="color:#e879f9">📌</button>
-            <button class="btn sm" onclick="openMacModal('${v.id}','${escHtml(v.name)}')" title="MAC Adresi" style="color:#38bdf8">🔗</button>
-            <button class="btn sm" onclick="openVmFirewallModal('${v.id}','${escHtml(v.name)}')" title="VM Firewall" style="color:#f43f5e">🛡</button>
-            <button class="btn sm" onclick="toggleMaintenance('${v.id}','${escHtml(v.name)}')" title="Bakım Modu" style="color:#fbbf24">🔧</button>
-            <button class="btn sm" onclick="openSpiceInfo('${v.id}','${escHtml(v.name)}')" title="SPICE Konsol" style="color:#34d399">📺</button>
+              : `<button class="btn sm danger" onclick="vmForceStop('${v.id}')" title="Zorla Durdur">⏻</button>
+                 <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat">↺</button>
+                 <button class="btn sm" style="color:var(--accent-lt)" onclick="openConsole('${v.id}')" title="Konsol">▣</button>`}
+            <button class="btn sm" onclick="openVmMoreMenu(event,'${v.id}','${escHtml(v.name)}','${v.state}')" title="Daha fazla" style="font-weight:700;letter-spacing:1px;min-width:26px">⋯</button>
             <button class="btn sm danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')" title="Sil">✕</button>
           </div>
         </td>
@@ -10324,6 +10324,46 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeVmCtxMenu();
 });
+
+/* ── ⋯ More button — secondary/advanced VM actions ── */
+function openVmMoreMenu(e, vmId, vmName, state) {
+  e.preventDefault(); e.stopPropagation();
+  _ctxVmId = vmId; _ctxVmName = vmName; _ctxVmState = state;
+  const menu = document.getElementById('vm-ctx-menu');
+  if (!menu) return;
+  menu.innerHTML = `
+    <div class="ctx-hdr">${escHtml(vmName)}</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="cloneVM(_ctxVmId,_ctxVmName);closeVmCtxMenu()">⧉ Klonla</div>
+    <div class="ctx-item" onclick="_ctxVmAction('inject-ip')">🌐 Statik IP Ata</div>
+    <div class="ctx-item" onclick="_ctxVmAction('snapshot')">📸 Anlık Görüntü</div>
+    <div class="ctx-item" onclick="_ctxVmAction('template')">📋 Şablon Olarak Kaydet</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="openLiveMigrate(_ctxVmId,_ctxVmName);closeVmCtxMenu()">🚀 Canlı Geçiş</div>
+    <div class="ctx-item" onclick="openDiskResize(_ctxVmId,_ctxVmName);closeVmCtxMenu()">⊞ Disk Genişlet</div>
+    <div class="ctx-item" onclick="openVmMetaModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">📝 Not & Etiket</div>
+    <div class="ctx-item" onclick="openCdromModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">💿 CD-ROM</div>
+    <div class="ctx-item" onclick="exportVM(_ctxVmId,_ctxVmName);closeVmCtxMenu()">⬇ OVA Export</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="openPciModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">🔌 PCI/USB Passthrough</div>
+    <div class="ctx-item" onclick="openCpuPinModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">📌 CPU Pinning</div>
+    <div class="ctx-item" onclick="openMacModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">🔗 MAC Adresi</div>
+    <div class="ctx-item" onclick="openVmFirewallModal(_ctxVmId,_ctxVmName);closeVmCtxMenu()">🛡 VM Firewall</div>
+    <div class="ctx-item" onclick="toggleMaintenance(_ctxVmId,_ctxVmName);closeVmCtxMenu()">🔧 Bakım Modu</div>
+    <div class="ctx-item" onclick="openSpiceInfo(_ctxVmId,_ctxVmName);closeVmCtxMenu()">📺 SPICE Konsol</div>
+    <div class="ctx-item" onclick="sendWoL(_ctxVmId,_ctxVmName);closeVmCtxMenu()">⚡ Wake-on-LAN</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="_ctxVmAction('hw')">⚙ Donanım Ayarları</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item danger" onclick="_ctxVmAction('delete')">🗑 Sil</div>
+  `;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = Math.min(rect.right - 210, window.innerWidth - 220);
+  const y = Math.min(rect.bottom + 6, window.innerHeight - 420);
+  menu.style.left = Math.max(4, x) + 'px';
+  menu.style.top  = Math.max(4, y) + 'px';
+  menu.style.display = '';
+}
 
 async function createVM() {
   const name = document.getElementById("vm-name").value.trim();
