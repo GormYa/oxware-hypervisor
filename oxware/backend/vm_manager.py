@@ -507,172 +507,190 @@ def _build_cidata_iso_python(iso_path: str, ci_dir: str, has_network_config: boo
     """
     Pure-Python minimal ISO 9660 writer for cloud-init NoCloud.
     No external tools required.
-    Writes meta-data, user-data, and optionally network-config
-    into a valid ISO 9660 image with volume label 'cidata'.
+    Volume label 'cidata', files: meta-data, user-data, network-config.
+
+    ISO 9660 layout:
+      Sectors  0-15: system area (unused)
+      Sector  16:    Primary Volume Descriptor
+      Sector  17:    Volume Descriptor Set Terminator
+      Sector  18:    L-Type Path Table (padded to 1 sector)
+      Sector  19:    M-Type Path Table (padded to 1 sector)
+      Sector  20:    Root Directory (1 sector)
+      Sector 21+:    File data
     """
-    import struct, math, os as _os
+    import struct as _st
+    import math   as _math
+    import os     as _os
+    import time   as _time
 
-    SECTOR = 2048
+    SEC = 2048
 
-    def _pad(data: bytes, size: int) -> bytes:
-        return data + b'\x00' * (size - len(data))
+    # ── helpers ───────────────────────────────────────────────────────────────
+    def b16(n):   # both-endian 16-bit → 4 bytes
+        return _st.pack('<H', n) + _st.pack('>H', n)
 
-    def _both16(n: int) -> bytes:
-        """Both-endian 16-bit."""
-        return struct.pack('<H', n) + struct.pack('>H', n)
+    def b32(n):   # both-endian 32-bit → 8 bytes
+        return _st.pack('<I', n) + _st.pack('>I', n)
 
-    def _both32(n: int) -> bytes:
-        """Both-endian 32-bit."""
-        return struct.pack('<I', n) + struct.pack('>I', n)
+    def le32(n):
+        return _st.pack('<I', n)
 
-    def _datetime_field(zeros: bool = True) -> bytes:
-        """17-byte date/time field — all zeros = unspecified."""
-        return b'0' * 16 + b'\x00'  # '0000000000000000' + tz=0
+    def be32(n):
+        return _st.pack('>I', n)
 
-    def _dir_datetime() -> bytes:
-        """7-byte directory record date/time."""
-        import time
-        t = time.localtime()
-        return bytes([
-            t.tm_year - 1900, t.tm_mon, t.tm_mday,
-            t.tm_hour, t.tm_min, t.tm_sec, 0
-        ])
+    def pad_sec(data: bytes) -> bytes:
+        rem = len(data) % SEC
+        return data + b'\x00' * (SEC - rem if rem else 0)
 
-    def _build_dir_record(name_bytes: bytes, extent: int, size: int,
-                           is_dir: bool = False) -> bytes:
-        flags = 0x02 if is_dir else 0x00
-        name_len = len(name_bytes)
-        # Record length must be even
-        rec_len = 33 + name_len
-        if rec_len % 2 == 1:
-            rec_len += 1
-        rec = bytearray(rec_len)
-        rec[0]  = rec_len
-        rec[1]  = 0           # extended attribute length
-        rec[2:10]  = _both32(extent)
-        rec[10:18] = _both32(size)
-        rec[18:25] = _dir_datetime()
-        rec[25] = flags
-        rec[26] = 0
-        rec[27] = 0
-        rec[28:32] = _both16(1)  # volume sequence number
-        rec[32] = name_len
-        rec[33:33+name_len] = name_bytes
-        return bytes(rec)
+    def dt7() -> bytes:  # 7-byte directory record timestamp
+        t = _time.localtime()
+        return bytes([t.tm_year - 1900, t.tm_mon, t.tm_mday,
+                      t.tm_hour, t.tm_min, t.tm_sec, 0])
 
-    # Collect files
-    files = []
-    for fname in ("meta-data", "user-data"):
-        fpath = _os.path.join(ci_dir, fname)
-        if _os.path.exists(fpath):
-            with open(fpath, "rb") as f:
-                data = f.read()
-            files.append((fname.upper().replace("-", "_") + ";1", fname, data))
+    def dt17() -> bytes:  # 17-byte PVD timestamp (unspecified)
+        return b'0000000000000000\x00'
+
+    def dir_rec(name: bytes, extent: int, size: int, is_dir: bool = False) -> bytes:
+        """Build one ISO 9660 directory record (fixed-width field writes)."""
+        nl = len(name)
+        rl = 33 + nl
+        if rl & 1:
+            rl += 1   # must be even
+        r = bytearray(rl)
+        r[0]    = rl
+        r[1]    = 0                                  # ext attr len
+        r[2:10] = b32(extent)                        # location (both-endian 32)
+        r[10:18]= b32(size)                          # data length (both-endian 32)
+        r[18:25]= dt7()                              # recording date
+        r[25]   = 0x02 if is_dir else 0x00           # flags
+        # r[26]=interleave unit, r[27]=interleave gap → 0
+        r[28:32]= b16(1)                             # volume sequence number (both-endian 16 = 4 bytes)
+        r[32]   = nl
+        r[33:33+nl] = name
+        return bytes(r)
+
+    # ── collect files ─────────────────────────────────────────────────────────
+    # ISO 9660 level-1: uppercase, hyphens OK in practice; cloud-init reads
+    # by content using the volume label, so filenames just need to be present.
+    FILE_NAMES = [
+        ("meta-data",     "META-DATA;1"),
+        ("user-data",     "USER-DATA;1"),
+    ]
     if has_network_config:
-        fpath = _os.path.join(ci_dir, "network-config")
-        if _os.path.exists(fpath):
-            with open(fpath, "rb") as f:
-                data = f.read()
-            files.append(("NETWORK_CONFIG;1", "network-config", data))
+        FILE_NAMES.append(("network-config", "NETWORK-CONFIG;1"))
+
+    files = []   # (iso_name_bytes, raw_data)
+    for real_name, iso_name in FILE_NAMES:
+        fp = _os.path.join(ci_dir, real_name)
+        if _os.path.exists(fp):
+            with open(fp, "rb") as _f:
+                files.append((iso_name.encode("ascii"), _f.read()))
 
     if not files:
         return None
 
-    # Layout:
-    # Sector 0:    system area (16 sectors × 2048 = 32768 bytes, unused)
-    # Sector 16:   Primary Volume Descriptor
-    # Sector 17:   Volume Descriptor Set Terminator
-    # Sector 18:   Root directory (1 sector)
-    # Sector 19+:  File data
+    # ── sector layout ─────────────────────────────────────────────────────────
+    L_PATH_SECTOR  = 18
+    M_PATH_SECTOR  = 19
+    ROOT_DIR_SEC   = 20
+    FILE_START_SEC = 21
 
-    SYSTEM_AREA_SECTORS = 16
-    PVD_SECTOR          = 16
-    TERMINATOR_SECTOR   = 17
-    ROOT_DIR_SECTOR     = 18
-    FILE_START_SECTOR   = 19
-
-    # Assign extents to files
-    file_extents = []
-    cur = FILE_START_SECTOR
-    for iso_name, real_name, data in files:
-        file_extents.append((iso_name, real_name, data, cur))
-        cur += math.ceil(len(data) / SECTOR) if data else 1
-
+    extents = []   # (iso_name_bytes, data, sector)
+    cur = FILE_START_SEC
+    for name_b, data in files:
+        extents.append((name_b, data, cur))
+        cur += max(1, _math.ceil(len(data) / SEC))
     total_sectors = cur
 
-    # ── Build root directory ──────────────────────────────────────────────────
-    # "." entry
-    dot = _build_dir_record(b'\x00', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
-    # ".." entry (same as root since root IS root)
-    dotdot = _build_dir_record(b'\x01', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
+    # ── minimal path table (root only, 10 bytes) ─────────────────────────────
+    def _pt_entry(sector_fn) -> bytes:
+        e = bytearray(10)
+        e[0] = 1                                     # len of dir id
+        e[1] = 0                                     # ext attr len
+        return bytes(e)   # filled below per endianness
 
-    dir_data = bytearray(dot + dotdot)
-    for iso_name, _, data, extent in file_extents:
-        name_bytes = iso_name.encode("ascii")
-        rec = _build_dir_record(name_bytes, extent, len(data), is_dir=False)
-        if len(dir_data) + len(rec) > SECTOR:
-            break  # shouldn't happen for 3 small files
-        dir_data.extend(rec)
-    root_dir_sector_data = _pad(bytes(dir_data), SECTOR)
+    # L-type path table (little-endian sector)
+    l_pt = bytearray(10)
+    l_pt[0] = 1                                      # dir id length
+    l_pt[1] = 0                                      # ext attr
+    _st.pack_into('<I', l_pt, 2, ROOT_DIR_SEC)       # extent LE
+    _st.pack_into('<H', l_pt, 6, 1)                  # parent dir num
+    l_pt[8] = 0                                      # dir identifier (root)
+    l_pt[9] = 0                                      # padding
 
-    # ── Build Primary Volume Descriptor (sector 16) ───────────────────────────
-    pvd = bytearray(SECTOR)
-    pvd[0]  = 1                        # type: PVD
-    pvd[1:6] = b'CD001'
-    pvd[6]  = 1                        # version
-    # System identifier (32 bytes, space-padded)
-    pvd[8:40]  = b' ' * 32
-    # Volume identifier (32 bytes) — MUST be "cidata" for cloud-init NoCloud
-    vol_id = b'cidata' + b' ' * 26
-    pvd[40:72] = vol_id
-    # Volume space size
-    pvd[80:88] = _both32(total_sectors)
-    pvd[120:122] = _both16(1)  # volume set size
-    pvd[122:124] = _both16(1)  # volume sequence number
-    pvd[124:126] = _both16(SECTOR)  # logical block size
-    # Path table size (minimal)
-    pvd[132:140] = _both32(10)
-    # Location of type-L path table (sector after terminator+root dir)
-    pvd[140:144] = struct.pack('<I', total_sectors)   # placeholder, not needed by cloud-init
-    pvd[148:152] = struct.pack('>I', total_sectors)
-    # Root directory record (34 bytes at offset 156)
-    root_rec = _build_dir_record(b'\x00', ROOT_DIR_SECTOR, SECTOR, is_dir=True)
-    pvd[156:156+34] = root_rec[:34]
-    # Volume set, publisher, data preparer, application identifiers (128/128/128/128 bytes, space-padded)
-    for off, length in [(190,128),(318,128),(446,128),(574,128)]:
-        pvd[off:off+length] = b' ' * length
-    # Copyright, abstract, bibliographic file identifiers (37/37/37 bytes)
-    for off, length in [(702,37),(739,37),(776,37)]:
-        pvd[off:off+length] = b' ' * length
-    # Volume creation / modification date
-    pvd[813:830] = _datetime_field()
-    pvd[830:847] = _datetime_field()
-    pvd[847:864] = _datetime_field(zeros=True)
-    pvd[864:881] = _datetime_field(zeros=True)
-    pvd[881] = 1  # file structure version
+    # M-type path table (big-endian sector)
+    m_pt = bytearray(10)
+    m_pt[0] = 1
+    m_pt[1] = 0
+    _st.pack_into('>I', m_pt, 2, ROOT_DIR_SEC)       # extent BE
+    _st.pack_into('>H', m_pt, 6, 1)
+    m_pt[8] = 0
+    m_pt[9] = 0
 
-    # ── Volume Descriptor Set Terminator (sector 17) ─────────────────────────
-    vdst = bytearray(SECTOR)
-    vdst[0] = 255
+    # ── root directory sector ─────────────────────────────────────────────────
+    dot    = dir_rec(b'\x00', ROOT_DIR_SEC, SEC, is_dir=True)
+    dotdot = dir_rec(b'\x01', ROOT_DIR_SEC, SEC, is_dir=True)
+    root_dir = bytearray(dot + dotdot)
+    for name_b, data, sect in extents:
+        rec = dir_rec(name_b, sect, len(data), is_dir=False)
+        if len(root_dir) + len(rec) > SEC:
+            break
+        root_dir.extend(rec)
+
+    # ── Primary Volume Descriptor (exactly 2048 bytes) ────────────────────────
+    pvd = bytearray(SEC)
+    # Use struct.pack_into throughout to avoid bytearray resize bugs
+    pvd[0]    = 1                                    # PVD type
+    pvd[1:6]  = b'CD001'
+    pvd[6]    = 1                                    # version
+    pvd[7]    = 0                                    # unused
+    pvd[8:40] = b' ' * 32                            # system identifier
+    pvd[40:72]= (b'cidata' + b' ' * 26)              # volume identifier (32 bytes)
+    # bytes 72-79: unused
+    pvd[80:88] = b32(total_sectors)                  # volume space size
+    # bytes 88-119: unused (escape seqs)
+    pvd[120:124] = b16(1)                            # volume set size        (both16 = 4 bytes)
+    pvd[124:128] = b16(1)                            # volume sequence number (both16 = 4 bytes)
+    pvd[128:132] = b16(SEC)                          # logical block size     (both16 = 4 bytes)
+    pvd[132:140] = b32(10)                           # path table size        (both32 = 8 bytes)
+    pvd[140:144] = le32(L_PATH_SECTOR)               # L path table location
+    pvd[144:148] = le32(0)                           # optional L path table (none)
+    pvd[148:152] = be32(M_PATH_SECTOR)               # M path table location
+    pvd[152:156] = be32(0)                           # optional M path table (none)
+    # Root directory record at offset 156 (34 bytes)
+    root_dr = dir_rec(b'\x00', ROOT_DIR_SEC, SEC, is_dir=True)
+    pvd[156:190] = root_dr[:34]
+    pvd[190:318] = b' ' * 128                        # volume set identifier
+    pvd[318:446] = b' ' * 128                        # publisher identifier
+    pvd[446:574] = b' ' * 128                        # data preparer identifier
+    pvd[574:702] = b' ' * 128                        # application identifier
+    pvd[702:739] = b' ' * 37                         # copyright file id
+    pvd[739:776] = b' ' * 37                         # abstract file id
+    pvd[776:813] = b' ' * 37                         # bibliographic file id
+    pvd[813:830] = dt17()                            # creation date
+    pvd[830:847] = dt17()                            # modification date
+    pvd[847:864] = dt17()                            # expiration date
+    pvd[864:881] = dt17()                            # effective date
+    pvd[881]     = 1                                 # file structure version
+
+    # ── Volume Descriptor Set Terminator ─────────────────────────────────────
+    vdst = bytearray(SEC)
+    vdst[0]   = 255
     vdst[1:6] = b'CD001'
-    vdst[6] = 1
+    vdst[6]   = 1
 
-    # ── Assemble ISO ──────────────────────────────────────────────────────────
-    with open(iso_path, "wb") as f:
-        # System area: 16 empty sectors
-        f.write(b'\x00' * (SYSTEM_AREA_SECTORS * SECTOR))
-        # PVD
-        f.write(bytes(pvd))
-        # Terminator
-        f.write(bytes(vdst))
-        # Root directory
-        f.write(root_dir_sector_data)
-        # File data
-        for iso_name, _, data, extent in file_extents:
-            padded = data + b'\x00' * (SECTOR - len(data) % SECTOR if len(data) % SECTOR else 0)
-            f.write(padded)
+    # ── Write ISO ────────────────────────────────────────────────────────────
+    with open(iso_path, "wb") as _fp:
+        _fp.write(b'\x00' * (16 * SEC))              # system area
+        _fp.write(bytes(pvd))                        # sector 16: PVD
+        _fp.write(bytes(vdst))                       # sector 17: VDST
+        _fp.write(pad_sec(bytes(l_pt)))              # sector 18: L path table
+        _fp.write(pad_sec(bytes(m_pt)))              # sector 19: M path table
+        _fp.write(pad_sec(bytes(root_dir)))          # sector 20: root dir
+        for _, data, _ in extents:
+            _fp.write(pad_sec(data))                 # sectors 21+: files
 
-    _log.info("cloud-init ISO oluşturuldu (Python fallback): %s", iso_path)
+    _log.info("cloud-init ISO oluşturuldu (Python ISO 9660 fallback): %s", iso_path)
     return iso_path
 
 
