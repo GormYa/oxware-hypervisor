@@ -26,6 +26,43 @@ STATE_MAP = {
 }
 
 _VNC_REGISTRY_FILE = os.path.join(config.DATA_DIR, "vnc_registry.json")
+_STATIC_IP_FILE    = os.path.join(config.DATA_DIR, "vm_static_ips.json")
+_STATIC_IP_LOCK    = threading.Lock()
+
+
+def _load_static_ips() -> dict:
+    """Load MAC→IP mapping for manually assigned static IPs."""
+    try:
+        if os.path.exists(_STATIC_IP_FILE):
+            with open(_STATIC_IP_FILE) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def save_vm_static_ip(mac: str, ip: str) -> None:
+    """Persist a static IP for a VM MAC so it shows in the VM list."""
+    with _STATIC_IP_LOCK:
+        data = _load_static_ips()
+        data[mac.lower()] = ip
+        try:
+            with open(_STATIC_IP_FILE, "w") as f:
+                json.dump(data, f)
+        except Exception as e:
+            _log.warning("Static IP kaydedilemedi: %s", e)
+
+
+def clear_vm_static_ip(mac: str) -> None:
+    """Remove a stored static IP (on VM delete)."""
+    with _STATIC_IP_LOCK:
+        data = _load_static_ips()
+        data.pop(mac.lower(), None)
+        try:
+            with open(_STATIC_IP_FILE, "w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
 
 # ISO kurulum monitörleri: vm_uuid → Thread
 _install_monitors: dict = {}
@@ -289,7 +326,9 @@ def _get_dhcp_ip_for_mac(network: str, mac: str) -> str:
                         return part                           # bare IP (no prefix)
     except Exception:
         pass
-    return ""
+    # Fallback: manually saved static IPs (for bridge VMs where dnsmasq is bypassed)
+    static_ips = _load_static_ips()
+    return static_ips.get(mac.lower(), "")
 
 
 def _parse_net_info(xml_str, resolve_ip: bool = False):

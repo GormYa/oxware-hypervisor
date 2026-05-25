@@ -1410,6 +1410,12 @@ def api_create_vm():
         ev.vm_event(f"VM oluşturuldu: {name}", vm_id, level="INFO")
         if static_ip:
             ev.vm_event(f"Statik IP atandı: {static_ip} (cloud-init)", vm_id, level="INFO")
+            # Persist static IP by MAC so it shows in VM list (bridge VMs)
+            if vm_mac:
+                try:
+                    vm_manager.save_vm_static_ip(vm_mac, static_ip)
+                except Exception as _sie:
+                    log.warning("Static IP kayıt hatası: %s", _sie)
         if app_install:
             ev.vm_event(f"App kurulum planlandı: {app_install}", vm_id, level="INFO")
         if webhook_mgr: webhook_mgr.trigger("vm.created", {"vm_id": vm_id, "vm_name": name})

@@ -2035,7 +2035,7 @@
             <button class="btn sm" onclick="clearVmSelection()">✕ Seçimi Temizle</button>
           </div>
 
-          <div class="table-wrap">
+          <div class="table-wrap" oncontextmenu="vmTableContextMenu(event)">
             <table>
               <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="vm-select-all" onchange="toggleAllVms(this.checked)" title="Tümünü seç"></th>
@@ -2046,6 +2046,8 @@
               </tbody>
             </table>
           </div>
+          <!-- VM Right-Click Context Menu -->
+          <div id="vm-ctx-menu" style="display:none;position:fixed;z-index:9999;background:var(--surface2,#161b22);border:1px solid var(--border2,#30363d);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.55);min-width:210px;padding:4px 0;font-size:13px;user-select:none"></div>
         </div>
 
         <!-- ─────── Networks Page ─────── -->
@@ -4871,6 +4873,15 @@ systemctl enable --now qemu-guest-agent</pre>
   .cvm-grid2, .cvm-grid3 { grid-template-columns: 1fr; }
   .os-grid { grid-template-columns: repeat(3, 1fr); }
 }
+/* ── VM Context Menu ── */
+#vm-ctx-menu .ctx-hdr{padding:6px 14px 4px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+#vm-ctx-menu .ctx-sep{height:1px;background:var(--border2,#30363d);margin:3px 0}
+#vm-ctx-menu .ctx-item{padding:7px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+#vm-ctx-menu .ctx-item:hover{background:var(--surface3,#21262d)}
+#vm-ctx-menu .ctx-item.danger{color:#f87171}
+#vm-ctx-menu .ctx-item.success{color:#4ade80}
+#vm-ctx-menu .ctx-item.muted{color:var(--text-muted);font-style:italic;cursor:default}
+#vm-ctx-menu .ctx-item.muted:hover{background:none}
 </style>
 
 <div class="cvm-overlay" id="modal-create-vm" onclick="if(event.target===this)closeModal('modal-create-vm')">
@@ -5095,6 +5106,10 @@ systemctl enable --now qemu-guest-agent</pre>
               Boş disk yerine <strong>önceden kurulu OS</strong> gelir — ISO takmanıza gerek yok.<br>
               <span style="color:#94a3b8">İlk indirimde ~500MB–1GB bant genişliği kullanılır, sonraki VM'lerde cache'den çalışır.</span>
             </div>
+            <div id="win-cloud-note" style="display:none;margin-top:6px;padding:8px 10px;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.3);border-radius:6px;font-size:11px;color:#fbbf24;line-height:1.6">
+              ⚠️ Windows için standart cloud image desteği yoktur.<br>
+              <strong>Hızlı deploy için:</strong> Önce Şablonlar sayfasından OVA veya qcow2 import edin, ardından <strong>🔗 Şablondan Klonla</strong> seçeneğiyle saniyeler içinde VM oluşturun.
+            </div>
           </div>
           <div id="vm-iso-row" class="cvm-row">
             <label>Kurulum ISO'su (Opsiyonel)</label>
@@ -5153,6 +5168,18 @@ systemctl enable --now qemu-guest-agent</pre>
         <!-- 7. Cloud-Init & Gelişmiş -->
         <div class="cvm-sec">
           <div class="cvm-sec-title">Cloud-Init & Gelişmiş (Opsiyonel)</div>
+          <div class="cvm-grid2">
+            <div class="cvm-row">
+              <label>Kullanıcı Adı</label>
+              <input id="ci-user" placeholder="ubuntu" oninput="window._ciUserManual=true" autocomplete="off">
+              <div class="hint" id="ci-user-hint">Linux: VM adından otomatik. Boş bırakırsan "ubuntu" kullanılır.</div>
+            </div>
+            <div class="cvm-row">
+              <label>Şifre</label>
+              <input id="ci-password" type="password" placeholder="Güçlü bir şifre girin" autocomplete="new-password">
+              <div class="hint">Boş bırakırsan SSH key ile giriş</div>
+            </div>
+          </div>
           <div class="cvm-row">
             <label>SSH Public Key</label>
             <input id="ci-sshkey" placeholder="ssh-rsa AAAA…" style="font-family:monospace;font-size:11px">
@@ -5293,6 +5320,16 @@ function cvmSelectOS(card) {
   const os = card.dataset.os;
   document.getElementById('vm-os').value = os;
   document.getElementById('sum-os').textContent = card.querySelector('.os-label').textContent;
+  // Windows: disable cloud image, show warning
+  const isWin = os.startsWith('win');
+  const winNote = document.getElementById('win-cloud-note');
+  const cloudChk = document.getElementById('vm-use-cloud-image');
+  if (winNote) winNote.style.display = isWin ? '' : 'none';
+  if (isWin && cloudChk?.checked) {
+    cloudChk.checked = false;
+    cvmToggleCloudImage(false);
+  }
+  _updateCiUser();
 }
 
 function cvmSetType(t) {
@@ -10185,7 +10222,108 @@ function cvmToggleCloudImage(on) {
   if (infoBox) infoBox.style.display = on ? '' : 'none';
   if (bootSel && on)  bootSel.value = 'hd';
   if (bootSel && !on) bootSel.value = 'cdrom,hd';
+  // Block cloud image for Windows
+  if (on) {
+    const os = document.getElementById('vm-os')?.value || '';
+    if (os.startsWith('win')) {
+      document.getElementById('vm-use-cloud-image').checked = false;
+      if (infoBox) infoBox.style.display = 'none';
+      if (isoRow) isoRow.style.display = '';
+      if (bootSel) bootSel.value = 'cdrom,hd';
+      toast('Windows için cloud image desteklenmiyor. Şablondan Klonla veya ISO kullanın.', 'warning');
+    }
+  }
 }
+
+/* ══ VM Right-Click Context Menu ══════════════════════════════════════════ */
+let _ctxVmId = null, _ctxVmName = null, _ctxVmState = null;
+
+function vmTableContextMenu(e) {
+  e.preventDefault();
+  // Find VM row
+  const row = e.target.closest('tr[data-vmid]');
+  const menu = document.getElementById('vm-ctx-menu');
+  if (!menu) return;
+  if (row) {
+    const vmId    = row.dataset.vmid;
+    // Find vm state from badge in row
+    const badge   = row.querySelector('.status-badge,.state-badge,[class*="badge"]');
+    const stateEl = row.querySelector('td:nth-child(3)');
+    const stateText = (stateEl?.textContent || '').toLowerCase();
+    const running  = stateText.includes('çalış') || stateText.includes('running');
+    const vmName  = row.querySelector('td:nth-child(2) strong,td:nth-child(2) a')?.textContent?.trim() || vmId;
+    _ctxVmId = vmId; _ctxVmName = vmName; _ctxVmState = running ? 'running' : 'stopped';
+    menu.innerHTML = `
+      <div class="ctx-hdr">${escHtml(vmName)}</div>
+      <div class="ctx-sep"></div>
+      ${running
+        ? `<div class="ctx-item" onclick="_ctxVmAction('stop')">⏻ Durdur</div>
+           <div class="ctx-item" onclick="_ctxVmAction('reboot')">↺ Yeniden Başlat</div>
+           <div class="ctx-item danger" onclick="_ctxVmAction('force-stop')">⚡ Zorla Durdur</div>
+           <div class="ctx-sep"></div>
+           <div class="ctx-item" onclick="_ctxVmAction('console')">▣ Konsol (VNC)</div>`
+        : `<div class="ctx-item success" onclick="_ctxVmAction('start')">▶ Başlat</div>
+           <div class="ctx-sep"></div>
+           <div class="ctx-item muted">▣ Konsol (VM durdu)</div>`}
+      <div class="ctx-sep"></div>
+      <div class="ctx-item" onclick="_ctxVmAction('inject-ip')">🌐 Statik IP Ata</div>
+      <div class="ctx-item" onclick="_ctxVmAction('snapshot')">📸 Anlık Görüntü</div>
+      <div class="ctx-item" onclick="_ctxVmAction('clone')">⧉ Klonla</div>
+      <div class="ctx-item" onclick="_ctxVmAction('template')">📋 Şablon Olarak Kaydet</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item" onclick="_ctxVmAction('hw')">⚙ Donanım Ayarları</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item danger" onclick="_ctxVmAction('delete')">🗑 Sil</div>
+    `;
+  } else {
+    // Empty area — global actions
+    _ctxVmId = null;
+    menu.innerHTML = `
+      <div class="ctx-hdr">Sanal Makineler</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item" onclick="closeVmCtxMenu();openCreateVMModal()">➕ Yeni VM Oluştur</div>
+      <div class="ctx-item" onclick="closeVmCtxMenu();loadVMs()">↻ Yenile</div>
+      <div class="ctx-item" onclick="closeVmCtxMenu();openModal('modal-vm-template')">📋 Şablonlar</div>
+    `;
+  }
+  // Position menu
+  const mx = Math.min(e.clientX, window.innerWidth - 220);
+  const my = Math.min(e.clientY, window.innerHeight - menu.scrollHeight - 10);
+  menu.style.left = mx + 'px';
+  menu.style.top  = my + 'px';
+  menu.style.display = '';
+}
+
+function closeVmCtxMenu() {
+  const m = document.getElementById('vm-ctx-menu');
+  if (m) m.style.display = 'none';
+}
+
+function _ctxVmAction(action) {
+  closeVmCtxMenu();
+  const id = _ctxVmId, name = _ctxVmName;
+  switch(action) {
+    case 'start':      vmAction(id, 'start'); break;
+    case 'stop':       vmAction(id, 'stop'); break;
+    case 'reboot':     vmAction(id, 'reboot'); break;
+    case 'force-stop': vmForceStop(id); break;
+    case 'console':    openConsole(id); break;
+    case 'clone':      cloneVM(id, name); break;
+    case 'template':   openSaveTemplateModal ? openSaveTemplateModal(id, name) : toast('Şablon modalı yok','error'); break;
+    case 'inject-ip':  openInjectIpModal ? openInjectIpModal(id, name) : selectTreeItem('vm',id,name); break;
+    case 'snapshot':   openSnapshotModal ? openSnapshotModal(id, name) : selectTreeItem('vm',id,name); break;
+    case 'hw':         selectTreeItem('vm', id, name); break;
+    case 'delete':     deleteVM(id, name); break;
+  }
+}
+
+// Close menu on any click outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#vm-ctx-menu')) closeVmCtxMenu();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeVmCtxMenu();
+});
 
 async function createVM() {
   const name = document.getElementById("vm-name").value.trim();
@@ -10218,6 +10356,8 @@ async function createVM() {
   const appInstall = document.querySelector('input[name="app_install"]:checked')?.value || '';
   if (appInstall) body.app_install = appInstall;
   // Cloud-Init / unattend.xml credentials
+  const ciUser = document.getElementById("ci-user")?.value.trim();
+  const ciPass = document.getElementById("ci-password")?.value || "";
   const ciKey  = document.getElementById("ci-sshkey")?.value.trim();
   const ciData = document.getElementById("ci-userdata")?.value.trim();
   // Static IP (bridge networks)
@@ -10227,6 +10367,7 @@ async function createVM() {
   const ciDnsRaw   = document.getElementById("ci-dns")?.value.trim() || "8.8.8.8, 1.1.1.1";
   const ciDns      = ciDnsRaw.split(',').map(s=>s.trim()).filter(Boolean);
   body.cloud_init  = {
+    user: ciUser||undefined, password: ciPass||undefined,
     ssh_key: ciKey||undefined, user_data: ciData||undefined,
     static_ip: ciStaticIp||undefined, gateway: ciGateway||undefined,
     netmask: ciNetmask, dns: ciDns,
