@@ -7345,7 +7345,7 @@ def api_vm_disk_resize(vm_id):
     disk_path = data.get("disk_path")
     if not disk_path:
         try:
-            info = vm_manager.get_vm_info(vm_id)
+            info = vm_manager.get_vm(vm_id)
             disks = info.get("disks", [])
             idx = int(data.get("disk_index", 0))
             if not disks:
@@ -7376,7 +7376,7 @@ def api_vm_disk_resize(vm_id):
             return err(f"Yeni boyut ({new_size_gb}GB) mevcut boyuttan ({current_gb:.1f}GB) büyük olmalı")
 
         # VM çalışıyorsa virsh blockresize kullan (online), yoksa qemu-img resize
-        vm_info = vm_manager.get_vm_info(vm_id)
+        vm_info = vm_manager.get_vm(vm_id)
         is_running = vm_info.get("state") == "running"
 
         if is_running:
@@ -8041,7 +8041,7 @@ def api_cpu_pinning_set(vm_id):
 def api_cpu_pinning_clear(vm_id):
     """Tüm pinning'i kaldır — tüm vCPU'ları tüm pCPU'lara serbest bırak."""
     try:
-        info = vm_manager.get_vm_info(vm_id)
+        info = vm_manager.get_vm(vm_id)
         vcpus = info.get("vcpus", 1)
         host_cpus = os.cpu_count() or 1
         cpulist = f"0-{host_cpus-1}"
@@ -8136,7 +8136,7 @@ def api_vm_export(vm_id):
     """VM'i OVA benzeri tar arşivine aktar (XML + disk)."""
     import threading as _thr, tarfile, datetime as _dt
     try:
-        info = vm_manager.get_vm_info(vm_id)
+        info = vm_manager.get_vm(vm_id)
         vm_name = info.get("name", vm_id)
         import re as _re_sec
         vm_name_safe = _re_sec.sub(r'[^\w\-.]', '_', str(vm_name))[:64]
