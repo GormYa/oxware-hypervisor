@@ -2046,8 +2046,7 @@
               </tbody>
             </table>
           </div>
-          <!-- VM Right-Click Context Menu -->
-          <div id="vm-ctx-menu" style="display:none;position:fixed;z-index:9999;background:var(--surface2,#161b22);border:1px solid var(--border2,#30363d);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.55);min-width:210px;padding:4px 0;font-size:13px;user-select:none"></div>
+          <!-- vm-ctx-menu moved to body root (was here — child of hidden page = invisible) -->
         </div>
 
         <!-- ─────── Networks Page ─────── -->
@@ -18150,6 +18149,10 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+
+<!-- Global Right-Click Context Menu — must be at body root, NOT inside any .page div
+     (pages get display:none on navigation; display:none parent hides fixed children too) -->
+<div id="vm-ctx-menu" style="display:none;position:fixed;z-index:9999;background:var(--surface2,#161b22);border:1px solid var(--border2,#30363d);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.55);min-width:210px;padding:4px 0;font-size:13px;user-select:none"></div>
 
 <!-- ═══ VNC In-Page Console Modal ═══════════════════════════════════════════ -->
 <div id="vnc-modal" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.72);align-items:center;justify-content:center">
