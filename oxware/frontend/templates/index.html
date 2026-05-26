@@ -18193,183 +18193,386 @@ document.addEventListener('DOMContentLoaded', () => {
       <button onclick="vncModalFS()" title="Tam Ekran" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">⛶</button>
       <button onclick="closeVncModal()" title="Kapat" style="padding:3px 9px;border-radius:5px;border:1px solid rgba(248,81,73,.4);background:rgba(248,81,73,.08);color:#f85149;font-size:11px;cursor:pointer">✕ Kapat</button>
     </div>
-    <!-- Loading overlay (shown until iframe fires load event) -->
-    <div id="vnc-modal-loading" style="
-      position:absolute;top:44px;left:0;right:0;bottom:0;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      background:#000;z-index:2;gap:14px;
-    ">
-      <div style="width:42px;height:42px;border:3px solid rgba(0,212,255,.2);border-top-color:#00d4ff;border-radius:50%;animation:spin 1s linear infinite"></div>
-      <span style="color:#8b949e;font-size:13px">Konsol başlatılıyor…</span>
+    <!-- Screen div + loading overlay (direct noVNC — no iframe) -->
+    <div id="vnc-modal-screen" style="flex:1;background:#000;position:relative;overflow:hidden">
+      <div id="vnc-modal-loading" style="
+        position:absolute;inset:0;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        background:#000;z-index:2;gap:14px;
+      ">
+        <div style="width:42px;height:42px;border:3px solid rgba(0,212,255,.2);border-top-color:#00d4ff;border-radius:50%;animation:spin 1s linear infinite"></div>
+        <span id="vnc-modal-load-msg" style="color:#8b949e;font-size:13px">Konsol başlatılıyor…</span>
+        <small id="vnc-modal-load-detail" style="color:#484f58;font-size:11px;max-width:340px;text-align:center;word-break:break-all"></small>
+      </div>
     </div>
-    <!-- iframe -->
-    <iframe
-      id="vnc-modal-iframe"
-      src=""
-      style="flex:1;border:none;background:#000;display:block"
-      allow="fullscreen; pointer-lock"
-      allowfullscreen
-    ></iframe>
   </div>
 </div>
 
 <script>
-/* ═══ VNC In-Page Modal ═══════════════════════════════════════════════════════ */
-let _vncModalVmId   = null;
-let _vncModalVmName = null;
-let _vncModalUrl    = null;
+/* ═══ VNC In-Page Modal — Direct noVNC (no iframe) ══════════════════════════
+ *  Eliminates iframe WebSocket issues (Firefox ws→wss upgrade, pointer-lock
+ *  permission, X-Frame-Options). Runs noVNC directly inside #vnc-modal-screen.
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
-function openVncModal(vmId, vmName, url) {
-  _vncModalVmId   = vmId;
-  _vncModalVmName = vmName || vmId;
-  _vncModalUrl    = url;
+// Canvas createElement intercept — must run before noVNC loads.
+// Captures noVNC's mouse event handlers so pointer lock can call them directly
+// (avoids isTrusted rejection on synthetic events).
+(function() {
+  const _orig = document.createElement.bind(document);
+  const _map  = new WeakMap();
+  document.createElement = function(tag, ...args) {
+    const el = _orig(tag, ...args);
+    if (tag.toLowerCase() === 'canvas') {
+      const h = { mousemove: [], mousedown: [], mouseup: [], wheel: [] };
+      const _origAEL = el.addEventListener.bind(el);
+      el.addEventListener = function(type, fn, opts) {
+        if (h[type]) h[type].push(fn);
+        return _origAEL(type, fn, opts);
+      };
+      _map.set(el, h);
+    }
+    return el;
+  };
+  window._vncModalHandlers = (canvas) => _map.get(canvas) || {};
+})();
+
+let _vncModalVmId      = null;
+let _vncModalRfb       = null;
+let _vncModalPlCanvas  = null;
+let _vncModalVX        = 0;
+let _vncModalVY        = 0;
+let _vncModalLockPoll  = null;
+let _vncModalPLCleanup = null;  // function to remove PL event listeners
+
+/* ── Status helpers ─────────────────────────────────────────────────────── */
+function _vncModalSetStatus(text, ok) {
+  const el = document.getElementById('vnc-modal-status');
+  if (!el) return;
+  el.textContent = text || '';
+  const isOk = ok === true, isErr = ok === false;
+  el.style.color       = isOk ? '#3fb950' : isErr ? '#f85149' : '#8b949e';
+  el.style.borderColor = isOk ? 'rgba(63,185,80,.4)' : isErr ? 'rgba(248,81,73,.4)' : '#30363d';
+}
+function _vncModalSetLoad(msg, detail) {
+  const lm = document.getElementById('vnc-modal-load-msg');
+  const ld = document.getElementById('vnc-modal-load-detail');
+  if (lm) lm.textContent = msg    || '';
+  if (ld) ld.textContent = detail || '';
+}
+function _vncModalHideLoading() {
+  const el = document.getElementById('vnc-modal-loading');
+  if (el) el.style.display = 'none';
+}
+function _vncModalUpdateLockBtn(locked) {
+  const btn = document.getElementById('vnc-modal-lock-btn');
+  if (!btn) return;
+  btn.textContent      = locked ? '🔒 Ctrl+Alt = Serbest' : '🖱 Mouse Kilitle';
+  btn.style.color      = locked ? '#3fb950' : '';
+  btn.style.borderColor = locked ? 'rgba(63,185,80,.5)' : '';
+}
+
+/* ── Pointer lock (same logic as vnc_console.html) ──────────────────────── */
+function _vncModalSetupPointerLock(canvas) {
+  _vncModalPlCanvas = canvas;
+  const h = window._vncModalHandlers(canvas);
+
+  function _call(type, e, extra) {
+    const list = h[type] || [];
+    if (!list.length) return;
+    const proxy = new Proxy(e, {
+      get(t, p) {
+        if (p in extra) return extra[p];
+        const v = t[p];
+        return typeof v === 'function' ? v.bind(t) : v;
+      }
+    });
+    for (const fn of list) { try { fn(proxy); } catch(_) {} }
+  }
+
+  // Click canvas → request lock
+  canvas.addEventListener('click', () => {
+    if (!document.pointerLockElement) canvas.requestPointerLock();
+  });
+
+  const onMove = (e) => {
+    if (!e.isTrusted || document.pointerLockElement !== canvas) return;
+    const r = canvas.getBoundingClientRect();
+    _vncModalVX = Math.max(0, Math.min(r.width,  _vncModalVX + e.movementX));
+    _vncModalVY = Math.max(0, Math.min(r.height, _vncModalVY + e.movementY));
+    _call('mousemove', e, { clientX: r.left + _vncModalVX, clientY: r.top + _vncModalVY,
+                             movementX: 0, movementY: 0, isTrusted: true,
+                             target: canvas, currentTarget: canvas });
+  };
+  const onDown = (e) => {
+    if (!e.isTrusted || document.pointerLockElement !== canvas) return;
+    const r = canvas.getBoundingClientRect();
+    _call('mousedown', e, { clientX: r.left + _vncModalVX, clientY: r.top + _vncModalVY,
+                             isTrusted: true, target: canvas, currentTarget: canvas });
+  };
+  const onUp = (e) => {
+    if (!e.isTrusted || document.pointerLockElement !== canvas) return;
+    const r = canvas.getBoundingClientRect();
+    _call('mouseup', e, { clientX: r.left + _vncModalVX, clientY: r.top + _vncModalVY,
+                           isTrusted: true, target: canvas, currentTarget: canvas });
+  };
+  const onKey = (e) => {
+    if (e.ctrlKey && e.altKey && document.pointerLockElement === canvas) {
+      if (e.key !== 'Delete') {
+        document.exitPointerLock();
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  };
+  const onLockChange = () => {
+    const locked = document.pointerLockElement === canvas;
+    _vncModalUpdateLockBtn(locked);
+    if (locked) {
+      const r = canvas.getBoundingClientRect();
+      _vncModalVX = r.width  / 2;
+      _vncModalVY = r.height / 2;
+    }
+  };
+
+  document.addEventListener('mousemove',        onMove,      true);
+  document.addEventListener('mousedown',        onDown,      true);
+  document.addEventListener('mouseup',          onUp,        true);
+  document.addEventListener('keydown',          onKey,       true);
+  document.addEventListener('pointerlockchange', onLockChange);
+
+  _vncModalPLCleanup = () => {
+    document.removeEventListener('mousemove',        onMove,      true);
+    document.removeEventListener('mousedown',        onDown,      true);
+    document.removeEventListener('mouseup',          onUp,        true);
+    document.removeEventListener('keydown',          onKey,       true);
+    document.removeEventListener('pointerlockchange', onLockChange);
+  };
+}
+
+function _vncModalTeardown() {
+  if (_vncModalRfb) { try { _vncModalRfb.disconnect(); } catch(_) {} _vncModalRfb = null; }
+  if (_vncModalPLCleanup) { _vncModalPLCleanup(); _vncModalPLCleanup = null; }
+  if (_vncModalLockPoll)  { clearInterval(_vncModalLockPoll); _vncModalLockPoll = null; }
+  if (document.pointerLockElement) document.exitPointerLock();
+  _vncModalPlCanvas = null;
+  _vncModalUpdateLockBtn(false);
+  // Remove noVNC canvas from screen
+  const scr = document.getElementById('vnc-modal-screen');
+  if (scr) scr.querySelectorAll('canvas').forEach(c => c.remove());
+}
+
+/* ── openVncModal ────────────────────────────────────────────────────────── */
+async function openVncModal(vmId, vmName /*, _unused_url */) {
+  _vncModalVmId = vmId;
 
   const modal  = document.getElementById('vnc-modal');
   const panel  = document.getElementById('vnc-modal-panel');
-  const iframe = document.getElementById('vnc-modal-iframe');
   const nameEl = document.getElementById('vnc-modal-vmname');
-  const statEl = document.getElementById('vnc-modal-status');
   const loadEl = document.getElementById('vnc-modal-loading');
 
-  nameEl.textContent = _vncModalVmName;
-  statEl.textContent = 'Bağlanıyor…';
-  statEl.style.color = '#8b949e';
-  statEl.style.borderColor = '#30363d';
-  if (loadEl) { loadEl.style.display = 'flex'; }
+  nameEl.textContent = vmName || vmId;
+  _vncModalSetStatus('Bağlanıyor…');
+  _vncModalSetLoad('Konsol başlatılıyor…', '');
+  if (loadEl) loadEl.style.display = 'flex';
 
-  // Reset panel position (dragging may have moved it)
-  panel.style.left = '';
-  panel.style.top  = '';
+  // Reset drag position
+  panel.style.left      = '';
+  panel.style.top       = '';
   panel.style.transform = '';
+  panel.style.height    = '88vh';
+  panel.dataset.minimized = '0';
 
   // Show modal
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 
-  // Set iframe src → triggers VNC load
-  iframe.src = '';
-  setTimeout(() => { iframe.src = url; }, 60);
+  // Tear down any previous connection
+  _vncModalTeardown();
 
-  // Listen for iframe load to hide loading overlay
-  iframe.onload = () => {
-    if (loadEl) { setTimeout(() => { loadEl.style.display = 'none'; }, 400); }
-    // Poll status from iframe window title (noVNC sets it)
-    _vncModalStatusPoller();
-  };
+  const tok    = TOKEN();
+  const screen = document.getElementById('vnc-modal-screen');
 
-  // Click outside modal to nothing (don't close — user might misclick during VNC)
+  try {
+    _vncModalSetLoad('noVNC yükleniyor…', '');
+    const rfbMod = await import('/novnc/core/rfb.js');
+    const RFB    = rfbMod.default;
+
+    const wsProto = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const wsUrl   = `${wsProto}://${location.host}/ws/vnc/${vmId}?token=${encodeURIComponent(tok)}`;
+
+    _vncModalSetLoad('VNC bağlanıyor…', wsUrl);
+
+    _vncModalRfb = new RFB(screen, wsUrl, { credentials: { password: '' } });
+    _vncModalRfb.viewOnly      = false;
+    _vncModalRfb.scaleViewport = true;
+    _vncModalRfb.resizeSession = false;
+    _vncModalRfb.background    = '#000000';
+
+    _vncModalRfb.addEventListener('connect', () => {
+      _vncModalHideLoading();
+      _vncModalSetStatus('● Bağlı', true);
+    });
+
+    _vncModalRfb.addEventListener('disconnect', (e) => {
+      const reason = e.detail?.reason || '';
+      const msg    = 'Bağlantı kesildi' + (reason ? ': ' + reason : '');
+      _vncModalSetStatus(msg, false);
+      _vncModalSetLoad('Bağlantı kesildi', reason);
+      if (loadEl) loadEl.style.display = 'flex';
+    });
+
+    _vncModalRfb.addEventListener('credentialsrequired', () => {
+      _vncModalRfb.sendCredentials({ password: '' });
+    });
+
+    _vncModalRfb.addEventListener('desktopname', (e) => {
+      if (e.detail?.name) {
+        const nm = document.getElementById('vnc-modal-vmname');
+        if (nm) nm.textContent = e.detail.name;
+        _vncModalSetStatus('● ' + e.detail.name, true);
+      }
+    });
+
+    // Poll for canvas noVNC creates asynchronously
+    _vncModalLockPoll = setInterval(() => {
+      const canvas = screen.querySelector('canvas');
+      if (canvas) {
+        clearInterval(_vncModalLockPoll);
+        _vncModalLockPoll = null;
+        _vncModalSetupPointerLock(canvas);
+      }
+    }, 150);
+
+  } catch (e) {
+    _vncModalSetStatus('Hata', false);
+    _vncModalSetLoad('Bağlantı kurulamadı', e.message);
+    console.error('VNC modal init error:', e);
+  }
 }
 
+/* ── closeVncModal ───────────────────────────────────────────────────────── */
 function closeVncModal() {
-  const modal  = document.getElementById('vnc-modal');
-  const iframe = document.getElementById('vnc-modal-iframe');
-  iframe.src = '';  // disconnect
-  modal.style.display = 'none';
+  _vncModalTeardown();
+  const modal = document.getElementById('vnc-modal');
+  if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
   _vncModalVmId = null;
 }
 
+/* ── vncModalPopout — open standalone window ─────────────────────────────── */
 function vncModalPopout() {
-  // Open in real window then close modal — strip embed=1 so header shows
-  if (_vncModalUrl) {
-    const popUrl = _vncModalUrl.replace(/[&?]embed=1/, '');
-    window.open(popUrl, 'vnc_' + (_vncModalVmId||''), 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
-    closeVncModal();
-  }
+  if (!_vncModalVmId) return;
+  const tok = TOKEN();
+  const url = `/vnc_console/${_vncModalVmId}?token=${encodeURIComponent(tok)}`;
+  window.open(url, 'vnc_' + _vncModalVmId, 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
+  closeVncModal();
 }
 
+/* ── Fullscreen & Minimize ───────────────────────────────────────────────── */
 function vncModalFS() {
   const panel = document.getElementById('vnc-modal-panel');
-  if (!document.fullscreenElement) {
-    panel.requestFullscreen().catch(() => {});
-  } else {
-    document.exitFullscreen();
-  }
+  if (!document.fullscreenElement) panel.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
 }
 
 function vncModalMinimize() {
-  // Toggle panel height between full and collapsed (header only)
   const panel  = document.getElementById('vnc-modal-panel');
-  const iframe = document.getElementById('vnc-modal-iframe');
-  const loading= document.getElementById('vnc-modal-loading');
+  const screen = document.getElementById('vnc-modal-screen');
   const isMin  = panel.dataset.minimized === '1';
   if (isMin) {
     panel.style.height = '88vh';
-    if (iframe)  iframe.style.display = 'block';
-    if (loading) loading.style.display = 'none';
+    if (screen) screen.style.display = '';
     panel.dataset.minimized = '0';
   } else {
     panel.style.height = '44px';
-    if (iframe)  iframe.style.display = 'none';
+    if (screen) screen.style.display = 'none';
     panel.dataset.minimized = '1';
   }
 }
 
-function _vncModalIframeCall(type) {
-  const iframe = document.getElementById('vnc-modal-iframe');
-  if (!iframe) return;
-  // Same-origin direct call first
-  try {
-    const win = iframe.contentWindow;
-    const fn = { vncCtrlAltDel: 'sendCtrlAltDel', vncPaste: 'vncPaste', vncPointerLock: 'togglePointerLock' }[type];
-    if (fn && win[fn]) { win[fn](); return; }
-  } catch(_) {}
-  // postMessage fallback
-  try { iframe.contentWindow.postMessage({ type }, '*'); } catch(_) {}
+/* ── Ctrl+Alt+Del / Pointer lock / Paste — direct calls (no iframe) ─────── */
+function vncModalCtrlAltDel() {
+  if (_vncModalRfb) _vncModalRfb.sendCtrlAltDel();
 }
 
-function vncModalCtrlAltDel()  { _vncModalIframeCall('vncCtrlAltDel');  }
-function vncModalPaste()        { _vncModalIframeCall('vncPaste');        }
-function vncModalPointerLock()  {
-  _vncModalIframeCall('vncPointerLock');
-  // Update lock button state after short delay
-  setTimeout(() => {
-    const btn = document.getElementById('vnc-modal-lock-btn');
-    if (!btn) return;
-    try {
-      const iframe = document.getElementById('vnc-modal-iframe');
-      const locked = !!iframe.contentDocument?.pointerLockElement;
-      btn.textContent = locked ? '🔒 Ctrl+Alt = Serbest' : '🖱 Mouse Kilitle';
-      btn.style.color = locked ? '#3fb950' : '';
-      btn.style.borderColor = locked ? 'rgba(63,185,80,.5)' : '';
-    } catch(_) {}
-  }, 200);
+function vncModalPointerLock() {
+  if (document.pointerLockElement) document.exitPointerLock();
+  else if (_vncModalPlCanvas) _vncModalPlCanvas.requestPointerLock();
 }
 
-// Status poll: read iframe document title to update status badge
-// postMessage from iframe → update modal UI
-window.addEventListener('message', e => {
-  if (!e.data) return;
+function vncModalPaste() {
+  const rfb = _vncModalRfb;
 
-  // Pointer lock state → update lock button
-  if (e.data.type === 'vncLockChange') {
-    const btn = document.getElementById('vnc-modal-lock-btn');
-    if (btn) {
-      const locked = e.data.locked;
-      btn.textContent  = locked ? '🔒 Ctrl+Alt = Serbest' : '🖱 Mouse Kilitle';
-      btn.style.color  = locked ? '#3fb950' : '';
-      btn.style.borderColor = locked ? 'rgba(63,185,80,.5)' : '';
+  const existing = document.getElementById('_vncModalPasteOverlay');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = '_vncModalPasteOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 22px;width:400px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.7)';
+
+  const ttl  = document.createElement('div');
+  ttl.textContent = "📋 VM'ye Yapıştır";
+  ttl.style.cssText = 'font-size:14px;font-weight:700;color:#e6edf3;margin-bottom:5px';
+
+  const hint = document.createElement('div');
+  hint.textContent = 'Ctrl+V ile yapıştırın → Gönder. İzin gerekmez, VNC bağlantısı kesilmez.';
+  hint.style.cssText = 'font-size:11px;color:#8b949e;margin-bottom:10px';
+
+  const ta = document.createElement('textarea');
+  ta.placeholder = 'Metni buraya yapıştırın…';
+  ta.style.cssText = 'width:100%;height:85px;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 11px;color:#e6edf3;font-size:13px;font-family:monospace;resize:vertical;outline:none';
+
+  const row  = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:10px';
+
+  const cBtn = document.createElement('button');
+  cBtn.textContent = 'İptal';
+  cBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:1px solid #30363d;background:transparent;color:#e6edf3;cursor:pointer;font-size:12px';
+  cBtn.onclick = () => overlay.remove();
+
+  const sBtn = document.createElement('button');
+  sBtn.textContent = 'Gönder →';
+  sBtn.style.cssText = 'padding:6px 16px;border-radius:6px;border:none;background:#1565c0;color:#fff;cursor:pointer;font-size:12px;font-weight:600';
+  sBtn.onclick = () => {
+    const text = ta.value;
+    overlay.remove();
+    if (text && rfb && typeof rfb.sendKey === 'function') {
+      _vncModalSendKeys(rfb, text);
     }
-    return;
+  };
+
+  ta.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') sBtn.click(); });
+  row.append(cBtn, sBtn);
+  box.append(ttl, hint, ta, row);
+  overlay.append(box);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  setTimeout(() => ta.focus(), 30);
+}
+
+function _vncModalSendKeys(rfb, text) {
+  let i = 0;
+  function next() {
+    if (i >= text.length) return;
+    const ch = text[i++];
+    let ks;
+    if      (ch === '\n' || ch === '\r') { ks = 0xff0d; }
+    else if (ch === '\t')                { ks = 0xff09; }
+    else {
+      const c = ch.charCodeAt(0);
+      ks = (c >= 0x20 && c <= 0x7e) ? c : (0x1000000 | c);
+    }
+    rfb.sendKey(ks, '', true);
+    rfb.sendKey(ks, '', false);
+    setTimeout(next, 30);
   }
+  next();
+}
 
-  if (e.data.type !== 'vncStatus') return;
-  const modal = document.getElementById('vnc-modal');
-  if (!modal || modal.style.display === 'none') return;
-  const statEl = document.getElementById('vnc-modal-status');
-  const nameEl = document.getElementById('vnc-modal-vmname');
-  if (statEl) {
-    statEl.textContent = e.data.text || '';
-    const ok = e.data.ok === true, er = e.data.ok === false;
-    statEl.style.color       = ok ? '#3fb950' : er ? '#f85149' : '#8b949e';
-    statEl.style.borderColor = ok ? 'rgba(63,185,80,.4)' : er ? 'rgba(248,81,73,.4)' : '#30363d';
-  }
-  if (nameEl && e.data.vmName) nameEl.textContent = e.data.vmName;
-});
-
-function _vncModalStatusPoller() { /* replaced by postMessage — no-op */ }
-
-/* ── Draggable header ──────────────────────────────────────────────────────── */
+/* ── Draggable header ────────────────────────────────────────────────────── */
 (function() {
   let _dragging = false, _ox = 0, _oy = 0;
   document.addEventListener('DOMContentLoaded', () => {
@@ -18402,13 +18605,13 @@ function _vncModalStatusPoller() { /* replaced by postMessage — no-op */ }
   });
 })();
 
-/* ── Keyboard shortcut: Escape to close ─────────────────────────────────────  */
+/* ── Escape to close (only when pointer not locked) ─────────────────────── */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     const modal = document.getElementById('vnc-modal');
     if (modal && modal.style.display !== 'none') {
-      // Only close if focus is NOT inside the iframe (user might press Esc inside VM)
-      if (!document.activeElement?.closest('#vnc-modal-iframe')) {
+      // Escape first releases pointer lock; only close on second Escape (no lock)
+      if (!document.pointerLockElement) {
         closeVncModal();
       }
     }
