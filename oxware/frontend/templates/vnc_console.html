@@ -241,8 +241,9 @@ function hideLoading() {
     _rfb.background    = "#000000";
 
     // postMessage → parent modal can update its own status badge
+    // NOTE: spread extra only when defined — spreading undefined throws TypeError (caught silently)
     function _pmStatus(text, ok, extra) {
-      try { window.parent.postMessage({ type: 'vncStatus', text, ok, ...extra }, '*'); } catch(_) {}
+      try { window.parent.postMessage(Object.assign({ type: 'vncStatus', text, ok }, extra || {}), '*'); } catch(_) {}
     }
 
     _rfb.addEventListener("connect", () => {
@@ -369,14 +370,17 @@ function setupPointerLock(canvas) {
     }
   }, true);
 
-  // Kilit durumu değişince gösterge güncelle + sanal pos merkeze al
+  // Kilit durumu değişince gösterge güncelle + parent modal'a bildir
   document.addEventListener("pointerlockchange", () => {
     _updateLockBtn();
-    if (document.pointerLockElement === canvas) {
+    const locked = document.pointerLockElement === canvas;
+    if (locked) {
       const r = canvas.getBoundingClientRect();
       _vX = r.width / 2;
       _vY = r.height / 2;
     }
+    // Notify parent modal to update its lock button
+    try { window.parent.postMessage({ type: 'vncLockChange', locked }, '*'); } catch(_) {}
   });
 }
 

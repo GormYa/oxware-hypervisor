@@ -766,7 +766,30 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
         # Always enable SSH password auth (disabled by default on Ubuntu cloud images)
         lines.append("ssh_pwauth: true")
 
+        # Generate SHA-512 password hash (most reliable for cloud-init passwd: field)
+        def _hash_password(pw: str) -> str | None:
+            """Try openssl then Python crypt to produce a SHA-512 shadow hash."""
+            try:
+                r = subprocess.run(
+                    ["openssl", "passwd", "-6", "-stdin"],
+                    input=pw, capture_output=True, text=True, timeout=5
+                )
+                h = r.stdout.strip()
+                if h and h.startswith("$6$"):
+                    return h
+            except Exception:
+                pass
+            # Fallback: Python crypt (deprecated in 3.13 but works on most servers)
+            try:
+                import crypt as _crypt
+                return _crypt.crypt(pw, _crypt.mksalt(_crypt.METHOD_SHA512))
+            except Exception:
+                pass
+            return None
+
         if safe_user:
+            hashed_pw = _hash_password(safe_password) if safe_password else None
+
             user_lines = [
                 "users:",
                 f"  - name: {safe_user}",
@@ -776,27 +799,27 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
             ]
             if safe_password:
                 user_lines.append("    lock_passwd: false")
+                if hashed_pw:
+                    # passwd: field — set at user creation, never needs chpasswd
+                    user_lines.append(f"    passwd: '{hashed_pw}'")
             if safe_ssh_key:
                 user_lines.append("    ssh_authorized_keys:")
                 user_lines.append(f"      - {safe_ssh_key}")
             lines.append("\n".join(user_lines))
 
             if safe_password:
-                # chpasswd — set password after user is created
+                # chpasswd belt-and-suspenders (plaintext fallback for passwd: failure)
                 lines.append(
-                    f"chpasswd:\n  expire: false\n  list: |\n    {safe_user}:{safe_password}"
+                    f"chpasswd:\n  expire: false\n  list: |\n"
+                    f"    {safe_user}:{safe_password}\n    root:{safe_password}"
                 )
-                # runcmd fallback: most reliable across all cloud-init versions.
-                # Escape single-quote in password for shell safety.
+                # runcmd last resort — runs after all cloud-init modules
                 _pw_shell = safe_password.replace("'", "'\\''")
-                _runcmds = [
-                    f"  - echo '{safe_user}:{_pw_shell}' | chpasswd",
-                ]
-                # Also allow root SSH/console login with same password for convenience
-                _runcmds.append(
+                lines.append(
+                    f"runcmd:\n"
+                    f"  - echo '{safe_user}:{_pw_shell}' | chpasswd\n"
                     f"  - echo 'root:{_pw_shell}' | chpasswd 2>/dev/null || true"
                 )
-                lines.append("runcmd:\n" + "\n".join(_runcmds))
         elif safe_ssh_key:
             lines.append(f"ssh_authorized_keys:\n  - {safe_ssh_key}")
 

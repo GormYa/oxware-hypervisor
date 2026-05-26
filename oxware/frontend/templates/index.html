@@ -18207,7 +18207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       id="vnc-modal-iframe"
       src=""
       style="flex:1;border:none;background:#000;display:block"
-      allow="fullscreen"
+      allow="fullscreen; pointer-lock"
       allowfullscreen
     ></iframe>
   </div>
@@ -18337,9 +18337,23 @@ function vncModalPointerLock()  {
 }
 
 // Status poll: read iframe document title to update status badge
-// postMessage from iframe → update modal status badge (replaces DOM polling)
+// postMessage from iframe → update modal UI
 window.addEventListener('message', e => {
-  if (!e.data || e.data.type !== 'vncStatus') return;
+  if (!e.data) return;
+
+  // Pointer lock state → update lock button
+  if (e.data.type === 'vncLockChange') {
+    const btn = document.getElementById('vnc-modal-lock-btn');
+    if (btn) {
+      const locked = e.data.locked;
+      btn.textContent  = locked ? '🔒 Ctrl+Alt = Serbest' : '🖱 Mouse Kilitle';
+      btn.style.color  = locked ? '#3fb950' : '';
+      btn.style.borderColor = locked ? 'rgba(63,185,80,.5)' : '';
+    }
+    return;
+  }
+
+  if (e.data.type !== 'vncStatus') return;
   const modal = document.getElementById('vnc-modal');
   if (!modal || modal.style.display === 'none') return;
   const statEl = document.getElementById('vnc-modal-status');
