@@ -673,6 +673,13 @@ if [ -d "\${INSTALL_DIR}/.git" ]; then
     git fetch origin main
     git reset --hard origin/main
     echo -e "\${GREEN}[✓]\${NC} Kod güncellendi"
+    # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
+    if [ -f "\${INSTALL_DIR}/install.sh" ]; then
+        echo -e "\${CYAN}[i]\${NC} CLI araçları yenileniyor (ox / oxupdate)..."
+        bash "\${INSTALL_DIR}/install.sh" --refresh-cli 2>/dev/null \
+            && echo -e "\${GREEN}[✓]\${NC} ox / oxupdate güncellendi" \
+            || echo -e "\${YELLOW}[!]\${NC} CLI güncelleme atlandı"
+    fi
 else
     echo -e "\${YELLOW}[!]\${NC} Git repo bulunamadı — atlanıyor"
 fi
@@ -1177,6 +1184,14 @@ print_done() {
 
 # ── Ana Akış ─────────────────────────────────────────────────
 main() {
+    # Hızlı mod: sadece CLI araçlarını güncelle
+    if [ "${1:-}" = "--refresh-cli" ]; then
+        check_root
+        install_cli_tools
+        echo -e "\033[0;32m[✓] ox ve oxupdate güncellendi\033[0m"
+        exit 0
+    fi
+
     print_banner
     check_root
     check_os
