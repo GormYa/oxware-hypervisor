@@ -10919,7 +10919,7 @@ async function vmResetPassword(id, vmName) {
     try {
       const d = await api(`/vms/${id}/reset-password`, {
         method: 'POST',
-        body: JSON.stringify({ username, password })
+        body: { username, password }
       });
 
       if (d.success) {

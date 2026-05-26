@@ -2194,12 +2194,21 @@ def api_vm_reset_password(vm_id):
     Ayrıca SSH password auth'u etkinleştirir.
     Body: { "username": "...", "password": "..." }
     """
-    data = request.json or {}
+    # request.json can be a string if frontend double-serializes the body
+    raw = request.json
+    if isinstance(raw, str):
+        try:
+            import json as _jsn
+            raw = _jsn.loads(raw)
+        except Exception:
+            raw = {}
+    data = raw if isinstance(raw, dict) else {}
+
     username = (data.get("username") or "").strip()
     password = (data.get("password") or "").strip()
 
     if not username or not password:
-        return err("username ve password gerekli", 400)
+        return jsonify({"success": False, "error": "username ve password gerekli"}), 200
 
     try:
         vm      = vm_manager.get_vm(vm_id)
@@ -2208,9 +2217,9 @@ def api_vm_reset_password(vm_id):
         # Kabuk injection'a karşı: sadece güvenli karakterlere izin ver
         import re as _re
         if not _re.match(r'^[A-Za-z0-9_\-]+$', username):
-            return err("Geçersiz kullanıcı adı karakteri", 400)
+            return jsonify({"success": False, "error": "Geçersiz kullanıcı adı karakteri"}), 200
         if len(password) > 128:
-            return err("Şifre çok uzun", 400)
+            return jsonify({"success": False, "error": "Şifre çok uzun (max 128)"}), 200
 
         # Şifreyi base64 ile geç — tek tırnak/özel karakter sorununu önler
         import base64 as _b64
@@ -2294,7 +2303,8 @@ def api_vm_reset_password(vm_id):
         }), 200
 
     except Exception as e:
-        return err(str(e), 500)
+        _log.error("reset-password hata vm=%s: %s", vm_id, e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 200
 
 
 @app.route("/api/vms/<vm_id>/nat-sync", methods=["POST"])
