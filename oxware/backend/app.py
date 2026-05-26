@@ -7361,55 +7361,79 @@ def api_vm_disk_resize(vm_id):
     if not shutil.which("qemu-img"):
         return err("qemu-img bulunamadı")
 
+    import json as _json
+
+    # Validate disk path exists
+    if not os.path.exists(disk_path):
+        return err(f"Disk dosyası bulunamadı: {disk_path}")
+
     try:
-        # Mevcut boyutu kontrol et
+        # Current size via qemu-img info
         info_r = subprocess.run(
             ["qemu-img", "info", "--output=json", disk_path],
             capture_output=True, text=True, timeout=30
         )
-        import json as _json
-        img_info = _json.loads(info_r.stdout)
+        if info_r.returncode != 0:
+            return err(f"qemu-img info başarısız: {info_r.stderr.strip() or info_r.stdout.strip()}")
+        try:
+            img_info = _json.loads(info_r.stdout)
+        except Exception:
+            return err(f"Disk bilgisi parse edilemedi. stderr: {info_r.stderr.strip()[:200]}")
+
         current_bytes = img_info.get("virtual-size", 0)
-        current_gb = current_bytes / (1024**3)
+        current_gb = current_bytes / (1024 ** 3)
 
         if new_size_gb <= current_gb:
             return err(f"Yeni boyut ({new_size_gb}GB) mevcut boyuttan ({current_gb:.1f}GB) büyük olmalı")
 
-        # VM çalışıyorsa virsh blockresize kullan (online), yoksa qemu-img resize
-        vm_info = vm_manager.get_vm(vm_id)
+        # VM running? → virsh blockresize (online), else qemu-img resize (offline)
+        vm_info    = vm_manager.get_vm(vm_id)
+        vm_name    = vm_info.get("name", vm_id)
         is_running = vm_info.get("state") == "running"
 
         if is_running:
-            # Online resize — disk adını bul
-            disk_name = data.get("disk_name", "vda")
+            # Find block device name from disks list
+            disks     = vm_info.get("disks", [])
+            disk_name = "vda"
+            for d in disks:
+                src = d.get("source") or d.get("path") or ""
+                if src == disk_path:
+                    disk_name = d.get("device") or d.get("target") or "vda"
+                    break
+            disk_name = data.get("disk_name", disk_name)
             r = subprocess.run(
-                ["virsh", "blockresize", vm_id, disk_name, f"{new_size_gb}G"],
+                ["virsh", "blockresize", vm_name, disk_name, f"{new_size_gb}G"],
                 capture_output=True, text=True, timeout=60
             )
             if r.returncode != 0:
-                return err(f"virsh blockresize başarısız: {r.stderr}")
+                # Fallback: try with disk path directly
+                r2 = subprocess.run(
+                    ["virsh", "blockresize", vm_name, disk_path, f"{new_size_gb}G"],
+                    capture_output=True, text=True, timeout=60
+                )
+                if r2.returncode != 0:
+                    return err(f"virsh blockresize başarısız: {r.stderr.strip()}")
         else:
-            # Offline resize
             r = subprocess.run(
                 ["qemu-img", "resize", disk_path, f"{new_size_gb}G"],
                 capture_output=True, text=True, timeout=120
             )
             if r.returncode != 0:
-                return err(f"qemu-img resize başarısız: {r.stderr}")
+                return err(f"qemu-img resize başarısız: {r.stderr.strip()}")
 
-        ev.info(f"Disk genişletildi: {vm_id} {current_gb:.1f}GB → {new_size_gb}GB", category="vm")
+        ev.info(f"Disk genişletildi: {vm_name} {current_gb:.1f}GB → {new_size_gb}GB", category="vm")
         return ok({
-            "vm_id": vm_id,
-            "disk_path": disk_path,
+            "vm_id":      vm_id,
+            "disk_path":  disk_path,
             "old_size_gb": round(current_gb, 1),
             "new_size_gb": new_size_gb,
-            "online": is_running,
+            "online":     is_running,
             "guest_steps": _disk_guest_steps(new_size_gb),
         })
     except subprocess.TimeoutExpired:
         return err("Disk genişletme zaman aşımına uğradı", 504)
     except Exception as e:
-        return err(e, 500)
+        return err(str(e), 500)
 
 
 def _disk_guest_steps(new_size_gb: int) -> dict:
