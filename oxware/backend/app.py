@@ -782,7 +782,11 @@ def api_vnc_token(vm_id):
 def vnc_console_page(vm_id):
     """Dedicated VNC console page — SocketIO TCP proxy, no websockify needed."""
     embed = request.args.get("embed", "0") == "1"
-    return render_template("vnc_console.html", vm_id=vm_id, embed=embed)
+    resp = make_response(render_template("vnc_console.html", vm_id=vm_id, embed=embed))
+    # Allow embedding from same origin (needed for in-page modal iframe)
+    resp.headers.pop("X-Frame-Options", None)
+    resp.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
+    return resp
 
 @app.route("/novnc/")
 @app.route("/novnc/<path:filename>")
