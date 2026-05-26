@@ -554,10 +554,45 @@ cat << HELP
   \${GREEN}--logs -f\${NC}       Canlı log takibi
   \${GREEN}--info\${NC}          Sistem bilgilerini göster
   \${GREEN}--vms\${NC}           Sanal makineleri listele
+  \${GREEN}--users\${NC}         Kullanıcıları listele
   \${GREEN}--url\${NC}           Web arayüz adresini göster
   \${GREEN}--update\${NC}        OXware'i güncelle (oxupdate)
   \${GREEN}--version, -v\${NC}   Sürüm bilgisi
 HELP
+}
+
+show_users() {
+    echo -e "\n\${CYAN}━━━ OXware Kullanıcıları ━━━\${NC}"
+    printf "  \${WHITE}%-20s  %-12s\${NC}\n" "KULLANICI ADI" "YETKİ"
+    printf "  \${WHITE}%-20s  %-12s\${NC}\n" "--------------------" "------------"
+
+    # Primary admin
+    _PRIMARY=""
+    [ -f /etc/oxware/.username ] && _PRIMARY=\$(cat /etc/oxware/.username 2>/dev/null | tr -d '[:space:]')
+    if [ -n "\$_PRIMARY" ]; then
+        printf "  \${GREEN}%-20s\${NC}  \${YELLOW}%-12s\${NC}\n" "\$_PRIMARY" "admin"
+    fi
+
+    # Extra users from /var/lib/oxware/users.json
+    _USERS_FILE="/var/lib/oxware/users.json"
+    if [ -f "\$_USERS_FILE" ]; then
+        python3 - <<PYUSERS 2>/dev/null
+import json, sys
+try:
+    data = json.load(open("$_USERS_FILE"))
+    users = data.get("users", {})
+    primary = open("/etc/oxware/.username").read().strip() if __import__("os").path.exists("/etc/oxware/.username") else ""
+    for uname, info in users.items():
+        if uname == primary:
+            continue
+        role = info.get("role", "viewer")
+        color = "\033[0;36m" if role in ("admin","administrator") else "\033[0;37m"
+        print(f"  {color}{uname:<20}\033[0m  \033[0;37m{role:<12}\033[0m")
+except Exception as e:
+    print(f"  (users.json okunamadı: {e})")
+PYUSERS
+    fi
+    echo ""
 }
 
 show_status() {
@@ -602,6 +637,7 @@ case "\$1" in
         echo -e "\n\${CYAN}━━━ Sanal Makineler ━━━\${NC}"
         virsh list --all 2>/dev/null || echo "libvirt bağlantısı kurulamadı"
         echo "" ;;
+    --users)    show_users ;;
     --url)
         HOST_IP=\$(hostname -I | awk '{print \$1}')
         echo -e "  \${CYAN}https://\${HOST_IP}:8006\${NC}" ;;
@@ -1127,6 +1163,7 @@ print_done() {
     echo -e "║${NC}  ${CYAN}ox --status${NC}      — Servis durumu                         ${GREEN}║"
     echo -e "║${NC}  ${CYAN}ox --logs -f${NC}     — Canlı log takibi                      ${GREEN}║"
     echo -e "║${NC}  ${CYAN}ox --vms${NC}         — Sanal makineleri listele              ${GREEN}║"
+    echo -e "║${NC}  ${CYAN}ox --users${NC}       — Kullanıcıları listele                 ${GREEN}║"
     echo -e "║${NC}  ${CYAN}ox --restart${NC}     — Servisi yeniden başlat               ${GREEN}║"
     echo -e "║${NC}  ${CYAN}sudo oxupdate${NC}    — Güncel sürüme geç                     ${GREEN}║"
     echo -e "╠══════════════════════════════════════════════════════════════╣"
