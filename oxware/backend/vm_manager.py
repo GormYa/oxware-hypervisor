@@ -166,6 +166,9 @@ def _monitor_install(vm_uuid: str, vm_name: str, on_complete=None):
 def _connect():
     return libvirt.open(LIBVIRT_URI)
 
+# Alias — app.py calls vm_manager._libvirt_conn()
+_libvirt_conn = _connect
+
 
 # ── list_vms() short-TTL cache (3 s) ─────────────────────────────────────────
 # Dashboard polls every 8 s; avoid a full libvirt scan + XMLDesc on every tick.

@@ -4361,44 +4361,105 @@ def ws_vm_serial_open(data=None):
         _emit(f"\r\n[virsh domstate hatası: {e}]\r\n"); return
 
     try:
-        import pty, fcntl, eventlet as _ev2
+        import fcntl, termios, tty, xml.etree.ElementTree as _ET, eventlet as _ev2
 
-        master_fd, slave_fd = pty.openpty()
-        proc = subprocess.Popen(
-            ["virsh", "console", vm_id, "--force"],
-            stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
-            close_fds=True, preexec_fn=os.setsid,
-        )
-        os.close(slave_fd)
-        _serial_sessions[sid] = {"proc": proc, "master_fd": master_fd, "vm_id": vm_id}
-
-        fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-        fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
-
-        def _read_loop():
-            while True:
-                try:
-                    out = os.read(master_fd, 4096)
-                    if out:
-                        sock.emit("vm_serial_output",
-                                  {"data": out.decode("utf-8", errors="replace")},
-                                  to=sid, namespace="/")
-                    else:
-                        break
-                except BlockingIOError:
-                    _ev2.sleep(0.05)
-                    continue
-                except OSError:
+        # ── Find QEMU serial PTY path from domain XML ─────────────────────────
+        # Direct PTY access is far more reliable than virsh console over PTY
+        pty_path = None
+        try:
+            _xml_r = subprocess.run(["virsh", "dumpxml", vm_id], capture_output=True, text=True)
+            _root  = _ET.fromstring(_xml_r.stdout)
+            for _serial in _root.findall(".//serial[@type='pty']") + _root.findall(".//console[@type='pty']"):
+                _src = _serial.find("source")
+                if _src is not None and _src.get("path"):
+                    pty_path = _src.get("path")
                     break
-                except Exception as _ex:
-                    log.error("vm_serial read_loop: %s", _ex); break
-            sock.emit("vm_serial_output", {"data": "\r\n[Konsol bağlantısı kesildi]\r\n"},
-                      to=sid, namespace="/")
-            _serial_sessions.pop(sid, None)
+        except Exception as _xe:
+            log.warning("dumpxml PTY parse hatası: %s", _xe)
 
-        _ev2.spawn(_read_loop)
-        _emit(f"\r\nOXware VM Konsolu — {vm_id}\r\nBağlanıyor (Ctrl+] çıkış)...\r\n")
-        log.info("vm_serial_open: sid=%s vm=%s pid=%d", sid, vm_id, proc.pid)
+        if pty_path:
+            # ── Direct PTY mode ───────────────────────────────────────────────
+            serial_fd = os.open(pty_path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+            # Set raw mode so input passes through byte-for-byte
+            try:
+                old_attrs = termios.tcgetattr(serial_fd)
+                tty.setraw(serial_fd)
+            except Exception:
+                pass
+
+            _serial_sessions[sid] = {"fd": serial_fd, "vm_id": vm_id, "proc": None, "master_fd": serial_fd}
+
+            def _read_loop():
+                while True:
+                    try:
+                        out = os.read(serial_fd, 4096)
+                        if out:
+                            sock.emit("vm_serial_output",
+                                      {"data": out.decode("utf-8", errors="replace")},
+                                      to=sid, namespace="/")
+                        else:
+                            _ev2.sleep(0.05)
+                    except BlockingIOError:
+                        _ev2.sleep(0.05)
+                        continue
+                    except OSError:
+                        break
+                    except Exception as _ex:
+                        log.error("vm_serial read_loop (pty): %s", _ex); break
+                sock.emit("vm_serial_output", {"data": "\r\n[Konsol bağlantısı kesildi]\r\n"},
+                          to=sid, namespace="/")
+                _serial_sessions.pop(sid, None)
+                try: os.close(serial_fd)
+                except Exception: pass
+
+            _ev2.spawn(_read_loop)
+            _emit(f"\r\nOXware VM Konsolu — {vm_id}\r\nBağlı ({pty_path})\r\nEscape: Ctrl+]\r\n")
+            log.info("vm_serial_open (direct-pty): sid=%s vm=%s pty=%s", sid, vm_id, pty_path)
+
+        else:
+            # ── Fallback: virsh console via PTY ──────────────────────────────
+            import pty as _pty
+            master_fd, slave_fd = _pty.openpty()
+            # Keep slave_fd open in parent so writes work (close after proc starts)
+            try:
+                # Set slave to raw mode before virsh reads it
+                tty.setraw(slave_fd)
+            except Exception:
+                pass
+            proc = subprocess.Popen(
+                ["virsh", "console", vm_id, "--force"],
+                stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                close_fds=True, preexec_fn=os.setsid,
+            )
+            os.close(slave_fd)
+            fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+            fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+            _serial_sessions[sid] = {"proc": proc, "master_fd": master_fd, "vm_id": vm_id, "fd": master_fd}
+
+            def _read_loop():
+                while True:
+                    try:
+                        out = os.read(master_fd, 4096)
+                        if out:
+                            sock.emit("vm_serial_output",
+                                      {"data": out.decode("utf-8", errors="replace")},
+                                      to=sid, namespace="/")
+                        else:
+                            break
+                    except BlockingIOError:
+                        _ev2.sleep(0.05)
+                        continue
+                    except OSError:
+                        break
+                    except Exception as _ex:
+                        log.error("vm_serial read_loop (virsh): %s", _ex); break
+                sock.emit("vm_serial_output", {"data": "\r\n[Konsol bağlantısı kesildi]\r\n"},
+                          to=sid, namespace="/")
+                _serial_sessions.pop(sid, None)
+
+            _ev2.spawn(_read_loop)
+            _emit(f"\r\nOXware VM Konsolu — {vm_id}\r\nBağlanıyor (Ctrl+] çıkış)...\r\n")
+            log.info("vm_serial_open (virsh-pty): sid=%s vm=%s pid=%d", sid, vm_id, proc.pid)
 
     except Exception as e:
         log.error("vm_serial_open hata: %s", e)
@@ -4413,7 +4474,9 @@ def ws_vm_serial_input(data):
         inp = data.get("data", "")
         if isinstance(inp, str):
             inp = inp.encode("utf-8")
-        os.write(sess["master_fd"], inp)
+        # Use "fd" key (direct PTY) or fall back to "master_fd" (virsh PTY)
+        fd = sess.get("fd") or sess.get("master_fd")
+        os.write(fd, inp)
     except Exception as e:
         log.error("vm_serial_input: %s", e)
 
@@ -4438,8 +4501,9 @@ def ws_vm_serial_close(data=None):
     if sess:
         try: sess["proc"].terminate()
         except Exception: pass
-        try: os.close(sess["master_fd"])
-        except Exception: pass
+        for _key in ("fd", "master_fd"):
+            try: os.close(sess[_key])
+            except Exception: pass
 
 
 # ── API Key Yönetimi ──────────────────────────────────────────────────────────
