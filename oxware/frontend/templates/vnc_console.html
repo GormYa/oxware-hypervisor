@@ -450,6 +450,15 @@ document.addEventListener("keydown", (e) => {
     vncPaste();
   }
 });
+
+// postMessage bridge — parent (in-page modal) can call functions via messages
+window.addEventListener("message", (e) => {
+  if (!e.data || typeof e.data !== "object") return;
+  switch (e.data.type) {
+    case "vncCtrlAltDel": sendCtrlAltDel(); break;
+    case "vncPaste":      vncPaste();       break;
+  }
+});
 </script>
 </body>
 </html>

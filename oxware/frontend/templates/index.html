@@ -10897,12 +10897,20 @@ async function openConsole(vmId) {
     // VNC portunu etkinleştir
     await api(`/vms/${vmId}/console/start`, { method: "POST" }).catch(() => {});
     const tok = TOKEN();
-    // Ayrı pencerede aç — temiz JS bağlamı, no mixed-content, no module cache
-    window.open(
-      `/vnc_console/${vmId}?token=${encodeURIComponent(tok)}`,
-      `vnc_${vmId}`,
-      "width=1200,height=820,resizable=yes,menubar=no,toolbar=no"
-    );
+    const url = `/vnc_console/${vmId}?token=${encodeURIComponent(tok)}`;
+    // VM adını bul (varsa cache'den)
+    let vmName = vmId;
+    try {
+      const cached = (_gsCacheVMs || []).find(v => v.id === vmId);
+      if (cached) vmName = cached.name || vmId;
+    } catch(_) {}
+    // In-page modal aç
+    if (typeof openVncModal === 'function') {
+      openVncModal(vmId, vmName, url);
+    } else {
+      // Fallback: ayrı pencere
+      window.open(url, `vnc_${vmId}`, "width=1200,height=820,resizable=yes,menubar=no,toolbar=no");
+    }
   } catch (e) {
     toast("Konsol hatası: " + e.message, "error");
   }
@@ -18142,5 +18150,247 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+
+<!-- ═══ VNC In-Page Console Modal ═══════════════════════════════════════════ -->
+<div id="vnc-modal" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.72);align-items:center;justify-content:center">
+  <div id="vnc-modal-panel" style="
+    width:90vw;height:88vh;max-width:1440px;
+    background:#0d1117;
+    border:1px solid #30363d;
+    border-radius:10px;
+    display:flex;flex-direction:column;
+    box-shadow:0 28px 70px rgba(0,0,0,.85);
+    overflow:hidden;
+    position:relative;
+  ">
+    <!-- Header / title bar -->
+    <div id="vnc-modal-hdr" style="
+      background:#161b22;
+      border-bottom:1px solid #30363d;
+      padding:7px 14px;
+      display:flex;align-items:center;gap:10px;
+      flex-shrink:0;cursor:move;user-select:none;
+    ">
+      <!-- traffic lights -->
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <span onclick="closeVncModal()" style="width:13px;height:13px;border-radius:50%;background:#f85149;cursor:pointer;display:block" title="Kapat"></span>
+        <span onclick="vncModalMinimize()" style="width:13px;height:13px;border-radius:50%;background:#eab308;cursor:pointer;display:block" title="Küçült"></span>
+        <span onclick="vncModalFS()" style="width:13px;height:13px;border-radius:50%;background:#3fb950;cursor:pointer;display:block" title="Tam Ekran"></span>
+      </div>
+      <span style="color:#00d4ff;font-weight:700;font-size:13px;flex-shrink:0">▣ VNC Konsol</span>
+      <span style="color:#484f58;font-size:12px;flex-shrink:0">›</span>
+      <span id="vnc-modal-vmname" style="font-size:12px;color:#e6edf3;font-weight:600"></span>
+      <span id="vnc-modal-status" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(0,0,0,.4);border:1px solid #30363d;color:#8b949e;flex-shrink:0">Bağlanıyor…</span>
+      <div style="flex:1;min-width:0"></div>
+      <!-- action buttons -->
+      <button onclick="vncModalCtrlAltDel()" title="Ctrl+Alt+Del" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer;white-space:nowrap">Ctrl+Alt+Del</button>
+      <button onclick="vncModalPaste()" title="Yapıştır" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">📋</button>
+      <button onclick="vncModalPopout()" title="Ayrı pencerede aç" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">⤢</button>
+      <button onclick="vncModalFS()" title="Tam Ekran" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">⛶</button>
+      <button onclick="closeVncModal()" title="Kapat" style="padding:3px 9px;border-radius:5px;border:1px solid rgba(248,81,73,.4);background:rgba(248,81,73,.08);color:#f85149;font-size:11px;cursor:pointer">✕ Kapat</button>
+    </div>
+    <!-- Loading overlay (shown until iframe fires load event) -->
+    <div id="vnc-modal-loading" style="
+      position:absolute;top:44px;left:0;right:0;bottom:0;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      background:#000;z-index:2;gap:14px;
+    ">
+      <div style="width:42px;height:42px;border:3px solid rgba(0,212,255,.2);border-top-color:#00d4ff;border-radius:50%;animation:spin 1s linear infinite"></div>
+      <span style="color:#8b949e;font-size:13px">Konsol başlatılıyor…</span>
+    </div>
+    <!-- iframe -->
+    <iframe
+      id="vnc-modal-iframe"
+      src=""
+      style="flex:1;border:none;background:#000;display:block"
+      allow="fullscreen; pointer-lock"
+      allowfullscreen
+    ></iframe>
+  </div>
+</div>
+
+<script>
+/* ═══ VNC In-Page Modal ═══════════════════════════════════════════════════════ */
+let _vncModalVmId   = null;
+let _vncModalVmName = null;
+let _vncModalUrl    = null;
+
+function openVncModal(vmId, vmName, url) {
+  _vncModalVmId   = vmId;
+  _vncModalVmName = vmName || vmId;
+  _vncModalUrl    = url;
+
+  const modal  = document.getElementById('vnc-modal');
+  const panel  = document.getElementById('vnc-modal-panel');
+  const iframe = document.getElementById('vnc-modal-iframe');
+  const nameEl = document.getElementById('vnc-modal-vmname');
+  const statEl = document.getElementById('vnc-modal-status');
+  const loadEl = document.getElementById('vnc-modal-loading');
+
+  nameEl.textContent = _vncModalVmName;
+  statEl.textContent = 'Bağlanıyor…';
+  statEl.style.color = '#8b949e';
+  statEl.style.borderColor = '#30363d';
+  if (loadEl) { loadEl.style.display = 'flex'; }
+
+  // Reset panel position (dragging may have moved it)
+  panel.style.left = '';
+  panel.style.top  = '';
+  panel.style.transform = '';
+
+  // Show modal
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  // Set iframe src → triggers VNC load
+  iframe.src = '';
+  setTimeout(() => { iframe.src = url; }, 60);
+
+  // Listen for iframe load to hide loading overlay
+  iframe.onload = () => {
+    if (loadEl) { setTimeout(() => { loadEl.style.display = 'none'; }, 400); }
+    // Poll status from iframe window title (noVNC sets it)
+    _vncModalStatusPoller();
+  };
+
+  // Click outside modal to nothing (don't close — user might misclick during VNC)
+}
+
+function closeVncModal() {
+  const modal  = document.getElementById('vnc-modal');
+  const iframe = document.getElementById('vnc-modal-iframe');
+  iframe.src = '';  // disconnect
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+  _vncModalVmId = null;
+}
+
+function vncModalPopout() {
+  // Open in real window then close modal
+  if (_vncModalUrl) {
+    window.open(_vncModalUrl, 'vnc_' + (_vncModalVmId||''), 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
+    closeVncModal();
+  }
+}
+
+function vncModalFS() {
+  const panel = document.getElementById('vnc-modal-panel');
+  if (!document.fullscreenElement) {
+    panel.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function vncModalMinimize() {
+  // Toggle panel height between full and collapsed (header only)
+  const panel  = document.getElementById('vnc-modal-panel');
+  const iframe = document.getElementById('vnc-modal-iframe');
+  const loading= document.getElementById('vnc-modal-loading');
+  const isMin  = panel.dataset.minimized === '1';
+  if (isMin) {
+    panel.style.height = '88vh';
+    if (iframe)  iframe.style.display = 'block';
+    if (loading) loading.style.display = 'none';
+    panel.dataset.minimized = '0';
+  } else {
+    panel.style.height = '44px';
+    if (iframe)  iframe.style.display = 'none';
+    panel.dataset.minimized = '1';
+  }
+}
+
+function vncModalCtrlAltDel() {
+  // Send Ctrl+Alt+Del into iframe (postMessage to vnc_console page)
+  const iframe = document.getElementById('vnc-modal-iframe');
+  try { iframe.contentWindow.postMessage({ type: 'vncCtrlAltDel' }, '*'); } catch(_) {}
+  // Also try direct call if same origin
+  try { if (iframe.contentWindow.sendCtrlAltDel) iframe.contentWindow.sendCtrlAltDel(); } catch(_) {}
+}
+
+function vncModalPaste() {
+  const iframe = document.getElementById('vnc-modal-iframe');
+  // Try direct call (same origin)
+  try { if (iframe.contentWindow.vncPaste) { iframe.contentWindow.vncPaste(); return; } } catch(_) {}
+  // Fallback: postMessage
+  try { iframe.contentWindow.postMessage({ type: 'vncPaste' }, '*'); } catch(_) {}
+}
+
+// Status poll: read iframe document title to update status badge
+let _vncStatTimer = null;
+function _vncModalStatusPoller() {
+  clearInterval(_vncStatTimer);
+  _vncStatTimer = setInterval(() => {
+    const modal = document.getElementById('vnc-modal');
+    if (!modal || modal.style.display === 'none') { clearInterval(_vncStatTimer); return; }
+    try {
+      const iframe  = document.getElementById('vnc-modal-iframe');
+      const statEl  = document.getElementById('vnc-modal-status');
+      const nameEl  = document.getElementById('vnc-modal-vmname');
+      // Read status from iframe's #status span text
+      const iStatus = iframe.contentDocument?.getElementById('status');
+      if (iStatus) {
+        statEl.textContent  = iStatus.textContent;
+        const ok = iStatus.classList.contains('ok');
+        const er = iStatus.classList.contains('err');
+        statEl.style.color  = ok ? '#3fb950' : er ? '#f85149' : '#8b949e';
+        statEl.style.borderColor = ok ? 'rgba(63,185,80,.4)' : er ? 'rgba(248,81,73,.4)' : '#30363d';
+      }
+      // Read VM name from iframe title
+      const iTitle = iframe.contentWindow?.document.title;
+      if (iTitle && iTitle.startsWith('VNC – ')) {
+        const n = iTitle.replace('VNC – ', '').trim();
+        if (n && n !== nameEl.textContent) nameEl.textContent = n;
+      }
+    } catch(_) {} // cross-origin guard
+  }, 1500);
+}
+
+/* ── Draggable header ──────────────────────────────────────────────────────── */
+(function() {
+  let _dragging = false, _ox = 0, _oy = 0;
+  document.addEventListener('DOMContentLoaded', () => {
+    const hdr   = document.getElementById('vnc-modal-hdr');
+    const panel = document.getElementById('vnc-modal-panel');
+    if (!hdr || !panel) return;
+
+    hdr.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN') return;
+      _dragging = true;
+      const r  = panel.getBoundingClientRect();
+      panel.style.position = 'absolute';
+      panel.style.left     = r.left + 'px';
+      panel.style.top      = r.top  + 'px';
+      panel.style.margin   = '0';
+      _ox = e.clientX - r.left;
+      _oy = e.clientY - r.top;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!_dragging) return;
+      const maxX = window.innerWidth  - panel.offsetWidth;
+      const maxY = window.innerHeight - panel.offsetHeight;
+      panel.style.left = Math.max(0, Math.min(maxX, e.clientX - _ox)) + 'px';
+      panel.style.top  = Math.max(0, Math.min(maxY, e.clientY - _oy)) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => { _dragging = false; });
+  });
+})();
+
+/* ── Keyboard shortcut: Escape to close ─────────────────────────────────────  */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('vnc-modal');
+    if (modal && modal.style.display !== 'none') {
+      // Only close if focus is NOT inside the iframe (user might press Esc inside VM)
+      if (!document.activeElement?.closest('#vnc-modal-iframe')) {
+        closeVncModal();
+      }
+    }
+  }
+});
+</script>
 </body>
 </html>
