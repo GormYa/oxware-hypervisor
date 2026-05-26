@@ -177,8 +177,8 @@
     .summary-panel-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
     /* ── ESXi-style host panel ── */
     .esxi-host-panel{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:14px;min-height:200px}
-    .esxi-host-left{width:340px;flex-shrink:0;padding:16px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;border-right:1px solid var(--border);background:var(--surface2)}
-    .esxi-server-svg{width:80px;height:80px;flex-shrink:0;opacity:0.75}
+    .esxi-host-left{width:220px;flex-shrink:0;padding:12px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;border-right:1px solid var(--border);background:var(--surface2)}
+    .esxi-server-svg{width:64px;height:64px;flex-shrink:0;opacity:0.75}
     .esxi-host-identity{text-align:center}
     .esxi-host-name{font-size:16px;font-weight:400;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#c8d6e8;margin-bottom:2px;word-break:break-all;letter-spacing:0}
     .esxi-host-state{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:'Segoe UI',Arial,sans-serif;color:#22c55e;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:2px;padding:1px 8px;margin-top:4px;letter-spacing:.3px}
@@ -188,17 +188,50 @@
     .esxi-meta-key{color:#5a7494;flex-shrink:0;font-weight:400}
     .esxi-meta-val{color:#8ba7c4;text-align:right;font-size:11px;word-break:break-all;font-weight:400}
     .esxi-meta-val.accent{color:#5b9bd5;font-weight:600}
-    .esxi-host-right{flex:1;padding:18px 26px;display:flex;flex-direction:column;justify-content:space-around;gap:4px}
-    .esxi-res-block{margin-bottom:10px}
+    .esxi-host-center{width:240px;flex-shrink:0;padding:12px 16px;display:flex;flex-direction:column;gap:6px;border-right:1px solid var(--border);background:var(--surface)}
+    .esxi-center-section{margin-bottom:6px}
+    .esxi-center-section:last-child{margin-bottom:0}
+    .esxi-center-title{font-size:9px;font-weight:700;letter-spacing:.8px;color:#3d5a78;text-transform:uppercase;margin-bottom:6px;font-family:'Segoe UI',Arial,sans-serif}
+    .esxi-vm-chips{display:flex;gap:6px}
+    .esxi-vm-chip{display:flex;flex-direction:column;align-items:center;padding:6px 8px;border-radius:3px;flex:1}
+    .esxi-vm-chip.running{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2)}
+    .esxi-vm-chip.stopped{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18)}
+    .esxi-vm-chip.total{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18)}
+    .esxi-vm-chip-val{font-size:22px;font-weight:700;line-height:1;font-family:'Segoe UI',Arial,sans-serif}
+    .esxi-vm-chip.running .esxi-vm-chip-val{color:#22c55e}
+    .esxi-vm-chip.stopped .esxi-vm-chip-val{color:#f87171}
+    .esxi-vm-chip.total .esxi-vm-chip-val{color:#60a5fa}
+    .esxi-vm-chip-lbl{font-size:8px;color:#4a6480;margin-top:3px;letter-spacing:.4px;font-family:'Segoe UI',Arial,sans-serif}
+    .esxi-svc-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid rgba(30,45,69,.4);font-family:'Segoe UI',Arial,sans-serif}
+    .esxi-svc-row:last-child{border-bottom:none}
+    .esxi-svc-name{color:#5a7494}
+    .esxi-svc-ok{color:#22c55e;font-size:10px}
+    .esxi-svc-warn{color:#eab308;font-size:10px}
+    .esxi-svc-err{color:#f87171;font-size:10px}
+    .esxi-ip-row{font-size:11px;color:#8ba7c4;padding:2px 0;font-family:'Segoe UI',Arial,sans-serif;word-break:break-all}
+    .esxi-ip-label{font-size:10px;color:#3d5a78;margin-right:6px}
+    .vcenter-cs-card{display:flex;align-items:stretch;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:14px}
+    .vcenter-cs-left{display:flex;align-items:center;gap:12px;padding:14px 18px;border-right:1px solid var(--border);background:var(--surface2);flex-shrink:0;min-width:210px}
+    .vcenter-cs-icon{width:34px;height:34px;flex-shrink:0;opacity:.8}
+    .vcenter-cs-title{font-size:14px;font-weight:600;color:#c8d6e8;font-family:'Segoe UI',Arial,sans-serif}
+    .vcenter-cs-sub{font-size:10px;color:#4a6480;margin-top:2px;font-family:'Segoe UI',Arial,sans-serif}
+    .vcenter-cs-features{flex:1;padding:14px 20px;display:flex;flex-direction:column;justify-content:center;gap:5px}
+    .vcenter-cs-feat{font-size:11px;color:#5a7494;font-family:'Segoe UI',Arial,sans-serif}
+    .vcenter-cs-right{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border-left:1px solid var(--border);flex-shrink:0;min-width:180px}
+    .vcenter-cs-badge{font-size:9px;font-weight:700;letter-spacing:1.5px;color:#eab308;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:2px;padding:2px 10px}
+    .vcenter-cs-btn{opacity:.35;cursor:not-allowed!important;font-size:12px;pointer-events:none;white-space:nowrap}
+    .vcenter-cs-note{font-size:9px;color:#3d5a78;text-align:center;font-family:'Segoe UI',Arial,sans-serif;max-width:160px}
+    .esxi-host-right{flex:1;padding:12px 18px;display:flex;flex-direction:column;justify-content:space-around;gap:2px}
+    .esxi-res-block{margin-bottom:6px}
     .esxi-res-block:last-child{margin-bottom:0}
-    .esxi-res-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+    .esxi-res-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
     .esxi-res-name{font-size:11px;font-weight:600;letter-spacing:.6px;color:#5a7494;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif}
     .esxi-res-stats{display:flex;gap:18px;font-size:11px;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif}
     .esxi-res-stats .free{color:#4a6480}
     .esxi-res-stats .used{color:#8ba7c4}
     .esxi-res-stats .cap{color:#4a6480}
     .esxi-res-stats span b{font-weight:600;color:#a8c0d8}
-    .esxi-bar{height:10px;background:var(--surface3);border-radius:2px;overflow:hidden;position:relative}
+    .esxi-bar{height:7px;background:var(--surface3);border-radius:2px;overflow:hidden;position:relative}
     .esxi-bar-fill{height:100%;border-radius:2px;transition:width .5s ease;min-width:2px}
     .esxi-bar-fill.cpu{background:linear-gradient(90deg,#2a6dd9,#3d82f0)}
     .esxi-bar-fill.mem{background:linear-gradient(90deg,#16a34a,#22c55e)}
@@ -674,8 +707,12 @@
       .summary-grid{grid-template-columns:1fr!important}
       .esxi-host-panel{flex-direction:column!important}
       .esxi-host-left{width:100%!important;border-right:none!important;border-bottom:1px solid var(--border)!important;flex-direction:row!important;align-items:flex-start!important;gap:12px!important}
+      .esxi-host-center{width:100%!important;border-right:none!important;border-bottom:1px solid var(--border)!important}
       .esxi-server-svg{width:52px!important;height:52px!important;flex-shrink:0}
       .esxi-host-meta{margin-top:0!important}
+      .vcenter-cs-card{flex-direction:column!important}
+      .vcenter-cs-left{min-width:0!important;border-right:none!important;border-bottom:1px solid var(--border)!important}
+      .vcenter-cs-right{border-left:none!important;border-top:1px solid var(--border)!important;min-width:0!important}
       .charts-row{grid-template-columns:1fr!important}
       .form-grid{grid-template-columns:1fr!important}
       .card-grid{grid-template-columns:1fr 1fr!important}
@@ -1102,6 +1139,46 @@
               </div>
             </div>
 
+            <!-- Center: VM counts + services -->
+            <div class="esxi-host-center">
+
+              <!-- VM Counts -->
+              <div class="esxi-center-section">
+                <div class="esxi-center-title">Sanal Makineler</div>
+                <div class="esxi-vm-chips">
+                  <div class="esxi-vm-chip running">
+                    <span class="esxi-vm-chip-val" id="ns-vm-running">—</span>
+                    <span class="esxi-vm-chip-lbl">ÇALIŞIYOR</span>
+                  </div>
+                  <div class="esxi-vm-chip stopped">
+                    <span class="esxi-vm-chip-val" id="ns-vm-stopped">—</span>
+                    <span class="esxi-vm-chip-lbl">DURDURULDU</span>
+                  </div>
+                  <div class="esxi-vm-chip total">
+                    <span class="esxi-vm-chip-val" id="ns-vm-total">—</span>
+                    <span class="esxi-vm-chip-lbl">TOPLAM</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Network -->
+              <div class="esxi-center-section">
+                <div class="esxi-center-title">Ağ</div>
+                <div class="esxi-ip-row"><span class="esxi-ip-label">Host IP</span><span id="ns-host-ip">—</span></div>
+                <div class="esxi-ip-row"><span class="esxi-ip-label">Bridge</span><span id="ns-bridge">virbr0</span></div>
+              </div>
+
+              <!-- Services -->
+              <div class="esxi-center-section">
+                <div class="esxi-center-title">Servisler</div>
+                <div class="esxi-svc-row"><span class="esxi-svc-name">libvirtd</span><span class="esxi-svc-ok" id="ns-svc-libvirt">● Çalışıyor</span></div>
+                <div class="esxi-svc-row"><span class="esxi-svc-name">KVM Module</span><span id="ns-svc-kvm" class="esxi-svc-ok">● Yüklü</span></div>
+                <div class="esxi-svc-row"><span class="esxi-svc-name">Open vSwitch</span><span class="esxi-svc-ok" id="ns-svc-ovs">● Çalışıyor</span></div>
+                <div class="esxi-svc-row"><span class="esxi-svc-name">SSH</span><span class="esxi-svc-ok" id="ns-svc-ssh">● Etkin</span></div>
+              </div>
+
+            </div>
+
             <!-- Right: resource bars -->
             <div class="esxi-host-right">
 
@@ -1159,6 +1236,41 @@
 
             </div>
           </div><!-- /esxi-host-panel -->
+
+          <!-- vCenter Server — Coming Soon -->
+          <div class="vcenter-cs-card">
+            <div class="vcenter-cs-left">
+              <svg class="vcenter-cs-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="6" width="36" height="9" rx="1.5" fill="#1e2d45" stroke="#2a6dd9" stroke-width="1"/>
+                <rect x="5" y="8.5" width="12" height="4" rx=".5" fill="#0e1420"/>
+                <circle cx="30" cy="10.5" r="1.5" fill="#22c55e"/>
+                <circle cx="34" cy="10.5" r="1.5" fill="#2a3550"/>
+                <rect x="2" y="18" width="36" height="9" rx="1.5" fill="#1e2d45" stroke="#2a3550" stroke-width="1"/>
+                <rect x="5" y="20.5" width="12" height="4" rx=".5" fill="#0e1420"/>
+                <circle cx="30" cy="22.5" r="1.5" fill="#22c55e"/>
+                <circle cx="34" cy="22.5" r="1.5" fill="#2a3550"/>
+                <line x1="20" y1="27" x2="20" y2="34" stroke="#2a6dd9" stroke-width=".8"/>
+                <circle cx="20" cy="37" r="3" fill="#0e1420" stroke="#2a6dd9" stroke-width="1"/>
+                <path d="M18.5 37l1.2 1.2L22 35.5" stroke="#2a6dd9" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div>
+                <div class="vcenter-cs-title">OXware vCenter</div>
+                <div class="vcenter-cs-sub">Çoklu Node Yönetim Sistemi</div>
+              </div>
+            </div>
+            <div class="vcenter-cs-features">
+              <div class="vcenter-cs-feat">◈ &nbsp;Merkezi çoklu node yönetimi</div>
+              <div class="vcenter-cs-feat">◈ &nbsp;Canlı VM taşıma (Live Migration)</div>
+              <div class="vcenter-cs-feat">◈ &nbsp;Merkezi izleme &amp; alarm yönetimi</div>
+              <div class="vcenter-cs-feat">◈ &nbsp;Küme kaynak havuzu (Cluster Pooling)</div>
+            </div>
+            <div class="vcenter-cs-right">
+              <span class="vcenter-cs-badge">YAKINDA</span>
+              <button class="btn vcenter-cs-btn" disabled title="Yakında kullanıma açılacak">Get vCenter Server &rarr;</button>
+              <div class="vcenter-cs-note">OXware vCenter geliştirme aşamasındadır</div>
+            </div>
+          </div><!-- /vcenter-cs-card -->
+
           </div><!-- /dash-widget#resources -->
 
           <div class="dash-widget" data-wid="cpu-chart">
@@ -8818,6 +8930,28 @@ async function loadNodeSummary() {
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
     document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.0"}`;
+
+    // Center panel: VM counts
+    const _vmRun  = vmSumData?.running ?? '—';
+    const _vmTot  = vmSumData?.total   ?? '—';
+    const _vmStop = (vmSumData?.total != null && vmSumData?.running != null) ? (vmSumData.total - vmSumData.running) : '—';
+    const _nsVmRunEl  = document.getElementById("ns-vm-running");
+    const _nsVmStopEl = document.getElementById("ns-vm-stopped");
+    const _nsVmTotEl  = document.getElementById("ns-vm-total");
+    if (_nsVmRunEl)  _nsVmRunEl.textContent  = _vmRun;
+    if (_nsVmStopEl) _nsVmStopEl.textContent = _vmStop;
+    if (_nsVmTotEl)  _nsVmTotEl.textContent  = _vmTot;
+
+    // Center panel: Host IP
+    const _nsHostIpEl = document.getElementById("ns-host-ip");
+    if (_nsHostIpEl && infoData.host?.ip) _nsHostIpEl.textContent = infoData.host.ip;
+
+    // Center panel: KVM service status
+    const _nsKvmSvcEl = document.getElementById("ns-svc-kvm");
+    if (_nsKvmSvcEl) {
+      _nsKvmSvcEl.textContent = infoData.host?.kvm_available ? "● Yüklü" : "✗ Yok";
+      _nsKvmSvcEl.className   = infoData.host?.kvm_available ? "esxi-svc-ok" : "esxi-svc-err";
+    }
 
     // Topbar stats
     document.getElementById("tb-cpu").textContent = cpuPct.toFixed(0) + "%";
