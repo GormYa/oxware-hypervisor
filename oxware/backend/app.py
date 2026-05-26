@@ -2185,6 +2185,118 @@ def api_vm_enable_ssh(vm_id):
     except Exception as e:
         return err(str(e), 500)
 
+@app.route("/api/vms/<vm_id>/reset-password", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_reset_password(vm_id):
+    """
+    QEMU Guest Agent ile çalışan VM içinde şifre sıfırla.
+    Ayrıca SSH password auth'u etkinleştirir.
+    Body: { "username": "...", "password": "..." }
+    """
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
+
+    if not username or not password:
+        return err("username ve password gerekli", 400)
+
+    try:
+        vm      = vm_manager.get_vm(vm_id)
+        vm_name = vm.get("name", vm_id)
+
+        # Kabuk injection'a karşı: sadece güvenli karakterlere izin ver
+        import re as _re
+        if not _re.match(r'^[A-Za-z0-9_\-]+$', username):
+            return err("Geçersiz kullanıcı adı karakteri", 400)
+        if len(password) > 128:
+            return err("Şifre çok uzun", 400)
+
+        # Şifreyi base64 ile geç — tek tırnak/özel karakter sorununu önler
+        import base64 as _b64
+        pw_b64   = _b64.b64encode(password.encode()).decode()
+        user_b64 = _b64.b64encode(username.encode()).decode()
+
+        script = (
+            # Decode from base64 → safe to use in printf
+            f"PW=$(echo {pw_b64} | base64 -d); "
+            f"USER=$(echo {user_b64} | base64 -d); "
+            # Set passwords
+            f"printf \"$USER:$PW\\nroot:$PW\\n\" | chpasswd; "
+            # Unlock accounts
+            f"passwd -u \"$USER\" 2>/dev/null; passwd -u root 2>/dev/null; "
+            # Enable SSH password auth
+            f"SSHCFG=/etc/ssh/sshd_config; "
+            f"sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication yes/' \"$SSHCFG\"; "
+            f"grep -q '^PasswordAuthentication yes' \"$SSHCFG\" || echo 'PasswordAuthentication yes' >> \"$SSHCFG\"; "
+            # Reload sshd
+            f"systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || "
+            f"service ssh reload 2>/dev/null || service sshd reload 2>/dev/null; "
+            f"echo OXWARE_DONE"
+        )
+
+        cmd_payload = json.dumps({
+            "execute": "guest-exec",
+            "arguments": {
+                "path": "/bin/bash",
+                "arg": ["-c", script],
+                "capture-output": True
+            }
+        })
+
+        result = subprocess.run(
+            ["virsh", "qemu-agent-command", vm_name, cmd_payload],
+            capture_output=True, text=True, timeout=20
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            not_connected = any(x in stderr.lower() for x in [
+                "not responding", "not connected", "agent is not", "no agent", "error: unable"
+            ])
+            return jsonify({
+                "success": False,
+                "needs_guest_agent": not_connected,
+                "error": stderr or "Guest agent bağlı değil",
+                "install_cmd": (
+                    "apt update && apt install -y qemu-guest-agent && "
+                    "systemctl enable --now qemu-guest-agent"
+                ) if not_connected else None,
+            }), 200
+
+        # Read exec result and wait for completion
+        try:
+            pid = json.loads(result.stdout).get("return", {}).get("pid")
+            if pid:
+                time.sleep(1.5)
+                status_payload = json.dumps({
+                    "execute": "guest-exec-status",
+                    "arguments": {"pid": pid}
+                })
+                sr = subprocess.run(
+                    ["virsh", "qemu-agent-command", vm_name, status_payload],
+                    capture_output=True, text=True, timeout=10
+                )
+                if sr.returncode == 0:
+                    ret     = json.loads(sr.stdout).get("return", {})
+                    exitcode = ret.get("exitcode", 0)
+                    if exitcode != 0:
+                        import base64 as _b64e
+                        err_b64 = ret.get("err-data", "")
+                        err_txt = _b64e.b64decode(err_b64).decode("utf-8", errors="replace") if err_b64 else ""
+                        return jsonify({"success": False, "error": f"exit {exitcode}: {err_txt}"}), 200
+        except Exception:
+            pass
+
+        return jsonify({
+            "success": True,
+            "message": f"'{username}' şifresi sıfırlandı, SSH password auth etkinleştirildi."
+        }), 200
+
+    except Exception as e:
+        return err(str(e), 500)
+
+
 @app.route("/api/vms/<vm_id>/nat-sync", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")

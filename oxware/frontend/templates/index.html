@@ -8983,6 +8983,7 @@ async function loadVMDetail(vmId) {
       actHtml += `<button class="vd-btn" onclick="toggleMaintenance('${_vid}','${_vnm}')" title="Bakım Modu" style="color:#fbbf24">🔧 Bakım</button>`;
       actHtml += `<button class="vd-btn" onclick="openSpiceInfo('${_vid}','${_vnm}')" title="SPICE Konsol" style="color:#34d399">📺 SPICE</button>`;
       actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${_vid}')" title="SSH">🔑 SSH</button>`;
+      actHtml += `<button class="vd-btn" onclick="vmResetPassword('${_vid}','${_vnm}')" title="VM içinde şifreyi sıfırla (QEMU Guest Agent)" style="color:#f59e0b">🔐 Şifre Sıfırla</button>`;
       actHtml += `<button class="vd-btn" onclick="vmNatSync('${_vid}')" title="NAT Sync">🔄 NAT</button>`;
       actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${_vid}','${_vnm}')">👤 Atama</button>`;
       actHtml += `<button class="vd-btn danger" onclick="deleteVM('${_vid}','${_vnm}')">✕ Sil</button>`;
@@ -10860,6 +10861,96 @@ async function vmEnableSsh(id) {
     completeTaskPanel(taskId, 'error');
     toast("SSH etkinleştirilemedi: " + escHtml(e.message || String(e)), "error");
   }
+}
+
+async function vmResetPassword(id, vmName) {
+  // Inline modal: username + password inputs
+  const existing = document.getElementById('_vmResetPwOverlay');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = '_vmResetPwOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+
+  overlay.innerHTML = `
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;width:380px;max-width:92vw;box-shadow:0 20px 60px #000c">
+      <div style="font-weight:700;font-size:14px;color:#e6edf3;margin-bottom:4px">🔐 VM Şifre Sıfırla</div>
+      <div style="font-size:11px;color:#8b949e;margin-bottom:16px">${escHtml(vmName)} — QEMU Guest Agent gerektirir</div>
+      <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Kullanıcı Adı</label>
+      <input id="_rpUser" type="text" placeholder="Örn: ubuntu, gursoy..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 11px;color:#e6edf3;font-size:13px;margin-bottom:12px;outline:none">
+      <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px">Yeni Şifre</label>
+      <input id="_rpPass" type="password" placeholder="Yeni şifre"
+        style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 11px;color:#e6edf3;font-size:13px;margin-bottom:16px;outline:none">
+      <div style="font-size:10px;color:#484f58;margin-bottom:14px;line-height:1.5">
+        ✓ Kullanıcı + root şifresi ayarlanır<br>
+        ✓ SSH password auth etkinleştirilir (PasswordAuthentication yes)<br>
+        ✓ Hesap kilidi kaldırılır (passwd -u)
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="_rpCancel" style="padding:7px 16px;border-radius:6px;border:1px solid #30363d;background:transparent;color:#e6edf3;cursor:pointer;font-size:12px">İptal</button>
+        <button id="_rpSubmit" style="padding:7px 18px;border-radius:6px;border:none;background:#1565c0;color:#fff;cursor:pointer;font-size:12px;font-weight:600">Sıfırla →</button>
+      </div>
+      <div id="_rpStatus" style="margin-top:12px;font-size:11px;display:none"></div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const userEl   = document.getElementById('_rpUser');
+  const passEl   = document.getElementById('_rpPass');
+  const submitEl = document.getElementById('_rpSubmit');
+  const cancelEl = document.getElementById('_rpCancel');
+  const statusEl = document.getElementById('_rpStatus');
+
+  cancelEl.onclick = () => overlay.remove();
+  setTimeout(() => userEl.focus(), 30);
+
+  const doReset = async () => {
+    const username = userEl.value.trim();
+    const password = passEl.value;
+    if (!username) { userEl.focus(); return; }
+    if (!password) { passEl.focus(); return; }
+
+    submitEl.disabled = true;
+    submitEl.textContent = '⏳ Sıfırlanıyor…';
+    statusEl.style.display = 'none';
+
+    try {
+      const d = await api(`/vms/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+
+      if (d.success) {
+        statusEl.style.cssText = 'margin-top:12px;font-size:11px;display:block;color:#3fb950';
+        statusEl.textContent = '✓ ' + (d.message || 'Şifre başarıyla sıfırlandı');
+        submitEl.textContent = '✓ Tamam';
+        setTimeout(() => overlay.remove(), 2500);
+        toast('Şifre sıfırlandı, SSH password auth açıldı ✓', 'success');
+      } else if (d.needs_guest_agent) {
+        const cmd = d.install_cmd || 'apt install -y qemu-guest-agent && systemctl enable --now qemu-guest-agent';
+        statusEl.style.cssText = 'margin-top:12px;font-size:11px;display:block;color:#f85149';
+        statusEl.innerHTML = `⚠ QEMU Guest Agent bulunamadı.<br>VNC konsolundan giriş yapıp şu komutu çalıştırın:<br>
+          <code style="display:block;background:#0d1117;padding:6px;border-radius:4px;margin-top:6px;font-size:10px;word-break:break-all;cursor:pointer" onclick="navigator.clipboard?.writeText(${JSON.stringify(cmd)});toast('Kopyalandı','success')">${escHtml(cmd)}</code>`;
+        submitEl.disabled = false;
+        submitEl.textContent = 'Tekrar Dene';
+      } else {
+        statusEl.style.cssText = 'margin-top:12px;font-size:11px;display:block;color:#f85149';
+        statusEl.textContent = '✗ ' + escHtml(d.error || 'Bilinmeyen hata');
+        submitEl.disabled = false;
+        submitEl.textContent = 'Sıfırla →';
+      }
+    } catch (e) {
+      statusEl.style.cssText = 'margin-top:12px;font-size:11px;display:block;color:#f85149';
+      statusEl.textContent = '✗ ' + escHtml(e.message || String(e));
+      submitEl.disabled = false;
+      submitEl.textContent = 'Sıfırla →';
+    }
+  };
+
+  submitEl.onclick = doReset;
+  passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doReset(); });
 }
 
 async function vmNatSync(id) {
