@@ -253,8 +253,8 @@
     .vd-btn.warning:hover{background:rgba(234,179,8,.18)}
 
     /* ── Section header ── */
-    .section-header{display:flex;align-items:flex-start;margin-bottom:12px;gap:10px}
-    .section-header h2{font-size:14px;font-weight:700;color:var(--text)}
+    .section-header{display:flex;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:nowrap}
+    .section-header h2{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0}
     .section-header h2 + p,.section-header div p{font-size:11px;color:var(--text-muted);margin-top:1px}
     .spacer{flex:1}
 
@@ -2047,7 +2047,7 @@
               <button class="btn" onclick="openAiVmModal()" style="color:var(--accent-lt)" title="AI ile VM oluştur">🤖 AI ile Oluştur</button>
               <button class="btn" onclick="openImportOvaModal()" style="color:#34d399">⬆ OVA Import</button>
             </span>
-            <input id="vmTagFilter" type="text" placeholder="🏷 Etiket filtrele..." style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);font-size:13px;min-width:160px" oninput="filterVmsByTag(this.value)">
+            <input id="vmTagFilter" type="text" placeholder="🏷 Etiket filtrele..." style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);font-size:13px;width:180px;flex-shrink:0" oninput="filterVmsByTag(this.value)">
           </div>
 
           <!-- Batch toolbar -->
