@@ -10897,7 +10897,7 @@ async function openConsole(vmId) {
     // VNC portunu etkinleştir
     await api(`/vms/${vmId}/console/start`, { method: "POST" }).catch(() => {});
     const tok = TOKEN();
-    const url = `/vnc_console/${vmId}?token=${encodeURIComponent(tok)}`;
+    const url = `/vnc_console/${vmId}?token=${encodeURIComponent(tok)}&embed=1`;
     // VM adını bul (varsa cache'den)
     let vmName = vmId;
     try {
@@ -18266,9 +18266,10 @@ function closeVncModal() {
 }
 
 function vncModalPopout() {
-  // Open in real window then close modal
+  // Open in real window then close modal — strip embed=1 so header shows
   if (_vncModalUrl) {
-    window.open(_vncModalUrl, 'vnc_' + (_vncModalVmId||''), 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
+    const popUrl = _vncModalUrl.replace(/[&?]embed=1/, '');
+    window.open(popUrl, 'vnc_' + (_vncModalVmId||''), 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
     closeVncModal();
   }
 }
