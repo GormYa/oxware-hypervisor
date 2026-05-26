@@ -10436,9 +10436,12 @@ function _showGlobalCtxMenu(page, x, y) {
 // Global document-level handler
 // .table-wrap already calls vmTableContextMenu via oncontextmenu attr — skip here
 document.addEventListener('contextmenu', e => {
-  if (e.target.closest('input,textarea,select,code')) return;  // native
-  if (e.target.closest('#vm-ctx-menu')) return;
-  if (e.target.closest('.table-wrap')) return;  // handled per-table
+  if (e.target.closest('input,textarea,select,code,pre')) return;  // native text
+  if (e.target.closest('#vm-ctx-menu')) return;                    // menu itself
+  if (e.target.closest('.table-wrap[oncontextmenu]')) return;      // vm table (own handler)
+  if (e.target.closest('#shell-terminal,#shell-container')) return; // xterm.js terminal
+  if (e.target.closest('#vnc-screen,#vnc-iframe,canvas')) return;  // noVNC / SPICE canvas
+  if (e.target.closest('#topo-canvas-wrap svg')) return;           // topology SVG nodes
   e.preventDefault();
   _showGlobalCtxMenu(typeof currentPage !== 'undefined' ? currentPage : 'summary', e.clientX, e.clientY);
 });
