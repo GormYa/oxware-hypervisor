@@ -893,48 +893,88 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
             # 4. Pure-Python SHA-512 crypt (always succeeds)
             return _sha512_crypt_pure(pw)
 
+        # Top-level password: directive — sets DEFAULT user (ubuntu) password.
+        # Most reliable method, works on all cloud-init versions regardless of
+        # users: stanza. MUST come before users: stanza in the YAML.
+        if safe_password:
+            lines.append(f"password: {safe_password}")
+
         if safe_user:
             hashed_pw = _hash_password(safe_password) if safe_password else None
 
+            # CRITICAL: '- default' must be first — without it cloud-init REPLACES
+            # all pre-installed users (ubuntu) instead of adding to them.
+            # This was the root cause of "Login incorrect" on Ubuntu cloud images.
             user_lines = [
                 "users:",
-                f"  - name: {safe_user}",
-                "    sudo: ALL=(ALL) NOPASSWD:ALL",
-                "    shell: /bin/bash",
-                "    groups: users,sudo",
+                "  - default",
             ]
-            if safe_password:
-                user_lines.append("    lock_passwd: false")
-                if hashed_pw:
-                    # passwd: field — set at user creation, never needs chpasswd
-                    user_lines.append(f"    passwd: '{hashed_pw}'")
-            if safe_ssh_key:
-                user_lines.append("    ssh_authorized_keys:")
-                user_lines.append(f"      - {safe_ssh_key}")
+            is_default_user = safe_user.lower() in ("ubuntu", "debian", "centos",
+                                                      "fedora", "ec2-user", "cloud-user")
+            if not is_default_user:
+                # Custom username — add as a second user alongside the default
+                user_lines.extend([
+                    f"  - name: {safe_user}",
+                    "    sudo: ALL=(ALL) NOPASSWD:ALL",
+                    "    shell: /bin/bash",
+                    "    groups: users,sudo",
+                ])
+                if safe_password:
+                    user_lines.append("    lock_passwd: false")
+                    if hashed_pw:
+                        user_lines.append(f"    passwd: '{hashed_pw}'")
+                if safe_ssh_key:
+                    user_lines.append("    ssh_authorized_keys:")
+                    user_lines.append(f"      - {safe_ssh_key}")
+            else:
+                # Username IS the default cloud user — patch via default entry
+                if safe_ssh_key:
+                    user_lines.extend([
+                        f"  - name: {safe_user}",
+                        "    sudo: ALL=(ALL) NOPASSWD:ALL",
+                        "    lock_passwd: false",
+                        "    ssh_authorized_keys:",
+                        f"      - {safe_ssh_key}",
+                    ])
             lines.append("\n".join(user_lines))
 
             if safe_password:
-                # chpasswd: new format (cloud-init 22.3+ — 'list' was removed)
-                # type: text = plaintext (cloud-init hashes it internally)
+                # chpasswd: covers all users explicitly (cloud-init 22.3+ format)
+                # type: text = plain password, cloud-init hashes internally
+                chpasswd_entries = (
+                    f"    - name: ubuntu\n      password: {safe_password}\n      type: text"
+                )
+                if not is_default_user:
+                    chpasswd_entries += (
+                        f"\n    - name: {safe_user}\n      password: {safe_password}\n      type: text"
+                    )
+                chpasswd_entries += (
+                    f"\n    - name: root\n      password: {safe_password}\n      type: text"
+                )
                 lines.append(
                     f"chpasswd:\n"
                     f"  expire: false\n"
                     f"  users:\n"
-                    f"    - name: {safe_user}\n"
-                    f"      password: {safe_password}\n"
-                    f"      type: text\n"
-                    f"    - name: root\n"
-                    f"      password: {safe_password}\n"
-                    f"      type: text"
+                    f"{chpasswd_entries}"
                 )
-                # runcmd last resort — runs after all cloud-init modules complete
+
+                # runcmd: absolute last resort — runs after ALL cloud-init modules
                 _pw_q = safe_password.replace("'", "'\\''")
-                lines.append(
-                    f"runcmd:\n"
-                    f"  - \"printf '{safe_user}:{_pw_q}\\nroot:{_pw_q}\\n' | chpasswd\"\n"
-                    f"  - \"passwd -u {safe_user} 2>/dev/null || true\"\n"
-                    f"  - \"passwd -u root 2>/dev/null || true\""
-                )
+                runcmd_cmds = [
+                    f"printf 'ubuntu:{_pw_q}\\nroot:{_pw_q}\\n' | chpasswd 2>/dev/null || true",
+                    f"passwd -u ubuntu 2>/dev/null || true",
+                    f"passwd -u root 2>/dev/null || true",
+                ]
+                if not is_default_user:
+                    runcmd_cmds.insert(1,
+                        f"printf '{safe_user}:{_pw_q}\\n' | chpasswd 2>/dev/null || true"
+                    )
+                    runcmd_cmds.insert(2,
+                        f"passwd -u {safe_user} 2>/dev/null || true"
+                    )
+                runcmd_yaml = "runcmd:\n" + "\n".join(f"  - \"{c}\"" for c in runcmd_cmds)
+                lines.append(runcmd_yaml)
+
         elif safe_ssh_key:
             lines.append(f"ssh_authorized_keys:\n  - {safe_ssh_key}")
 

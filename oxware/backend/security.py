@@ -143,9 +143,12 @@ def security_headers_middleware(app):
             response.headers["Pragma"]        = "no-cache"
 
         # HSTS (yalnızca HTTPS'de)
+        # NOT: preload kullanma — self-signed / yenilenen sertifikalarda
+        # tarayıcı kalıcı olarak bloke olur ve "proceed anyway" seçeneği çıkmaz.
+        # max-age=300 (5 dakika) → sertifika sorunlarında hızlı kurtarma sağlar.
         if request.is_secure:
             response.headers["Strict-Transport-Security"] = \
-                "max-age=31536000; includeSubDomains; preload"
+                "max-age=300"
 
         # CSP — console/novnc için frame-ancestors 'self', diğerleri için 'none'
         frame_ancestors = "'self'" if is_console_path else "'none'"

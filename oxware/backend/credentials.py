@@ -184,7 +184,7 @@ def verify_credentials(username: str, password: str) -> bool:
             username
         )
         return False
-    if data.get("username") != username:
+    if data.get("username", "").lower() != username.lower():
         return False
     return _verify_password(password, data.get("password_hash", ""))
 
