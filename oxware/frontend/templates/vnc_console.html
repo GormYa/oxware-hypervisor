@@ -135,15 +135,19 @@ let _rfb = null;
 
 function setStatus(msg, ok) {
   const el = document.getElementById("status");
+  if (!el) return;  // embed mode — header not rendered
   el.textContent = msg;
   el.className   = "status " + (ok === true ? "ok" : ok === false ? "err" : "");
 }
 function setLoad(msg, detail) {
-  document.getElementById("load-msg").textContent    = msg || "";
-  document.getElementById("load-detail").textContent = detail || "";
+  const lm = document.getElementById("load-msg");
+  const ld = document.getElementById("load-detail");
+  if (lm) lm.textContent = msg || "";
+  if (ld) ld.textContent = detail || "";
 }
 function hideLoading() {
-  document.getElementById("loading").style.display = "none";
+  const el = document.getElementById("loading");
+  if (el) el.style.display = "none";
 }
 
 // Fetch VM name for title bar
@@ -153,7 +157,8 @@ function hideLoading() {
     if (r.ok) {
       const d = await r.json();
       const name = (d.vm || d).name || _vmId;
-      document.getElementById("vm-name").textContent = name;
+      const nm = document.getElementById("vm-name");
+      if (nm) nm.textContent = name;
       document.title = "VNC – " + name;
     }
   } catch (_) {}
@@ -253,7 +258,9 @@ function hideLoading() {
 
     _rfb.addEventListener("desktopname", (e) => {
       if (e.detail?.name) {
-        document.getElementById("vm-name").textContent = e.detail.name;
+        const nm = document.getElementById("vm-name");
+        if (nm) nm.textContent = e.detail.name;
+        document.title = "VNC – " + e.detail.name;
         setStatus("● " + e.detail.name, true);
       }
     });
