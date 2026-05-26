@@ -247,7 +247,7 @@ install_packages() {
         ufw fail2ban certbot python3-certbot
         nftables wireguard
         openvswitch-switch openvswitch-common
-        suricata
+        # suricata: Debian 12 main repo'da yok — install_suricata() tarafından ayrıca kurulur
     )
     for pkg in "${PKGS[@]}"; do
         dpkg -l "$pkg" &>/dev/null || apt-get install -y -qq "$pkg" 2>/dev/null \
@@ -817,6 +817,7 @@ with open(fpath, 'w') as fp:
     yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
 print(f"Cleaned {iface} config in {fpath}")
 PYCLEAN
+        chmod 600 "$f"  # netplan: "too open" uyarısını önle
     done
 
     netplan apply
@@ -1002,8 +1003,29 @@ MOTDSCRIPT
 # ── Suricata IDS/IPS ──────────────────────────────────────────
 install_suricata() {
     step "Suricata IDS/IPS"
+
+    # Debian 12 main repo'da yok — önce kurulmaya çalış
     if ! command -v suricata &>/dev/null; then
-        warn "Suricata kurulu değil — paket kurulumu atlandı"
+        log "Suricata kuruluyor..."
+        # Debian 12 (bookworm): OISF Debian repo'su gerekli
+        if grep -qi "debian" /etc/os-release 2>/dev/null; then
+            apt-get install -y -qq lsb-release apt-transport-https 2>/dev/null || true
+            CODENAME=$(lsb_release -sc 2>/dev/null || echo "bookworm")
+            # OISF resmi Debian deposu
+            curl -fsSL "https://packagecloud.io/oisf/suricata-stable/gpgkey" \
+                | gpg --dearmor -o /etc/apt/trusted.gpg.d/suricata.gpg 2>/dev/null || true
+            echo "deb https://packagecloud.io/oisf/suricata-stable/debian/ ${CODENAME} main" \
+                > /etc/apt/sources.list.d/suricata.list
+            apt-get update -qq 2>/dev/null || true
+            apt-get install -y -qq suricata 2>/dev/null || true
+        else
+            apt-get install -y -qq suricata 2>/dev/null || true
+        fi
+    fi
+
+    if ! command -v suricata &>/dev/null; then
+        warn "Suricata kurulamadı — IDS/IPS devre dışı (isteğe bağlı bileşen)"
+        warn "Manuel kurulum: curl -fsSL https://packagecloud.io/oisf/suricata-stable/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/suricata.gpg"
         return
     fi
 
@@ -1151,9 +1173,9 @@ main() {
     configure_hostname
     configure_firewall
     configure_fail2ban
+    install_ovs          # OVS bridge setup'tan önce başlatılmalı — netplan apply OVS'ye ulaşmaya çalışır
     setup_host_bridge
     fix_reboot_stability
-    install_ovs
     install_suricata
     install_motd
     install_cli_tools
