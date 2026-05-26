@@ -26,6 +26,9 @@
       flex-shrink:0;
       height:44px;
     }
+    /* embed=1: hide own header, screen fills full height */
+    body.embed .header { display:none !important; }
+    body.embed #screen { height:100vh !important; }
     .logo {
       display:flex;
       align-items:center;
@@ -95,13 +98,9 @@
 <body>
 
 <script>
-// embed=1 → hide header (loaded inside in-page modal, modal provides own chrome)
+// embed=1 → body.embed class → CSS hides .header immediately (no DOMContentLoaded needed)
 if (new URLSearchParams(location.search).get('embed') === '1') {
-  document.documentElement.style.setProperty('--hdr-h', '0px');
-  document.addEventListener('DOMContentLoaded', () => {
-    const h = document.querySelector('.header');
-    if (h) h.style.display = 'none';
-  });
+  document.body.classList.add('embed');
 }
 </script>
 
