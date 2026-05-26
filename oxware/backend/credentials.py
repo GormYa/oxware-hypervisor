@@ -191,13 +191,17 @@ def verify_credentials(username: str, password: str) -> bool:
 
 def get_username() -> str:
     # Önce şifreli auth dosyasından dene
+    # NOTE: login her zaman .lower() uygular (api_login satır ~889), bu yüzden
+    # burada da normalize ediyoruz — JWT identity her zaman lowercase olduğu için
+    # username == get_username() karşılaştırmaları case-mismatch yüzünden "viewer"
+    # dönmesin diye. (OXW-RBAC-001 fix)
     data = _load_auth()
     if data.get("username"):
-        return data["username"]
+        return data["username"].strip().lower()
     # Şifreli dosya çözülemediyse (machine-id değişmiş olabilir) plaintext yedeğe bak
     try:
         if os.path.exists(USERNAME_FILE):
-            uname = Path(USERNAME_FILE).read_text().strip()
+            uname = Path(USERNAME_FILE).read_text().strip().lower()
             if uname:
                 import logging as _log
                 _log.getLogger("oxware.credentials").critical(

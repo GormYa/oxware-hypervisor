@@ -583,7 +583,7 @@ def require_role(*allowed_roles):
             try:
                 # Primary admin check (credentials.py sadece tek admin tutar)
                 _primary_admin = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
-                if username == _primary_admin:
+                if username.lower() == _primary_admin.lower():
                     role = "admin"
                 elif hasattr(cred_mgr, "get_role"):
                     role = cred_mgr.get_role(username) or "viewer"
@@ -611,7 +611,7 @@ def _vmuser_check(vm_id):
         verify_jwt_in_request()
         username = get_jwt_identity()
         _primary = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
-        if username == _primary:
+        if username.lower() == _primary.lower():
             return None  # admin — pass
         role = (cred_mgr.get_role(username) if hasattr(cred_mgr, "get_role")
                 else user_manager.get_user_role(username)) or "viewer"
@@ -764,7 +764,7 @@ def api_vnc_token(vm_id):
     token = _secrets.token_urlsafe(32)
     try:
         _prim  = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
-        _role  = "administrator" if username == _prim else (
+        _role  = "administrator" if username.lower() == _prim.lower() else (
             user_manager.get_user_role(username) or "viewer")
     except Exception:
         _role = "viewer"
@@ -978,7 +978,7 @@ def api_login():
     # Resolve role for frontend
     try:
         _primary = cred_mgr.get_username()
-        _role = "administrator" if username == _primary else (
+        _role = "administrator" if username.lower() == _primary.lower() else (
             _ldap_role or user_manager.get_user_role(username)
         )
     except Exception:
@@ -1022,7 +1022,7 @@ def api_2fa_verify_login():
         except Exception:
             pass
     try:
-        _2fa_role = "administrator" if username == cred_mgr.get_username() \
+        _2fa_role = "administrator" if username.lower() == cred_mgr.get_username().lower() \
             else user_manager.get_user_role(username)
     except Exception:
         _2fa_role = "administrator"
@@ -1077,7 +1077,7 @@ def api_me():
     # Resolve role for RBAC frontend use
     try:
         _primary_admin = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
-        if username == _primary_admin:
+        if username.lower() == _primary_admin.lower():
             _role = "administrator"
         else:
             _role = user_manager.get_user_role(username)
@@ -1146,7 +1146,7 @@ def api_get_vm(vm_id):
         username = get_jwt_identity()
         role = user_manager.get_user_role(username)
         try:
-            if username == cred_mgr.get_username():
+            if username.lower() == cred_mgr.get_username().lower():
                 role = "administrator"
         except Exception:
             pass
