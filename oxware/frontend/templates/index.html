@@ -1165,7 +1165,7 @@
               <div class="esxi-center-section">
                 <div class="esxi-center-title">Ağ</div>
                 <div class="esxi-ip-row"><span class="esxi-ip-label">Host IP</span><span id="ns-host-ip">—</span></div>
-                <div class="esxi-ip-row"><span class="esxi-ip-label">Bridge</span><span id="ns-bridge">virbr0</span></div>
+                <div class="esxi-ip-row"><span class="esxi-ip-label">Bridge</span><span id="ns-bridge">oxbridge</span></div>
               </div>
 
               <!-- Services -->
@@ -8942,9 +8942,11 @@ async function loadNodeSummary() {
     if (_nsVmStopEl) _nsVmStopEl.textContent = _vmStop;
     if (_nsVmTotEl)  _nsVmTotEl.textContent  = _vmTot;
 
-    // Center panel: Host IP
+    // Center panel: Host IP + Bridge
     const _nsHostIpEl = document.getElementById("ns-host-ip");
-    if (_nsHostIpEl && infoData.host?.ip) _nsHostIpEl.textContent = infoData.host.ip;
+    if (_nsHostIpEl) _nsHostIpEl.textContent = infoData.host?.ip || "—";
+    const _nsBridgeEl = document.getElementById("ns-bridge");
+    if (_nsBridgeEl) _nsBridgeEl.textContent = infoData.host?.bridge || "oxbridge";
 
     // Center panel: KVM service status
     const _nsKvmSvcEl = document.getElementById("ns-svc-kvm");

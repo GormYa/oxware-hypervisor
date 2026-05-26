@@ -4,6 +4,7 @@ import platform
 import os
 import time
 import threading
+import socket
 import libvirt
 import config
 
@@ -62,6 +63,29 @@ def get_host_info():
     hours = int((uptime_secs % 86400) // 3600)
     mins = int((uptime_secs % 3600) // 60)
 
+    # Primary IP — UDP trick (no data actually sent)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as _s:
+            _s.connect(("8.8.8.8", 80))
+            host_ip = _s.getsockname()[0]
+    except Exception:
+        try:
+            host_ip = socket.gethostbyname(uname.node)
+        except Exception:
+            host_ip = "—"
+
+    # Bridge interface — prefer oxbridge, fall back to virbr0
+    try:
+        _ifaces = list(psutil.net_if_addrs().keys())
+        if "oxbridge" in _ifaces:
+            bridge = "oxbridge"
+        elif "virbr0" in _ifaces:
+            bridge = "virbr0"
+        else:
+            bridge = next((i for i in _ifaces if i.startswith(("br-", "bridge", "vmbr"))), "—")
+    except Exception:
+        bridge = "—"
+
     return {
         "hostname": uname.node,
         "os": f"{uname.system} {uname.release}",
@@ -75,6 +99,8 @@ def get_host_info():
         "uptime_seconds": int(uptime_secs),
         "boot_time": psutil.boot_time(),
         "distro": get_distro_name(),
+        "ip": host_ip,
+        "bridge": bridge,
     }
 
 
