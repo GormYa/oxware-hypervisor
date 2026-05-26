@@ -445,6 +445,31 @@
     .spinner-sm{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
     @keyframes spin{to{transform:rotate(360deg)}}
 
+    /* ── VNC Modal — Mobile fullscreen ───────────────────────────────────────── */
+    @media (max-width: 768px) {
+      #vnc-modal { background: #000 !important; }
+      #vnc-modal-panel {
+        width:  100vw !important;
+        height: 100dvh !important; /* dvh = dynamic viewport height (avoids browser chrome) */
+        max-width: 100vw !important;
+        border-radius: 0 !important;
+        border: none !important;
+      }
+      #vnc-modal-hdr {
+        padding: 4px 8px !important;
+        gap: 6px !important;
+        height: 38px !important;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+      }
+      /* Hide less important buttons on mobile to save header space */
+      #vnc-modal-hdr button:not(#vnc-modal-lock-btn):not([onclick*="closeVncModal"]):not([onclick*="vncModalCtrlAltDel"]) {
+        display: none !important;
+      }
+      #vnc-modal-screen { touch-action: none; }
+      #vnc-modal-screen canvas { touch-action: none; }
+    }
+
     .user-avatar{width:30px;height:30px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
 
     /* Card */
@@ -18496,7 +18521,9 @@ async function openVncModal(vmId, vmName /*, _unused_url */) {
     _vncModalRfb = new RFB(screen, wsUrl, { credentials: { password: '' } });
     _vncModalRfb.viewOnly      = false;
     _vncModalRfb.scaleViewport = true;
-    _vncModalRfb.resizeSession = false;
+    // resizeSession: true on mobile so VM resolution fits the screen;
+    // false on desktop to preserve VM's native resolution
+    _vncModalRfb.resizeSession = window.innerWidth <= 768;
     _vncModalRfb.background    = '#000000';
 
     _vncModalRfb.addEventListener('connect', () => {

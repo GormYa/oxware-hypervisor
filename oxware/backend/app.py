@@ -7369,8 +7369,9 @@ def api_vm_disk_resize(vm_id):
 
     try:
         # Current size via qemu-img info
+        # -U / --force-share: bypass exclusive write lock (needed when VM is running)
         info_r = subprocess.run(
-            ["qemu-img", "info", "--output=json", disk_path],
+            ["qemu-img", "info", "--output=json", "-U", disk_path],
             capture_output=True, text=True, timeout=30
         )
         if info_r.returncode != 0:
