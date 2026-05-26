@@ -240,16 +240,25 @@ function hideLoading() {
     _rfb.resizeSession = false;
     _rfb.background    = "#000000";
 
+    // postMessage → parent modal can update its own status badge
+    function _pmStatus(text, ok, extra) {
+      try { window.parent.postMessage({ type: 'vncStatus', text, ok, ...extra }, '*'); } catch(_) {}
+    }
+
     _rfb.addEventListener("connect", () => {
       hideLoading();
       setStatus("● Bağlı", true);
+      _pmStatus("● Bağlı", true);
     });
 
     _rfb.addEventListener("disconnect", (e) => {
       const reason = e.detail?.reason || "";
-      setStatus("Bağlantı kesildi" + (reason ? ": " + reason : ""), false);
+      const msg = "Bağlantı kesildi" + (reason ? ": " + reason : "");
+      setStatus(msg, false);
       setLoad("Bağlantı kesildi", reason);
-      document.getElementById("loading").style.display = "flex";
+      const ld = document.getElementById("loading");
+      if (ld) ld.style.display = "flex";
+      _pmStatus(msg, false);
     });
 
     _rfb.addEventListener("credentialsrequired", () => {
@@ -262,6 +271,7 @@ function hideLoading() {
         if (nm) nm.textContent = e.detail.name;
         document.title = "VNC – " + e.detail.name;
         setStatus("● " + e.detail.name, true);
+        _pmStatus("● " + e.detail.name, true, { vmName: e.detail.name });
       }
     });
 
