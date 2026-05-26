@@ -545,6 +545,99 @@ def remove_dhcp_host(network: str, mac: str, ip: str) -> bool:
         return False
 
 
+def _sha512_crypt_pure(password: str, salt: str = None) -> str:
+    """
+    Pure-Python SHA-512 crypt per Drepper spec (https://www.akkadia.org/docs/SHA-crypt.txt).
+    Used when openssl and Python crypt module are both unavailable.
+    Always succeeds — no external dependencies.
+    """
+    import hashlib as _hl, os as _os
+
+    _B64 = ('./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            'abcdefghijklmnopqrstuvwxyz')
+
+    def _to64(v, n):
+        s = ''
+        for _ in range(n):
+            s += _B64[v & 0x3f]
+            v >>= 6
+        return s
+
+    if salt is None:
+        salt = ''.join(_B64[b & 0x3f] for b in _os.urandom(16))
+    salt = salt[:16]
+
+    pw = password.encode()
+    sa = salt.encode()
+
+    # --- Step 1-5: Digest A ---
+    da = _hl.sha512(pw + sa)
+    db = _hl.sha512(pw + sa + pw).digest()   # Digest B
+
+    # Append bytes from B for each char of password (step 4)
+    n = len(pw)
+    while n > 0:
+        da.update(db if n >= 64 else db[:n])
+        n -= 64
+
+    # Process bits of password length (step 5)
+    n = len(pw)
+    while n:
+        da.update(db if (n & 1) else pw)
+        n >>= 1
+    da = da.digest()
+
+    # --- Step 6: Digest P ---
+    dp = _hl.sha512()
+    for _ in range(len(pw)):
+        dp.update(pw)
+    dp = dp.digest()
+    p_str = (dp * (len(pw) // 64 + 1))[:len(pw)]
+
+    # --- Step 7: Digest S ---
+    ds = _hl.sha512()
+    for _ in range(16 + da[0]):
+        ds.update(sa)
+    s_str = ds.digest()[:len(sa)]
+
+    # --- Step 8: 5000 rounds ---
+    c = da
+    for i in range(5000):
+        dc = _hl.sha512()
+        dc.update(p_str if (i & 1) else c)
+        if i % 3: dc.update(s_str)
+        if i % 7: dc.update(p_str)
+        dc.update(c if (i & 1) else p_str)
+        c = dc.digest()
+
+    # --- Step 9: SHA-512 specific byte interleaving ---
+    out = (
+        _to64((c[ 0]<<16)|(c[21]<<8)|c[42], 4) +
+        _to64((c[22]<<16)|(c[43]<<8)|c[ 1], 4) +
+        _to64((c[44]<<16)|(c[ 2]<<8)|c[23], 4) +
+        _to64((c[ 3]<<16)|(c[24]<<8)|c[45], 4) +
+        _to64((c[25]<<16)|(c[46]<<8)|c[ 4], 4) +
+        _to64((c[47]<<16)|(c[ 5]<<8)|c[26], 4) +
+        _to64((c[ 6]<<16)|(c[27]<<8)|c[48], 4) +
+        _to64((c[28]<<16)|(c[49]<<8)|c[ 7], 4) +
+        _to64((c[50]<<16)|(c[ 8]<<8)|c[29], 4) +
+        _to64((c[ 9]<<16)|(c[30]<<8)|c[51], 4) +
+        _to64((c[31]<<16)|(c[52]<<8)|c[10], 4) +
+        _to64((c[53]<<16)|(c[11]<<8)|c[32], 4) +
+        _to64((c[12]<<16)|(c[33]<<8)|c[54], 4) +
+        _to64((c[34]<<16)|(c[55]<<8)|c[13], 4) +
+        _to64((c[56]<<16)|(c[14]<<8)|c[35], 4) +
+        _to64((c[15]<<16)|(c[36]<<8)|c[57], 4) +
+        _to64((c[37]<<16)|(c[58]<<8)|c[16], 4) +
+        _to64((c[59]<<16)|(c[17]<<8)|c[38], 4) +
+        _to64((c[18]<<16)|(c[39]<<8)|c[60], 4) +
+        _to64((c[40]<<16)|(c[61]<<8)|c[19], 4) +
+        _to64((c[62]<<16)|(c[20]<<8)|c[41], 4) +
+        _to64(c[63], 2)
+    )
+    return f"$6${salt}${out}"
+
+
 def _build_cidata_iso_python(iso_path: str, ci_dir: str, has_network_config: bool) -> str | None:
     """
     Pure-Python minimal ISO 9660 writer for cloud-init NoCloud.
@@ -767,8 +860,20 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
         lines.append("ssh_pwauth: true")
 
         # Generate SHA-512 password hash (most reliable for cloud-init passwd: field)
-        def _hash_password(pw: str) -> str | None:
-            """Try openssl then Python crypt to produce a SHA-512 shadow hash."""
+        def _hash_password(pw: str) -> str:
+            """SHA-512 shadow hash. Always returns a valid hash — never None."""
+            # 1. openssl passwd -6 <pw>  (direct arg, most reliable)
+            try:
+                r = subprocess.run(
+                    ["openssl", "passwd", "-6", pw],
+                    capture_output=True, text=True, timeout=5
+                )
+                h = r.stdout.strip()
+                if h and h.startswith("$6$"):
+                    return h
+            except Exception:
+                pass
+            # 2. openssl passwd -6 -stdin
             try:
                 r = subprocess.run(
                     ["openssl", "passwd", "-6", "-stdin"],
@@ -779,13 +884,14 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
                     return h
             except Exception:
                 pass
-            # Fallback: Python crypt (deprecated in 3.13 but works on most servers)
+            # 3. Python crypt module (available in Python < 3.13)
             try:
                 import crypt as _crypt
                 return _crypt.crypt(pw, _crypt.mksalt(_crypt.METHOD_SHA512))
             except Exception:
                 pass
-            return None
+            # 4. Pure-Python SHA-512 crypt (always succeeds)
+            return _sha512_crypt_pure(pw)
 
         if safe_user:
             hashed_pw = _hash_password(safe_password) if safe_password else None
@@ -808,17 +914,26 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
             lines.append("\n".join(user_lines))
 
             if safe_password:
-                # chpasswd belt-and-suspenders (plaintext fallback for passwd: failure)
+                # chpasswd: new format (cloud-init 22.3+ — 'list' was removed)
+                # type: text = plaintext (cloud-init hashes it internally)
                 lines.append(
-                    f"chpasswd:\n  expire: false\n  list: |\n"
-                    f"    {safe_user}:{safe_password}\n    root:{safe_password}"
+                    f"chpasswd:\n"
+                    f"  expire: false\n"
+                    f"  users:\n"
+                    f"    - name: {safe_user}\n"
+                    f"      password: {safe_password}\n"
+                    f"      type: text\n"
+                    f"    - name: root\n"
+                    f"      password: {safe_password}\n"
+                    f"      type: text"
                 )
-                # runcmd last resort — runs after all cloud-init modules
-                _pw_shell = safe_password.replace("'", "'\\''")
+                # runcmd last resort — runs after all cloud-init modules complete
+                _pw_q = safe_password.replace("'", "'\\''")
                 lines.append(
                     f"runcmd:\n"
-                    f"  - echo '{safe_user}:{_pw_shell}' | chpasswd\n"
-                    f"  - echo 'root:{_pw_shell}' | chpasswd 2>/dev/null || true"
+                    f"  - \"printf '{safe_user}:{_pw_q}\\nroot:{_pw_q}\\n' | chpasswd\"\n"
+                    f"  - \"passwd -u {safe_user} 2>/dev/null || true\"\n"
+                    f"  - \"passwd -u root 2>/dev/null || true\""
                 )
         elif safe_ssh_key:
             lines.append(f"ssh_authorized_keys:\n  - {safe_ssh_key}")
