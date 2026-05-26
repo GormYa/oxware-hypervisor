@@ -574,19 +574,20 @@ show_users() {
     fi
 
     # Extra users from /var/lib/oxware/users.json
-    _USERS_FILE="/var/lib/oxware/users.json"
-    if [ -f "\$_USERS_FILE" ]; then
-        python3 - <<PYUSERS 2>/dev/null
-import json, sys
+    if [ -f "/var/lib/oxware/users.json" ]; then
+        python3 - <<'PYUSERS' 2>/dev/null
+import json, os
+_UF = "/var/lib/oxware/users.json"
+_PF = "/etc/oxware/.username"
 try:
-    data = json.load(open("$_USERS_FILE"))
+    data = json.load(open(_UF))
     users = data.get("users", {})
-    primary = open("/etc/oxware/.username").read().strip() if __import__("os").path.exists("/etc/oxware/.username") else ""
+    primary = open(_PF).read().strip() if os.path.exists(_PF) else ""
     for uname, info in users.items():
         if uname == primary:
             continue
         role = info.get("role", "viewer")
-        color = "\033[0;36m" if role in ("admin","administrator") else "\033[0;37m"
+        color = "\033[0;36m" if role in ("admin", "administrator") else "\033[0;37m"
         print(f"  {color}{uname:<20}\033[0m  \033[0;37m{role:<12}\033[0m")
 except Exception as e:
     print(f"  (users.json okunamadı: {e})")
