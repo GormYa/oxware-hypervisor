@@ -3909,6 +3909,117 @@ _EXECUTE_WHITELIST = [
 
 import re as _re_exec
 
+# ── Shell komut kısıtlama (admin olmayan kullanıcılar) ────────────────────────
+_SHELL_BLOCKED_PATTERNS = [
+    # Şifre / kullanıcı yönetimi
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:passwd|chpasswd|useradd|userdel|usermod|groupadd|groupdel|groupmod|vipw|vigr|visudo)\b', _re_exec.I),
+    # Sistem kapatma / yeniden başlatma
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:shutdown|reboot|poweroff|halt|init\s+[016])\b', _re_exec.I),
+    # Ayrıcalık yükseltme
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:su|sudo)\b', _re_exec.I),
+    # Disk / bölüm yönetimi
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:fdisk|parted|gdisk|mkfs(?:\.\w+)?|dd)\b', _re_exec.I),
+    # Güvenlik duvarı değiştirme
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:iptables|ip6tables|nft)\b', _re_exec.I),
+    _re_exec.compile(r'(?:^|[;&|`(\s])ufw\s+(?:disable|reset|delete|deny|allow|reject|limit)\b', _re_exec.I),
+    # systemctl tehlikeli işlemler
+    _re_exec.compile(r'systemctl\s+(?:stop|disable|mask|kill|daemon-reload|reboot|poweroff|halt|suspend|hibernate)\b', _re_exec.I),
+    # Zamanlanmış görev değiştirme
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?crontab\b', _re_exec.I),
+    _re_exec.compile(r'(?:^|[;&|`(\s])(?:[/\w]*/)?(?:at|atq|atrm)\b', _re_exec.I),
+    # Uzaktan kod çalıştırma
+    _re_exec.compile(r'(?:curl|wget)\s+.*\|\s*(?:ba)?sh', _re_exec.I),
+    # Kritik dosyalara yazma
+    _re_exec.compile(r'[>|]\s*/etc/(?:passwd|shadow|sudoers|crontab|hosts)\b', _re_exec.I),
+]
+
+_SHELL_RESTRICTED_BANNER = (
+    "\r\n\x1b[31m╔══════════════════════════════════════════════════════════╗\x1b[0m\r\n"
+    "\x1b[31m║  ⛔  YETKİ REDDEDİLDİ                                      ║\x1b[0m\r\n"
+    "\x1b[31m║     Bu işlem için yeterli yetkiniz bulunmamaktadır.         ║\x1b[0m\r\n"
+    "\x1b[31m║     Lütfen sistem yöneticinize başvurun.                    ║\x1b[0m\r\n"
+    "\x1b[31m╚══════════════════════════════════════════════════════════╝\x1b[0m\r\n"
+)
+
+def _shell_is_blocked(cmd: str) -> bool:
+    """Komutun kısıtlı listede olup olmadığını kontrol eder."""
+    cmd = cmd.strip()
+    if not cmd:
+        return False
+    for pat in _SHELL_BLOCKED_PATTERNS:
+        if pat.search(cmd):
+            return True
+    return False
+
+# Kısıtlı shell için bash rcfile içeriği (admin olmayan kullanıcılara uygulanır)
+_RESTRICTED_SHELL_RC = r"""
+# OXware Kısıtlı Shell — admin olmayan kullanıcılar için
+export PS1='\[\e[33m\][KISITLI-SHELL]\[\e[0m\] \u@oxware:\w\$ '
+
+_perm_denied() {
+    printf '\r\n\033[31m╔══════════════════════════════════════════════════════════╗\033[0m\r\n'
+    printf '\033[31m║  ⛔  YETKİ REDDEDİLDİ                                      ║\033[0m\r\n'
+    printf '\033[31m║     Bu işlem için yeterli yetkiniz bulunmamaktadır.         ║\033[0m\r\n'
+    printf '\033[31m║     Lütfen sistem yöneticinize başvurun.                    ║\033[0m\r\n'
+    printf '\033[31m╚══════════════════════════════════════════════════════════╝\033[0m\r\n'
+    return 1
+}
+
+passwd()     { _perm_denied; }
+chpasswd()   { _perm_denied; }
+useradd()    { _perm_denied; }
+userdel()    { _perm_denied; }
+usermod()    { _perm_denied; }
+groupadd()   { _perm_denied; }
+groupdel()   { _perm_denied; }
+groupmod()   { _perm_denied; }
+vipw()       { _perm_denied; }
+vigr()       { _perm_denied; }
+visudo()     { _perm_denied; }
+shutdown()   { _perm_denied; }
+reboot()     { _perm_denied; }
+poweroff()   { _perm_denied; }
+halt()       { _perm_denied; }
+su()         { _perm_denied; }
+sudo()       { _perm_denied; }
+fdisk()      { _perm_denied; }
+parted()     { _perm_denied; }
+gdisk()      { _perm_denied; }
+dd()         { _perm_denied; }
+mkfs()       { _perm_denied; }
+mkfs.ext4()  { _perm_denied; }
+mkfs.xfs()   { _perm_denied; }
+mkfs.btrfs() { _perm_denied; }
+iptables()   { _perm_denied; }
+ip6tables()  { _perm_denied; }
+nft()        { _perm_denied; }
+crontab()    { _perm_denied; }
+
+ufw() {
+    case "$1" in disable|reset|delete|deny|allow|reject|limit)
+        _perm_denied; return ;;
+    esac
+    command ufw "$@"
+}
+
+systemctl() {
+    case "$1" in
+        stop|disable|mask|kill|daemon-reload|reboot|poweroff|halt|suspend|hibernate)
+            _perm_denied; return ;;
+    esac
+    command systemctl "$@"
+}
+
+export -f _perm_denied passwd chpasswd useradd userdel usermod groupadd groupdel groupmod
+export -f vipw vigr visudo shutdown reboot poweroff halt su sudo
+export -f fdisk parted gdisk dd mkfs iptables ip6tables nft crontab ufw systemctl
+
+printf '\033[33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\r\n'
+printf '\033[33m  OXware Kısıtlı Shell — Tehlikeli komutlar engellendi\033[0m\r\n'
+printf '\033[33m  Tam yetki için ana yönetici hesabıyla giriş yapın.\033[0m\r\n'
+printf '\033[33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\r\n'
+"""
+
 @app.route("/api/system/execute", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator")
@@ -4176,8 +4287,6 @@ _vnc_sessions    = {}   # sid    → tcp_socket
 
 @sock.on("shell_open")
 def ws_shell_open(data=None):
-    # sid'i en başta yakala — context emit() yerine sock.emit(to=sid) kullan
-    # (context emit() bazı exception path'lerinde iletilemiyor)
     sid = request.sid
     log.info("shell_open alındı: sid=%s", sid)
 
@@ -4202,17 +4311,34 @@ def ws_shell_open(data=None):
         _shell_emit(f"\r\n[Yetkilendirme hatası: {e}]\r\n")
         return
 
+    # ── Rol çözümle — primary admin tam yetki, diğerleri kısıtlı ─────────────
+    try:
+        _primary = cred_mgr.get_username() if hasattr(cred_mgr, "get_username") else ""
+        if identity == _primary:
+            _shell_role = "admin"
+        elif hasattr(cred_mgr, "get_role"):
+            _shell_role = cred_mgr.get_role(identity) or "viewer"
+        elif user_manager:
+            _shell_role = user_manager.get_user_role(identity) or "viewer"
+        else:
+            _shell_role = "viewer"
+    except Exception:
+        _shell_role = "viewer"
+    _is_admin_shell = _shell_role in ("admin", "administrator")
+
     # rapor #38 fix: audit log PTY shell open
     _client_ip = request.remote_addr or "unknown"
-    audit_log.log_action(identity, "shell_open", "host", "pty", details={"sid": sid, "ip": _client_ip})
-    log.warning("PTY shell acildi: kullanici=%s ip=%s sid=%s", identity, _client_ip, sid)
+    audit_log.log_action(identity, "shell_open", "host", "pty",
+                         details={"sid": sid, "ip": _client_ip, "role": _shell_role})
+    log.warning("PTY shell acildi: kullanici=%s ip=%s sid=%s rol=%s",
+                identity, _client_ip, sid, _shell_role)
+
     # ── PTY + Bash ──────────────────────────────────────────────────────────
     try:
         import pty, fcntl, termios, resource as _res, eventlet
 
         master_fd, slave_fd = pty.openpty()
 
-        # bash -i: interactive mode zorla (PTY stdin olsa bile bazı env'lerde gerekli)
         # rapor #39 fix: fork bomb korumasi
         def _set_limits():
             os.setsid()
@@ -4222,14 +4348,40 @@ def ws_shell_open(data=None):
             except Exception:
                 pass
 
+        # Admin olmayan kullanıcılar için kısıtlı rcfile oluştur
+        _rcfile_path = None
+        if not _is_admin_shell:
+            import tempfile as _tmpf
+            _rcfd, _rcfile_path = _tmpf.mkstemp(prefix="oxw-rc-", suffix=".sh")
+            try:
+                os.write(_rcfd, _RESTRICTED_SHELL_RC.encode())
+            finally:
+                os.close(_rcfd)
+            os.chmod(_rcfile_path, 0o600)
+
+        bash_cmd = ["/bin/bash"] if _is_admin_shell else ["/bin/bash", "--rcfile", _rcfile_path]
         proc = subprocess.Popen(
-            ["/bin/bash"],
+            bash_cmd,
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
             close_fds=True, preexec_fn=_set_limits,
             env={**os.environ, "TERM": "xterm-256color", "PS1": r"\u@oxware:\w\$ "},
         )
         os.close(slave_fd)
-        _shell_sessions[sid] = {"proc": proc, "master_fd": master_fd}
+
+        # Rcfile'ı hemen sil — bash zaten fd açtı, dosya silinse de çalışır
+        if _rcfile_path:
+            try:
+                os.unlink(_rcfile_path)
+            except Exception:
+                pass
+
+        _shell_sessions[sid] = {
+            "proc":     proc,
+            "master_fd": master_fd,
+            "role":     _shell_role,
+            "is_admin": _is_admin_shell,
+            "cmd_buf":  "",   # input buffer — non-admin komut interception için
+        }
 
         fl = fcntl.fcntl(master_fd, fcntl.F_GETFL)
         fcntl.fcntl(master_fd, fcntl.F_SETFL, fl | os.O_NONBLOCK)
@@ -4259,7 +4411,7 @@ def ws_shell_open(data=None):
         eventlet.spawn(_read_loop)
         root_warn = "" if os.geteuid() == 0 else "\r\n\x1b[33m[Uyarı: Backend root değil — bazı komutlar çalışmayabilir]\x1b[0m"
         _shell_emit(f"\r\nOXware Host Shell — {'root' if os.geteuid() == 0 else os.getlogin() if hasattr(os, 'getlogin') else 'user'}{root_warn}\r\n")
-        log.info("Shell başlatıldı: sid=%s pid=%d", sid, proc.pid)
+        log.info("Shell başlatıldı: sid=%s pid=%d rol=%s", sid, proc.pid, _shell_role)
 
     except Exception as e:
         log.error("Shell açma hatası: %s", e)
@@ -4274,10 +4426,46 @@ def ws_shell_input(data):
         log.warning("shell_input: oturum bulunamadı %s", session_id)
         return
     try:
-        inp = data.get("data", "")
-        if isinstance(inp, str):
-            inp = inp.encode("utf-8")
-        os.write(sess["master_fd"], inp)
+        raw = data.get("data", "")
+        inp_str = raw if isinstance(raw, str) else raw.decode("utf-8", errors="replace")
+        inp_bytes = inp_str.encode("utf-8") if isinstance(raw, str) else raw
+
+        # Admin: tüm girdi kısıtsız geçer
+        if sess.get("is_admin", True):
+            os.write(sess["master_fd"], inp_bytes)
+            return
+
+        # Non-admin: karakter bazlı buffer + Enter'da komut kontrolü
+        # (bash function override'ların yakalayamadığı tam yol bypass'larını engeller)
+        for ch in inp_str:
+            ch_bytes = ch.encode("utf-8")
+            if ch in ("\r", "\n"):
+                cmd = sess.get("cmd_buf", "").strip()
+                sess["cmd_buf"] = ""
+                if cmd and _shell_is_blocked(cmd):
+                    # Engelle: PTY'ye Ctrl+C gönder (satırı iptal eder)
+                    os.write(sess["master_fd"], b"\x03")
+                    sock.emit("shell_output",
+                              {"data": _SHELL_RESTRICTED_BANNER},
+                              to=session_id, namespace="/")
+                    log.warning("shell_input engellendi: sid=%s cmd=%r", session_id, cmd[:120])
+                else:
+                    os.write(sess["master_fd"], ch_bytes)
+            elif ch in ("\x7f", "\x08"):  # Backspace
+                buf = sess.get("cmd_buf", "")
+                if buf:
+                    sess["cmd_buf"] = buf[:-1]
+                os.write(sess["master_fd"], ch_bytes)
+            elif ch == "\x03":  # Ctrl+C — tamponu temizle
+                sess["cmd_buf"] = ""
+                os.write(sess["master_fd"], ch_bytes)
+            elif ch == "\t" or ord(ch) >= 0x20:  # yazdırılabilir + tab
+                sess["cmd_buf"] = sess.get("cmd_buf", "") + ch
+                os.write(sess["master_fd"], ch_bytes)
+            else:
+                # Ok tuşları ve diğer kontrol karakterleri: buffer'a ekleme, geçir
+                os.write(sess["master_fd"], ch_bytes)
+
     except Exception as e:
         log.error("shell_input yazma hatası: %s", e)
 
