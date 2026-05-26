@@ -781,7 +781,8 @@ def api_vnc_token(vm_id):
 @app.route("/vnc_console/<vm_id>")
 def vnc_console_page(vm_id):
     """Dedicated VNC console page — SocketIO TCP proxy, no websockify needed."""
-    return render_template("vnc_console.html", vm_id=vm_id)
+    embed = request.args.get("embed", "0") == "1"
+    return render_template("vnc_console.html", vm_id=vm_id, embed=embed)
 
 @app.route("/novnc/")
 @app.route("/novnc/<path:filename>")

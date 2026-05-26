@@ -760,21 +760,43 @@ def _build_cloud_init_iso(vm_name: str, ci: dict) -> str | None:
 
         # user-data YAML
         lines = ["#cloud-config"]
+        # Always enable SSH password auth (disabled by default on Ubuntu cloud images)
+        lines.append("ssh_pwauth: true")
+
         if safe_user:
-            user_block = f"""users:
-  - name: {safe_user}
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    shell: /bin/bash"""
-            if safe_ssh_key:
-                user_block += f"\n    ssh_authorized_keys:\n      - {safe_ssh_key}"
+            user_lines = [
+                "users:",
+                f"  - name: {safe_user}",
+                "    sudo: ALL=(ALL) NOPASSWD:ALL",
+                "    shell: /bin/bash",
+                "    groups: users,sudo",
+            ]
             if safe_password:
-                user_block += f"\n    lock_passwd: false"
-                lines.append("chpasswd:")
-                lines.append(f"  list: |\n    {safe_user}:{safe_password}")
-                lines.append("  expire: false")
-            lines.append(user_block)
+                user_lines.append("    lock_passwd: false")
+            if safe_ssh_key:
+                user_lines.append("    ssh_authorized_keys:")
+                user_lines.append(f"      - {safe_ssh_key}")
+            lines.append("\n".join(user_lines))
+
+            if safe_password:
+                # chpasswd — set password after user is created
+                lines.append(
+                    f"chpasswd:\n  expire: false\n  list: |\n    {safe_user}:{safe_password}"
+                )
+                # runcmd fallback: most reliable across all cloud-init versions.
+                # Escape single-quote in password for shell safety.
+                _pw_shell = safe_password.replace("'", "'\\''")
+                _runcmds = [
+                    f"  - echo '{safe_user}:{_pw_shell}' | chpasswd",
+                ]
+                # Also allow root SSH/console login with same password for convenience
+                _runcmds.append(
+                    f"  - echo 'root:{_pw_shell}' | chpasswd 2>/dev/null || true"
+                )
+                lines.append("runcmd:\n" + "\n".join(_runcmds))
         elif safe_ssh_key:
             lines.append(f"ssh_authorized_keys:\n  - {safe_ssh_key}")
+
         if ci.get("user_data"):
             lines.append(ci["user_data"].strip())
 

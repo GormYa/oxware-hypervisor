@@ -26,9 +26,7 @@
       flex-shrink:0;
       height:44px;
     }
-    /* embed=1: hide own header, screen fills full height */
-    body.embed .header { display:none !important; }
-    body.embed #screen { height:100vh !important; }
+    /* standalone only — no embed styles needed (server-side conditional) */
     .logo {
       display:flex;
       align-items:center;
@@ -97,13 +95,7 @@
 </head>
 <body>
 
-<script>
-// embed=1 → body.embed class → CSS hides .header immediately (no DOMContentLoaded needed)
-if (new URLSearchParams(location.search).get('embed') === '1') {
-  document.body.classList.add('embed');
-}
-</script>
-
+{% if not embed %}
 <div class="header">
   <div class="logo">
     <img src="/static/img/oxware2.png" alt="" onerror="this.style.display='none'">
@@ -118,6 +110,7 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
   <button class="btn" onclick="toggleFS()">⛶ Tam Ekran</button>
   <button class="btn danger" onclick="window.close()">✕ Kapat</button>
 </div>
+{% endif %}
 
 <div id="screen">
   <div id="loading">
@@ -465,8 +458,9 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("message", (e) => {
   if (!e.data || typeof e.data !== "object") return;
   switch (e.data.type) {
-    case "vncCtrlAltDel": sendCtrlAltDel(); break;
-    case "vncPaste":      vncPaste();       break;
+    case "vncCtrlAltDel":   sendCtrlAltDel();    break;
+    case "vncPaste":        vncPaste();           break;
+    case "vncPointerLock":  togglePointerLock();  break;
   }
 });
 </script>

@@ -18183,6 +18183,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <span id="vnc-modal-status" style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(0,0,0,.4);border:1px solid #30363d;color:#8b949e;flex-shrink:0">Bağlanıyor…</span>
       <div style="flex:1;min-width:0"></div>
       <!-- action buttons -->
+      <button id="vnc-modal-lock-btn" onclick="vncModalPointerLock()" title="Mouse'u konsola kilitle" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer;white-space:nowrap">🖱 Mouse Kilitle</button>
       <button onclick="vncModalCtrlAltDel()" title="Ctrl+Alt+Del" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer;white-space:nowrap">Ctrl+Alt+Del</button>
       <button onclick="vncModalPaste()" title="Yapıştır" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">📋</button>
       <button onclick="vncModalPopout()" title="Ayrı pencerede aç" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">⤢</button>
@@ -18301,20 +18302,35 @@ function vncModalMinimize() {
   }
 }
 
-function vncModalCtrlAltDel() {
-  // Send Ctrl+Alt+Del into iframe (postMessage to vnc_console page)
+function _vncModalIframeCall(type) {
   const iframe = document.getElementById('vnc-modal-iframe');
-  try { iframe.contentWindow.postMessage({ type: 'vncCtrlAltDel' }, '*'); } catch(_) {}
-  // Also try direct call if same origin
-  try { if (iframe.contentWindow.sendCtrlAltDel) iframe.contentWindow.sendCtrlAltDel(); } catch(_) {}
+  if (!iframe) return;
+  // Same-origin direct call first
+  try {
+    const win = iframe.contentWindow;
+    const fn = { vncCtrlAltDel: 'sendCtrlAltDel', vncPaste: 'vncPaste', vncPointerLock: 'togglePointerLock' }[type];
+    if (fn && win[fn]) { win[fn](); return; }
+  } catch(_) {}
+  // postMessage fallback
+  try { iframe.contentWindow.postMessage({ type }, '*'); } catch(_) {}
 }
 
-function vncModalPaste() {
-  const iframe = document.getElementById('vnc-modal-iframe');
-  // Try direct call (same origin)
-  try { if (iframe.contentWindow.vncPaste) { iframe.contentWindow.vncPaste(); return; } } catch(_) {}
-  // Fallback: postMessage
-  try { iframe.contentWindow.postMessage({ type: 'vncPaste' }, '*'); } catch(_) {}
+function vncModalCtrlAltDel()  { _vncModalIframeCall('vncCtrlAltDel');  }
+function vncModalPaste()        { _vncModalIframeCall('vncPaste');        }
+function vncModalPointerLock()  {
+  _vncModalIframeCall('vncPointerLock');
+  // Update lock button state after short delay
+  setTimeout(() => {
+    const btn = document.getElementById('vnc-modal-lock-btn');
+    if (!btn) return;
+    try {
+      const iframe = document.getElementById('vnc-modal-iframe');
+      const locked = !!iframe.contentDocument?.pointerLockElement;
+      btn.textContent = locked ? '🔒 Ctrl+Alt = Serbest' : '🖱 Mouse Kilitle';
+      btn.style.color = locked ? '#3fb950' : '';
+      btn.style.borderColor = locked ? 'rgba(63,185,80,.5)' : '';
+    } catch(_) {}
+  }, 200);
 }
 
 // Status poll: read iframe document title to update status badge
