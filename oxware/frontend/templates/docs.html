@@ -1069,21 +1069,6 @@ ethernets:
     <section id="hosting">
       <h2>Hosting Integration</h2>
 
-      <h3>DiyoCP Module <span class="tag tag-green">v2.5</span></h3>
-      <p>OXware includes a native provisioning module for <strong>DiyoCP</strong>, a Turkish hosting control panel. Download the module from <strong>Settings → Integrations → DiyoCP</strong> and copy it to your DiyoCP server's <code>modules/servers/oxware/</code> directory.</p>
-      <table>
-        <thead><tr><th>DiyoCP Server Setting</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Hostname</td><td>OXware API URL — e.g. <code>https://oxware.example.com</code></td></tr>
-          <tr><td>Password</td><td>OXware API key (starts with <code>oxw_</code>)</td></tr>
-        </tbody>
-      </table>
-      <p>Package config options: <code>cpu</code>, <code>ram_mb</code>, <code>disk_gb</code>, <code>os_template</code>, <code>network</code>. The module supports: <strong>Create, Suspend, Unsuspend, Terminate, Resize (changePackage), Status, Test Connection</strong>.</p>
-      <div class="callout callout-info">
-        <strong>API key scope</strong>
-        Generate a dedicated API key in <strong>Settings → API Keys</strong> for DiyoCP. The key requires <code>provision</code> scope at minimum.
-      </div>
-
       <h3>WiseCP Module</h3>
       <p>The WiseCP module allows hosting providers to provision OXware VMs directly from the WiseCP billing panel. Customers order a VPS product, WiseCP calls the OXware Provisioning API to create the VM, and credentials are delivered automatically.</p>
 

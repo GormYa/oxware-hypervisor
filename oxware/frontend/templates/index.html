@@ -19,26 +19,27 @@
   <style>
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
     :root{
-      --bg:#080c14;--surface:#0e1420;--surface2:#141c2c;--surface3:#1a2438;
-      --border:#1e2d45;--border2:#253450;
-      --text:#c8d6e8;--text-muted:#5a7494;--text-dim:#3d5470;
-      --accent:#2a6dd9;--accent-lt:#3d82f0;
-      --green:#1a9e4a;--green-lt:#22c55e;
-      --red:#c0392b;--red-lt:#ef4444;
-      --yellow:#b07d10;--yellow-lt:#eab308;
-      --orange:#c2591a;
-      --topbar-h:54px;--tree-w:0px;--nav-w:200px;--taskbar-h:170px;
+      /* ── ESXi-style palette ── */
+      --bg:#111822;--surface:#18222f;--surface2:#1c2a3a;--surface3:#213040;
+      --border:#243448;--border2:#2d4159;
+      --text:#c2d4e8;--text-muted:#6b8aaa;--text-dim:#3d5778;
+      --accent:#1a82cc;--accent-lt:#3da3e5;
+      --green:#17924a;--green-lt:#22c55e;
+      --red:#be3226;--red-lt:#ef4444;
+      --yellow:#a87210;--yellow-lt:#eab308;
+      --orange:#c05a18;
+      --topbar-h:48px;--tree-w:0px;--nav-w:196px;--taskbar-h:170px;
       /* Tema değişkenleri */
-      --bg-primary: #0d1117;
-      --bg-secondary: #161b22;
-      --bg-card: #21262d;
-      --border-color: #30363d;
-      --text-primary: #e6edf3;
-      --text-secondary: #8b949e;
-      --accent2: #0066ff;
-      --success: #3fb950;
-      --warning: #d29922;
-      --danger: #f85149;
+      --bg-primary: #111822;
+      --bg-secondary: #18222f;
+      --bg-card: #1c2a3a;
+      --border-color: #243448;
+      --text-primary: #c2d4e8;
+      --text-secondary: #6b8aaa;
+      --accent2: #1a82cc;
+      --success: #22c55e;
+      --warning: #eab308;
+      --danger: #ef4444;
     }
     .light-theme {
       --bg-primary: #f6f8fa;
@@ -74,34 +75,34 @@
     /* App layout */
     #app{display:flex;flex-direction:column;height:100vh}
 
-    /* ───── TOPBAR ───── */
-    #topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0;z-index:200}
-    .tb-logo{width:148px;height:100%;display:flex;align-items:center;gap:9px;padding:0 14px;border-right:1px solid var(--border);flex-shrink:0;text-decoration:none}
+    /* ───── TOPBAR ─────  ESXi-style compact header */
+    #topbar{height:var(--topbar-h);background:#162030;border-bottom:1px solid #243040;display:flex;align-items:center;flex-shrink:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+    .tb-logo{width:148px;height:100%;display:flex;align-items:center;gap:8px;padding:0 12px;border-right:1px solid #243040;flex-shrink:0;text-decoration:none}
     #tree-panel{display:none!important}
-    .tb-logo-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .tb-logo-icon img{width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,212,255,0.55))}
-    .tb-logo-icon .tb-logo-fb{width:34px;height:34px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
-    .tb-logo-icon .tb-logo-fb svg{width:20px;height:20px;fill:#fff}
-    .tb-logo-text{display:block;font-size:15px;font-weight:700;color:var(--fg);letter-spacing:.3px;line-height:1}
-    .tb-logo-ver{display:block;font-size:9px;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-top:2px}
+    .tb-logo-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .tb-logo-icon img{width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(26,130,204,0.6))}
+    .tb-logo-icon .tb-logo-fb{width:28px;height:28px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center}
+    .tb-logo-icon .tb-logo-fb svg{width:16px;height:16px;fill:#fff}
+    .tb-logo-text{display:block;font-size:13px;font-weight:700;color:#d8e8f4;letter-spacing:.3px;line-height:1}
+    .tb-logo-ver{display:block;font-size:9px;color:#4a6888;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
     .tb-spacer{flex:1}
-    .tb-stats{height:100%;display:flex;align-items:center;border-left:1px solid var(--border);font-size:11px}
-    .tb-stat{display:flex;align-items:center;gap:5px;padding:0 12px;border-right:1px solid var(--border);height:100%;color:var(--text-muted)}
-    .tb-stat .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+    .tb-stats{height:100%;display:flex;align-items:center;border-left:1px solid #243040;font-size:11px}
+    .tb-stat{display:flex;align-items:center;gap:5px;padding:0 10px;border-right:1px solid #243040;height:100%;color:var(--text-muted)}
+    .tb-stat .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
     .tb-stat .dot.green{background:var(--green-lt)}
     .tb-stat .dot.yellow{background:var(--yellow-lt)}
     .tb-stat .val{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
     .tb-actions{display:flex;height:100%}
-    .tb-action{height:100%;padding:0 12px;background:none;border:none;border-right:1px solid var(--border);color:var(--text-muted);font-size:12px;display:flex;align-items:center;gap:6px;transition:background .12s,color .12s;white-space:nowrap}
-    .tb-action:hover{background:var(--surface2);color:var(--text)}
+    .tb-action{height:100%;padding:0 10px;background:none;border:none;border-right:1px solid #243040;color:var(--text-muted);font-size:11px;display:flex;align-items:center;gap:5px;transition:background .12s,color .12s;white-space:nowrap}
+    .tb-action:hover{background:rgba(255,255,255,.05);color:var(--text)}
     .tb-action.primary{background:var(--accent);color:#fff;border-right-color:var(--accent)}
     .tb-action.primary:hover{background:var(--accent-lt)}
-    .tb-action svg{width:13px;height:13px;fill:currentColor}
-    .tb-user{height:100%;padding:0 14px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:background .12s}
-    .tb-user:hover{background:var(--surface2)}
-    .tb-avatar{width:26px;height:26px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
-    .tb-uname{font-size:12px;font-weight:600;line-height:1.1}
-    .tb-realm{font-size:10px;color:var(--text-muted)}
+    .tb-action svg{width:12px;height:12px;fill:currentColor}
+    .tb-user{height:100%;padding:0 12px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:background .12s}
+    .tb-user:hover{background:rgba(255,255,255,.05)}
+    .tb-avatar{width:24px;height:24px;background:var(--accent);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+    .tb-uname{font-size:11px;font-weight:600;line-height:1.1;color:#c2d4e8}
+    .tb-realm{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
 
     /* ───── 3-column ───── */
     #middle{flex:1;display:flex;overflow:hidden;min-height:0}
@@ -131,50 +132,50 @@
     .vm-dot.crashed{background:var(--red-lt)}
     .vm-id{font-family:'Consolas',monospace;color:var(--text-dim);font-size:10px;margin-right:2px}
 
-    /* ── Context Nav ── */
-    #nav-panel{width:var(--nav-w);min-width:160px;max-width:400px;background:var(--surface2);border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;padding:4px 0;position:relative;transition:none}
-    #nav-resize-handle{position:absolute;right:0;top:0;bottom:0;width:4px;cursor:col-resize;background:transparent;z-index:10;transition:background .15s}
+    /* ── Context Nav ── ESXi-style sidebar */
+    #nav-panel{width:var(--nav-w);min-width:160px;max-width:400px;background:#162030;border-right:1px solid #243040;overflow-y:auto;flex-shrink:0;padding:3px 0;position:relative;transition:none}
+    #nav-resize-handle{position:absolute;right:0;top:0;bottom:0;width:3px;cursor:col-resize;background:transparent;z-index:10;transition:background .15s}
     #nav-resize-handle:hover,#nav-resize-handle.dragging{background:var(--accent)}
 
     /* ── Taskbar resize ── */
-    #taskbar-resize-handle{height:4px;background:transparent;cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);transition:background .15s}
+    #taskbar-resize-handle{height:3px;background:transparent;cursor:row-resize;flex-shrink:0;border-top:1px solid #243040;transition:background .15s}
     #taskbar-resize-handle:hover,#taskbar-resize-handle.dragging{background:var(--accent)}
-    .ctx-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);padding:9px 12px 3px}
-    .ctx-item{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text-muted);transition:background .1s,color .1s;position:relative}
-    .ctx-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
-    .ctx-item.active{background:rgba(42,109,217,.14);color:var(--accent-lt)}
-    .ctx-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
-    .ctx-item svg{width:13px;height:13px;fill:currentColor;flex-shrink:0}
+    .ctx-section{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#3d5778;padding:8px 10px 2px}
+    .ctx-item{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;font-size:11.5px;color:#7090b0;transition:background .1s,color .1s;position:relative}
+    .ctx-item:hover{background:rgba(26,130,204,.1);color:#b0cce8}
+    .ctx-item.active{background:rgba(26,130,204,.18);color:#4fb8f0}
+    .ctx-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:#1a82cc}
+    .ctx-item svg{width:12px;height:12px;fill:currentColor;flex-shrink:0}
 
     /* ── Content ── */
     #content-area{flex:1;overflow-y:auto;background:var(--bg)}
-    .page{display:none;padding:18px 22px}
+    .page{display:none;padding:16px 20px}
     .page.active{display:block}
 
-    /* ── Taskbar ── */
-    #taskbar{height:var(--taskbar-h);background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column}
-    .tb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2)}
-    .tb-tab{padding:6px 16px;font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s}
-    .tb-tab.active{color:var(--accent-lt);border-bottom-color:var(--accent)}
-    .tb-tab:hover{color:var(--text)}
-    .tb-tab-content{flex:1;overflow-y:auto;background:var(--surface)}
+    /* ── Taskbar ── ESXi event log style */
+    #taskbar{height:var(--taskbar-h);background:#162030;border-top:1px solid #243040;flex-shrink:0;display:flex;flex-direction:column}
+    .tb-tabs{display:flex;border-bottom:1px solid #243040;flex-shrink:0;background:#111e2c}
+    .tb-tab{padding:5px 14px;font-size:10.5px;font-weight:600;color:#526a84;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s;letter-spacing:.2px}
+    .tb-tab.active{color:#4fb8f0;border-bottom-color:#1a82cc}
+    .tb-tab:hover{color:#a0bcd8}
+    .tb-tab-content{flex:1;overflow-y:auto;background:#162030}
     .task-table{width:100%;border-collapse:collapse}
-    .task-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-dim);padding:5px 12px;background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;position:sticky;top:0}
-    .task-table td{font-size:11px;padding:4px 12px;border-bottom:1px solid rgba(30,45,69,.4);white-space:nowrap;color:var(--text-muted)}
-    .task-table tr:hover td{background:var(--surface2);color:var(--text)}
+    .task-table th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#3d5778;padding:4px 10px;background:#111e2c;border-bottom:1px solid #243040;text-align:left;white-space:nowrap;position:sticky;top:0}
+    .task-table td{font-size:11px;padding:3px 10px;border-bottom:1px solid rgba(36,52,72,.6);white-space:nowrap;color:#6b8aaa}
+    .task-table tr:hover td{background:rgba(26,130,204,.07);color:#b0cce8}
     .task-status{display:inline-flex;align-items:center;gap:4px}
     .task-status.ok{color:var(--green-lt)}
     .task-status.err{color:var(--red-lt)}
     .task-status.running{color:var(--yellow-lt)}
 
     /* ── Node Summary ── */
-    .node-hdr{margin-bottom:14px}
-    .node-hdr-title{font-size:14px;font-weight:700;color:var(--accent-lt)}
+    .node-hdr{margin-bottom:12px}
+    .node-hdr-title{font-size:13px;font-weight:700;color:#4fb8f0;letter-spacing:.3px}
     .node-hdr-uptime{font-size:11px;color:var(--text-muted);margin-left:8px;font-weight:400}
 
-    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    .summary-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px 16px}
-    .summary-panel-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .summary-panel{background:#18222f;border:1px solid #243448;border-radius:2px;padding:12px 14px}
+    .summary-panel-title{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#3d5778;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #243448}
     /* ── ESXi-style host panel ── */
     .esxi-host-panel{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:14px;min-height:200px}
     .esxi-host-left{width:220px;flex-shrink:0;padding:12px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;border-right:1px solid var(--border);background:var(--surface2)}
@@ -285,22 +286,22 @@
     .vd-btn.warning{background:rgba(234,179,8,.1);border-color:rgba(234,179,8,.3);color:#fbbf24}
     .vd-btn.warning:hover{background:rgba(234,179,8,.18)}
 
-    /* ── Section header ── */
-    .section-header{display:flex;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:nowrap}
-    .section-header h2{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0}
+    /* ── Section header ── ESXi breadcrumb-style */
+    .section-header{display:flex;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:nowrap;padding-bottom:8px;border-bottom:1px solid #243448}
+    .section-header h2{font-size:13px;font-weight:600;color:#c2d4e8;white-space:nowrap;flex-shrink:0;letter-spacing:.2px}
     .section-header h2 + p,.section-header div p{font-size:11px;color:var(--text-muted);margin-top:1px}
     .spacer{flex:1}
 
-    /* ── Buttons ── */
-    .btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s;white-space:nowrap}
-    .btn:hover{background:var(--surface2);border-color:var(--accent)}
-    .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-    .btn.primary:hover{background:var(--accent-lt);border-color:var(--accent-lt)}
-    .btn.success{color:var(--green-lt);border-color:rgba(34,197,94,.3)}
-    .btn.success:hover{background:rgba(34,197,94,.1);border-color:var(--green-lt)}
-    .btn.danger{color:var(--red-lt);border-color:rgba(192,57,43,.3)}
-    .btn.danger:hover{background:rgba(192,57,43,.15);border-color:var(--red-lt)}
-    .btn.sm{padding:4px 8px;font-size:11px}
+    /* ── Buttons ── ESXi-style flat buttons */
+    .btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:#1e2d3f;border:1px solid #2d4159;border-radius:2px;color:#9ab8d4;font-size:11.5px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s,color .12s;white-space:nowrap}
+    .btn:hover{background:#253548;border-color:#3d5879;color:#c2d4e8}
+    .btn.primary{background:#1a5a96;border-color:#1e70bb;color:#e8f4ff}
+    .btn.primary:hover{background:#1a82cc;border-color:#3da3e5;color:#fff}
+    .btn.success{color:var(--green-lt);border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.07)}
+    .btn.success:hover{background:rgba(34,197,94,.14);border-color:var(--green-lt)}
+    .btn.danger{color:#f87171;border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.07)}
+    .btn.danger:hover{background:rgba(239,68,68,.14);border-color:#f87171}
+    .btn.sm{padding:3px 8px;font-size:10.5px}
 
     /* ── Badges ── */
     .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border:1px solid}
@@ -400,24 +401,24 @@
     .progress-fill.red{background:var(--red-lt)}
     .progress-fill.yellow{background:var(--yellow-lt)}
 
-    /* ── Tables ── */
-    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:4px;background:var(--surface)}
+    /* ── Tables ── ESXi data grid style */
+    .table-wrap{overflow-x:auto;border:1px solid #243448;border-radius:2px;background:#18222f}
     table{width:100%;border-collapse:collapse}
-    thead th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-    tbody td{padding:8px 12px;border-bottom:1px solid rgba(30,45,69,.5);font-size:12px}
+    thead th{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#3d5778;padding:6px 10px;background:#111e2c;border-bottom:1px solid #243448;text-align:left;white-space:nowrap}
+    tbody td{padding:6px 10px;border-bottom:1px solid rgba(36,52,72,.7);font-size:11.5px;color:#8aa8c8}
     tbody tr:last-child td{border-bottom:none}
-    tbody tr:hover td{background:var(--surface2)}
+    tbody tr:hover td{background:rgba(26,130,204,.07);color:#b8d0e8}
 
     /* ── Forms ── */
-    .form-row{margin-bottom:12px}
-    .form-row label{display:block;font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}
-    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .form-row{margin-bottom:10px}
+    .form-row label{display:block;font-size:9.5px;font-weight:700;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.7px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .form-hint{font-size:10px;color:var(--text-dim);margin-top:3px}
-    input[type=text],input[type=password],input[type=number],input[type=email],select,textarea{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:12px;outline:none;font-family:inherit}
-    input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+    input[type=text],input[type=password],input[type=number],input[type=email],select,textarea{width:100%;padding:6px 9px;background:#1a2738;border:1px solid #2d4159;border-radius:2px;color:#b8d0e8;font-size:12px;outline:none;font-family:inherit}
+    input:focus,select:focus,textarea:focus{border-color:#1a82cc;box-shadow:0 0 0 2px rgba(26,130,204,.15)}
     /* ── Dark dropdown (all select/option) ── */
-    select option{background:#0f1521;color:#e6edf3}
-    select option:checked,select option:hover{background:#1e3a5f;color:#60a5fa}
+    select option{background:#131a23;color:#c2d4e8}
+    select option:checked,select option:hover{background:#1a3a5c;color:#4fb8f0}
     select{color-scheme:dark}
     /* ── Resource Sliders ── */
     .res-slider-wrap{display:flex;flex-direction:column;gap:8px}
@@ -433,20 +434,20 @@
     .res-slider-input[type=number]{-moz-appearance:textfield}
     .res-slider-unit{font-size:11px;color:var(--text-muted);margin-left:2px}
 
-    /* ── Modal ── */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:center;justify-content:center}
+    /* ── Modal ── ESXi dialog style */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:none;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
-    .modal{background:var(--surface);border:1px solid var(--border2);border-radius:6px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
-    .modal-header{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-    .modal-header h2,.modal-header h3{font-size:13px;font-weight:700}
-    .modal-close{background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:2px 6px;border-radius:3px}
-    .modal-close:hover{background:var(--surface2);color:var(--text)}
-    .modal-body{padding:18px;overflow-y:auto;flex:1;min-height:0}
-    .modal-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;background:var(--surface)}
+    .modal{background:#18222f;border:1px solid #2d4159;border-radius:3px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+    .modal-header{padding:10px 16px;border-bottom:1px solid #243448;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#111e2c}
+    .modal-header h2,.modal-header h3{font-size:12.5px;font-weight:700;color:#c2d4e8;letter-spacing:.2px}
+    .modal-close{background:none;border:none;color:#526a84;font-size:16px;cursor:pointer;padding:2px 6px;border-radius:2px}
+    .modal-close:hover{background:rgba(255,255,255,.07);color:#b0cce8}
+    .modal-body{padding:16px;overflow-y:auto;flex:1;min-height:0}
+    .modal-footer{padding:10px 16px;border-top:1px solid #243448;display:flex;gap:7px;justify-content:flex-end;flex-shrink:0;background:#111e2c}
 
     /* ── Toast ── */
-    #toast-container{position:fixed;bottom:calc(var(--taskbar-h) + 18px);right:18px;transition:bottom .1s;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-    .toast{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface2);border:1px solid var(--border2);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text);min-width:240px;max-width:380px;animation:slideIn .2s ease;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+    #toast-container{position:fixed;bottom:calc(var(--taskbar-h) + 16px);right:16px;transition:bottom .1s;z-index:2000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
+    .toast{display:flex;align-items:center;gap:10px;padding:8px 13px;background:#1c2b3d;border:1px solid #2d4159;border-left:3px solid var(--accent);border-radius:2px;font-size:12px;color:#b8d0e8;min-width:240px;max-width:380px;animation:slideIn .2s ease;box-shadow:0 4px 20px rgba(0,0,0,.5)}
     @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
     .toast.success{border-left-color:var(--green-lt)}
     .toast.error{border-left-color:var(--red-lt)}
@@ -505,9 +506,9 @@
 
     .user-avatar{width:30px;height:30px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
 
-    /* Card */
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px 16px}
-    .card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent-lt);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+    /* Card — ESXi property panel style */
+    .card{background:#18222f;border:1px solid #243448;border-radius:2px;padding:12px 14px}
+    .card-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#4a80b0;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #243448}
     .app-chip-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
     .app-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;font-size:11px;font-weight:600;color:var(--text);transition:border-color .15s,background .15s;white-space:nowrap;user-select:none}
     .app-chip:hover{border-color:var(--accent);background:var(--surface3)}
@@ -881,7 +882,7 @@
     }
   </style>
 </head>
-<body>
+<body style="visibility:hidden">
 <script>
 /* OXware Security Monitor */
 (function(){
@@ -5300,6 +5301,9 @@ systemctl enable --now qemu-guest-agent</pre>
         <!-- 7. Cloud-Init & Gelişmiş -->
         <div class="cvm-sec">
           <div class="cvm-sec-title">Cloud-Init & Gelişmiş (Opsiyonel)</div>
+          <div id="ci-notice" style="display:none;margin-bottom:8px;padding:8px 10px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:5px;font-size:11px;color:#fde047;line-height:1.5">
+            ⚠️ Cloud-init sadece <strong>☁️ Cloud Image</strong> ile çalışır. ISO kurulumu seçiliyken bu alan etkisiz olur.
+          </div>
           <div class="cvm-grid2">
             <div class="cvm-row">
               <label>Kullanıcı Adı</label>
@@ -6425,6 +6429,7 @@ function _tokenExpired() {
     const oxyBtn = document.getElementById("oxy-btn");
     if (oxyBtn) oxyBtn.style.display = "none";
   }
+  document.body.style.visibility = "visible";
 })();
 
 /* ══ API helper ══ */
@@ -6569,6 +6574,10 @@ async function openCreateVMModal() {
   document.getElementById('ci-password').value = '';
   document.getElementById('ci-user').value = '';
   document.getElementById('ci-user').readOnly = false;
+  // Show cloud-init notice if ISO mode (default)
+  const _useCloudImg = document.getElementById('vm-use-cloud-image')?.checked;
+  const _ciNotice = document.getElementById('ci-notice');
+  if (_ciNotice) _ciNotice.style.display = _useCloudImg ? 'none' : '';
   _updateCiUser();
   // Wire up auto-fill on name/OS change (remove old listeners first)
   const nameEl = document.getElementById('vm-name');
@@ -10375,8 +10384,10 @@ function cvmToggleCloudImage(on) {
   const isoRow   = document.getElementById('vm-iso-row');
   const infoBox  = document.getElementById('cloud-image-info');
   const bootSel  = document.getElementById('vm-boot');
-  if (isoRow)  isoRow.style.display  = on ? 'none' : '';
-  if (infoBox) infoBox.style.display = on ? '' : 'none';
+  const ciNotice = document.getElementById('ci-notice');
+  if (isoRow)   isoRow.style.display   = on ? 'none' : '';
+  if (infoBox)  infoBox.style.display  = on ? '' : 'none';
+  if (ciNotice) ciNotice.style.display = on ? 'none' : '';
   if (bootSel && on)  bootSel.value = 'hd';
   if (bootSel && !on) bootSel.value = 'cdrom,hd';
   // Block cloud image for Windows
@@ -12661,27 +12672,6 @@ async function downloadModule(name) {
   }
 }
 
-async function testDiyoCPConnection() {
-  const url = (document.getElementById('diyocp-url') || {}).value?.trim();
-  const key = (document.getElementById('diyocp-apikey') || {}).value?.trim();
-  const res = document.getElementById('diyocp-test-result');
-  if (!url || !key) { toast('URL ve API Key zorunlu', 'warning'); return; }
-  if (res) { res.style.display = 'block'; res.style.background = 'rgba(234,179,8,.08)'; res.style.border = '1px solid rgba(234,179,8,.25)'; res.textContent = '⏳ Test ediliyor...'; }
-  try {
-    const d = await _api('/api/hosting/diyocp/test', 'POST', { url, api_key: key });
-    if (res) {
-      if (d && d.status === 'ok') {
-        res.style.background = 'rgba(34,197,94,.08)'; res.style.border = '1px solid rgba(34,197,94,.25)';
-        res.textContent = '✅ Bağlantı başarılı! DiyoCP sunucusuna ulaşıldı.';
-      } else {
-        res.style.background = 'rgba(239,68,68,.08)'; res.style.border = '1px solid rgba(239,68,68,.25)';
-        res.textContent = '❌ Bağlantı başarısız: ' + (d?.error || 'Bilinmeyen hata');
-      }
-    }
-  } catch(e) {
-    if (res) { res.style.background = 'rgba(239,68,68,.08)'; res.style.border = '1px solid rgba(239,68,68,.25)'; res.textContent = '❌ Hata: ' + e.message; }
-  }
-}
 
 async function hostingCreateKey() {
   const name = document.getElementById("hst-key-name").value.trim() || "billing-module";

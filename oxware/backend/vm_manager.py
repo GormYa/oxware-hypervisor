@@ -100,12 +100,16 @@ def _monitor_install(vm_uuid: str, vm_name: str, on_complete=None):
                     xml_str = dom.XMLDesc(0)
                     root    = ET.fromstring(xml_str)
 
-                    # cdrom disk elementlerini kaldır
+                    # cdrom disk elementlerini kaldır — yalnızca kurucu ISO (sdb).
+                    # cloud-init ISO (sdc) bırakılır: VM ilk boot'unda cloud-init okur.
                     devices = root.find("devices")
                     if devices is not None:
                         for disk in list(devices.findall("disk")):
                             if disk.get("device") == "cdrom":
-                                devices.remove(disk)
+                                target = disk.find("target")
+                                dev = target.get("dev", "") if target is not None else ""
+                                if dev != "sdc":   # sdc = cidata ISO, koru
+                                    devices.remove(disk)
 
                     # boot order → sadece hd
                     os_el = root.find("os")
@@ -1024,7 +1028,7 @@ ethernets:
             with open(os.path.join(ci_dir, "network-config"), "w") as f:
                 f.write(network_config_str)
 
-        iso_path = os.path.join("/tmp", f"ci-{vm_name}.iso")
+        iso_path = os.path.join(config.DISK_DIR, f"ci-{vm_name}.iso")
 
         # cloud-localds supports network-config natively
         # genisoimage/mkisofs: include network-config file manually
@@ -1431,6 +1435,12 @@ def delete_vm(vm_id, delete_disk=True):
         xml_str = dom.XMLDesc()
         disks = _parse_disk_info(xml_str)
 
+        # cloud-init ISO adını VM adından türet
+        try:
+            _vm_name_el = ET.fromstring(xml_str).findtext("name") or ""
+        except Exception:
+            _vm_name_el = ""
+
         dom.undefineFlags(
             libvirt.VIR_DOMAIN_UNDEFINE_MANAGED_SAVE |
             libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA
@@ -1441,6 +1451,15 @@ def delete_vm(vm_id, delete_disk=True):
                 path = disk.get("path", "")
                 if path and os.path.exists(path):
                     os.remove(path)
+
+        # cloud-init ISO temizle
+        if _vm_name_el:
+            _ci_iso = os.path.join(config.DISK_DIR, f"ci-{_vm_name_el}.iso")
+            if os.path.exists(_ci_iso):
+                try:
+                    os.remove(_ci_iso)
+                except Exception:
+                    pass
 
         reg = _load_vnc_registry()
         reg.pop(vm_id, None)

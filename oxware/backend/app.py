@@ -10065,7 +10065,6 @@ def api_hosting_download(module_name):
     paths = {
         "whmcs":  base / "whmcs" / "servers" / "oxware" / "oxware.php",
         "wisecp": base / "wisecp" / "oxware" / "oxware.php",
-        "diyocp": base / "diyocp" / "servers" / "oxware" / "oxware.php",
     }
     path = paths.get(module_name)
     if not path or not path.exists():
@@ -10075,29 +10074,6 @@ def api_hosting_download(module_name):
                      download_name=f"oxware_{module_name}.php",
                      mimetype="text/plain")
 
-
-@app.route("/api/hosting/diyocp/test", methods=["POST"])
-@require_auth
-@require_role("admin", "administrator")
-def api_diyocp_test():
-    """DiyoCP API bağlantı testi."""
-    import urllib.request as _ur
-    data = request.get_json() or {}
-    url = (data.get("url") or "").rstrip("/")
-    api_key = data.get("api_key") or ""
-    if not url or not api_key:
-        return err("url ve api_key zorunlu")
-    try:
-        req = _ur.Request(
-            f"{url}/api/server/status",
-            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-            method="GET"
-        )
-        with _ur.urlopen(req, timeout=8) as resp:
-            body = resp.read(4096)
-            return ok(status="ok", http_code=resp.status, body_preview=body[:200].decode("utf-8", errors="replace"))
-    except Exception as e:
-        return err(f"DiyoCP bağlantı hatası: {e}")
 
 
 # ── Provisioning API (WiseCP / WHMCS / Billing entegrasyonu) ─────────────────
