@@ -4832,9 +4832,211 @@
             </div>
           </div>
 
+          <!-- Card 5: Host Profilleri -->
+          <div class="card" style="margin-top:14px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              <i class="fa-solid fa-bookmark" style="color:var(--accent-lt)"></i>
+              Host Profilleri
+              <button class="btn sm" onclick="captureHostProfile()" style="margin-left:auto">&#128248; Şimdi Yakala</button>
+              <button class="btn sm" onclick="loadHostProfiles()">&#x21BB;</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Host'un sysctl, NTP, DNS, SSH ve CPU ayarlarını profil olarak kaydedin ve tekrar uygulayın.</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Oluşturma</th><th>Açıklama</th><th>İşlemler</th></tr></thead>
+                <tbody id="host-profiles-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
           </div><!-- /cfg-pane-host -->
 
         </div><!-- /page-tab-settings -->
+
+        <!-- ─────── tab-syslog ─────── -->
+        <div class="page" id="page-tab-syslog">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-scroll fa-fw" style="color:var(--accent-lt)"></i> Syslog Görüntüleyici</h2>
+            <div class="spacer"></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+            <button class="btn" id="syslog-sub-journald" onclick="activateSyslogTab('journald')" style="font-size:12px">Journald</button>
+            <button class="btn" id="syslog-sub-syslog" onclick="activateSyslogTab('syslog')" style="font-size:12px">Syslog / Messages</button>
+            <button class="btn" id="syslog-sub-kernel" onclick="activateSyslogTab('kernel')" style="font-size:12px">Kernel / dmesg</button>
+          </div>
+
+          <!-- Journald sub-tab -->
+          <div id="syslog-pane-journald">
+            <div class="card" style="margin-bottom:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Seviye</label>
+                  <select id="jnl-level" class="form-control" style="min-width:110px">
+                    <option value="">Hepsi</option>
+                    <option value="err">Hata (err)</option>
+                    <option value="warning">Uyarı (warning)</option>
+                    <option value="info">Bilgi (info)</option>
+                    <option value="debug">Debug</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Servis</label>
+                  <input id="jnl-service" type="text" class="form-control" placeholder="örn: sshd" style="min-width:130px">
+                </div>
+                <button class="btn-primary" onclick="loadSyslogTab('journald')">↻ Yenile</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Zaman</th><th>Seviye</th><th>Kaynak</th><th>Mesaj</th></tr></thead>
+                <tbody id="syslog-tbody-journald"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Syslog/Messages sub-tab -->
+          <div id="syslog-pane-syslog" style="display:none">
+            <div class="card" style="margin-bottom:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Seviye</label>
+                  <select id="sys-level" class="form-control" style="min-width:110px">
+                    <option value="">Hepsi</option>
+                    <option value="err">Hata</option>
+                    <option value="warn">Uyarı</option>
+                    <option value="info">Bilgi</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Filtre (grep)</label>
+                  <input id="sys-grep" type="text" class="form-control" placeholder="arama ifadesi" style="min-width:150px">
+                </div>
+                <button class="btn-primary" onclick="loadSyslogTab('syslog')">↻ Yenile</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Zaman</th><th>Seviye</th><th>Kaynak</th><th>Mesaj</th></tr></thead>
+                <tbody id="syslog-tbody-syslog"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Kernel/dmesg sub-tab -->
+          <div id="syslog-pane-kernel" style="display:none">
+            <div class="card" style="margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:12px;color:var(--text-muted)">Son 100 kernel mesajı</span>
+                <button class="btn-primary" onclick="loadSyslogTab('kernel')">↻ Yenile</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Zaman</th><th>Seviye</th><th>Kaynak</th><th>Mesaj</th></tr></thead>
+                <tbody id="syslog-tbody-kernel"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /page-tab-syslog -->
+
+        <!-- ─────── tab-content-library ─────── -->
+        <div class="page" id="page-tab-content-library">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-photo-film fa-fw" style="color:var(--accent-lt)"></i> İçerik Kütüphanesi</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="syncContentLibrary()" style="font-size:12px"><i class="fa-solid fa-rotate fa-fw"></i> Senkronize Et</button>
+            <button class="btn-primary" onclick="openAddContentItem()" style="font-size:12px">+ İçerik Ekle</button>
+          </div>
+
+          <!-- Stats cards -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+            <div class="card" style="flex:1;min-width:120px;text-align:center">
+              <div style="font-size:22px;font-weight:700;color:var(--accent-lt)" id="cls-total">—</div>
+              <div style="font-size:11px;color:var(--text-muted)">Toplam Öğe</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center">
+              <div style="font-size:22px;font-weight:700;color:var(--accent-lt)" id="cls-iso">—</div>
+              <div style="font-size:11px;color:var(--text-muted)">ISO / Image</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center">
+              <div style="font-size:22px;font-weight:700;color:var(--accent-lt)" id="cls-ova">—</div>
+              <div style="font-size:11px;color:var(--text-muted)">OVA / Template</div>
+            </div>
+            <div class="card" style="flex:1;min-width:120px;text-align:center">
+              <div style="font-size:22px;font-weight:700;color:var(--accent-lt)" id="cls-other">—</div>
+              <div style="font-size:11px;color:var(--text-muted)">Diğer</div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Ad</th><th>Tür</th><th>Boyut</th><th>Oluşturma</th><th>İşlemler</th></tr></thead>
+              <tbody id="content-lib-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
+
+          <!-- Add content item form (hidden by default) -->
+          <div id="content-lib-add-form" style="display:none;margin-top:14px">
+            <div class="card">
+              <div class="card-title">Yeni İçerik Ekle</div>
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+                <div class="form-group" style="margin:0;flex:1;min-width:160px">
+                  <label style="font-size:11px">Ad</label>
+                  <input id="cli-name" type="text" class="form-control" placeholder="ubuntu-22.04.iso">
+                </div>
+                <div class="form-group" style="margin:0;flex:2;min-width:220px">
+                  <label style="font-size:11px">URL veya Yol</label>
+                  <input id="cli-url" type="text" class="form-control" placeholder="https://... veya /var/lib/...">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px">Tür</label>
+                  <select id="cli-type" class="form-control">
+                    <option value="iso">ISO</option>
+                    <option value="ova">OVA</option>
+                    <option value="qcow2">qcow2</option>
+                    <option value="other">Diğer</option>
+                  </select>
+                </div>
+                <button class="btn-primary" onclick="addContentItem()">Ekle</button>
+                <button class="btn" onclick="document.getElementById('content-lib-add-form').style.display='none'">İptal</button>
+              </div>
+            </div>
+          </div>
+        </div><!-- /page-tab-content-library -->
+
+        <!-- ─────── tab-datastore ─────── -->
+        <div class="page" id="page-tab-datastore">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-folder-open fa-fw" style="color:var(--accent-lt)"></i> Datastore Gezgini</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="datastoreMkdirPrompt()" style="font-size:12px">+ Klasör</button>
+            <button class="btn-primary" onclick="loadDatastore()" style="font-size:12px">↻ Yenile</button>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px">Havuz / Kök Dizin</label>
+                <select id="ds-pool-sel" class="form-control" onchange="loadDatastore(this.value,'')" style="min-width:240px">
+                  <option value="/var/lib/libvirt/images">/var/lib/libvirt/images</option>
+                  <option value="/var/lib/oxware">/var/lib/oxware</option>
+                  <option value="/tmp/oxware-uploads">/tmp/oxware-uploads</option>
+                </select>
+              </div>
+              <div id="ds-breadcrumb" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--text-muted)">
+                <span style="color:var(--accent-lt);cursor:pointer" onclick="loadDatastore(document.getElementById('ds-pool-sel').value,'')">Kök</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Ad</th><th>Tür</th><th>Boyut</th><th>Değiştirilme</th><th>İşlemler</th></tr></thead>
+              <tbody id="datastore-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
+          <input type="hidden" id="ds-current-path" value="">
+        </div><!-- /page-tab-datastore -->
 
       </div><!-- /content -->
     </div><!-- /content-area -->
@@ -8760,6 +8962,16 @@ function buildContextNav(type) {
 
     ${isOperator ? `<div class="ctx-item" data-page="tab-ai" onclick="navigate('tab-ai');closeMobileNav()">
       <i class="fa-solid fa-robot fa-fw"></i>${t('ai')}
+    </div>` : ''}
+    ${isOperator ? `
+    <div class="ctx-item" data-page="tab-syslog" onclick="navigate('tab-syslog');closeMobileNav()">
+      <i class="fa-solid fa-scroll fa-fw"></i>Syslog
+    </div>
+    <div class="ctx-item" data-page="tab-content-library" onclick="navigate('tab-content-library');closeMobileNav()">
+      <i class="fa-solid fa-photo-film fa-fw"></i>İçerik Kütüphanesi
+    </div>
+    <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()">
+      <i class="fa-solid fa-folder-open fa-fw"></i>Datastore
     </div>` : ''}
   </div>
 
@@ -14604,6 +14816,9 @@ async function loadTabData(tabId) {
     case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); break;
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
+    case 'tab-syslog':        activateSyslogTab('journald'); break;
+    case 'tab-content-library': loadContentLibrary(); break;
+    case 'tab-datastore':     loadDatastore(); break;
   }
 }
 
@@ -19809,6 +20024,218 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+
+/* ══════════════════ Syslog Viewer ══════════════════ */
+let _syslogActiveTab = 'journald';
+
+function activateSyslogTab(tab) {
+  _syslogActiveTab = tab;
+  ['journald','syslog','kernel'].forEach(t => {
+    const pane = document.getElementById('syslog-pane-' + t);
+    const btn  = document.getElementById('syslog-sub-' + t);
+    if (pane) pane.style.display = t === tab ? '' : 'none';
+    if (btn)  btn.classList.toggle('btn-primary', t === tab);
+  });
+  loadSyslogTab(tab);
+}
+
+async function loadSyslogTab(tab) {
+  const tbody = document.getElementById('syslog-tbody-' + tab);
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  let url = '';
+  if (tab === 'journald') {
+    const level   = document.getElementById('jnl-level')?.value   || '';
+    const service = document.getElementById('jnl-service')?.value || '';
+    url = '/api/syslog/journal?lines=200' + (level ? '&level=' + encodeURIComponent(level) : '') + (service ? '&service=' + encodeURIComponent(service) : '');
+  } else if (tab === 'syslog') {
+    const level = document.getElementById('sys-level')?.value || '';
+    const grep  = document.getElementById('sys-grep')?.value  || '';
+    url = '/api/syslog/syslog?lines=200' + (level ? '&level=' + encodeURIComponent(level) : '') + (grep ? '&grep=' + encodeURIComponent(grep) : '');
+  } else {
+    url = '/api/syslog/kernel?lines=100';
+  }
+  const d = await _api(url);
+  const entries = (d && (d.entries || d.lines || d.logs)) || [];
+  tbody.innerHTML = entries.length ? entries.map(e => {
+    const lvl = escHtml(e.level || e.priority || '');
+    const lvlClass = /err|crit|emerg|alert/i.test(lvl) ? 'badge-danger' : /warn/i.test(lvl) ? 'badge-warning' : 'badge-muted';
+    return `<tr>
+      <td style="font-size:11px;font-family:monospace;white-space:nowrap">${escHtml(e.time || e.timestamp || e.ts || '')}</td>
+      <td><span class="${lvlClass}" style="font-size:10px">${lvl||'—'}</span></td>
+      <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${escHtml(e.unit || e.source || e.ident || '')}</td>
+      <td style="font-size:12px;word-break:break-all">${escHtml(e.message || e.msg || String(e))}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Kayıt bulunamadı</td></tr>';
+}
+
+/* ══════════════════ Content Library ══════════════════ */
+async function loadContentLibrary() {
+  const tbody = document.getElementById('content-lib-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/content-library');
+  const items = (d && (d.items || d.files || [])) || [];
+  // Update stats
+  const total = items.length;
+  const iso   = items.filter(i => (i.type||'').toLowerCase()==='iso').length;
+  const ova   = items.filter(i => /ova|template/i.test(i.type||'')).length;
+  const other = total - iso - ova;
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('cls-total', total); setEl('cls-iso', iso); setEl('cls-ova', ova); setEl('cls-other', other);
+  tbody.innerHTML = items.length ? items.map(it => `<tr>
+    <td><strong>${escHtml(it.name||it.filename||'')}</strong></td>
+    <td><span class="badge-muted" style="font-size:10px">${escHtml(it.type||'—')}</span></td>
+    <td style="font-size:11px;color:var(--text-muted)">${escHtml(it.size||it.size_human||'—')}</td>
+    <td style="font-size:11px;color:var(--text-muted)">${escHtml(it.created_at ? new Date(it.created_at).toLocaleDateString('tr-TR') : (it.created||'—'))}</td>
+    <td><button class="btn sm danger" onclick="deleteContentItem('${escHtml(String(it.id||it.name||''))}')">Sil</button></td>
+  </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">İçerik yok</td></tr>';
+}
+
+function openAddContentItem() {
+  const form = document.getElementById('content-lib-add-form');
+  if (form) form.style.display = '';
+}
+
+async function addContentItem() {
+  const name = document.getElementById('cli-name')?.value.trim();
+  const url  = document.getElementById('cli-url')?.value.trim();
+  const type = document.getElementById('cli-type')?.value || 'iso';
+  if (!name || !url) { toast('Ad ve URL zorunludur', 'error'); return; }
+  const d = await _api('/api/content-library', 'POST', {name, url, type});
+  if (d && !d.error) {
+    toast('İçerik eklendi: ' + name, 'success');
+    const form = document.getElementById('content-lib-add-form');
+    if (form) form.style.display = 'none';
+    loadContentLibrary();
+  } else {
+    toast('Hata: ' + (d?.error || 'Bilinmeyen hata'), 'error');
+  }
+}
+
+async function deleteContentItem(id) {
+  if (!await showConfirm('Bu içerik öğesi silinecek.', 'İçerik Sil', true)) return;
+  await _api('/api/content-library/' + encodeURIComponent(id), 'DELETE');
+  loadContentLibrary();
+}
+
+async function syncContentLibrary() {
+  toast('Senkronizasyon başlatılıyor...', 'info');
+  const d = await _api('/api/content-library/sync', 'POST');
+  toast(d && d.ok ? 'Senkronizasyon tamamlandı' : ('Hata: ' + (d?.error || '')), d && d.ok ? 'success' : 'error');
+  if (d && d.ok) loadContentLibrary();
+}
+
+/* ══════════════════ Datastore Browser ══════════════════ */
+async function loadDatastore(pool, relPath) {
+  const poolSel = document.getElementById('ds-pool-sel');
+  if (pool === undefined) pool = poolSel ? poolSel.value : '/var/lib/libvirt/images';
+  if (relPath === undefined) relPath = document.getElementById('ds-current-path')?.value || '';
+  if (poolSel && poolSel.value !== pool) poolSel.value = pool;
+  const pathEl = document.getElementById('ds-current-path');
+  if (pathEl) pathEl.value = relPath;
+  _updateDsBreadcrumb(pool, relPath);
+  const tbody = document.getElementById('datastore-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const url = '/api/datastore/browse?pool=' + encodeURIComponent(pool) + '&path=' + encodeURIComponent(relPath);
+  const d = await _api(url);
+  const entries = (d && (d.entries || d.files || [])) || [];
+  tbody.innerHTML = entries.length ? entries.map(e => {
+    const isDir = e.type === 'dir' || e.is_dir;
+    const icon  = isDir ? '<i class="fa-solid fa-folder fa-fw" style="color:#f0b429"></i>' : '<i class="fa-regular fa-file fa-fw" style="color:var(--text-muted)"></i>';
+    const nameLink = isDir
+      ? `<span style="cursor:pointer;color:var(--accent-lt)" onclick="loadDatastore('${escHtml(pool)}','${escHtml((relPath?relPath+'/':'')+e.name)}')">${icon} ${escHtml(e.name)}</span>`
+      : `${icon} ${escHtml(e.name)}`;
+    const fullPath = (relPath ? relPath + '/' : '') + e.name;
+    return `<tr>
+      <td>${nameLink}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${isDir ? 'Klasör' : escHtml(e.ext || e.type || 'Dosya')}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${escHtml(e.size || e.size_human || (isDir ? '—' : ''))}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${escHtml(e.modified || e.mtime || '')}</td>
+      <td>
+        ${!isDir ? `<button class="btn sm" onclick="datastoreRenamePrompt('${escHtml(fullPath)}')">Yeniden Adlandır</button>
+        <button class="btn sm danger" onclick="datastoreDelete('${escHtml(pool)}','${escHtml(fullPath)}')">Sil</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Bu dizin boş</td></tr>';
+}
+
+function _updateDsBreadcrumb(pool, relPath) {
+  const bc = document.getElementById('ds-breadcrumb');
+  if (!bc) return;
+  let html = `<span style="color:var(--accent-lt);cursor:pointer" onclick="loadDatastore('${escHtml(pool)}','')">Kök</span>`;
+  if (relPath) {
+    const parts = relPath.split('/').filter(Boolean);
+    parts.forEach((p, i) => {
+      const sub = parts.slice(0, i+1).join('/');
+      html += ` <span style="color:var(--text-muted)">›</span> <span style="color:var(--accent-lt);cursor:pointer" onclick="loadDatastore('${escHtml(pool)}','${escHtml(sub)}')">${escHtml(p)}</span>`;
+    });
+  }
+  bc.innerHTML = html;
+}
+
+async function datastoreDelete(pool, relPath) {
+  if (!await showConfirm('Bu dosya kalıcı olarak silinecek.', 'Dosya Sil', true)) return;
+  const d = await _api('/api/datastore/delete', 'POST', {pool, path: relPath});
+  toast(d && d.ok ? 'Silindi' : ('Hata: ' + (d?.error || '')), d && d.ok ? 'success' : 'error');
+  if (d && d.ok) loadDatastore(pool, document.getElementById('ds-current-path')?.value || '');
+}
+
+async function datastoreRenamePrompt(relPath) {
+  const newName = prompt('Yeni ad:', relPath.split('/').pop());
+  if (!newName) return;
+  const pool = document.getElementById('ds-pool-sel')?.value || '';
+  const d = await _api('/api/datastore/rename', 'POST', {pool, path: relPath, new_name: newName});
+  toast(d && d.ok ? 'Yeniden adlandırıldı' : ('Hata: ' + (d?.error || '')), d && d.ok ? 'success' : 'error');
+  if (d && d.ok) loadDatastore(pool, document.getElementById('ds-current-path')?.value || '');
+}
+
+async function datastoreMkdirPrompt() {
+  const name = prompt('Klasör adı:');
+  if (!name) return;
+  const pool    = document.getElementById('ds-pool-sel')?.value || '';
+  const curPath = document.getElementById('ds-current-path')?.value || '';
+  const d = await _api('/api/datastore/mkdir', 'POST', {pool, path: curPath, name});
+  toast(d && d.ok ? 'Klasör oluşturuldu' : ('Hata: ' + (d?.error || '')), d && d.ok ? 'success' : 'error');
+  if (d && d.ok) loadDatastore(pool, curPath);
+}
+
+/* ══════════════════ Host Profiles ══════════════════ */
+async function loadHostProfiles() {
+  const d = await _api('/api/host-profiles');
+  const tbody = document.getElementById('host-profiles-tbody');
+  if (!tbody) return;
+  const profiles = d.profiles || [];
+  tbody.innerHTML = profiles.length ? profiles.map(p => `
+    <tr>
+      <td><strong>${escHtml(p.name)}</strong></td>
+      <td style="font-size:11px;color:var(--text-muted)">${new Date(p.created_at||0).toLocaleDateString('tr-TR')}</td>
+      <td style="font-size:12px">${escHtml(p.description||'—')}</td>
+      <td>
+        <button class="btn sm" onclick="applyHostProfile('${escHtml(p.id)}')">Uygula</button>
+        <button class="btn sm danger" onclick="deleteHostProfile('${escHtml(p.id)}')">Sil</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Profil yok</td></tr>';
+}
+async function captureHostProfile() {
+  const name = prompt('Profil adı:');
+  if (!name) return;
+  const d = await _api('/api/host-profiles', 'POST', {name, description: 'Manuel yakalama'});
+  if (d && d.profile) { toast('Profil kaydedildi: ' + d.profile.name, 'success'); loadHostProfiles(); }
+  else toast('Hata: ' + (d?.error || ''), 'error');
+}
+async function applyHostProfile(id) {
+  if (!await showConfirm('Bu profil mevcut host\'a uygulanacak.', 'Profil Uygula')) return;
+  const d = await _api('/api/host-profiles/' + encodeURIComponent(id) + '/apply', 'POST');
+  toast(d.ok ? ('Uygulandı: ' + (d.applied||[]).join(', ')) : (d.error||'Hata'), d.ok?'success':'error');
+}
+async function deleteHostProfile(id) {
+  if (!await showConfirm('Bu profil silinecek.', 'Profil Sil', true)) return;
+  await _api('/api/host-profiles/' + encodeURIComponent(id), 'DELETE');
+  loadHostProfiles();
+}
 </script>
 </body>
 </html>
