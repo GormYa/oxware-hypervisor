@@ -1588,51 +1588,76 @@
             </div>
           </div>
 
-          <!-- ══ Port Yönlendirme Kartı (host IP çakışması veya NAT modu) ══ -->
+          <!-- ══ Port Yönlendirme (Tüm NAT VM'leri için) ══ -->
           <div id="vd-port-forward-card" style="display:none;margin-top:12px">
-            <div class="card" style="border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.04)">
+            <div class="card" style="border:1px solid rgba(88,166,255,.25);background:rgba(88,166,255,.04)">
               <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                <i class="fa-solid fa-right-left" style="color:#f87171"></i>
+                <i class="fa-solid fa-right-left" style="color:var(--accent-lt)"></i>
                 Port Yönlendirme
-                <span id="vd-pf-host-ip-warn" style="display:none;font-size:11px;color:#f87171;margin-left:4px">⛔ Pool IP = sunucu IP'si — tam NAT mümkün değil, port bazlı yönlendirme kullanın</span>
-                <button class="btn sm" onclick="loadPortForwards(currentVmId)" style="margin-left:auto">↻ Yenile</button>
+                <span id="vd-pf-host-ip-warn" style="display:none;font-size:11px;color:#f59e0b;margin-left:4px">⚠ Pool IP sunucu IP'siyle aynı — tam NAT çalışmaz, sadece port yönlendirme kullanın</span>
+                <button class="btn sm" onclick="loadPortForwards(currentVmId)" style="margin-left:auto" title="Yenile">↻</button>
               </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
-                VM'in iç IP'si üzerinde belirli portları dışarıya açar.
-                Örnek: <code>31.58.236.60:2222 → 192.168.122.100:22</code> (SSH erişimi)
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.6">
+                VM'in iç IP'si: <code id="pf-vm-internal-display" style="color:#86efac">—</code>
+                &nbsp;·&nbsp; Dışarıdan erişim için sunucu portunu VM portuna yönlendir.
               </div>
-              <!-- Add rule form -->
-              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px;background:var(--surface2);border-radius:7px;margin-bottom:10px">
+
+              <!-- Hızlı preset butonlar -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                <span style="font-size:11px;color:var(--text-muted);align-self:center">Hızlı ekle:</span>
+                <button class="btn sm" onclick="pfPreset('tcp','22','22')" style="font-size:11px">🔑 SSH :22</button>
+                <button class="btn sm" onclick="pfPreset('tcp','80','80')" style="font-size:11px">🌐 HTTP :80</button>
+                <button class="btn sm" onclick="pfPreset('tcp','443','443')" style="font-size:11px">🔒 HTTPS :443</button>
+                <button class="btn sm" onclick="pfPreset('tcp','3306','3306')" style="font-size:11px">🗄 MySQL</button>
+                <button class="btn sm" onclick="pfPreset('tcp','5432','5432')" style="font-size:11px">🐘 PgSQL</button>
+                <button class="btn sm" onclick="pfPreset('tcp','3389','3389')" style="font-size:11px">🖥 RDP</button>
+              </div>
+
+              <!-- Manuel kural ekleme formu -->
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px 12px;background:var(--surface2);border-radius:7px;margin-bottom:10px">
                 <div class="form-group" style="margin:0">
                   <label style="font-size:11px;color:var(--text-muted)">Protokol</label>
-                  <select id="pf-proto" class="form-control" style="width:70px">
+                  <select id="pf-proto" class="form-control" style="width:68px">
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin:0">
                   <label style="font-size:11px;color:var(--text-muted)">Host Port</label>
-                  <input id="pf-host-port" type="number" class="form-control" placeholder="2222" style="width:80px" min="1" max="65535">
+                  <input id="pf-host-port" type="number" class="form-control" placeholder="2222" style="width:78px" min="1" max="65535">
                 </div>
-                <div style="font-size:18px;color:var(--text-muted);padding-bottom:4px">→</div>
+                <div style="font-size:16px;color:var(--text-muted);padding-bottom:4px">→</div>
                 <div class="form-group" style="margin:0">
                   <label style="font-size:11px;color:var(--text-muted)">VM İç IP</label>
-                  <input id="pf-vm-ip" type="text" class="form-control" placeholder="192.168.122.100" style="width:140px">
+                  <input id="pf-vm-ip" type="text" class="form-control" placeholder="192.168.122.x" style="width:140px">
                 </div>
                 <div class="form-group" style="margin:0">
                   <label style="font-size:11px;color:var(--text-muted)">VM Port</label>
-                  <input id="pf-vm-port" type="number" class="form-control" placeholder="22" style="width:80px" min="1" max="65535">
+                  <input id="pf-vm-port" type="number" class="form-control" placeholder="22" style="width:78px" min="1" max="65535">
                 </div>
-                <button class="btn-primary" onclick="addPortForward(currentVmId)" style="white-space:nowrap">
-                  <i class="fa-solid fa-plus"></i> Kural Ekle
+                <button class="btn-primary" onclick="addPortForward(currentVmId)" style="white-space:nowrap;padding:7px 14px">
+                  <i class="fa-solid fa-plus"></i> Ekle
                 </button>
               </div>
+
               <!-- Kural listesi -->
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Protokol</th><th>Host Port</th><th>VM IP</th><th>VM Port</th><th>Sil</th></tr></thead>
-                  <tbody id="pf-rules-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Kural yok —</td></tr></tbody>
+                  <thead><tr>
+                    <th style="width:60px">Proto</th>
+                    <th>Host Port</th>
+                    <th>VM IP</th>
+                    <th>VM Port</th>
+                    <th style="width:50px">Sil</th>
+                  </tr></thead>
+                  <tbody id="pf-rules-tbody">
+                    <tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Kural yok. Yukarıdan ekleyin. —</td></tr>
+                  </tbody>
                 </table>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+                <i class="fa-solid fa-circle-info" style="color:var(--accent-lt)"></i>
+                Kurallar otomatik kaydedilir — reboot'ta da geçerli kalır.
               </div>
             </div>
           </div>
@@ -10180,11 +10205,12 @@ async function loadVMDetail(vmId) {
       `<div class="vd-actions-primary">${primaryHtml}</div>` +
       (secondaryHtml ? `<div class="vd-actions-secondary">${secondaryHtml}</div>` : "");
 
-    // ── Port Yönlendirme kartı: host IP çakışması veya NAT modunda göster ───────
+    // ── Port Yönlendirme kartı: NAT ağındaki tüm VM'lerde göster ────────────────
     const pfCard = document.getElementById('vd-port-forward-card');
     const pfWarn = document.getElementById('vd-pf-host-ip-warn');
     if (pfCard) {
-      const showPf = v.host_ip_conflict || v.nat_mode;
+      // is_nat_vm: libvirt NAT ağında mı | nat_mode: pool ile dışarı çıkıyor | host_ip_conflict: host IP pool'a eklenmiş
+      const showPf = v.is_nat_vm || v.nat_mode || v.host_ip_conflict;
       pfCard.style.display = showPf ? 'block' : 'none';
       if (pfWarn) pfWarn.style.display = v.host_ip_conflict ? 'inline' : 'none';
       if (showPf) loadPortForwards(v.id || vmId);
@@ -12183,41 +12209,50 @@ async function vmNatSync(id) {
 }
 
 // ══════════════════ Port Yönlendirme ══════════════════
+function pfPreset(proto, hostPort, vmPort) {
+  // Preset butonları formu doldurur — VM IP zaten dolu olmalı
+  const pEl = document.getElementById('pf-proto');
+  const hEl = document.getElementById('pf-host-port');
+  const vEl = document.getElementById('pf-vm-port');
+  if (pEl) pEl.value = proto;
+  if (hEl) hEl.value = hostPort;
+  if (vEl) vEl.value = vmPort;
+  // Eğer VM IP boşsa internal_ip'den doldur
+  const ipEl = document.getElementById('pf-vm-ip');
+  if (ipEl && !ipEl.value && window._currentPfInternalIp) ipEl.value = window._currentPfInternalIp;
+  // Otomatik ekle
+  if (ipEl && ipEl.value) addPortForward(currentVmId);
+}
+
 async function loadPortForwards(vmId) {
   if (!vmId) return;
   const d = await _api(`/api/vms/${vmId}/port-forwards`);
   if (!d) return;
 
-  // Show/hide card based on host_ip_conflict or nat_mode
-  const card = document.getElementById('vd-port-forward-card');
-  const warn = document.getElementById('vd-pf-host-ip-warn');
-  if (card) card.style.display = 'block';
-  if (warn) warn.style.display = d.host_ips && d.host_ips.some(h => {
-    const pfVmIp = document.getElementById('pf-vm-ip');
-    return false; // shown via loadVMDetail v.host_ip_conflict
-  }) ? 'inline' : 'none';
+  // İç IP'yi göster ve forma doldur
+  const intIp = d.internal_ip || '';
+  window._currentPfInternalIp = intIp;
+  const dispEl = document.getElementById('pf-vm-internal-display');
+  if (dispEl) dispEl.textContent = intIp || 'Bekleniyor…';
+  const ipEl = document.getElementById('pf-vm-ip');
+  if (ipEl && !ipEl.value && intIp) ipEl.value = intIp;
 
-  // Auto-fill VM internal IP
-  if (d.internal_ip) {
-    const el = document.getElementById('pf-vm-ip');
-    if (el && !el.value) el.value = d.internal_ip;
-  }
-
-  // Populate rules table
+  // Kural tablosu
   const tbody = document.getElementById('pf-rules-tbody');
   if (!tbody) return;
   const rules = d.rules || [];
   tbody.innerHTML = rules.length ? rules.map(r => `
     <tr>
-      <td><span class="badge-muted">${escHtml(r.proto.toUpperCase())}</span></td>
-      <td style="font-family:monospace;color:var(--accent-lt)">${escHtml(r.host_ip||'')}:<b>${escHtml(r.host_port)}</b></td>
-      <td style="font-family:monospace">${escHtml(r.vm_ip)}</td>
-      <td style="font-family:monospace">${escHtml(r.vm_port)}</td>
+      <td><span class="badge-muted" style="font-size:10px">${escHtml(r.proto.toUpperCase())}</span></td>
+      <td style="font-family:monospace;color:var(--accent-lt);font-weight:600">:${escHtml(r.host_port)}</td>
+      <td style="font-family:monospace;font-size:11px">${escHtml(r.vm_ip)}</td>
+      <td style="font-family:monospace">:${escHtml(r.vm_port)}</td>
       <td>
-        <button class="btn-danger" style="font-size:11px;padding:3px 8px" onclick="deletePortForward('${escHtml(vmId)}','${escHtml(r.proto)}','${escHtml(r.host_ip||'')}','${escHtml(r.host_port)}','${escHtml(r.vm_ip)}','${escHtml(r.vm_port)}')">✕</button>
+        <button class="btn-danger" style="font-size:10px;padding:2px 7px"
+          onclick="deletePortForward('${escHtml(vmId)}','${escHtml(r.proto)}','${escHtml(r.host_ip||'')}','${escHtml(r.host_port)}','${escHtml(r.vm_ip)}','${escHtml(r.vm_port)}')">✕</button>
       </td>
     </tr>
-  `).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Kural yok. Yukarıdan ekleyin. —</td></tr>';
+  `).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:10px;font-size:12px">— Henüz kural yok —</td></tr>';
 }
 
 async function addPortForward(vmId) {

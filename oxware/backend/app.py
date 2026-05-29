@@ -1258,6 +1258,34 @@ def api_get_vm(vm_id):
             vm["pool_name"]   = ""
             vm["nat_mode"]    = False
             vm["internal_ip"] = ""
+
+        # is_nat_vm: VM libvirt NAT ağında mı? (pool atamasından bağımsız)
+        # Port yönlendirme kartını her NAT VM'de göstermek için kullanılır
+        try:
+            _vm_networks  = vm.get("networks", [])
+            _vm_net_names = [n.get("network", "") for n in _vm_networks if n.get("network")]
+            if not _vm_net_names:
+                _vm_net_names = [vm.get("network", "default")]
+            _lv_all_nets  = network_manager.list_networks()
+            _is_nat_vm    = False
+            _nat_vm_ip    = vm.get("internal_ip", "")
+            for _vnn in _vm_net_names:
+                _lv_net = next((n for n in _lv_all_nets if n.get("name") == _vnn), None)
+                if _lv_net and _lv_net.get("forward_mode") in ("nat", "", None, "route"):
+                    _is_nat_vm = True
+                    break
+            # NAT VM'nin iç IP'sini ağ listesinden al
+            if _is_nat_vm and not _nat_vm_ip:
+                for _n in _vm_networks:
+                    if _n.get("ip"):
+                        _nat_vm_ip = _n["ip"]
+                        break
+            vm["is_nat_vm"]   = _is_nat_vm
+            if _is_nat_vm and _nat_vm_ip:
+                vm["internal_ip"] = _nat_vm_ip
+        except Exception:
+            vm["is_nat_vm"] = False
+
         # Guest agent quick status (non-blocking, 2s timeout)
         try:
             vm["guest_agent"] = vm_manager.get_guest_agent_status(vm_id)
@@ -2595,6 +2623,7 @@ def api_vm_port_forwards_add(vm_id):
                 details={"proto": proto, "host_port": host_port, "vm_ip": vm_ip, "vm_port": vm_port}
             )
             ev.info(f"Port yönlendirme eklendi: {host_ip}:{host_port} → {vm_ip}:{vm_port}", category="network")
+            threading.Thread(target=_save_iptables_rules, daemon=True).start()
             return ok(
                 added=True, proto=proto,
                 host_ip=host_ip, host_port=host_port,
@@ -2636,11 +2665,62 @@ def api_vm_port_forwards_delete(vm_id):
 
         if r.returncode == 0:
             ev.info(f"Port yönlendirme silindi: {host_ip}:{host_port} → {vm_ip}:{vm_port}", category="network")
+            threading.Thread(target=_save_iptables_rules, daemon=True).start()
             return ok(deleted=True)
         else:
             return err(f"iptables hatası: {r.stderr.strip()}", 500)
     except Exception as e:
         return err(e)
+
+
+_PF_RULES_FILE = "/var/lib/oxware/pf_rules.json"
+
+def _save_iptables_rules():
+    """iptables kurallarını dosyaya kaydet (reboot kalıcılığı)."""
+    try:
+        # iptables-save ile tüm kuralları dök
+        r = subprocess.run(["iptables-save"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            # /etc/iptables/rules.v4 varsa oraya kaydet (iptables-persistent)
+            rules_paths = [
+                "/etc/iptables/rules.v4",
+                "/etc/iptables.rules",
+            ]
+            for rp in rules_paths:
+                import pathlib as _pl
+                if _pl.Path(rp).parent.exists():
+                    try:
+                        _pl.Path(rp).write_text(r.stdout)
+                        log.info("iptables kuralları kaydedildi: %s", rp)
+                        break
+                    except Exception:
+                        pass
+            # Ayrıca OXware'in kendi formatında da tut (restore için)
+            os.makedirs(os.path.dirname(_PF_RULES_FILE), exist_ok=True)
+            with open(_PF_RULES_FILE, "w") as f:
+                f.write(r.stdout)
+    except Exception as _pe:
+        log.warning("iptables kaydetme hatası: %s", _pe)
+
+
+def _restore_iptables_rules():
+    """Kaydedilmiş iptables kurallarını yükle (servis başlangıcında çağrılır)."""
+    try:
+        rules_paths = [
+            "/etc/iptables/rules.v4",
+            "/etc/iptables.rules",
+            _PF_RULES_FILE,
+        ]
+        for rp in rules_paths:
+            if os.path.exists(rp):
+                r = subprocess.run(["iptables-restore", rp],
+                                   capture_output=True, timeout=10)
+                if r.returncode == 0:
+                    log.info("iptables kuralları yüklendi: %s", rp)
+                    return True
+    except Exception as _re:
+        log.warning("iptables geri yükleme hatası: %s", _re)
+    return False
 
 
 @app.route("/api/vms/<vm_id>/nat-sync", methods=["POST"])
@@ -14083,6 +14163,40 @@ def _startup_ensure_physnet():
         log.warning("ensure_physnet başlatma hatası: %s", _e)
 
 _startup_ensure_physnet()
+
+# Servis başlangıcında MASQUERADE + ip_forward + kayıtlı port yönlendirmeleri geri yükle
+def _startup_iptables():
+    try:
+        subprocess.run(["sysctl", "-w", "net.ipv4.ip_forward=1"],
+                       capture_output=True, timeout=5)
+        try:
+            _virbr_nets = network_manager.list_networks()
+        except Exception:
+            _virbr_nets = []
+        for _vn in _virbr_nets:
+            _vn_ip = _vn.get("ip")
+            _vn_nm = _vn.get("netmask", "255.255.255.0")
+            if _vn_ip and _vn.get("forward_mode") in ("nat", "", None):
+                try:
+                    import ipaddress as _ipa2
+                    _net2 = str(_ipa2.IPv4Network(f"{_vn_ip}/{_vn_nm}", strict=False))
+                    chk = subprocess.run([
+                        "iptables", "-t", "nat", "-C", "POSTROUTING",
+                        "-s", _net2, "!", "-d", _net2, "-j", "MASQUERADE"
+                    ], capture_output=True, timeout=3)
+                    if chk.returncode != 0:
+                        subprocess.run([
+                            "iptables", "-t", "nat", "-A", "POSTROUTING",
+                            "-s", _net2, "!", "-d", _net2, "-j", "MASQUERADE"
+                        ], capture_output=True, timeout=5)
+                        log.info("Startup MASQUERADE eklendi: %s", _net2)
+                except Exception:
+                    pass
+        _restore_iptables_rules()
+    except Exception as _se:
+        log.warning("Startup iptables hatası: %s", _se)
+
+threading.Thread(target=_startup_iptables, daemon=True, name="startup-iptables").start()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
