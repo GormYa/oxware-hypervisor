@@ -247,7 +247,6 @@ install_packages() {
         ufw fail2ban certbot python3-certbot
         nftables wireguard
         openvswitch-switch openvswitch-common
-        # suricata: Debian 12 main repo'da yok — install_suricata() tarafından ayrıca kurulur
     )
     for pkg in "${PKGS[@]}"; do
         dpkg -l "$pkg" &>/dev/null || apt-get install -y -qq "$pkg" 2>/dev/null \
@@ -1044,64 +1043,6 @@ MOTDSCRIPT
     log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
 }
 
-# ── Suricata IDS/IPS ──────────────────────────────────────────
-install_suricata() {
-    step "Suricata IDS/IPS"
-
-    # Debian 12 main repo'da yok — önce kurulmaya çalış
-    if ! command -v suricata &>/dev/null; then
-        log "Suricata kuruluyor..."
-        # Debian 12 (bookworm): OISF Debian repo'su gerekli
-        if grep -qi "debian" /etc/os-release 2>/dev/null; then
-            apt-get install -y -qq lsb-release apt-transport-https 2>/dev/null || true
-            CODENAME=$(lsb_release -sc 2>/dev/null || echo "bookworm")
-            # OISF resmi Debian deposu
-            curl -fsSL "https://packagecloud.io/oisf/suricata-stable/gpgkey" \
-                | gpg --dearmor -o /etc/apt/trusted.gpg.d/suricata.gpg 2>/dev/null || true
-            echo "deb https://packagecloud.io/oisf/suricata-stable/debian/ ${CODENAME} main" \
-                > /etc/apt/sources.list.d/suricata.list
-            apt-get update -qq 2>/dev/null || true
-            apt-get install -y -qq suricata 2>/dev/null || true
-        else
-            apt-get install -y -qq suricata 2>/dev/null || true
-        fi
-    fi
-
-    if ! command -v suricata &>/dev/null; then
-        warn "Suricata kurulamadı — IDS/IPS devre dışı (isteğe bağlı bileşen)"
-        warn "Manuel kurulum: curl -fsSL https://packagecloud.io/oisf/suricata-stable/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/suricata.gpg"
-        return
-    fi
-
-    # Varsayılan konfigürasyonu etkinleştir
-    SURICATA_CONF="/etc/suricata/suricata.yaml"
-    if [ -f "$SURICATA_CONF" ]; then
-        # Ağ arayüzünü tespit et
-        DEFAULT_IFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-        if [ -n "$DEFAULT_IFACE" ]; then
-            sed -i "s/interface: eth0/interface: ${DEFAULT_IFACE}/g" "$SURICATA_CONF" 2>/dev/null || true
-            log "Suricata arayüzü: $DEFAULT_IFACE"
-        fi
-    fi
-
-    # Kural güncellemesi — suricata -T (kural doğrulama) ağır makinede asılı kalabilir
-    # timeout 180s ile güvenli çalıştır
-    log "Suricata kuralları güncelleniyor (max 3 dakika)..."
-    timeout 180 suricata-update 2>/dev/null \
-        && log "Suricata kuralları güncellendi" \
-        || warn "suricata-update tamamlanamadı — atlanıyor (sonradan: suricata-update)"
-
-    # Servisi etkinleştir ama başlatmayı timeout ile sınırla
-    systemctl enable suricata 2>/dev/null || true
-    timeout 30 systemctl start suricata 2>/dev/null || true
-
-    if systemctl is-active --quiet suricata; then
-        log "Suricata IDS/IPS çalışıyor"
-    else
-        warn "Suricata başlatılamadı — sonradan başlatmak için: systemctl start suricata"
-    fi
-}
-
 # ── Servisleri Başlat ─────────────────────────────────────────
 start_services() {
     step "Servisler Başlatılıyor"
@@ -1229,7 +1170,6 @@ main() {
     install_ovs          # OVS bridge setup'tan önce başlatılmalı — netplan apply OVS'ye ulaşmaya çalışır
     setup_host_bridge
     fix_reboot_stability
-    install_suricata
     install_motd
     install_cli_tools
     start_services

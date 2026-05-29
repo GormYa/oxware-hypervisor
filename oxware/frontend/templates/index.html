@@ -14781,47 +14781,6 @@ async function sshManualRestart() {
   } catch(e) { toast('Hata: ' + e.message, 'error'); }
 }
 
-async function loadIdsStatus() {
-  const d = await _api('/api/ids/status');
-  const el = document.getElementById('idsStatusCard');
-  if (el) el.innerHTML = d.available ? `
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span class="badge-success">✓ Suricata Kurulu</span>
-      <span class="badge-${d.active?'success':'muted'}">${d.active?'● Çalışıyor':'○ Durdu'}</span>
-      ${d.version ? `<span style="font-size:11px;color:var(--text-muted)">v${escHtml(d.version)}</span>` : ''}
-      ${d.alerts_today != null ? `<span style="font-size:12px;color:var(--text-muted)">${d.alerts_today} bugün alert</span>` : ''}
-      ${!d.active ? `<button onclick="idsStart()" style="background:var(--accent);border:none;color:white;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Başlat</button>` : ''}
-    </div>
-  ` : `
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <span class="badge-danger">✗ Suricata Kurulu Değil</span>
-      <span style="font-size:12px;color:var(--text-muted)">IDS/IPS için Suricata gereklidir.</span>
-    </div>
-    <div style="margin-top:10px;background:var(--surface3);border-radius:5px;padding:10px 14px">
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Sunucuya SSH ile bağlanarak kurun:</div>
-      <code style="font-size:12px;color:#86efac;display:block">apt-get install -y suricata &amp;&amp; suricata-update &amp;&amp; systemctl enable --now suricata</code>
-    </div>
-  `;
-  if (d.available) {
-    const da = await _api('/api/ids/alerts?limit=20');
-    const tbody = document.getElementById('idsAlertsTbody');
-    if (tbody) tbody.innerHTML = (da.alerts || []).map(a => `
-      <tr>
-        <td>${new Date(a.timestamp||a.ts||0).toLocaleString('tr-TR')}</td>
-        <td>${escHtml(a.src_ip||'—')}</td>
-        <td>${escHtml(a.dest_ip||'—')}:${escHtml(String(a.dest_port||''))}</td>
-        <td style="font-size:11px">${escHtml(a.alert?.signature||'—')}</td>
-        <td><span class="badge-${a.alert?.severity===1?'danger':a.alert?.severity===2?'warning':'muted'}">${a.alert?.severity||'—'}</span></td>
-      </tr>
-    `).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:12px">Alert yok</td></tr>';
-  }
-}
-
-async function idsStart() {
-  const d = await _api('/api/ids/start', 'POST');
-  if (d && !d.error) { toast('Suricata başlatıldı', 'success'); loadIdsStatus(); }
-}
-
 /* ══════════════════ AI ══════════════════ */
 async function loadAiRecommendations() {
   const d = await _api('/api/ai/recommendations');
