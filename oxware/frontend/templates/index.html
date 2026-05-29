@@ -2546,6 +2546,27 @@
 
           </div><!-- /net-tab-physical -->
 
+          <!-- DVS — Distributed Virtual Switch -->
+          <div class="card" style="margin-top:16px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              <i class="fa-solid fa-diagram-successor" style="color:var(--accent-lt)"></i>
+              Distributed Virtual Switch (DVS)
+              <button class="btn sm" onclick="loadDvsList()" style="margin-left:auto">↻ Yenile</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Birden fazla node'u kapsayan OVS tabanlı sanal switch. Merkezi VLAN ve tünelleme yönetimi.</div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
+              <div class="form-group" style="margin:0"><label style="font-size:11px">DVS Adı</label><input id="dvs-name" type="text" class="form-control" placeholder="dvs-prod" style="width:120px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">VLAN ID</label><input id="dvs-vlan" type="number" class="form-control" placeholder="0" value="0" style="width:70px"></div>
+              <button class="btn-primary" onclick="createDvs()">+ Oluştur</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Açıklama</th><th>VLAN</th><th>MTU</th><th>Nodes</th><th>Sil</th></tr></thead>
+                <tbody id="dvs-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:10px">Yüklemek için ↻ Yenile tıklayın</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
         <!-- ─────── Storage Page ─────── -->
@@ -2566,6 +2587,7 @@
             <button class="settings-tab active" data-stab="pools" onclick="switchStorageTab('pools')">⊞ Volumes</button>
             <button class="settings-tab" data-stab="isos" onclick="switchStorageTab('isos')">◎ ISO Library</button>
             <button class="settings-tab" data-stab="hostdisk" onclick="switchStorageTab('hostdisk')">▣ Host Disks</button>
+            <button class="settings-tab" data-stab="vsan" onclick="switchStorageTab('vsan');loadVsanStatus()">🗃 vSAN/Ceph</button>
           </div>
           <div id="storage-tab-pools">
             <!-- Ceph status card (hidden until loaded) -->
@@ -2612,6 +2634,34 @@
               </table>
             </div>
           </div>
+          <!-- vSAN/Cluster tab -->
+          <div id="storage-tab-vsan" style="display:none">
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-layer-group" style="color:#f97316"></i> vSAN / Ceph Cluster
+                <button class="btn sm" onclick="loadVsanStatus()" style="margin-left:auto">↻ Yenile</button>
+                <button class="btn sm" onclick="openModal('modal-ceph-pool')">+ Ceph Havuz</button>
+              </div>
+              <div id="vsan-status-body" style="font-size:13px;color:var(--text-muted)">Yüklemek için ↻ Yenile tıklayın.</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="card">
+                <div class="card-title">OSD'ler (Disk Daemon)</div>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>OSD ID</th><th>Host</th><th>Durum</th><th>Kapasite</th></tr></thead>
+                  <tbody id="vsan-osds-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">— Yükle —</td></tr></tbody>
+                </table></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Ceph Havuzları</div>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>Havuz</th><th>PG</th><th>Replikasyon</th></tr></thead>
+                  <tbody id="vsan-pools-tbody"><tr><td colspan="3" class="text-center text-muted" style="padding:10px">— Yükle —</td></tr></tbody>
+                </table></div>
+              </div>
+            </div>
+          </div>
+
           <div id="storage-tab-hostdisk" style="display:none">
             <div style="margin-bottom:18px">
               <div style="margin-bottom:8px">
@@ -4527,6 +4577,7 @@
             <div class="sub-tab" onclick="cfgTab('network')" id="cfg-tab-network">🔀 Ağ / Bağlantı</div>
             <div class="sub-tab" onclick="cfgTab('migration')" id="cfg-tab-migration">🚀 Toplu Taşıma</div>
             <div class="sub-tab" onclick="cfgTab('host')" id="cfg-tab-host">🖥️ Host</div>
+            <div class="sub-tab" onclick="cfgTab('dpm')" id="cfg-tab-dpm">⚡ DPM</div>
           </div>
 
           <!-- ── General pane ── -->
@@ -4899,6 +4950,39 @@
           </div>
 
           </div><!-- /cfg-pane-host -->
+
+          <!-- DPM — Distributed Power Management -->
+          <div id="cfg-pane-dpm" style="display:none">
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-bolt" style="color:#eab308"></i>
+                DPM — Distributed Power Management
+                <button id="dpm-analyze-btn" class="btn sm" onclick="dpmAnalyze()" style="margin-left:auto">🔍 Analiz Et</button>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+                Cluster node'larının CPU kullanımını izler. Düşük yüklü node'ları uyku moduna alır, yüksek yükte uyandırır.
+              </div>
+              <div id="dpm-analysis-out" style="margin-bottom:12px"></div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                Node Listesi
+                <button class="btn sm" onclick="loadDpmNodes()" style="margin-left:auto">↻</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
+                <div class="form-group" style="margin:0"><label style="font-size:11px">IP</label><input id="dpm-node-ip" type="text" class="form-control" placeholder="10.0.0.2" style="width:130px"></div>
+                <div class="form-group" style="margin:0"><label style="font-size:11px">Ad</label><input id="dpm-node-name" type="text" class="form-control" placeholder="node2" style="width:100px"></div>
+                <div class="form-group" style="margin:0"><label style="font-size:11px">MAC (WoL)</label><input id="dpm-node-mac" type="text" class="form-control" placeholder="aa:bb:cc:dd:ee:ff" style="width:150px"></div>
+                <button class="btn-primary" onclick="dpmAddNode()">+ Node Ekle</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Ad</th><th>IP</th><th>MAC</th><th>İşlemler</th></tr></thead>
+                  <tbody id="dpm-nodes-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:10px">Node yok</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div><!-- /cfg-pane-dpm -->
 
         </div><!-- /page-tab-settings -->
 
@@ -10195,7 +10279,7 @@ async function loadVMDetail(vmId) {
 }
 
 // ── Settings Sub-Tab Switch ────────────────────────────────────────────────────
-const _cfgPanes = ['general','resources','schedule','network','migration','host'];
+const _cfgPanes = ['general','resources','schedule','network','migration','host','dpm'];
 function cfgTab(name) {
   _cfgPanes.forEach(p => {
     const pane = document.getElementById(`cfg-pane-${p}`);
@@ -10208,7 +10292,8 @@ function cfgTab(name) {
   if (name === 'schedule')   loadVmSchedules();
   if (name === 'network')    loadBgpSettings();
   if (name === 'migration')  migRefreshJobs();
-  if (name === 'host')       { loadHostInfo(); loadNtpStatus(); }
+  if (name === 'host')       { loadHostInfo(); loadNtpStatus(); loadHostProfiles(); }
+  if (name === 'dpm')        { loadDpmNodes(); }
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
@@ -13058,6 +13143,8 @@ function switchStorageTab(tab) {
   document.getElementById("storage-tab-pools").style.display = tab === "pools" ? "" : "none";
   document.getElementById("storage-tab-isos").style.display = tab === "isos" ? "" : "none";
   document.getElementById("storage-tab-hostdisk").style.display = tab === "hostdisk" ? "" : "none";
+  const vsanEl = document.getElementById("storage-tab-vsan");
+  if (vsanEl) vsanEl.style.display = tab === "vsan" ? "" : "none";
   if (tab === "hostdisk") { loadVMDiskPools(); loadBlockDevices(); }
   if (tab === "isos") loadISOList();
 }
@@ -20211,6 +20298,133 @@ async function loadSyslogTab(tab) {
   }).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Kayıt bulunamadı</td></tr>';
 }
 
+/* ══════════════════ vSAN / Ceph Cluster ══════════════════ */
+async function loadVsanStatus() {
+  const body = document.getElementById('vsan-status-body');
+  const osdsTbody = document.getElementById('vsan-osds-tbody');
+  const poolsTbody = document.getElementById('vsan-pools-tbody');
+  if (body) body.innerHTML = '<span style="color:var(--text-muted)">Yükleniyor...</span>';
+  try {
+    const [status, osds, pools] = await Promise.all([
+      _api('/api/vsan/status'),
+      _api('/api/vsan/osds'),
+      _api('/api/vsan/pools'),
+    ]);
+    if (body) {
+      const ok = status.available || status.ok;
+      const health = status.health || (ok ? 'HEALTH_OK' : 'Unavailable');
+      const healthColor = health.includes('OK') ? '#22c55e' : health.includes('WARN') ? '#f59e0b' : '#ef4444';
+      body.innerHTML = ok ? `
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:16px;font-weight:700;color:${healthColor}">${escHtml(health)}</span>
+          ${status.fsid ? `<code style="font-size:11px;color:var(--text-muted)">${escHtml(status.fsid)}</code>` : ''}
+          ${status.version ? `<span style="font-size:11px;color:var(--text-muted)">v${escHtml(status.version)}</span>` : ''}
+          ${status.total_bytes ? `<span style="font-size:12px">Toplam: ${(Number(status.total_bytes)/1073741824).toFixed(1)} GB</span>` : ''}
+          ${status.used_bytes  ? `<span style="font-size:12px;color:#f59e0b">Kullanılan: ${(Number(status.used_bytes)/1073741824).toFixed(1)} GB</span>` : ''}
+        </div>` : `<span style="color:#f59e0b">⚠ Ceph kullanılamıyor — ceph-mon/rbd kurulu mu?</span>`;
+    }
+    if (osdsTbody) {
+      const osdList = osds.osds || [];
+      osdsTbody.innerHTML = osdList.length ? osdList.map(o => `<tr>
+        <td style="font-family:monospace">osd.${escHtml(String(o.id??''))}</td>
+        <td>${escHtml(o.host||'—')}</td>
+        <td><span class="${o.up && o.in ? 'badge-success' : 'badge-danger'}" style="font-size:10px">${o.up && o.in ? 'UP' : 'DOWN'}</span></td>
+        <td style="font-size:11px">${o.capacity || '—'}</td>
+      </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">OSD bilgisi yok</td></tr>';
+    }
+    if (poolsTbody) {
+      const poolList = pools.pools || [];
+      poolsTbody.innerHTML = poolList.length ? poolList.map(p => `<tr>
+        <td><strong>${escHtml(p.pool_name||p.name||'')}</strong></td>
+        <td style="font-family:monospace">${escHtml(String(p.pg_num||''))}</td>
+        <td>${escHtml(String(p.replication_size||p.size||''))}</td>
+      </tr>`).join('') : '<tr><td colspan="3" class="text-center text-muted" style="padding:10px">Ceph havuzu yok</td></tr>';
+    }
+  } catch(e) {
+    if (body) body.innerHTML = `<span style="color:#ef4444">Hata: ${escHtml(e.message)}</span>`;
+  }
+}
+
+/* ══════════════════ DVS (Distributed Virtual Switch) ══════════════════ */
+async function loadDvsList() {
+  const d = await _api('/api/dvs');
+  const tbody = document.getElementById('dvs-tbody');
+  if (!tbody) return;
+  const switches = d.switches || [];
+  tbody.innerHTML = switches.length ? switches.map(s => `<tr>
+    <td><strong>${escHtml(s.name||'')}</strong></td>
+    <td style="font-size:11px">${escHtml(s.description||'—')}</td>
+    <td><span class="badge-muted" style="font-size:10px">VLAN ${escHtml(String(s.vlan_id||0))}</span></td>
+    <td style="font-family:monospace;font-size:11px">${escHtml(String(s.mtu||1500))} MTU</td>
+    <td>${(s.nodes||[]).length} node</td>
+    <td><button class="btn sm danger" onclick="deleteDvs('${escHtml(s.id||'')}')">Sil</button></td>
+  </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:10px">DVS yok</td></tr>';
+}
+async function createDvs() {
+  const name = document.getElementById('dvs-name')?.value;
+  const vlan = document.getElementById('dvs-vlan')?.value || '0';
+  if (!name) { toast('DVS adı zorunlu', 'error'); return; }
+  const d = await _api('/api/dvs', 'POST', {name, vlan_id: parseInt(vlan)});
+  if (d && d.dvs) { toast('DVS oluşturuldu: ' + d.dvs.name, 'success'); loadDvsList(); }
+  else toast('Hata: ' + escHtml(d?.error||''), 'error');
+}
+async function deleteDvs(id) {
+  if (!await showConfirm('DVS silinecek.', 'DVS Sil', true)) return;
+  await _api(`/api/dvs/${id}`, 'DELETE');
+  loadDvsList();
+}
+
+/* ══════════════════ DPM (Distributed Power Management) ══════════════════ */
+async function loadDpmNodes() {
+  const d = await _api('/api/dpm/config');
+  const tbody = document.getElementById('dpm-nodes-tbody');
+  if (!tbody || !d) return;
+  const nodes = (d.config || d).nodes || [];
+  tbody.innerHTML = nodes.length ? nodes.map(n => `<tr>
+    <td><strong>${escHtml(n.name||n.ip)}</strong></td>
+    <td style="font-family:monospace">${escHtml(n.ip)}</td>
+    <td style="font-family:monospace;font-size:11px">${escHtml(n.mac||'—')}</td>
+    <td><button class="btn sm" onclick="dpmWakeup('${escHtml(n.ip)}')">WoL</button>
+        <button class="btn sm danger" onclick="dpmRemoveNode('${escHtml(n.ip)}')">Çıkar</button></td>
+  </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Node yok</td></tr>';
+}
+async function dpmAnalyze() {
+  const btn = document.getElementById('dpm-analyze-btn');
+  if (btn) { btn.textContent = 'Analiz ediliyor...'; btn.disabled = true; }
+  const d = await _api('/api/dpm/analyze');
+  if (btn) { btn.textContent = '🔍 Analiz Et'; btn.disabled = false; }
+  const out = document.getElementById('dpm-analysis-out');
+  if (!out || !d) return;
+  const nodes = d.nodes || [];
+  out.innerHTML = nodes.length ? nodes.map(n => {
+    const cpu = n.cpu !== null ? n.cpu + '%' : '—';
+    const color = n.action?.includes('suspend') ? '#f59e0b' : n.action === 'high_load' ? '#ef4444' : n.cpu === null ? '#94a3b8' : '#22c55e';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface2);border-radius:6px;margin-bottom:6px">
+      <span style="font-weight:600;flex:1">${escHtml(n.name||n.node)}</span>
+      <code style="font-size:11px">${escHtml(n.node)}</code>
+      <span style="font-family:monospace;color:${color}">${cpu}</span>
+      <span class="badge-muted" style="font-size:10px;color:${color}">${escHtml(n.action||n.status||'—')}</span>
+      ${n.action?.includes('wakeup') ? `<button class="btn sm" onclick="dpmWakeNode('${escHtml(n.node)}')">WoL</button>` : ''}
+    </div>`;
+  }).join('') : '<div style="color:var(--text-muted);font-size:12px">Node bulunamadı</div>';
+}
+async function dpmAddNode() {
+  const ip = document.getElementById('dpm-node-ip')?.value;
+  const name = document.getElementById('dpm-node-name')?.value || ip;
+  const mac = document.getElementById('dpm-node-mac')?.value || '';
+  if (!ip) { toast('IP zorunlu', 'error'); return; }
+  const d = await _api('/api/dpm/nodes', 'POST', {ip, name, mac});
+  if (d) { toast('Node eklendi', 'success'); loadDpmNodes(); }
+}
+async function dpmRemoveNode(ip) {
+  await _api(`/api/dpm/nodes/${encodeURIComponent(ip)}`, 'DELETE');
+  loadDpmNodes();
+}
+async function dpmWakeup(ip) {
+  const d = await _api(`/api/dpm/wakeup/${encodeURIComponent(ip)}`, 'POST');
+  toast(d?.ok ? 'WoL paketi gönderildi' : 'Hata: ' + escHtml(d?.error||''), d?.ok ? 'success' : 'error');
+}
+
 /* ══════════════════ Content Library ══════════════════ */
 async function loadContentLibrary() {
   const tbody = document.getElementById('content-lib-tbody');
@@ -20225,13 +20439,19 @@ async function loadContentLibrary() {
   const other = total - iso - ova;
   const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   setEl('cls-total', total); setEl('cls-iso', iso); setEl('cls-ova', ova); setEl('cls-other', other);
-  tbody.innerHTML = items.length ? items.map(it => `<tr>
-    <td><strong>${escHtml(it.name||it.filename||'')}</strong></td>
-    <td><span class="badge-muted" style="font-size:10px">${escHtml(it.type||'—')}</span></td>
-    <td style="font-size:11px;color:var(--text-muted)">${escHtml(it.size||it.size_human||'—')}</td>
+  tbody.innerHTML = items.length ? items.map(it => {
+    const bytes = Number(it.size) || 0;
+    const szStr = it.size_human || (bytes > 1073741824 ? (bytes/1073741824).toFixed(1)+' GB' : bytes > 1048576 ? (bytes/1048576).toFixed(1)+' MB' : bytes > 1024 ? (bytes/1024).toFixed(1)+' KB' : bytes+' B');
+    const typeColor = {iso:'#60a5fa',disk_template:'#34d399',other:'#94a3b8'}[it.type] || '#94a3b8';
+    return `<tr>
+    <td><i class="fa-solid fa-compact-disc" style="color:${typeColor};margin-right:6px"></i><strong>${escHtml(it.name||it.filename||'')}</strong></td>
+    <td><span class="badge-muted" style="font-size:10px;background:rgba(88,166,255,.1);color:${typeColor}">${escHtml(it.type||'—')}</span></td>
+    <td style="font-size:11px;color:var(--text-muted);font-family:monospace">${escHtml(szStr)}</td>
     <td style="font-size:11px;color:var(--text-muted)">${escHtml(it.created_at ? new Date(it.created_at).toLocaleDateString('tr-TR') : (it.created||'—'))}</td>
-    <td><button class="btn sm danger" onclick="deleteContentItem('${escHtml(String(it.id||it.name||''))}')">Sil</button></td>
-  </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">İçerik yok</td></tr>';
+    <td style="display:flex;gap:4px">
+      <button class="btn sm danger" onclick="deleteContentItem('${escHtml(String(it.id||it.name||''))}')">Sil</button>
+    </td>
+  </tr>`;}).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">İçerik yok — URL veya dosya yoluyla ekleyin</td></tr>';
 }
 
 function openAddContentItem() {
