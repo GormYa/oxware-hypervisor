@@ -353,10 +353,11 @@ mkdir -p "$SQUASHFS_ROOT/etc/calamares/modules"
 
 cp "$CALA_SRC/settings.conf" "$SQUASHFS_ROOT/etc/calamares/"
 
-for conf in welcome locale keyboard partition users summary finished; do
+for conf in welcome locale keyboard users summary finished; do
     [ -f "$CALA_SRC/modules/${conf}.conf" ] && \
         cp "$CALA_SRC/modules/${conf}.conf" "$SQUASHFS_ROOT/etc/calamares/modules/"
 done
+# partition.conf artık kullanılmıyor — oxdisk QML modülü kpmcore olmadan çalışır
 
 # Custom Python job (Calamares → install.py --headless)
 mkdir -p "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxware_install"
@@ -371,6 +372,13 @@ cp "$CALA_SRC/modules/oxnetwork/module.desc" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
 cp "$CALA_SRC/modules/oxnetwork/oxnetwork.qml" \
    "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxnetwork/"
+
+# OXware disk seçimi viewmodule (kpmcore olmadan — kpmcore 2% donmasını önler)
+mkdir -p "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxdisk"
+cp "$CALA_SRC/modules/oxdisk/module.desc" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxdisk/"
+cp "$CALA_SRC/modules/oxdisk/oxdisk.qml" \
+   "$SQUASHFS_ROOT/usr/lib/calamares/modules/oxdisk/"
 
 # OXware branding
 mkdir -p "$SQUASHFS_ROOT/usr/share/calamares/branding/oxware"
@@ -611,6 +619,48 @@ if [ -n "$_IFACE" ]; then
     printf '{"iface":"%s","ip":"%s"}\n' "$_IFACE" "$_IP" \
         > /tmp/oxware-netinfo.json
 fi
+
+# ── polkitd başlat (kpmcore / udisks2 yetkilendirme için) ─────────────────────
+if command -v polkitd &>/dev/null; then
+    polkitd --no-debug 2>/dev/null &
+    sleep 0.5
+    echo "polkitd başlatıldı"
+elif command -v /usr/lib/polkit-1/polkitd &>/dev/null; then
+    /usr/lib/polkit-1/polkitd --no-debug 2>/dev/null &
+    sleep 0.5
+    echo "polkitd başlatıldı (/usr/lib/polkit-1/)"
+fi
+
+# ── oxdisk QML modülü için disk listesi oluştur ────────────────────────────────
+echo "Disk listesi oluşturuluyor..."
+lsblk -d -J -o NAME,SIZE,TYPE,MODEL,TRAN,RM 2>/dev/null \
+    | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+disks = [d for d in data.get('blockdevices',[])
+         if d.get('type','')=='disk' and str(d.get('rm','1'))=='0']
+with open('/tmp/oxware-disks.json','w') as f:
+    json.dump({'blockdevices': disks}, f, indent=2)
+print(f'Disk sayısı: {len(disks)}')
+for d in disks:
+    print(f'  /dev/{d[\"name\"]}  {d[\"size\"]}  {d.get(\"model\",\"\")}')
+" 2>/dev/null || \
+lsblk -d -n -o NAME,SIZE,TYPE,MODEL,TRAN,RM 2>/dev/null \
+    | awk '$3=="disk" && $6=="0" {print $1,$2,$4,$5}' \
+    | python3 -c "
+import sys, json
+disks = []
+for ln in sys.stdin:
+    p = ln.strip().split()
+    if p:
+        disks.append({'name':p[0],'size':p[1] if len(p)>1 else '?',
+                      'model':' '.join(p[2:]) if len(p)>2 else ''})
+with open('/tmp/oxware-disks.json','w') as f:
+    json.dump({'blockdevices': disks}, f, indent=2)
+print(f'Disk sayısı (fallback): {len(disks)}')
+" 2>/dev/null || echo '{"blockdevices":[]}' > /tmp/oxware-disks.json
+
+echo "Disk listesi hazır: $(cat /tmp/oxware-disks.json | python3 -c 'import sys,json;d=json.load(sys.stdin);print(len(d[\"blockdevices\"]),\"disk\")'  2>/dev/null)"
 
 # ── Calamares fullscreen kurulum ──────────────────────────────────────────────
 echo "Calamares başlıyor..."

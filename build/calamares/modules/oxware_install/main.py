@@ -15,6 +15,7 @@ import libcalamares
 CONFIG_PATH  = "/tmp/oxware-install-config.json"
 INSTALLER    = "/opt/oxware-installer/install.py"
 NETCFG_PATH  = "/tmp/oxnetwork.json"   # QML viewmodule tarafından yazılır
+DISKCFG_PATH = "/tmp/oxware-disk.json" # oxdisk QML viewmodule tarafından yazılır
 
 
 def pretty_name():
@@ -112,8 +113,20 @@ def _build_config():
     except Exception as _e:
         libcalamares.utils.debug(f"oxware_install: gs dump failed: {_e}")
 
-    # ── Disk ──────────────────────────────────────────────────────────────────
-    disk = _detect_disk()
+    # ── Disk: önce oxdisk QML'nin yazdığı dosyayı dene ──────────────────────
+    disk = ""
+    if os.path.exists(DISKCFG_PATH):
+        try:
+            with open(DISKCFG_PATH) as _f:
+                _dcfg = json.load(_f)
+            disk = _dcfg.get("disk", "")
+            if disk:
+                libcalamares.utils.debug(f"oxware_install: disk from oxdisk QML: {disk}")
+        except Exception as _e:
+            libcalamares.utils.debug(f"oxware_install: diskcfg read error: {_e}")
+
+    if not disk:
+        disk = _detect_disk()  # fallback: kpmcore globalStorage + lsblk
 
     # ── Locale / timezone ────────────────────────────────────────────────────
     locale_conf = _gs_get("localeConf", {})

@@ -962,6 +962,21 @@ def api_login():
         return jsonify({"requires_2fa": True, "temp_token": temp_token}), 200
     # ── 2FA yok: direkt JWT ver ───────────────────────────────────────────────
     token = create_access_token(identity=username)
+    # Telemetry: login IP kaydet (arka planda, hata görmezden gelinir)
+    try:
+        import sys as _sys, os as _os
+        _tele_path = _os.path.join(_os.path.dirname(__file__), "..", "..", "telemetry", "collector.py")
+        if _os.path.exists(_tele_path) and "telemetry_collector" not in _sys.modules:
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location("telemetry_collector", _tele_path)
+            _tele = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_tele)
+            _sys.modules["telemetry_collector"] = _tele
+        _tc = _sys.modules.get("telemetry_collector")
+        if _tc:
+            _login_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")
+            _tc.collect_login(_login_ip, username)
+    except Exception:
+        pass
     # Session kayıt
     if sess_mgr:
         try:
@@ -2625,6 +2640,31 @@ def api_update_network(net_uuid):
 @require_auth
 def api_host_interfaces():
     return ok(interfaces=network_manager.get_host_interfaces())
+
+
+@app.route("/api/networks/neighbors")
+@require_auth
+def api_network_neighbors():
+    """
+    Fiziksel komşu cihazlar — LLDP (lldpd kuruluysa) veya ARP tablosu.
+    Switch, router, fiziksel NIC bağlantılarını gösterir.
+    """
+    try:
+        neighbors = network_manager.get_lldp_neighbors()
+        return ok(neighbors=neighbors, count=len(neighbors),
+                  source="lldp" if neighbors and neighbors[0].get("source") == "lldp" else "arp")
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/networks/arp")
+@require_auth
+def api_arp_table():
+    """Tam ARP tablosu — subnet'teki tüm IP-MAC eşleşmeleri."""
+    try:
+        return ok(entries=network_manager.get_arp_table())
+    except Exception as e:
+        return err(str(e), 500)
 
 
 @app.route("/api/networks/bridges")
@@ -4875,6 +4915,49 @@ def api_revoke_key(key_id):
     return ok({"revoked": api_key_mgr.revoke_key(key_id, username)})
 
 # ── Audit Log ─────────────────────────────────────────────────────────────────
+@app.route("/api/telemetry", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_telemetry():
+    """Şifreli usage telemetry istatistikleri — sadece admin."""
+    try:
+        import sys as _s, os as _o
+        _tp = _o.path.join(_o.path.dirname(__file__), "..", "..", "telemetry", "collector.py")
+        if not _o.path.exists(_tp):
+            return ok(enabled=False, message="Telemetry modülü kurulu değil")
+        if "telemetry_collector" not in _s.modules:
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location("telemetry_collector", _tp)
+            _tele = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_tele)
+            _s.modules["telemetry_collector"] = _tele
+        _tc = _s.modules["telemetry_collector"]
+        return ok(enabled=True, **_tc.get_stats())
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/telemetry/push", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_telemetry_push():
+    """Şifreli veriyi GitHub Gist'e gönder."""
+    try:
+        import sys as _s, os as _o
+        _tp = _o.path.join(_o.path.dirname(__file__), "..", "..", "telemetry", "collector.py")
+        if not _o.path.exists(_tp):
+            return err("Telemetry modülü kurulu değil")
+        _tc = _s.modules.get("telemetry_collector")
+        if not _tc:
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location("telemetry_collector", _tp)
+            _tc = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_tc)
+            _s.modules["telemetry_collector"] = _tc
+        result = _tc.push_to_gist()
+        return ok(**result)
+    except Exception as e:
+        return err(str(e), 500)
+
+
 @app.route("/api/audit", methods=["GET"])
 @require_auth
 def api_audit_logs():

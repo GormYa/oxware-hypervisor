@@ -604,3 +604,144 @@ def get_host_interfaces():
     except Exception:
         pass
     return interfaces
+
+
+# ── MAC OUI lookup (çevrimdışı, sadece yaygın satıcılar) ─────────────────────
+_OUI_TABLE = {
+    "00:00:0c": "Cisco", "00:01:42": "Cisco", "00:0d:60": "Cisco",
+    "00:1a:a2": "Cisco", "00:25:45": "Cisco", "00:50:56": "VMware",
+    "00:0c:29": "VMware", "00:e0:4c": "Realtek", "08:00:27": "VirtualBox",
+    "00:1b:21": "Intel", "08:00:20": "Sun", "00:0a:f7": "HPE",
+    "3c:d9:2b": "HPE", "00:17:a4": "HPE", "00:1c:c4": "MikroTik",
+    "d4:ca:6d": "MikroTik", "b8:69:f4": "MikroTik", "e4:8d:8c": "MikroTik",
+    "00:e0:52": "Juniper", "2c:21:72": "Juniper", "00:1f:12": "Juniper",
+    "0c:75:bd": "Dell", "14:18:77": "Dell", "00:21:9b": "Dell",
+    "7c:d1:c3": "Ubiquiti", "00:27:22": "Ubiquiti", "f4:92:bf": "Ubiquiti",
+    "18:e8:29": "Huawei", "ac:85:3d": "Huawei", "00:e0:fc": "Huawei",
+    "00:1e:67": "Arista", "00:1c:73": "Arista",
+    "00:24:e8": "Extreme Networks", "00:04:96": "Extreme Networks",
+}
+
+def _mac_vendor(mac: str) -> str:
+    if not mac or len(mac) < 8:
+        return ""
+    oui = mac[:8].lower()
+    return _OUI_TABLE.get(oui, "")
+
+
+def get_lldp_neighbors() -> list:
+    """
+    LLDP komşu cihazları döndür.
+    lldpd kuruluysa lldpctl -f json ile gerçek veri,
+    kurulu değilse ARP tablosu + MAC vendor lookup ile tahmin.
+    """
+    neighbors = []
+
+    # ── Yöntem 1: lldpctl (lldpd paketi) ──────────────────────────────────
+    try:
+        import subprocess, json as _json
+        result = subprocess.run(
+            ["lldpctl", "-f", "json"],
+            capture_output=True, text=True, timeout=8
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = _json.loads(result.stdout)
+            lldp = data.get("lldp", {})
+            ifaces = lldp.get("interface", {})
+            if isinstance(ifaces, list):
+                ifaces = {item.get("name","?"): item for item in ifaces}
+            for iface_name, iface_data in ifaces.items():
+                chassis = iface_data.get("chassis", {})
+                if isinstance(chassis, list):
+                    chassis = chassis[0] if chassis else {}
+                port = iface_data.get("port", {})
+                if isinstance(port, list):
+                    port = port[0] if port else {}
+                ch_name = chassis.get("name", {})
+                if isinstance(ch_name, dict):
+                    ch_name = ch_name.get("value", "")
+                ch_desc = chassis.get("descr", {})
+                if isinstance(ch_desc, dict):
+                    ch_desc = ch_desc.get("value", "")
+                port_id = port.get("id", {})
+                if isinstance(port_id, dict):
+                    port_id = port_id.get("value", "")
+                ch_mac = ""
+                ch_id = chassis.get("id", {})
+                if isinstance(ch_id, dict) and ch_id.get("type") == "mac":
+                    ch_mac = ch_id.get("value", "")
+                neighbors.append({
+                    "source":      "lldp",
+                    "local_iface": iface_name,
+                    "chassis_name": str(ch_name),
+                    "chassis_desc": str(ch_desc)[:120],
+                    "port_id":     str(port_id),
+                    "mac":         ch_mac,
+                    "vendor":      _mac_vendor(ch_mac),
+                    "type":        "switch" if "switch" in str(ch_desc).lower() else "device",
+                })
+            if neighbors:
+                return neighbors
+    except FileNotFoundError:
+        pass  # lldpd kurulu değil
+    except Exception:
+        pass
+
+    # ── Yöntem 2: ARP tablosu + MAC vendor ────────────────────────────────
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ip", "-j", "neigh"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            import json as _json
+            entries = _json.loads(result.stdout)
+            for e in entries:
+                mac  = e.get("lladdr", "")
+                ip   = e.get("dst", "")
+                dev  = e.get("dev", "")
+                state = e.get("state", [])
+                if not mac or not ip:
+                    continue
+                # Sadece erişilebilir/kalıcı kayıtlar
+                if isinstance(state, list) and any(s in state for s in ("REACHABLE", "PERMANENT", "STALE", "DELAY")):
+                    vendor = _mac_vendor(mac)
+                    neighbors.append({
+                        "source":       "arp",
+                        "local_iface":  dev,
+                        "ip":           ip,
+                        "mac":          mac,
+                        "vendor":       vendor,
+                        "type":         "switch" if any(k in vendor.lower() for k in ("cisco","juniper","arista","ubiquiti","mikrotik","hpe","huawei","extreme")) else "host",
+                        "chassis_name": vendor or mac,
+                        "chassis_desc": "",
+                        "port_id":      "",
+                    })
+    except Exception:
+        pass
+
+    return neighbors
+
+
+def get_arp_table() -> list:
+    """Tam ARP tablosunu döndür (tüm kayıtlar)."""
+    try:
+        import subprocess, json as _json
+        result = subprocess.run(["ip", "-j", "neigh"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            entries = _json.loads(result.stdout)
+            out = []
+            for e in entries:
+                mac = e.get("lladdr", "")
+                out.append({
+                    "ip":     e.get("dst", ""),
+                    "mac":    mac,
+                    "iface":  e.get("dev", ""),
+                    "state":  e.get("state", []),
+                    "vendor": _mac_vendor(mac),
+                })
+            return out
+    except Exception:
+        pass
+    return []
