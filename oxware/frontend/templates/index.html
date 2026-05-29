@@ -592,7 +592,7 @@
     /* Collapsible nav sections */
     .ctx-section-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-top:6px}
     .ctx-section-header:hover{color:var(--text-muted)}
-    .ctx-section-arrow{font-size:10px;transition:transform .2s}
+    .ctx-section-arrow{font-size:9px;transition:transform .2s;opacity:.5;display:flex;align-items:center}
     .ctx-section-body{overflow:hidden;transition:max-height .25s ease}
     .ctx-section-body.collapsed{display:none}
     .nav-sub-list{padding-left:20px;border-left:1px solid var(--border);margin:4px 0 4px 18px}
@@ -8588,11 +8588,11 @@ document.addEventListener('click', (e) => {
 /* ══════════════════ Collapsible Nav Sections ══════════════════ */
 
 function toggleNavSection(btn) {
-  const body = btn.nextElementSibling;          // düzeltildi: parentElement değil
+  const body = btn.nextElementSibling;
   if (!body) return;
   const arrow = btn.querySelector('.ctx-section-arrow');
   const collapsed = body.classList.toggle('collapsed');
-  if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(90deg)';
+  if (arrow) arrow.style.transform = collapsed ? 'rotate(0deg)' : 'rotate(90deg)';
 }
 
 function toggleStorageSubnav(e) {
@@ -9033,7 +9033,7 @@ function buildContextNav(type) {
   if (isVmUser) {
     html = `
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body">
     <div class="ctx-item active" data-page="summary" onclick="navigate('summary');closeMobileNav()">
@@ -9041,7 +9041,7 @@ function buildContextNav(type) {
     </div>
   </div>
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>Sanal Makineler</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+    <span>Sanal Makineler</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body">
     <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
@@ -9057,7 +9057,7 @@ function buildContextNav(type) {
   if (type === "node") {
     html = `
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body">
     <div class="ctx-item active" data-page="summary" onclick="navigate('summary');closeMobileNav()">
@@ -9069,7 +9069,7 @@ function buildContextNav(type) {
   </div>
 
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('virtualization')}</span><span class="ctx-section-arrow">▸</span>
+    <span>${t('virtualization')}</span><span class="ctx-section-arrow"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body collapsed">
     <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
@@ -9098,7 +9098,7 @@ function buildContextNav(type) {
   </div>
 
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('system')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+    <span>${t('system')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body">
     ${isOperator ? `
@@ -9152,7 +9152,7 @@ function buildContextNav(type) {
 
   ${isAdmin ? `
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('management')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)">▸</span>
+    <span>${t('management')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
   </div>
   <div class="ctx-section-body">
     <div class="ctx-item" data-page="users" onclick="navigate('users');closeMobileNav()">
