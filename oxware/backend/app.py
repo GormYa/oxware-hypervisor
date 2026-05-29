@@ -3668,6 +3668,21 @@ def api_events():
 def api_event_stats():
     return ok(stats=ev.get_event_stats())
 
+@app.route("/api/events/list")
+@require_auth
+def api_events_list():
+    """Alias for /api/events — used by OXY AI context builder."""
+    limit    = int(request.args.get("limit", 100))
+    level    = request.args.get("level")
+    category = request.args.get("category")
+    vm_id    = request.args.get("vm_id")
+    since    = request.args.get("since")
+    offset   = int(request.args.get("offset", 0))
+    since_ts = float(since) if since else None
+    events   = ev.get_events(limit=limit, level=level, category=category,
+                              vm_id=vm_id, since=since_ts, offset=offset)
+    return ok(events=events, count=len(events))
+
 # ── Sistem ────────────────────────────────────────────────────────────────────
 @app.route("/api/system/reboot", methods=["POST"])
 @require_auth
@@ -6901,6 +6916,20 @@ def api_ai_nl():
         # fallback: re-process normally
     return ok(ai_planner.process_natural_language(cmd, username))
 
+@app.route("/api/ai/plan", methods=["POST"])
+@require_auth
+def api_ai_plan():
+    """VM creation planning endpoint — accepts {prompt} and returns vm_config suggestion."""
+    if not ai_planner: return err("AI modülü yüklenemedi")
+    username = get_jwt_identity()
+    body = request.json or {}
+    prompt = body.get("prompt", body.get("command", ""))
+    try:
+        result = ai_planner.process_natural_language(f"VM oluştur: {prompt}", username)
+        return ok(result)
+    except Exception as e:
+        return err(str(e), 500)
+
 # ── Anomaly Detector ──────────────────────────────────────────────────────────
 @app.route("/api/anomalies", methods=["GET"])
 @require_auth
@@ -7214,7 +7243,8 @@ def upload_iso():
 
         log.info("ISO yüklendi: %s (%d bytes)", safe_name, size)
         if audit_log:
-            audit_log.log("system", "iso_upload", fname, "success")
+            audit_log.log_action("system", "iso_upload", resource_type="storage",
+                                  resource_id=fname, result="success")
         else:
             log.info("Audit: iso_upload %s success", fname)
 
@@ -7397,8 +7427,9 @@ def license_validate():
         try:
             username = get_jwt_identity() or "unknown"
             if audit_log:
-                audit_log.log(username, "license_validate", code[:14],
-                              "success" if result.get("valid") else "fail")
+                audit_log.log_action(username, "license_validate",
+                                     resource_type="license", resource_id=code[:14],
+                                     result="success" if result.get("valid") else "fail")
         except Exception:
             pass
         return jsonify(result)
@@ -7430,7 +7461,8 @@ def license_deactivate():
         try:
             username = get_jwt_identity() or "unknown"
             if audit_log:
-                audit_log.log(username, "license_deactivate", "", "success")
+                audit_log.log_action(username, "license_deactivate",
+                                     resource_type="license", result="success")
         except Exception:
             pass
         return jsonify(result)
@@ -7474,10 +7506,10 @@ def prometheus_metrics():
         tag = f"{{{labels}}}" if labels else ""
         lines.append(f"oxware_{name}{tag} {value}")
     try:
-        stats = system_monitor.get_stats() if hasattr(system_monitor, "get_stats") else {}
-        gauge("cpu_usage_percent", stats.get("cpu_percent", 0))
-        gauge("memory_usage_percent", stats.get("memory_percent", 0))
-        gauge("disk_usage_percent", stats.get("disk_percent", 0))
+        stats = system_monitor.get_system_stats()
+        gauge("cpu_usage_percent",    stats.get("cpu",           {}).get("percent",  0))
+        gauge("memory_usage_percent", stats.get("memory",        {}).get("percent",  0))
+        gauge("disk_usage_percent",   stats.get("disk_capacity", {}).get("percent",  0))
         vms = vm_manager.list_vms()
         running = sum(1 for v in vms if v.get("state") == "running")
         gauge("vms_total", len(vms))
@@ -11058,7 +11090,7 @@ def api_bulk_snapshot():
     for vm_id in vm_ids[:50]:  # max 50
         try:
             name = snap_name or f"bulk-{__import__('datetime').datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            snap = vm_manager.create_snapshot(vm_id, name, description)
+            snap = vm_manager.take_snapshot(vm_id, name, description)
             results[vm_id] = {"ok": True, "snap": snap}
             ev.info(f"Bulk snapshot: {vm_id} → {name}", category="vm")
         except Exception as e:

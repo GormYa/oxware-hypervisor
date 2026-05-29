@@ -64,7 +64,7 @@
 
 ### Console & Remote Access
 - **Multi-console type selection** — choose noVNC (graphical VNC), xterm.js serial (virsh console via PTY), or SPICE for each VM
-- **noVNC console** — embedded in a dedicated browser tab; no client software needed
+- **noVNC console** — embedded in a dedicated browser tab; no client software needed; auto-reconnects on VM reboot (up to 10 attempts with countdown timer in status bar)
 - **xterm.js serial console** — direct virsh console over WebSocket; works headless (no GUI required on guest)
 - **SPICE support** — connection info and one-click open for SPICE-capable VMs
 - **Clipboard paste** — paste into any console via Ctrl+Shift+V, right-click, or toolbar button
@@ -769,6 +769,10 @@ sudo bash repair.sh --reset-password
 ### v2.5 — 2026-05
 
 **New features:**
+- **ESXi-style UI redesign** — full dark navy-blue palette (`#111822` base, `#1a82cc` accent); compact 48px topbar, 196px sidebar, ESXi-style left-border active state, flat buttons, 2px border radius; entire dashboard rebuilt with CSS variables for consistent theming
+- **noVNC auto-reconnect** — console automatically reconnects after VM reboot or network blip; up to 10 retry attempts; exponential backoff (3 s / 5 s); live countdown shown in status bar; manual close disables auto-reconnect
+- **cloud-init ISO persistence** — cloud-init seed ISO now stored in disk dir instead of `/tmp/`; install monitor no longer removes the cidata ISO before first boot; VM delete cleans up the ISO file
+- **Login flash fix** — `visibility:hidden` on `<body>` prevents login page flicker during auth token check; revealed only after auth guard completes
 - **WHMCS & WiseCP v2.0** — OS reinstall, auto IP assignment, SSH credentials vault, noVNC console token; random VM name generation; connection events logged to OXware event log
 - **Machine-ID independent credentials** — admin username backed up to `/etc/oxware/.username` plaintext file; survives `machine-id` changes (kernel update, disk clone, VM migration); login never breaks silently
 - **Password reset file** — root places `/etc/oxware/.passwd_reset` (mode 600, owner root) with `USERNAME=` and `PASSWORD=`; applied at next service restart, file deleted automatically; group/world-readable files rejected
@@ -783,6 +787,10 @@ sudo bash repair.sh --reset-password
 - `showToast` → `toast` — 14 frontend ReferenceError occurrences fixed
 - Duplicate Flask route stubs removed (`POST /api/networks` 405 stub, shadowed `POST /api/ssl/letsencrypt` stub)
 - ISO installer black screen — removed `vga=791`, `quiet splash`, `loglevel=0` from GRUB; removed `Driver "modesetting"` from Xorg config (fixes nomodeset boot); removed `exec startx` (errors now visible on terminal)
+- `audit_log.log()` → `audit_log.log_action()` — ISO upload and license endpoints were calling the module-level Logger object as a function; would silently turn successful ISO uploads into 500 errors
+- `vm_manager.create_snapshot()` → `vm_manager.take_snapshot()` — bulk snapshot endpoint called non-existent function name
+- Prometheus `/metrics` — was calling non-existent `get_stats()`; fixed to use `get_system_stats()` with correct nested key paths
+- Missing `/api/events/list` and `/api/ai/plan` routes added (frontend was silently failing to these endpoints)
 
 ### v2.4 — 2026-05
 
