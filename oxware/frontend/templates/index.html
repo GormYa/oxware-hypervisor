@@ -3410,7 +3410,7 @@
                 <div style="font-weight:600;color:var(--accent-lt);margin-bottom:6px">1️⃣ Havuz Oluştur</div>
                 <div style="color:var(--text-muted)">
                   <b>+ Yeni Havuz</b> butonuna tıklayın. Ağ adresi olarak VM'lerin kullanacağı aralığı girin.<br><br>
-                  <span style="color:#f59e0b">⚠ ÖNEMLİ:</span> Sunucunuzun <b>kendi IP adresini</b> pool'a eklemeyin! (ör: sunucu IP'si <code>31.58.236.60</code> ise bu IP pool ağında olmamalı). Bu IP otomatik olarak rezerve listesine eklenir.
+                  <span style="color:#f59e0b">⚠ ÖNEMLİ:</span> Sunucunuzun <b>kendi IP adresini</b> pool'a eklemeyin! (ör: sunucu IP'si <code>xx.xx.xxx.xx</code> ise bu IP pool ağında olmamalı). Bu IP otomatik olarak rezerve listesine eklenir.
                 </div>
               </div>
               <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #22c55e">
@@ -8988,6 +8988,9 @@ function buildContextNav(type) {
     </div>
     <div class="ctx-item" data-page="storage" onclick="navigate('storage');closeMobileNav()">
       <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
+    </div>
+    <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()" style="padding-left:28px;font-size:12px">
+      <i class="fa-solid fa-folder-open fa-fw" style="font-size:11px"></i>Datastore
     </div>` : ''}
     <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
       <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
@@ -9018,9 +9021,6 @@ function buildContextNav(type) {
     </div>
     <div class="ctx-item" data-page="tab-content-library" onclick="navigate('tab-content-library');closeMobileNav()">
       <i class="fa-solid fa-photo-film fa-fw"></i>İçerik Kütüphanesi
-    </div>
-    <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()">
-      <i class="fa-solid fa-folder-open fa-fw"></i>Datastore
     </div>` : ''}
   </div>
 
@@ -9384,7 +9384,8 @@ function _ipamCheckNetworkConflict() {
       const warn = document.createElement('div');
       warn.id = 'ipam-host-ip-warn';
       warn.style.cssText = 'margin-top:8px;padding:8px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:12px;color:#f87171';
-      warn.innerHTML = `⚠️ <strong>Dikkat:</strong> Bu ağ sunucunun kendi IP adresini içeriyor (<code>${escHtml(conflicting[0])}</code>). Bu IP VM'lere atanmamalı. Pool rezerve listesine otomatik eklenir.`;
+      const _maskedIp = conflicting[0].replace(/(\d+)\.(\d+)\.(\d+)\.(\d+)/, (_, a,b,c,d) => `${a}.${b}.xxx.xxx`);
+      warn.innerHTML = `⚠️ <strong>Dikkat:</strong> Bu ağ sunucunun kendi IP adresini içeriyor (<code>${escHtml(_maskedIp)}</code>). Bu IP VM'lere atanmamalı. Pool rezerve listesine otomatik eklenir.`;
       netInput.parentElement?.insertAdjacentElement('afterend', warn);
     }
   } catch(_) {}
@@ -20188,13 +20189,24 @@ async function loadSyslogTab(tab) {
   const d = await _api(url);
   const entries = (d && (d.entries || d.lines || d.logs)) || [];
   tbody.innerHTML = entries.length ? entries.map(e => {
-    const lvl = escHtml(e.level || e.priority || '');
-    const lvlClass = /err|crit|emerg|alert/i.test(lvl) ? 'badge-danger' : /warn/i.test(lvl) ? 'badge-warning' : 'badge-muted';
+    // Backend returns {raw, level, source} — raw is the full log line
+    const rawLine = e.raw || e.message || e.msg || '';
+    const lvl = escHtml((e.level || e.priority || '').toUpperCase());
+    const lvlClass = /ERR|CRIT|EMERG|ALERT/i.test(lvl) ? 'badge-danger' : /WARN/i.test(lvl) ? 'badge-warning' : 'badge-muted';
+    // Extract timestamp from raw line (journald short-iso: "2026-05-29T12:00:00+0300 hostname svc: msg")
+    let ts = e.time || e.timestamp || e.ts || '';
+    let msg = rawLine;
+    if (!ts && rawLine) {
+      const m = rawLine.match(/^(\d{4}-\d{2}-\d{2}T[\d:+]+)\s+\S+\s+(.*)$/);
+      if (m) { ts = m[1].replace('T', ' ').slice(0, 19); msg = m[2]; }
+      else { const m2 = rawLine.match(/^(\w+\s+\d+\s+[\d:]+)\s+(.*)/); if (m2) { ts = m2[1]; msg = m2[2]; } }
+    }
+    const src = escHtml(e.source || e.unit || e.ident || '');
     return `<tr>
-      <td style="font-size:11px;font-family:monospace;white-space:nowrap">${escHtml(e.time || e.timestamp || e.ts || '')}</td>
-      <td><span class="${lvlClass}" style="font-size:10px">${lvl||'—'}</span></td>
-      <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${escHtml(e.unit || e.source || e.ident || '')}</td>
-      <td style="font-size:12px;word-break:break-all">${escHtml(e.message || e.msg || String(e))}</td>
+      <td style="font-size:10px;font-family:monospace;white-space:nowrap;color:var(--text-muted)">${escHtml(ts)}</td>
+      <td><span class="${lvlClass}" style="font-size:10px;padding:1px 5px">${lvl||'INFO'}</span></td>
+      <td style="font-size:11px;color:var(--accent-lt);white-space:nowrap">${src}</td>
+      <td style="font-size:12px;word-break:break-all;font-family:monospace">${escHtml(msg || rawLine)}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Kayıt bulunamadı</td></tr>';
 }
