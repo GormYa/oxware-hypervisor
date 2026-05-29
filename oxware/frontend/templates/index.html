@@ -452,18 +452,46 @@
     .modal-footer{padding:12px 18px;border-top:1px solid #243448;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;background:#111e2c;border-radius:0 0 14px 14px}
 
     /* ── Toast ── */
-    #toast-container{position:fixed;bottom:calc(var(--taskbar-h) + 16px);right:16px;transition:bottom .1s;z-index:2000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
-    .toast{display:flex;align-items:center;gap:10px;padding:8px 13px;background:#1c2b3d;border:1px solid #2d4159;border-left:3px solid var(--accent);border-radius:2px;font-size:12px;color:#b8d0e8;min-width:240px;max-width:380px;animation:slideIn .2s ease;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+    #toast-container{position:fixed;bottom:calc(var(--taskbar-h) + 16px);right:16px;transition:bottom .1s;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#1c2b3d;border:1px solid #2d4159;border-left:3px solid var(--accent);border-radius:7px;font-size:12px;color:#b8d0e8;min-width:240px;max-width:380px;animation:toastIn .28s cubic-bezier(.16,1,.3,1);box-shadow:0 6px 24px rgba(0,0,0,.45);position:relative;overflow:hidden}
+    .toast.toast-out{animation:toastOut .25s cubic-bezier(.4,0,1,1) forwards}
     @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes toastIn{from{opacity:0;transform:translateX(110%) scale(.95)}to{opacity:1;transform:translateX(0) scale(1)}}
+    @keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(110%) scale(.95)}}
     .toast.success{border-left-color:var(--green-lt)}
     .toast.error{border-left-color:var(--red-lt)}
+    .toast.warn{border-left-color:#eab308}
     .toast-icon{font-size:14px;flex-shrink:0}
+    .toast.success .toast-icon{color:var(--green-lt)}
+    .toast.error .toast-icon{color:var(--red-lt)}
+    .toast.warn .toast-icon{color:#eab308}
+    .toast.info .toast-icon{color:var(--accent-lt)}
+    .toast-msg{flex:1;line-height:1.35}
+    .toast-close{cursor:pointer;opacity:.4;font-size:14px;flex-shrink:0;transition:opacity .15s;pointer-events:auto}
+    .toast-close:hover{opacity:.9}
+    .toast-bar{position:absolute;bottom:0;left:0;height:2px;background:currentColor;opacity:.4;animation:toastBar linear forwards}
+    @keyframes toastBar{from{width:100%}to{width:0%}}
 
     /* ── Empty ── */
     .empty-state{text-align:center;padding:28px 20px;color:var(--text-muted)}
     .empty-state .icon{font-size:26px;margin-bottom:8px}
     .empty-state h3{font-size:13px;color:var(--text);margin-bottom:4px}
     .empty-state p{font-size:11px}
+    .empty-state .empty-cta{margin-top:14px;display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:var(--accent);color:#0d1117;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .1s;text-decoration:none}
+    .empty-state .empty-cta:hover{opacity:.88;transform:translateY(-1px)}
+    .empty-state .empty-cta.ghost{background:transparent;color:var(--accent-lt);border:1px solid var(--border2)}
+
+    /* ── Skeleton loaders ── */
+    @keyframes skShimmer{0%{background-position:-460px 0}100%{background-position:460px 0}}
+    .sk{display:inline-block;border-radius:5px;background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.03) 75%);background-size:920px 100%;animation:skShimmer 1.3s ease-in-out infinite}
+    .sk-line{height:11px;margin:5px 0}
+    .sk-badge{height:16px;width:54px;border-radius:20px}
+    .sk-row td{padding:11px 12px}
+    .sk-cell{height:11px;width:80%}
+
+    /* ── Sparkline ── */
+    .spark-wrap{position:relative;height:26px;margin-top:5px;width:100%}
+    .spark-wrap svg{width:100%;height:100%;display:block;overflow:visible}
 
     /* ── Settings tabs ── */
     .settings-tab{background:none;border:none;border-bottom:2px solid transparent;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);transition:color .12s,border-color .12s;margin-bottom:-1px}
@@ -1196,6 +1224,7 @@
                   </div>
                 </div>
                 <div class="esxi-bar"><div class="esxi-bar-fill cpu" id="ns-cpu-bar" style="width:0%"></div></div>
+                <div class="spark-wrap" id="ns-cpu-spark" title="Son 1 saat CPU trendi"></div>
                 <div style="font-size:9px;color:var(--text-dim);margin-top:3px">Load avg: <span id="ns-load">—</span></div>
               </div>
 
@@ -1210,6 +1239,7 @@
                   </div>
                 </div>
                 <div class="esxi-bar"><div class="esxi-bar-fill mem" id="ns-ram-bar" style="width:0%"></div></div>
+                <div class="spark-wrap" id="ns-ram-spark" title="Son 1 saat RAM trendi"></div>
               </div>
 
               <!-- STORAGE -->
@@ -7169,14 +7199,106 @@ async function api(path, options = {}) {
 }
 
 /* ══ Toast ══ */
-function toast(msg, type = "info") {
-  const icons = { success: "✓", error: "✕", info: "ℹ" };
+function toast(msg, type = "info", duration = 4000) {
+  // 'warning' → 'warn' normalize
+  if (type === "warning") type = "warn";
+  const icons = { success: "✓", error: "✕", info: "ℹ", warn: "⚠" };
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+
+  // Auto-stack cap: en fazla 5 toast — en eskiyi kaldır
+  while (container.children.length >= 5) {
+    container.firstElementChild.remove();
+  }
+
   const el = document.createElement("div");
   el.className = `toast ${type}`;
   el.style.pointerEvents = "auto";
-  el.innerHTML = `<span class="toast-icon">${icons[type] || ""}</span>${escHtml(msg)}`;
-  document.getElementById("toast-container").appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+
+  const dur = Math.max(1500, duration | 0);
+  el.innerHTML =
+    `<span class="toast-icon">${icons[type] || "ℹ"}</span>` +
+    `<span class="toast-msg">${escHtml(msg)}</span>` +
+    `<span class="toast-close" title="Kapat">✕</span>` +
+    `<span class="toast-bar" style="animation-duration:${dur}ms"></span>`;
+
+  let removed = false;
+  const remove = () => {
+    if (removed) return;
+    removed = true;
+    el.classList.add("toast-out");
+    setTimeout(() => el.remove(), 250);
+  };
+
+  el.querySelector(".toast-close").addEventListener("click", remove);
+
+  // Hover'da timer durur
+  let timer = setTimeout(remove, dur);
+  el.addEventListener("mouseenter", () => {
+    clearTimeout(timer);
+    const bar = el.querySelector(".toast-bar");
+    if (bar) bar.style.animationPlayState = "paused";
+  });
+  el.addEventListener("mouseleave", () => {
+    timer = setTimeout(remove, 1500);
+    const bar = el.querySelector(".toast-bar");
+    if (bar) bar.style.animationPlayState = "running";
+  });
+
+  container.appendChild(el);
+}
+
+/* ══ Skeleton loader helpers ══ */
+// Tablo için skeleton satırları üret
+function skeletonRows(cols, rows = 4) {
+  let html = "";
+  for (let r = 0; r < rows; r++) {
+    html += '<tr class="sk-row">';
+    for (let c = 0; c < cols; c++) {
+      const w = 50 + Math.floor(Math.random() * 40); // 50-90%
+      html += `<td><span class="sk sk-cell" style="width:${w}%"></span></td>`;
+    }
+    html += "</tr>";
+  }
+  return html;
+}
+// Tek satırlık skeleton blokları (kart içi)
+function skeletonLines(n = 3) {
+  let html = "";
+  for (let i = 0; i < n; i++) {
+    const w = 60 + Math.floor(Math.random() * 35);
+    html += `<div class="sk sk-line" style="width:${w}%"></div>`;
+  }
+  return html;
+}
+
+/* ══ Sparkline (mini SVG trend grafiği) ══ */
+function renderSparkline(elId, data, color = "#58a6ff") {
+  const el = document.getElementById(elId);
+  if (!el || !data || data.length < 2) return;
+  const w = 100, h = 26;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = (max - min) || 1;
+  const step = w / (data.length - 1);
+  const pts = data.map((v, i) => {
+    const x = (i * step).toFixed(1);
+    const y = (h - ((v - min) / range) * (h - 4) - 2).toFixed(1);
+    return `${x},${y}`;
+  });
+  const linePath = "M" + pts.join(" L");
+  const areaPath = `M0,${h} L` + pts.join(" L") + ` L${w},${h} Z`;
+  const gid = "sg_" + elId.replace(/[^a-z0-9]/gi, "");
+  el.innerHTML =
+    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
+    `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>` +
+    `<stop offset="100%" stop-color="${color}" stop-opacity="0"/>` +
+    `</linearGradient></defs>` +
+    `<path d="${areaPath}" fill="url(#${gid})"/>` +
+    `<path d="${linePath}" fill="none" stroke="${color}" stroke-width="1.5" ` +
+    `stroke-linejoin="round" stroke-linecap="round"/>` +
+    `</svg>`;
 }
 
 function escHtml(s) {
@@ -9956,12 +10078,24 @@ function updateCharts(cpu, ram, load) {
 
 async function loadNodeSummary() {
   try {
-    const [statsData, vmSumData, infoData, diskData] = await Promise.all([
+    const [statsData, vmSumData, infoData, diskData, histData] = await Promise.all([
       api("/system/stats"),
       api("/system/vmsummary"),
       api("/system/info"),
       api("/storage/disks").catch(() => ({ disks: [] })),
+      _api("/api/metrics/system?period=1h").catch(() => ({ data: [] })),
     ]);
+
+    // Sparkline: son 1 saat CPU/RAM trendi
+    try {
+      const hist = (histData && histData.data) || [];
+      if (hist.length >= 2) {
+        const cpuSeries = hist.map(r => r.cpu_pct ?? 0).slice(-60);
+        const ramSeries = hist.map(r => r.mem_pct ?? 0).slice(-60);
+        renderSparkline("ns-cpu-spark", cpuSeries, "#3b82f6");
+        renderSparkline("ns-ram-spark", ramSeries, "#22c55e");
+      }
+    } catch(_) {}
 
     const s = statsData.stats;
     const cpuPct = s.cpu.percent;
@@ -11150,15 +11284,19 @@ async function loadVMs() {
   const titleEl = document.getElementById("vms-page-title");
   if (titleEl) titleEl.textContent = isVmUser ? "VM'lerim" : "Sanal Makineler";
 
+  const tbody = document.getElementById("vm-tbody");
+  // Skeleton: yükleme sırasında animasyonlu placeholder
+  if (tbody) tbody.innerHTML = skeletonRows(isVmUser ? 6 : 8, 4);
+
   try {
     const data = await api("/vms");
     const vms = data.vms || [];
     _gsCacheVMs = vms;
-    const tbody = document.getElementById("vm-tbody");
     if (!vms.length) {
       const emptyMsg = isVmUser
         ? '<h3>Size atanmış VM yok</h3><p>Yöneticinizden VM ataması isteyin.</p>'
-        : '<h3>Sanal makine yok</h3><p>"+ Yeni VM" ile oluşturun</p>';
+        : '<h3>Henüz sanal makine yok</h3><p>İlk VM\'ini oluşturarak başla.</p>' +
+          '<button class="empty-cta" onclick="openCreateVMModal()"><i class="fa-solid fa-plus"></i> İlk VM\'ini Oluştur</button>';
       tbody.innerHTML = `<tr><td colspan="${isVmUser?6:8}"><div class="empty-state"><div class="icon">🖥️</div>${emptyMsg}</div></td></tr>`;
       clearVmSelection();
       return;
@@ -12974,6 +13112,8 @@ function _fmtBytes(bytes) {
 }
 
 async function loadNetworks() {
+  const _netBody = document.getElementById("net-tbody");
+  if (_netBody) _netBody.innerHTML = skeletonRows(8, 3);
   try {
     const [data, ifaceData] = await Promise.all([
       api("/networks"),
@@ -13268,6 +13408,8 @@ function switchStorageTab(tab) {
 async function loadStorage() { await loadPoolList(); }
 
 async function loadPoolList() {
+  const _poolBody = document.getElementById("pool-tbody");
+  if (_poolBody) _poolBody.innerHTML = skeletonRows(8, 3);
   try {
     const data = await api("/storage/pools");
     const pools = data.pools || [];
