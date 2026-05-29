@@ -3194,6 +3194,55 @@
         <div class="page" id="page-tab-vpn">
           <div class="section-header"><h2><i class="fa-solid fa-lock" style="margin-right:8px;color:var(--accent-lt)"></i>WireGuard VPN</h2></div>
           <div id="vpnStatusCard" class="card" style="margin-bottom:14px"></div>
+
+          <!-- WireGuard Kurulum Rehberi -->
+          <div id="vpnGuideCard" class="card" style="margin-bottom:14px;border:1px solid rgba(88,166,255,.2);background:rgba(88,166,255,.04)">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              <i class="fa-solid fa-circle-info" style="color:var(--accent-lt)"></i>
+              WireGuard Kurulum &amp; Kullanım Rehberi
+              <button class="btn sm" style="margin-left:auto" onclick="document.getElementById('vpnGuideCard').style.display='none'">✕</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:10px">
+              <div>
+                <div style="font-weight:600;font-size:12px;color:var(--accent-lt);margin-bottom:6px"><i class="fa-solid fa-1"></i> WireGuard Başlatma</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                  WireGuard kurulu değilse önce sunucuya bağlanın:<br>
+                  <code style="background:var(--surface3);padding:2px 6px;border-radius:4px;font-size:11px">apt install wireguard -y</code><br><br>
+                  Ardından paneldeki <b>Durum</b> kartında <b>Başlat</b> butonuna basın.
+                  Sunucu otomatik anahtar çifti oluşturur ve <code>wg0</code> arayüzünü başlatır.
+                </div>
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:12px;color:var(--accent-lt);margin-bottom:6px"><i class="fa-solid fa-2"></i> Peer (İstemci) Ekleme</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                  <b>Peer Adı:</b> istediğiniz bir isim (örn: <code>laptop</code>, <code>phone</code>)<br>
+                  <b>Allowed IPs:</b> Bu peer'a atanacak VPN IP'si + subnet (örn: <code>10.0.0.2/32</code>)<br><br>
+                  Peer eklendikten sonra tabloda görünür. <b>İndir</b> butonuyla
+                  <code>.conf</code> dosyasını alın — istemciye aktarın.
+                </div>
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:12px;color:var(--accent-lt);margin-bottom:6px"><i class="fa-solid fa-3"></i> İstemci Yapılandırması</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                  İndirilen <code>.conf</code> dosyasını istemciye aktarın:<br>
+                  • <b>Linux:</b> <code>wg-quick up &lt;conf&gt;</code><br>
+                  • <b>Windows/macOS/Android/iOS:</b> WireGuard uygulamasına import edin<br><br>
+                  Bağlandıktan sonra VM'lere VPN IP'si üzerinden erişebilirsiniz.
+                </div>
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:12px;color:var(--accent-lt);margin-bottom:6px"><i class="fa-solid fa-4"></i> Ne Yapabilirsiniz?</div>
+                <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
+                  • Uzaktan güvenli panele erişim<br>
+                  • VM'lerin iç ağına tünelleme<br>
+                  • Site-to-site VPN (iki sunucu arası)<br>
+                  • Peer başına Allowed IPs kısıtlaması<br>
+                  • Peer devre dışı bırakma / silme
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="card" style="margin-bottom:14px">
             <div class="card-title">Yeni Peer Ekle</div>
             <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">

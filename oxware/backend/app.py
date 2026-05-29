@@ -66,6 +66,21 @@ logging.basicConfig(
 )
 log = logging.getLogger("oxware")
 
+
+def _bg_notify(message: str, level: str = "DEBUG", category: str = "vm",
+               vm_id: str = None, details: dict = None):
+    """Arka planda bildirim gönder — response'u bloklamaz."""
+    def _send():
+        try:
+            notifications.send_alert(
+                message=message, level=level, category=category,
+                vm_id=vm_id, details=details or {}
+            )
+        except Exception as _ne:
+            log.debug("Bildirim gönderilemedi: %s", _ne)
+    threading.Thread(target=_send, daemon=True, name="notif-bg").start()
+
+
 # ── Yeni Modül İmportları ─────────────────────────────────────────────────────
 def _safe_import(name):
     try:
@@ -944,6 +959,9 @@ def api_login():
         if sec_hard:
             sec_hard.record_failed_login(username)
         ev.warn(f"Başarısız giriş: {username} / {request.remote_addr}", category="auth")
+        _bg_notify(f"Başarısız giriş denemesi: {username}", level="WARNING", category="auth",
+                   details={"user": username,
+                            "ip": request.headers.get("X-Forwarded-For", request.remote_addr or "")})
         return err("Geçersiz kimlik bilgileri", 401)
     if sec_hard:
         sec_hard.record_successful_login(username)
@@ -999,6 +1017,9 @@ def api_login():
     except Exception:
         _role = "administrator"
     ev.info(f"Giriş başarılı: {username} ({_role})", category="auth")
+    _bg_notify(f"Giriş başarılı: {username}", level="INFO", category="auth",
+               details={"user": username, "role": _role,
+                        "ip": request.headers.get("X-Forwarded-For", request.remote_addr or "")})
     return ok(token=token, username=username, role=_role)
 
 @app.route("/api/auth/2fa/verify-login", methods=["POST"])
@@ -1335,9 +1356,34 @@ def api_create_vm():
             template_id=template_id, clone_type=clone_type,
         )
 
-        result = vm_manager.create_vm(**create_kwargs)
+        try:
+            result = vm_manager.create_vm(**create_kwargs)
+        except Exception as _create_exc:
+            # VM oluşturma başarısız — erken IPAM tahsisini temizle
+            if _early_alloc:
+                try:
+                    ip_pool_mgr.release_ip(f"__pre__{name}")
+                    log.info("IPAM erken tahsis temizlendi (VM oluşturma başarısız): %s", name)
+                except Exception as _ipam_rl_e:
+                    log.warning("IPAM erken tahsis temizleme hatası: %s", _ipam_rl_e)
+            raise _create_exc
+
         vm_id  = result["id"]
         vm_mac = result.get("mac", "")
+
+        # ── IPAM: erken tahsis temizle — MAC alınamadıysa (edge case) ────────
+        if _early_alloc and not vm_mac:
+            try:
+                ip_pool_mgr.release_ip(f"__pre__{name}")
+                # MAC olmadan vm_id ile kayıt et — cloud-init IP zaten gömüldü
+                if vm_id:
+                    ip_pool_mgr.manual_assign(
+                        ip=static_ip, mac="", vm_name=name,
+                        pool_name=_early_pool_name, vm_id=vm_id
+                    )
+                log.info("IPAM erken tahsis vm_id ile güncellendi (MAC yok): %s → %s", name, static_ip)
+            except Exception as _ipam_no_mac_e:
+                log.warning("IPAM erken tahsis temizleme (MAC yok): %s", _ipam_no_mac_e)
 
         # ── Auto IP assignment via libvirt DHCP static entry ──────────────
         auto_ip   = data.get("auto_ip", False)
@@ -1428,6 +1474,10 @@ def api_create_vm():
                 result["auto_ip_error"] = str(_ip_e)
 
         ev.vm_event(f"VM oluşturuldu: {name}", vm_id, level="INFO")
+        _bg_notify(f"VM oluşturuldu: {name}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": name, "action": "create",
+                                         "vcpus": str(vcpus), "memory_mb": str(memory_mb),
+                                         "disk_gb": str(disk_gb)})
         if static_ip:
             ev.vm_event(f"Statik IP atandı: {static_ip} (cloud-init)", vm_id, level="INFO")
             # Persist static IP by MAC so it shows in VM list (bridge VMs)
@@ -1500,6 +1550,9 @@ def api_delete_vm(vm_id):
         if mac:
             ip_pool_mgr.release_ip(mac)  # __internal__ entries stored with mac as vm_id
         ev.vm_event(f"VM silindi: {vm.get('name')}", vm_id, level="WARNING")
+        _bg_notify(f"VM silindi: {_vm_name_del}", level="INFO", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_del, "action": "delete",
+                                         "delete_disk": str(delete_disk)})
         if uptime_tracker:
             try:
                 uptime_tracker.delete_uptime(vm_id)
@@ -1530,6 +1583,8 @@ def api_start_vm(vm_id):
             except Exception as _he: log.warning("pre-start hook hatası vm=%s: %s", vm_id, _he)
         r = vm_manager.start_vm(vm_id)
         ev.vm_event("VM başlatıldı", vm_id)
+        _bg_notify(f"VM başlatıldı: {_vm_name_start}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_start, "action": "start"})
         if webhook_mgr: webhook_mgr.trigger("vm.started", {"vm_id": vm_id})
         if uptime_tracker: uptime_tracker.record_start(vm_id, "")
         if hook_mgr:
@@ -1581,6 +1636,8 @@ def api_stop_vm(vm_id):
             except Exception as _he: log.warning("pre-stop hook hatası vm=%s: %s", vm_id, _he)
         r = vm_manager.stop_vm(vm_id, force=force)
         ev.vm_event("VM durduruldu", vm_id, level="WARNING")
+        _bg_notify(f"VM durduruldu: {_vm_name_stop}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_stop, "action": "stop", "force": str(force)})
         if webhook_mgr: webhook_mgr.trigger("vm.stopped", {"vm_id": vm_id})
         if uptime_tracker: uptime_tracker.record_stop(vm_id)
         if hook_mgr:
@@ -1598,7 +1655,16 @@ def api_reboot_vm(vm_id):
     if _chk: return _chk
     force = request.args.get("force", "false").lower() == "true"
     try:
-        return ok(**vm_manager.reboot_vm(vm_id, force=force))
+        _vm_name_rb = vm_id
+        try:
+            _rb_info = vm_manager.get_vm(vm_id)
+            _vm_name_rb = _rb_info.get("name", vm_id) if _rb_info else vm_id
+        except Exception:
+            pass
+        r = vm_manager.reboot_vm(vm_id, force=force)
+        _bg_notify(f"VM yeniden başlatıldı: {_vm_name_rb}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_rb, "action": "reboot", "force": str(force)})
+        return ok(**r)
     except Exception as e:
         return err(e, 500)
 
@@ -1609,7 +1675,16 @@ def api_pause_vm(vm_id):
     _chk = _vmuser_check(vm_id)
     if _chk: return _chk
     try:
-        return ok(**vm_manager.pause_vm(vm_id))
+        _vm_name_ps = vm_id
+        try:
+            _ps_info = vm_manager.get_vm(vm_id)
+            _vm_name_ps = _ps_info.get("name", vm_id) if _ps_info else vm_id
+        except Exception:
+            pass
+        r = vm_manager.pause_vm(vm_id)
+        _bg_notify(f"VM duraklatıldı: {_vm_name_ps}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_ps, "action": "pause"})
+        return ok(**r)
     except Exception as e:
         return err(e, 500)
 
@@ -1620,7 +1695,16 @@ def api_resume_vm(vm_id):
     _chk = _vmuser_check(vm_id)
     if _chk: return _chk
     try:
-        return ok(**vm_manager.resume_vm(vm_id))
+        _vm_name_rs = vm_id
+        try:
+            _rs_info = vm_manager.get_vm(vm_id)
+            _vm_name_rs = _rs_info.get("name", vm_id) if _rs_info else vm_id
+        except Exception:
+            pass
+        r = vm_manager.resume_vm(vm_id)
+        _bg_notify(f"VM devam ettirildi: {_vm_name_rs}", level="DEBUG", category="vm",
+                   vm_id=vm_id, details={"vm": _vm_name_rs, "action": "resume"})
+        return ok(**r)
     except Exception as e:
         return err(e, 500)
 
