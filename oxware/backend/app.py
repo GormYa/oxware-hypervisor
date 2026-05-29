@@ -4572,6 +4572,14 @@ def ws_vnc_connect(data=None):
         tcp.settimeout(5)
         tcp.connect(("127.0.0.1", vnc_port))
         tcp.settimeout(None)
+        # TCP keepalive — firewall/NAT sessiz drop'ları önler
+        tcp.setsockopt(_sock.SOL_SOCKET, _sock.SO_KEEPALIVE, 1)
+        try:
+            tcp.setsockopt(_sock.IPPROTO_TCP, _sock.TCP_KEEPIDLE,  10)  # 10s idle → ilk probe
+            tcp.setsockopt(_sock.IPPROTO_TCP, _sock.TCP_KEEPINTVL,  5)  # probe arası 5s
+            tcp.setsockopt(_sock.IPPROTO_TCP, _sock.TCP_KEEPCNT,    3)  # 3 başarısız → kapat
+        except AttributeError:
+            pass  # Windows'ta TCP_KEEPIDLE yok, SO_KEEPALIVE yeterli
         _vnc_sessions[sid] = tcp
     except Exception as ex:
         emit("vnc_proxy_error", {"msg": f"VNC bağlanamadı (port {vnc_port}): {ex}"})
