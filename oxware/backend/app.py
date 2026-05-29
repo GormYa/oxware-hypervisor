@@ -1200,12 +1200,47 @@ def api_get_vm(vm_id):
             if assignment and assignment.get("pool") not in ("__internal__", "", None):
                 vm["pool_ip"]   = assignment.get("ip", "")
                 vm["pool_name"] = assignment.get("pool", "")
+                # Detect NAT mode: pool IP not in any libvirt NAT subnet
+                _pub_ip = vm["pool_ip"]
+                _nat_mode = False
+                _internal_ip_val = ""
+                try:
+                    import ipaddress as _ipa
+                    _lv_nets_chk = network_manager.list_networks()
+                    for _ln in _lv_nets_chk:
+                        if _ln.get("ip") and _ln.get("forward_mode") in ("nat", "", None):
+                            try:
+                                _subnet = _ipa.IPv4Network(
+                                    f"{_ln['ip']}/{_ln.get('netmask','255.255.255.0')}",
+                                    strict=False
+                                )
+                                if _ipa.IPv4Address(_pub_ip) not in _subnet:
+                                    _nat_mode = True
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                vm["nat_mode"] = _nat_mode
+                # Internal IP (from __internal__ pool or derived from MAC)
+                if _nat_mode:
+                    try:
+                        _int_assigns = ip_pool_mgr.list_assignments("__internal__")
+                        _vm_mac = vm.get("mac", "") or (vm.get("networks", [{}])[0].get("mac", "") if vm.get("networks") else "")
+                        _int_entry = next((a for a in _int_assigns if a.get("mac") == _vm_mac), None)
+                        _internal_ip_val = _int_entry["ip"] if _int_entry else ""
+                    except Exception:
+                        pass
+                vm["internal_ip"] = _internal_ip_val
             else:
-                vm["pool_ip"]   = ""
-                vm["pool_name"] = ""
+                vm["pool_ip"]     = ""
+                vm["pool_name"]   = ""
+                vm["nat_mode"]    = False
+                vm["internal_ip"] = ""
         except Exception:
-            vm["pool_ip"]   = ""
-            vm["pool_name"] = ""
+            vm["pool_ip"]     = ""
+            vm["pool_name"]   = ""
+            vm["nat_mode"]    = False
+            vm["internal_ip"] = ""
         # Guest agent quick status (non-blocking, 2s timeout)
         try:
             vm["guest_agent"] = vm_manager.get_guest_agent_status(vm_id)
@@ -2483,9 +2518,36 @@ def api_vm_nat_sync(vm_id):
                 pass
 
         if not actual_ip:
+            # __internal__ pool'dan kayıtlı IP'yi kontrol et
+            try:
+                _int_assigns = ip_pool_mgr.list_assignments("__internal__")
+                _int_e = next((a for a in _int_assigns if a.get("mac") == mac), None)
+                if _int_e:
+                    actual_ip = _int_e["ip"]
+                    log.info("NAT sync: __internal__ pool'dan IP bulundu: %s → %s", mac, actual_ip)
+            except Exception:
+                pass
+
+        if not actual_ip:
+            # MAC'den deterministik internal IP türet ve DHCP rezervasyonu ekle
+            derived_ip = _mac_to_internal_ip(mac)
+            try:
+                vm_manager.add_dhcp_host("default", mac, derived_ip, vm_name)
+                ip_pool_mgr.manual_assign(ip=derived_ip, mac=mac, vm_name=vm_name,
+                                          pool_name="__internal__", vm_id=vm_id)
+                log.info("NAT sync: DHCP rezervasyonu eklendi: %s → %s (VM restart gerekebilir)", mac, derived_ip)
+                return jsonify({
+                    "success": False,
+                    "error": f"DHCP rezervasyonu eklendi ({derived_ip}). VM'yi yeniden başlatın, ardından NAT tekrar deneyin.",
+                    "dhcp_reserved": derived_ip,
+                    "public_ip": public_ip,
+                    "needs_restart": True,
+                }), 200
+            except Exception as _dhcp_err:
+                log.warning("NAT sync: DHCP rezervasyonu eklenemedi: %s", _dhcp_err)
             return jsonify({
                 "success": False,
-                "error": "VM henüz IP almamış — VM açık ve ağa bağlı olduğundan emin olun.",
+                "error": "VM henüz IP almamış. VM'yi yeniden başlatın — DHCP lease bekleniyor.",
                 "public_ip": public_ip,
                 "mac": mac,
             }), 200
@@ -3131,6 +3193,31 @@ def api_ipam_pools():
     return ok(pools=ip_pool_mgr.list_pools())
 
 
+def _get_host_ips() -> list:
+    """Sunucunun kendi IP adreslerini listele."""
+    try:
+        import socket as _sock, subprocess as _sp
+        ips = []
+        # hostname -I yöntemi
+        r = _sp.run(["hostname", "-I"], capture_output=True, text=True, timeout=3)
+        ips.extend(r.stdout.strip().split())
+        # Fallback: socket
+        try:
+            ips.append(_sock.gethostbyname(_sock.gethostname()))
+        except Exception:
+            pass
+        return list(set(ip for ip in ips if ip and "." in ip))
+    except Exception:
+        return []
+
+
+@app.route("/api/ipam/host-ips")
+@require_auth
+def api_ipam_host_ips():
+    """Sunucunun kendi IP adreslerini döndür — pool oluşturmada çakışma uyarısı için."""
+    return ok(ips=_get_host_ips())
+
+
 @app.route("/api/ipam/pools", methods=["POST"])
 @require_auth
 def api_ipam_create_pool():
@@ -3140,10 +3227,37 @@ def api_ipam_create_pool():
     if missing:
         return err(f"Zorunlu alanlar: {', '.join(missing)}")
     try:
+        import ipaddress as _ipa
+        _warnings = []
+
+        # Ana sunucu IP'leri pool aralığında mı kontrol et
+        try:
+            _net = _ipa.IPv4Network(data["network"], strict=False)
+            _host_ips = _get_host_ips()
+            _conflicting = [ip for ip in _host_ips
+                            if _ipa.IPv4Address(ip) in _net]
+            if _conflicting:
+                _warnings.append(
+                    f"UYARI: Pool ağı ({data['network']}) sunucunun kendi IP'sini içeriyor: "
+                    f"{', '.join(_conflicting)}. Bu IP'ler VM'lere atanmamalı — "
+                    f"reserved listesine eklenmeleri önerilir."
+                )
+                # Otomatik olarak host IP'leri reserved listesine ekle
+                _reserved = data.get("reserved", [])
+                for _cip in _conflicting:
+                    if _cip not in _reserved:
+                        _reserved.append(_cip)
+                data["reserved"] = _reserved
+        except Exception as _val_e:
+            log.warning("Pool validasyon hatası: %s", _val_e)
+
         _known = {"name", "network", "gateway", "dns", "start_ip", "end_ip", "reserved", "libvirt_network"}
         pool = ip_pool_mgr.create_pool(**{k: v for k, v in data.items() if k in _known})
         ev.info(f"IP havuzu oluşturuldu: {data['name']}", category="network")
-        return ok(pool=pool), 201
+        resp = {"pool": pool}
+        if _warnings:
+            resp["warnings"] = _warnings
+        return ok(**resp), 201
     except Exception as e:
         return err(e, 500)
 

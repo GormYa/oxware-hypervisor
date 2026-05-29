@@ -8991,6 +8991,9 @@ async function loadIpamPools() {
 
 async function ipamOpenCreatePool() {
   document.getElementById('modal-ipam-pool').classList.add('open');
+  // Remove old warning
+  const oldWarn = document.getElementById('ipam-host-ip-warn');
+  if (oldWarn) oldWarn.remove();
   // Populate libvirt network dropdown
   const sel = document.getElementById('ipam-pool-libvirt-net-sel');
   try {
@@ -9004,6 +9007,48 @@ async function ipamOpenCreatePool() {
     // Sync text input with first option
     if (nets.length) document.getElementById('ipam-pool-libvirt-net').value = nets[0].name;
   } catch(_) { sel.innerHTML = '<option value="default">default</option>'; }
+  // Load host IPs and show warning if they overlap with input network
+  try {
+    const hd = await _api('/api/ipam/host-ips');
+    if (hd && hd.ips && hd.ips.length) {
+      window._ipamHostIps = hd.ips;
+      // Add network input change handler
+      const netInput = document.getElementById('ipam-pool-network');
+      if (netInput && !netInput._hostIpListenerAdded) {
+        netInput._hostIpListenerAdded = true;
+        netInput.addEventListener('input', _ipamCheckNetworkConflict);
+      }
+    }
+  } catch(_) {}
+}
+
+function _ipamCheckNetworkConflict() {
+  const netInput = document.getElementById('ipam-pool-network');
+  const modalBody = netInput?.closest('.modal-body') || netInput?.parentElement;
+  const oldWarn = document.getElementById('ipam-host-ip-warn');
+  if (oldWarn) oldWarn.remove();
+  if (!window._ipamHostIps || !netInput?.value) return;
+  try {
+    // Simple check: does any host IP start with same /24 prefix?
+    const netVal = netInput.value.trim();
+    const conflicting = (window._ipamHostIps || []).filter(ip => {
+      try {
+        const netParts = netVal.split('/')[0].split('.');
+        const ipParts  = ip.split('.');
+        const prefix   = parseInt((netVal.split('/')[1] || '24'));
+        if (prefix >= 24) return netParts.slice(0,3).join('.') === ipParts.slice(0,3).join('.');
+        if (prefix >= 16) return netParts.slice(0,2).join('.') === ipParts.slice(0,2).join('.');
+        return false;
+      } catch(_) { return false; }
+    });
+    if (conflicting.length) {
+      const warn = document.createElement('div');
+      warn.id = 'ipam-host-ip-warn';
+      warn.style.cssText = 'margin-top:8px;padding:8px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:12px;color:#f87171';
+      warn.innerHTML = `⚠️ <strong>Dikkat:</strong> Bu ağ sunucunun kendi IP adresini içeriyor (<code>${escHtml(conflicting[0])}</code>). Bu IP VM'lere atanmamalı. Pool rezerve listesine otomatik eklenir.`;
+      netInput.parentElement?.insertAdjacentElement('afterend', warn);
+    }
+  } catch(_) {}
 }
 function ipamCloseCreatePool() {
   document.getElementById('modal-ipam-pool').classList.remove('open');
@@ -9025,6 +9070,9 @@ async function ipamConfirmCreatePool() {
   if (!d) { toast('Sunucu yanıt vermedi', 'error'); return; }
   if (d.error) { toast(`Havuz oluşturma hatası: ${d.error}`, 'error'); return; }
   toast(`Havuz oluşturuldu: ${name}`, 'success');
+  if (d.warnings && d.warnings.length) {
+    setTimeout(() => toast('⚠ ' + d.warnings[0], 'warn', 8000), 500);
+  }
   ipamCloseCreatePool();
   loadIpamPage();
   ['ipam-pool-name','ipam-pool-network','ipam-pool-gw','ipam-pool-dns','ipam-pool-start','ipam-pool-end','ipam-pool-libvirt-net'].forEach(id => {
@@ -9609,11 +9657,19 @@ async function loadVMDetail(vmId) {
       ipEl.textContent = poolIp;
       ipEl.title = poolIp;
       ipSubEl.textContent = poolName ? `Havuz: ${poolName}` : "IP Havuzu";
-      // DHCP IP secondary below
-      if (dhcpIp && dhcpIp !== poolIp) {
-        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: </span><span style="font-family:monospace">${dhcpIp}</span>`;
-      } else if (!dhcpIp && v.state === "running") {
-        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: bekleniyor…</span>`;
+      // NAT mode: show internal IP or restart hint — NOT "DHCP bekleniyor"
+      const natMode    = v.nat_mode    || false;
+      const internalIp = v.internal_ip || "";
+      if (natMode) {
+        if (internalIp) {
+          ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">NAT iç IP: </span><span style="font-family:monospace;color:#86efac">${escHtml(internalIp)}</span>`;
+        } else if (v.state === "running") {
+          ipDhcpEl.innerHTML = `<span style="color:#f59e0b;font-size:11px">⚠ NAT: VM'yi yeniden başlatın (DHCP lease bekleniyor)</span>`;
+        } else {
+          ipDhcpEl.textContent = "";
+        }
+      } else if (dhcpIp && dhcpIp !== poolIp) {
+        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: </span><span style="font-family:monospace">${escHtml(dhcpIp)}</span>`;
       } else {
         ipDhcpEl.textContent = "";
       }
@@ -11665,10 +11721,15 @@ async function vmNatSync(id) {
     const d = await api(`/vms/${id}/nat-sync`, { method: "POST" });
     if (d.success) {
       completeTaskPanel(taskId, 'success');
-      toast(`NAT sync tamam ✓ — ${d.internal_ip} → ${d.public_ip}`, "success");
+      toast(`NAT sync tamam ✓ — ${escHtml(d.internal_ip)} → ${escHtml(d.public_ip)}`, "success");
+      if (currentVmId) loadVMDetail(currentVmId);
+    } else if (d.needs_restart) {
+      completeTaskPanel(taskId, 'warn');
+      toast(`DHCP rezervasyonu eklendi (${escHtml(d.dhcp_reserved || '')}) — VM'yi yeniden başlatın, ardından NAT tekrar deneyin.`, "warn", 8000);
+      if (currentVmId) loadVMDetail(currentVmId);
     } else {
       completeTaskPanel(taskId, 'error');
-      toast("NAT sync: " + escHtml(d.error || "VM henüz IP almamış"), "warn");
+      toast("NAT sync: " + escHtml(d.error || "VM henüz IP almamış — VM'yi yeniden başlatın"), "warn", 6000);
     }
   } catch (e) {
     completeTaskPanel(taskId, 'error');
