@@ -18478,6 +18478,12 @@ let _vncModalVmId      = null;
 let _vncModalRfb       = null;
 let _vncModalPlCanvas  = null;
 let _vncModalVX        = 0;
+// Auto-reconnect state
+let _vncModalUserClosed  = false;
+let _vncModalReconnectN  = 0;
+let _vncModalReconnectT  = null;
+let _vncModalCountdownT  = null;
+const _VNC_RECONNECT_MAX = 10;
 let _vncModalVY        = 0;
 let _vncModalLockPoll  = null;
 let _vncModalPLCleanup = null;  // function to remove PL event listeners
@@ -18599,9 +18605,52 @@ function _vncModalTeardown() {
   if (scr) scr.querySelectorAll('canvas').forEach(c => c.remove());
 }
 
+/* ── VNC auto-reconnect ─────────────────────────────────────────────────── */
+function _vncModalClearReconnect() {
+  if (_vncModalReconnectT) { clearTimeout(_vncModalReconnectT);  _vncModalReconnectT = null; }
+  if (_vncModalCountdownT) { clearInterval(_vncModalCountdownT); _vncModalCountdownT = null; }
+}
+
+function _vncModalScheduleReconnect(vmId, vmName) {
+  _vncModalClearReconnect();
+  _vncModalReconnectN++;
+  const delaySec = _vncModalReconnectN <= 3 ? 3 : 5;
+
+  // Countdown status update
+  let remaining = delaySec;
+  const updateStatus = () => {
+    _vncModalSetStatus(
+      `⟳ Yeniden bağlanılıyor (${remaining}s) — ${_vncModalReconnectN}/${_VNC_RECONNECT_MAX}`, false
+    );
+  };
+  updateStatus();
+  _vncModalCountdownT = setInterval(() => {
+    remaining--;
+    if (remaining > 0) { updateStatus(); } else { clearInterval(_vncModalCountdownT); _vncModalCountdownT = null; }
+  }, 1000);
+
+  _vncModalReconnectT = setTimeout(async () => {
+    _vncModalReconnectT = null;
+    if (_vncModalUserClosed) return;
+    const modal = document.getElementById('vnc-modal');
+    if (!modal || modal.style.display === 'none') return;
+    _vncModalSetStatus('⟳ Bağlanıyor…', false);
+    _vncModalSetLoad('Yeniden bağlanıyor…', '');
+    const loadEl2 = document.getElementById('vnc-modal-loading');
+    if (loadEl2) loadEl2.style.display = 'flex';
+    await openVncModal(vmId, vmName, null, true /* isReconnect */);
+  }, delaySec * 1000);
+}
+
 /* ── openVncModal ────────────────────────────────────────────────────────── */
-async function openVncModal(vmId, vmName /*, _unused_url */) {
+async function openVncModal(vmId, vmName /*, _unused_url */, _isReconnect) {
   _vncModalVmId = vmId;
+  if (!_isReconnect) {
+    // Fresh open: reset reconnect counters
+    _vncModalUserClosed = false;
+    _vncModalReconnectN = 0;
+    _vncModalClearReconnect();
+  }
 
   const modal  = document.getElementById('vnc-modal');
   const panel  = document.getElementById('vnc-modal-panel');
@@ -18651,6 +18700,8 @@ async function openVncModal(vmId, vmName /*, _unused_url */) {
     _vncModalRfb.addEventListener('connect', () => {
       _vncModalHideLoading();
       _vncModalSetStatus('● Bağlı', true);
+      _vncModalReconnectN = 0;   // başarılı bağlantı → sayacı sıfırla
+      _vncModalClearReconnect();
     });
 
     _vncModalRfb.addEventListener('disconnect', (e) => {
@@ -18659,6 +18710,16 @@ async function openVncModal(vmId, vmName /*, _unused_url */) {
       _vncModalSetStatus(msg, false);
       _vncModalSetLoad('Bağlantı kesildi', reason);
       if (loadEl) loadEl.style.display = 'flex';
+
+      // Auto-reconnect — VM reboot gibi beklenmedik kopmalarda otomatik yeniden bağlan
+      const modal = document.getElementById('vnc-modal');
+      const isOpen = modal && modal.style.display !== 'none';
+      if (!_vncModalUserClosed && isOpen && _vncModalReconnectN < _VNC_RECONNECT_MAX) {
+        _vncModalScheduleReconnect(vmId, vmName);
+      } else if (_vncModalReconnectN >= _VNC_RECONNECT_MAX) {
+        _vncModalSetStatus(`❌ Yeniden bağlanılamadı (${_VNC_RECONNECT_MAX} deneme)`, false);
+        _vncModalSetLoad('Maksimum deneme aşıldı', 'Konsolı kapatıp tekrar açın');
+      }
     });
 
     _vncModalRfb.addEventListener('credentialsrequired', () => {
@@ -18692,6 +18753,9 @@ async function openVncModal(vmId, vmName /*, _unused_url */) {
 
 /* ── closeVncModal ───────────────────────────────────────────────────────── */
 function closeVncModal() {
+  _vncModalUserClosed = true;   // flag: kullanıcı kapattı → auto-reconnect tetiklenmesin
+  _vncModalClearReconnect();    // bekleyen yeniden bağlanma timer'ını iptal et
+  _vncModalReconnectN = 0;
   _vncModalTeardown();
   const modal = document.getElementById('vnc-modal');
   if (modal) modal.style.display = 'none';
