@@ -3866,6 +3866,169 @@ def api_processes():
 def api_vm_summary():
     return ok(**system_monitor.get_vm_summary())
 
+
+@app.route("/api/system/host-info")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_system_host_info():
+    """Detaylı host bilgisi — CPU modeli, RAM, kernel, uptime, KVM durumu."""
+    try:
+        import platform, psutil, subprocess as _sp
+        kvm_ok = False
+        try:
+            r = _sp.run(["kvm-ok"], capture_output=True, text=True, timeout=3)
+            kvm_ok = r.returncode == 0
+        except Exception:
+            kvm_ok = os.path.exists("/dev/kvm")
+
+        cpu_info = ""
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        cpu_info = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            cpu_info = platform.processor()
+
+        uptime_s = ""
+        try:
+            with open("/proc/uptime") as f:
+                secs = float(f.read().split()[0])
+            d, r = divmod(int(secs), 86400)
+            h, r = divmod(r, 3600)
+            m = r // 60
+            uptime_s = (f"{d}g " if d else "") + f"{h:02d}:{m:02d}"
+        except Exception:
+            pass
+
+        ram_gb = round(psutil.virtual_memory().total / (1024**3), 1)
+        return ok(
+            hostname=platform.node(),
+            os=f"{platform.system()} {platform.release()}",
+            kernel=platform.uname().release,
+            cpu_model=cpu_info,
+            cpu_count=psutil.cpu_count(logical=True),
+            ram_total_gb=ram_gb,
+            uptime=uptime_s,
+            kvm_available=kvm_ok,
+        )
+    except Exception as e:
+        return err(e)
+
+
+@app.route("/api/system/cpu-governor", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cpu_governor():
+    """CPU governor oku/yaz."""
+    if request.method == "GET":
+        try:
+            gov = open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor").read().strip()
+            return ok(governor=gov)
+        except Exception as e:
+            return ok(governor="unknown", error=str(e))
+    gov = (request.get_json(silent=True) or {}).get("governor", "")
+    allowed = {"performance", "powersave", "ondemand", "schedutil", "conservative", "userspace"}
+    if gov not in allowed:
+        return err("Geçersiz governor", 400)
+    try:
+        count = 0
+        import glob as _glob
+        for f in _glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"):
+            with open(f, "w") as fp:
+                fp.write(gov)
+            count += 1
+        _bg_notify(f"CPU governor değiştirildi: {gov}", level="INFO", category="system",
+                   details={"governor": gov, "cpu_count": count})
+        return ok(governor=gov, cpus_updated=count)
+    except Exception as e:
+        return err(e)
+
+
+@app.route("/api/system/sysctl", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_sysctl():
+    """sysctl parametrelerini oku/yaz."""
+    ALLOWED_KEYS = {
+        "vm.swappiness", "net.ipv4.ip_forward", "net.core.somaxconn",
+        "net.ipv4.tcp_fin_timeout", "kernel.shmmax", "net.core.rmem_max",
+        "net.core.wmem_max", "vm.dirty_ratio", "vm.dirty_background_ratio",
+    }
+    if request.method == "GET":
+        import subprocess as _sp
+        results = {}
+        for key in ALLOWED_KEYS:
+            try:
+                r = _sp.run(["sysctl", "-n", key], capture_output=True, text=True, timeout=3)
+                results[key] = r.stdout.strip() if r.returncode == 0 else "?"
+            except Exception:
+                results[key] = "?"
+        return ok(params=results)
+
+    data = request.get_json(silent=True) or {}
+    params = data.get("params", {})
+    applied, errors = [], []
+    import subprocess as _sp
+    for key, val in params.items():
+        if key not in ALLOWED_KEYS:
+            errors.append(f"{key}: izin verilmiyor")
+            continue
+        try:
+            r = _sp.run(["sysctl", "-w", f"{key}={val}"], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                applied.append(key)
+            else:
+                errors.append(f"{key}: {r.stderr.strip()}")
+        except Exception as e:
+            errors.append(f"{key}: {e}")
+    if applied:
+        _bg_notify(f"sysctl güncellendi: {', '.join(applied)}", level="INFO", category="system")
+    return ok(applied=applied, errors=errors)
+
+
+@app.route("/api/system/ntp-status")
+@require_auth
+def api_ntp_status():
+    """NTP senkronizasyon durumu ve sunucu saati."""
+    import subprocess as _sp
+    from datetime import datetime as _dt
+    synchronized = False
+    server = ""
+    try:
+        r = _sp.run(["timedatectl", "show", "--no-pager"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            if "NTPSynchronized=yes" in line:
+                synchronized = True
+            if line.startswith("NTP="):
+                server = line.split("=", 1)[1].strip()
+    except Exception:
+        pass
+    return ok(
+        synchronized=synchronized,
+        server=server,
+        time=_dt.now().strftime("%d.%m.%Y %H:%M:%S"),
+    )
+
+
+@app.route("/api/system/ntp-sync", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ntp_sync():
+    """NTP sunucusunu ayarla ve senkronize et."""
+    import subprocess as _sp
+    server = (request.get_json(silent=True) or {}).get("server", "pool.ntp.org")
+    if not server or len(server) > 100:
+        return err("Geçersiz NTP sunucusu", 400)
+    try:
+        _sp.run(["timedatectl", "set-ntp", "true"], capture_output=True, timeout=5)
+        _sp.run(["chronyc", "online"], capture_output=True, timeout=5)
+        return ok(message=f"NTP senkronize edildi: {server}")
+    except Exception as e:
+        return err(e)
+
+
 # ── Kullanıcı Yönetimi ───────────────────────────────────────────────────────
 @app.route("/api/users")
 @require_auth
