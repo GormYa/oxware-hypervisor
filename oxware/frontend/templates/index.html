@@ -2198,6 +2198,45 @@
             <button class="btn primary" onclick="openCreateNetworkModal()">+ Yeni Ağ</button>
           </div>
 
+          <!-- Network Guide Card -->
+          <div class="card" style="margin-bottom:16px;border:1px solid rgba(88,166,255,.2);background:rgba(88,166,255,.04)">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <i class="fa-solid fa-circle-question" style="color:var(--accent-lt)"></i>
+              Ağ Türleri ve Kullanımı
+              <button class="btn sm" onclick="this.closest('.card').style.display='none'" style="margin-left:auto;font-size:10px">✕ Kapat</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;font-size:12px;line-height:1.7">
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent-lt)">
+                <div style="font-weight:600;color:var(--accent-lt);margin-bottom:5px"><i class="fa-solid fa-shuffle"></i> NAT (Varsayılan)</div>
+                <div style="color:var(--text-muted)">
+                  VM'ler iç ağda bulunur (192.168.x.x). İnternet erişimi host üzerinden NAT ile sağlanır.<br><br>
+                  <b>Ne zaman kullanılır:</b> Basit VM kurulumları, internet erişimi yeterli, dışarıdan erişim gerekmiyorsa.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #22c55e">
+                <div style="font-weight:600;color:#22c55e;margin-bottom:5px"><i class="fa-solid fa-bridge"></i> Bridge</div>
+                <div style="color:var(--text-muted)">
+                  VM doğrudan fiziksel ağa bağlanır, gerçek IP alır. Host üzerinde bridge interface gerekir (<code>oxbr0</code> gibi).<br><br>
+                  <b>Ne zaman kullanılır:</b> VM'in kendi IP'si olacaksa, sunucuya ekstra IP almışsanız, barındırma paneli kullanıyorsanız.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #f59e0b">
+                <div style="font-weight:600;color:#f59e0b;margin-bottom:5px"><i class="fa-solid fa-lock"></i> Isolated</div>
+                <div style="color:var(--text-muted)">
+                  VM'ler sadece birbiriyle konuşur, internet yok, dış ağ yok. Tamamen izole test ortamı.<br><br>
+                  <b>Ne zaman kullanılır:</b> Lab ortamları, güvenli test ağları, kluster içi iletişim.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #a78bfa">
+                <div style="font-weight:600;color:#a78bfa;margin-bottom:5px"><i class="fa-solid fa-plus"></i> Yeni Ağ Ekleme</div>
+                <div style="color:var(--text-muted)">
+                  <b>+ Yeni Ağ</b> → Tip seç (NAT/Bridge/Isolated) → Ağ adı, subnet, DHCP aralığı gir.<br><br>
+                  Bridge için önce host'ta <code>ip link add oxbr0 type bridge</code> ile bridge oluşturun veya <b>SDN</b> sekmesinden OVS bridge ekleyin.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Overview stat cards -->
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px" id="net-stat-cards">
             <div style="background:linear-gradient(135deg,#1e3a5f 0%,#16213e 100%);border:1px solid #2a4a7f;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
@@ -3307,6 +3346,45 @@
             <div style="display:flex;gap:8px">
               <button class="btn-primary" onclick="ipamOpenCreatePool()"><i class="fa-solid fa-plus"></i> Yeni Havuz</button>
               <button class="btn-secondary" onclick="loadIpamPage()"><i class="fa-solid fa-rotate-right"></i> Yenile</button>
+            </div>
+          </div>
+
+          <!-- IPAM Guide Card -->
+          <div class="card" style="margin-bottom:16px;border:1px solid rgba(88,166,255,.2);background:rgba(88,166,255,.04)">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <i class="fa-solid fa-circle-question" style="color:var(--accent-lt)"></i>
+              IPAM Nasıl Kullanılır?
+              <button class="btn sm" onclick="this.closest('.card').style.display='none'" style="margin-left:auto;font-size:10px">✕ Kapat</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;font-size:12px;line-height:1.7">
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent-lt)">
+                <div style="font-weight:600;color:var(--accent-lt);margin-bottom:6px">1️⃣ Havuz Oluştur</div>
+                <div style="color:var(--text-muted)">
+                  <b>+ Yeni Havuz</b> butonuna tıklayın. Ağ adresi olarak VM'lerin kullanacağı aralığı girin.<br><br>
+                  <span style="color:#f59e0b">⚠ ÖNEMLİ:</span> Sunucunuzun <b>kendi IP adresini</b> pool'a eklemeyin! (ör: sunucu IP'si <code>31.58.236.60</code> ise bu IP pool ağında olmamalı). Bu IP otomatik olarak rezerve listesine eklenir.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #22c55e">
+                <div style="font-weight:600;color:#22c55e;margin-bottom:6px">2️⃣ VM Oluştururken IP Seç</div>
+                <div style="color:var(--text-muted)">
+                  VM oluştururken <b>IP Havuzu</b> alanından oluşturduğunuz havuzu seçin ve <b>Otomatik IP</b> kutusunu işaretleyin.<br><br>
+                  Sistem havuzdan boş bir IP alır ve VM'e atar.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #f59e0b">
+                <div style="font-weight:600;color:#f59e0b;margin-bottom:6px">🔀 NAT vs Bridge Modu</div>
+                <div style="color:var(--text-muted)">
+                  <b>NAT (varsayılan):</b> VM iç ağda (192.168.x.x), dışarıdan erişim için iptables NAT kuralı oluşturulur. VM'i yeniden başlatın ki iç DHCP lease alınsın.<br><br>
+                  <b>Bridge:</b> VM doğrudan fiziksel ağa bağlanır, cloud-init ile statik IP enjekte edilir. Restart gerekmez.
+                </div>
+              </div>
+              <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid #a78bfa">
+                <div style="font-weight:600;color:#a78bfa;margin-bottom:6px">🔄 NAT Sync</div>
+                <div style="color:var(--text-muted)">
+                  VM'e IP atandı ama <b>NAT çalışmıyor</b> mu? VM detay sayfasında <b>🔄 NAT</b> butonuna tıklayın.<br><br>
+                  Sistem VM'in iç IP'sini tespit eder, iptables DNAT kuralını günceller. VM kapalıysa önce başlatın.
+                </div>
+              </div>
             </div>
           </div>
 
