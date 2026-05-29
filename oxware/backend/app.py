@@ -3987,21 +3987,23 @@ def api_vm_summary():
 def api_system_host_info():
     """Detaylı host bilgisi — CPU modeli, RAM, kernel, uptime, KVM durumu."""
     try:
-        import platform, psutil, subprocess as _sp
-        kvm_ok = False
+        import platform, subprocess as _sp
+        kvm_ok = os.path.exists("/dev/kvm")
         try:
             r = _sp.run(["kvm-ok"], capture_output=True, text=True, timeout=3)
             kvm_ok = r.returncode == 0
         except Exception:
-            kvm_ok = os.path.exists("/dev/kvm")
+            pass
 
         cpu_info = ""
+        cpu_count = 0
         try:
             with open("/proc/cpuinfo") as f:
                 for line in f:
-                    if line.startswith("model name"):
+                    if line.startswith("model name") and not cpu_info:
                         cpu_info = line.split(":", 1)[1].strip()
-                        break
+                    if line.startswith("processor"):
+                        cpu_count += 1
         except Exception:
             cpu_info = platform.processor()
 
@@ -4009,20 +4011,41 @@ def api_system_host_info():
         try:
             with open("/proc/uptime") as f:
                 secs = float(f.read().split()[0])
-            d, r = divmod(int(secs), 86400)
-            h, r = divmod(r, 3600)
-            m = r // 60
-            uptime_s = (f"{d}g " if d else "") + f"{h:02d}:{m:02d}"
+            d_val, r_val = divmod(int(secs), 86400)
+            h_val, r_val = divmod(r_val, 3600)
+            m_val = r_val // 60
+            uptime_s = (f"{d_val}g " if d_val else "") + f"{h_val:02d}:{m_val:02d}"
         except Exception:
             pass
 
-        ram_gb = round(psutil.virtual_memory().total / (1024**3), 1)
+        ram_gb = 0
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal"):
+                        ram_kb = int(line.split()[1])
+                        ram_gb = round(ram_kb / (1024**2), 1)
+                        break
+        except Exception:
+            try:
+                import psutil as _ps
+                ram_gb = round(_ps.virtual_memory().total / (1024**3), 1)
+            except Exception:
+                pass
+
+        try:
+            if not cpu_count:
+                import os as _os
+                cpu_count = _os.cpu_count() or 0
+        except Exception:
+            pass
+
         return ok(
             hostname=platform.node(),
             os=f"{platform.system()} {platform.release()}",
             kernel=platform.uname().release,
             cpu_model=cpu_info,
-            cpu_count=psutil.cpu_count(logical=True),
+            cpu_count=cpu_count,
             ram_total_gb=ram_gb,
             uptime=uptime_s,
             kvm_available=kvm_ok,
@@ -13858,6 +13881,343 @@ def _startup_ensure_physnet():
         log.warning("ensure_physnet başlatma hatası: %s", _e)
 
 _startup_ensure_physnet()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ESXi Parity Modules — vSAN, DVS, DPM, Syslog, Content Library, Host Profile, Datastore
+# ══════════════════════════════════════════════════════════════════════════════
+
+vsan_mgr     = _safe_import("vsan_manager")
+dvs_mgr      = _safe_import("dvs_manager")
+dpm_mgr      = _safe_import("dpm_manager")
+syslog_mgr   = _safe_import("syslog_manager")
+cl_mgr       = _safe_import("content_library_manager")
+hprof_mgr    = _safe_import("host_profile_manager")
+ds_browser   = _safe_import("datastore_browser")
+
+
+# ── vSAN ─────────────────────────────────────────────────────────────────────
+@app.route("/api/vsan/status")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vsan_status():
+    if not vsan_mgr: return ok(available=False, error="vSAN modülü yüklenemedi")
+    return ok(**vsan_mgr.get_status())
+
+@app.route("/api/vsan/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vsan_config():
+    if not vsan_mgr: return err("vSAN modülü yüklenemedi")
+    if request.method == "GET":
+        return ok(config=vsan_mgr.get_config())
+    d = request.get_json(silent=True) or {}
+    return ok(config=vsan_mgr.save_config(**d))
+
+@app.route("/api/vsan/osds")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vsan_osds():
+    if not vsan_mgr: return ok(osds=[])
+    return ok(osds=vsan_mgr.get_osds())
+
+@app.route("/api/vsan/pools")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vsan_ceph_pools():
+    if not vsan_mgr: return ok(pools=[])
+    return ok(pools=vsan_mgr.get_pools())
+
+@app.route("/api/vsan/pools", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vsan_create_pool():
+    if not vsan_mgr: return err("vSAN modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    try:
+        result = vsan_mgr.create_pool(d.get("name",""), d.get("pg_num", 32), d.get("replication", 2))
+        return ok(pool=result)
+    except Exception as e:
+        return err(e)
+
+
+# ── DVS (Distributed Virtual Switch) ─────────────────────────────────────────
+@app.route("/api/dvs")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_dvs_list():
+    if not dvs_mgr: return ok(switches=[])
+    return ok(switches=dvs_mgr.list_dvs())
+
+@app.route("/api/dvs", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dvs_create():
+    if not dvs_mgr: return err("DVS modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    try:
+        result = dvs_mgr.create_dvs(
+            d.get("name", ""), d.get("description", ""),
+            int(d.get("vlan_id", 0)), int(d.get("mtu", 1500)),
+            d.get("uplinks"), d.get("nodes")
+        )
+        return ok(dvs=result), 201
+    except Exception as e:
+        return err(e)
+
+@app.route("/api/dvs/<dvs_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dvs_delete(dvs_id):
+    if not dvs_mgr: return err("DVS modülü yüklenemedi")
+    try:
+        dvs_mgr.delete_dvs(dvs_id)
+        return ok(status="deleted")
+    except Exception as e:
+        return err(e)
+
+@app.route("/api/dvs/<dvs_id>/portgroups", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dvs_add_portgroup(dvs_id):
+    if not dvs_mgr: return err("DVS modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    try:
+        result = dvs_mgr.add_port_group(dvs_id, d.get("name",""), int(d.get("vlan_id",0)), d.get("type","vm"))
+        return ok(portgroup=result)
+    except Exception as e:
+        return err(e)
+
+@app.route("/api/dvs/ovs-bridges")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_dvs_ovs_bridges():
+    if not dvs_mgr: return ok(bridges=[])
+    return ok(bridges=dvs_mgr.get_ovs_bridges())
+
+
+# ── DPM (Distributed Power Management) ───────────────────────────────────────
+@app.route("/api/dpm/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dpm_config():
+    if not dpm_mgr: return err("DPM modülü yüklenemedi")
+    if request.method == "GET":
+        return ok(config=dpm_mgr.get_config())
+    d = request.get_json(silent=True) or {}
+    return ok(config=dpm_mgr.save_config(**d))
+
+@app.route("/api/dpm/nodes", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_dpm_nodes():
+    if not dpm_mgr: return ok(nodes=[])
+    return ok(nodes=dpm_mgr.get_config().get("nodes", []))
+
+@app.route("/api/dpm/nodes", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dpm_add_node():
+    if not dpm_mgr: return err("DPM modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    added = dpm_mgr.add_node(d.get("ip",""), d.get("name",""), d.get("mac",""))
+    return ok(added=added)
+
+@app.route("/api/dpm/nodes/<path:ip>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dpm_remove_node(ip):
+    if not dpm_mgr: return err("DPM modülü yüklenemedi")
+    return ok(removed=dpm_mgr.remove_node(ip))
+
+@app.route("/api/dpm/analyze")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_dpm_analyze():
+    if not dpm_mgr: return ok(nodes=[], timestamp="")
+    return ok(**dpm_mgr.analyze())
+
+@app.route("/api/dpm/wakeup/<path:ip>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dpm_wakeup(ip):
+    if not dpm_mgr: return err("DPM modülü yüklenemedi")
+    return ok(**dpm_mgr.wakeup_node(ip))
+
+
+# ── Syslog / Log Viewer ───────────────────────────────────────────────────────
+@app.route("/api/syslog/journal")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_syslog_journal():
+    if not syslog_mgr: return ok(entries=[])
+    lines   = int(request.args.get("lines", 200))
+    service = request.args.get("service")
+    level   = request.args.get("level", "info")
+    since   = request.args.get("since")
+    until   = request.args.get("until")
+    return ok(**syslog_mgr.get_journal_logs(lines, service, level, since, until))
+
+@app.route("/api/syslog/syslog")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_syslog_file():
+    if not syslog_mgr: return ok(entries=[])
+    lines        = int(request.args.get("lines", 200))
+    level_filter = request.args.get("level")
+    grep         = request.args.get("grep")
+    return ok(**syslog_mgr.get_syslog(lines, level_filter, grep))
+
+@app.route("/api/syslog/kernel")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_syslog_kernel():
+    if not syslog_mgr: return ok(entries=[])
+    return ok(**syslog_mgr.get_kernel_logs(int(request.args.get("lines", 100))))
+
+@app.route("/api/syslog/oxware")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_syslog_oxware():
+    if not syslog_mgr: return ok(entries=[])
+    return ok(**syslog_mgr.get_oxware_logs(int(request.args.get("lines", 200))))
+
+@app.route("/api/syslog/services")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_syslog_services():
+    if not syslog_mgr: return ok(services=[])
+    return ok(services=syslog_mgr.get_services())
+
+@app.route("/api/syslog/core-dumps")
+@require_auth
+@require_role("admin", "administrator")
+def api_syslog_core_dumps():
+    if not syslog_mgr: return ok(dumps=[])
+    return ok(dumps=syslog_mgr.get_core_dumps())
+
+
+# ── Content Library ───────────────────────────────────────────────────────────
+@app.route("/api/content-library")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_cl_list():
+    if not cl_mgr: return ok(items=[])
+    return ok(items=cl_mgr.list_items(), stats=cl_mgr.get_stats())
+
+@app.route("/api/content-library", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cl_add():
+    if not cl_mgr: return err("Content Library modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    result = cl_mgr.add_item(
+        d.get("name",""), d.get("description",""),
+        d.get("type","iso"), d.get("tags"),
+        d.get("source_path"), d.get("url")
+    )
+    return ok(**result) if result.get("ok") else err(result.get("error","Hata"))
+
+@app.route("/api/content-library/<item_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cl_delete(item_id):
+    if not cl_mgr: return err("Content Library modülü yüklenemedi")
+    deleted = cl_mgr.delete_item(item_id)
+    return ok(deleted=deleted) if deleted else err("Öğe bulunamadı", 404)
+
+@app.route("/api/content-library/sync", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cl_sync():
+    if not cl_mgr: return err("Content Library modülü yüklenemedi")
+    iso_dir = (request.get_json(silent=True) or {}).get("iso_dir", "/var/lib/libvirt/images")
+    return ok(**cl_mgr.sync_from_iso_pool(iso_dir))
+
+
+# ── Host Profiles ─────────────────────────────────────────────────────────────
+@app.route("/api/host-profiles")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_hprof_list():
+    if not hprof_mgr: return ok(profiles=[])
+    return ok(profiles=hprof_mgr.list_profiles())
+
+@app.route("/api/host-profiles", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_hprof_capture():
+    if not hprof_mgr: return err("Host Profile modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    profile = hprof_mgr.capture_profile(d.get("name",""), d.get("description",""), d.get("tags"))
+    return ok(profile=profile), 201
+
+@app.route("/api/host-profiles/<profile_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_hprof_delete(profile_id):
+    if not hprof_mgr: return err("Host Profile modülü yüklenemedi")
+    return ok(deleted=hprof_mgr.delete_profile(profile_id))
+
+@app.route("/api/host-profiles/<profile_id>/apply", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_hprof_apply(profile_id):
+    if not hprof_mgr: return err("Host Profile modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    return ok(**hprof_mgr.apply_profile(profile_id, d.get("target_host","localhost")))
+
+
+# ── Datastore Browser ─────────────────────────────────────────────────────────
+@app.route("/api/datastore/browse")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_ds_browse():
+    if not ds_browser: return ok(items=[])
+    pool_path = request.args.get("pool", "/var/lib/libvirt/images")
+    rel_path  = request.args.get("path", "")
+    return ok(**ds_browser.list_directory(pool_path, rel_path))
+
+@app.route("/api/datastore/info")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_ds_info():
+    if not ds_browser: return ok()
+    pool_path = request.args.get("pool", "/var/lib/libvirt/images")
+    rel_path  = request.args.get("path", "")
+    return ok(**ds_browser.get_file_info(pool_path, rel_path))
+
+@app.route("/api/datastore/delete", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ds_delete():
+    if not ds_browser: return err("Datastore modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    return ok(**ds_browser.delete_file(d.get("pool","/var/lib/libvirt/images"), d.get("path","")))
+
+@app.route("/api/datastore/rename", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ds_rename():
+    if not ds_browser: return err("Datastore modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    return ok(**ds_browser.rename_file(d.get("pool","/var/lib/libvirt/images"), d.get("path",""), d.get("new_name","")))
+
+@app.route("/api/datastore/mkdir", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ds_mkdir():
+    if not ds_browser: return err("Datastore modülü yüklenemedi")
+    d = request.get_json(silent=True) or {}
+    return ok(**ds_browser.create_directory(d.get("pool","/var/lib/libvirt/images"), d.get("path",""), d.get("name","")))
+
+@app.route("/api/datastore/disk-usage")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_ds_disk_usage():
+    if not ds_browser: return ok()
+    pool_path = request.args.get("pool", "/var/lib/libvirt/images")
+    return ok(**ds_browser.get_disk_usage(pool_path))
 
 
 if __name__ == "__main__":

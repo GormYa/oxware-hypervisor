@@ -1269,7 +1269,7 @@
             </div>
             <div class="vcenter-cs-right">
               <span class="vcenter-cs-badge">YAKINDA</span>
-              <a href="https://shinnasakha.github.io/oxware-hypervisor/vcenter/" target="_blank" rel="noopener" class="btn" style="font-size:12px;background:rgba(234,179,8,.12);color:#eab308;border:1px solid rgba(234,179,8,.3);text-decoration:none">Get vCenter Server &rarr;</a>
+              <a href="https://oxware.top/vcenter/" target="_blank" rel="noopener" class="btn" style="font-size:12px;background:rgba(234,179,8,.12);color:#eab308;border:1px solid rgba(234,179,8,.3);text-decoration:none">Get vCenter Server &rarr;</a>
               <div class="vcenter-cs-note">OXware vCenter geliştirme aşamasındadır</div>
             </div>
           </div><!-- /vcenter-cs-card -->
@@ -16727,25 +16727,34 @@ async function migRefreshJobs() {
 
 // ── Host Settings ─────────────────────────────────────────────────────────────
 async function loadHostInfo() {
-  const d = await _api('/api/system/host-info');
   const el = document.getElementById('host-info-grid');
-  if (!el || !d) return;
-  const rows = [
-    ['Hostname', d.hostname || '—'],
-    ['OS', d.os || '—'],
-    ['Kernel', d.kernel || '—'],
-    ['CPU', d.cpu_model || '—'],
-    ['vCPU Sayısı', d.cpu_count || '—'],
-    ['RAM', d.ram_total_gb ? d.ram_total_gb + ' GB' : '—'],
-    ['Uptime', d.uptime || '—'],
-    ['KVM', d.kvm_available ? '✓ Aktif' : '✗ Kullanılamıyor'],
-  ];
-  el.innerHTML = rows.map(([k,v]) => `
-    <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:5px">
-      <span style="color:var(--text-muted)">${escHtml(k)}</span>
-      <span style="font-family:monospace;color:var(--text)">${escHtml(String(v))}</span>
-    </div>
-  `).join('');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Yükleniyor...</div>';
+  try {
+    const d = await _api('/api/system/host-info');
+    if (!d || d.error) {
+      el.innerHTML = `<div style="color:#f59e0b;font-size:12px">⚠ ${escHtml(d?.error || 'Bilgi alınamadı')}</div>`;
+      return;
+    }
+    const rows = [
+      ['Hostname', d.hostname || '—'],
+      ['OS', d.os || '—'],
+      ['Kernel', d.kernel || '—'],
+      ['CPU', d.cpu_model || '—'],
+      ['vCPU Sayısı', d.cpu_count || '—'],
+      ['RAM', d.ram_total_gb ? d.ram_total_gb + ' GB' : '—'],
+      ['Uptime', d.uptime || '—'],
+      ['KVM', d.kvm_available ? '<span style="color:#22c55e">✓ Aktif</span>' : '<span style="color:#ef4444">✗ Kullanılamıyor</span>'],
+    ];
+    el.innerHTML = rows.map(([k,v]) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:5px">
+        <span style="color:var(--text-muted);font-size:12px">${escHtml(k)}</span>
+        <span style="font-family:monospace;font-size:12px;color:var(--text)">${v}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:#ef4444;font-size:12px">Hata: ${escHtml(e.message)}</div>`;
+  }
 }
 
 async function setCpuGovernor() {
@@ -16756,14 +16765,34 @@ async function setCpuGovernor() {
 }
 
 async function applySysctl() {
-  const params = {
-    'vm.swappiness': document.getElementById('sysctl-swappiness')?.value,
-    'net.ipv4.ip_forward': document.getElementById('sysctl-ipforward')?.value,
-    'net.core.somaxconn': document.getElementById('sysctl-somaxconn')?.value,
-  };
-  const d = await _api('/api/system/sysctl', 'POST', {params});
+  const params = {};
+  const sw = document.getElementById('sysctl-swappiness')?.value;
+  const ip = document.getElementById('sysctl-ipforward')?.value;
+  const sc = document.getElementById('sysctl-somaxconn')?.value;
+  if (sw !== '' && sw !== undefined) params['vm.swappiness'] = sw;
+  if (ip !== '' && ip !== undefined) params['net.ipv4.ip_forward'] = ip;
+  if (sc !== '' && sc !== undefined) params['net.core.somaxconn'] = sc;
   const msg = document.getElementById('sysctl-msg');
-  if (msg) { msg.textContent = d.ok ? 'Ayarlar uygulandı.' : (d.error || 'Hata'); msg.style.color = d.ok ? '#22c55e' : '#ef4444'; }
+  try {
+    const d = await _api('/api/system/sysctl', 'POST', {params});
+    if (!d) { if (msg) { msg.textContent = 'Sunucu yanıt vermedi (401?)'; msg.style.color='#ef4444'; } return; }
+    if (msg) {
+      const applied = d.applied || [];
+      const errors  = d.errors  || [];
+      if (errors.length) {
+        msg.innerHTML = `<span style="color:#f59e0b">⚠ Bazı parametreler uygulanamadı (VPS kısıtlaması olabilir):</span><br><code style="font-size:11px">${escHtml(errors.join(', '))}</code>`;
+        msg.style.color = '#f59e0b';
+      } else if (applied.length) {
+        msg.textContent = '✓ Uygulandı: ' + applied.join(', ');
+        msg.style.color = '#22c55e';
+      } else {
+        msg.textContent = d.error || 'Parametre gönderilemedi';
+        msg.style.color = '#ef4444';
+      }
+    }
+  } catch(e) {
+    if (msg) { msg.textContent = 'Hata: ' + (e.message || String(e)); msg.style.color = '#ef4444'; }
+  }
 }
 
 async function syncNtp() {
