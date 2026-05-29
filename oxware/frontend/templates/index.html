@@ -274,7 +274,13 @@
     .vd-info-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted);padding:3px 16px 3px 0;margin-right:16px;border-right:1px solid var(--border)}
     .vd-info-item:last-child{border-right:none}
     .vd-info-val{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
-    .vd-actions-row{display:flex;gap:6px;flex-wrap:wrap;padding:10px 18px;border-top:1px solid var(--border);background:var(--surface2)}
+    .vd-actions-row{display:flex;flex-direction:column;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:var(--surface2)}
+    .vd-actions-primary{display:flex;gap:6px;flex-wrap:wrap}
+    .vd-actions-secondary{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+    .vd-actions-group{display:flex;gap:3px;padding:2px 4px;background:rgba(255,255,255,.04);border-radius:7px;border:1px solid rgba(255,255,255,.06)}
+    .vd-actions-divider{width:1px;height:20px;background:var(--border);margin:0 4px;align-self:center}
+    .vd-btn-icon{font-size:11px;padding:5px 8px;border-radius:5px;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text-muted);transition:all .15s;white-space:nowrap}
+    .vd-btn-icon:hover{border-color:var(--accent-lt);color:var(--text);background:rgba(88,166,255,.1)}
     .vd-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;border:1px solid var(--border);background:var(--surface3);color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;white-space:nowrap}
     .vd-btn:hover{background:var(--border);border-color:var(--border2)}
     .vd-btn.success{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#4ade80}
@@ -4393,6 +4399,7 @@
             <div class="sub-tab" onclick="cfgTab('schedule')" id="cfg-tab-schedule">📅 Zamanlama</div>
             <div class="sub-tab" onclick="cfgTab('network')" id="cfg-tab-network">🔀 Ağ / Bağlantı</div>
             <div class="sub-tab" onclick="cfgTab('migration')" id="cfg-tab-migration">🚀 Toplu Taşıma</div>
+            <div class="sub-tab" onclick="cfgTab('host')" id="cfg-tab-host">🖥️ Host</div>
           </div>
 
           <!-- ── General pane ── -->
@@ -4673,6 +4680,81 @@
           </div>
 
           </div><!-- /cfg-pane-migration -->
+
+          <!-- ── Host pane ── -->
+          <div id="cfg-pane-host" style="display:none">
+
+          <!-- Card 1: Host Bilgileri -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title"><i class="fa-solid fa-server" style="color:var(--accent-lt)"></i> Host Bilgileri</div>
+            <div id="host-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+              <div style="color:var(--text-muted)">Yükleniyor...</div>
+            </div>
+            <button class="btn sm" onclick="loadHostInfo()" style="margin-top:10px">↻ Yenile</button>
+          </div>
+
+          <!-- Card 2: CPU Governor -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title"><i class="fa-solid fa-microchip" style="color:var(--accent-lt)"></i> CPU Güç Yönetimi</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">CPU Governor, işlemci frekans-güç dengesini kontrol eder.</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="cpu-gov-sel" class="form-control" style="min-width:180px">
+                <option value="performance">performance — Maksimum performans</option>
+                <option value="powersave">powersave — Düşük güç tüketimi</option>
+                <option value="ondemand" selected>ondemand — Dinamik (önerilen)</option>
+                <option value="schedutil">schedutil — Kernel scheduler tabanlı</option>
+                <option value="conservative">conservative — Yavaş ölçekleme</option>
+              </select>
+              <button class="btn-primary" onclick="setCpuGovernor()">Uygula</button>
+            </div>
+          </div>
+
+          <!-- Card 3: Kernel Sysctl Ayarları -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title"><i class="fa-solid fa-sliders" style="color:var(--accent-lt)"></i> Kernel Sysctl Ayarları</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Sanal makine performansı için kritik kernel parametreleri. Değişiklikler anında uygulanır.</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:12px">
+                <span style="flex:1;color:var(--text-muted)"><code>vm.swappiness</code> — Bellek swap kullanımı (0-100)</span>
+                <input id="sysctl-swappiness" type="number" min="0" max="100" value="10" class="form-control" style="width:80px">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:12px">
+                <span style="flex:1;color:var(--text-muted)"><code>net.ipv4.ip_forward</code> — VM ağ yönlendirme</span>
+                <select id="sysctl-ipforward" class="form-control" style="width:80px"><option value="1" selected>1 (Açık)</option><option value="0">0 (Kapalı)</option></select>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:12px">
+                <span style="flex:1;color:var(--text-muted)"><code>net.core.somaxconn</code> — Max socket bağlantı kuyruğu</span>
+                <input id="sysctl-somaxconn" type="number" min="128" max="65535" value="1024" class="form-control" style="width:80px">
+              </div>
+            </div>
+            <button class="btn-primary" onclick="applySysctl()" style="margin-top:10px">Ayarları Uygula</button>
+            <div id="sysctl-msg" style="margin-top:8px;font-size:12px"></div>
+          </div>
+
+          <!-- Card 4: NTP / Saat Ayarı -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-title"><i class="fa-regular fa-clock" style="color:var(--accent-lt)"></i> NTP & Saat Dilimi</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">NTP Durumu</label>
+                <div id="ntp-status" style="font-size:12px;color:var(--text-muted)">Yükleniyor...</div>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Sunucu Saati</label>
+                <div id="host-time" style="font-size:12px;font-family:monospace">—</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+              <div class="form-group" style="margin:0;flex:1;min-width:200px">
+                <label style="font-size:11px">NTP Sunucusu</label>
+                <input id="ntp-server-input" type="text" class="form-control" placeholder="pool.ntp.org" value="pool.ntp.org">
+              </div>
+              <button class="btn-primary" onclick="syncNtp()">Senkronize Et</button>
+              <button class="btn" onclick="loadNtpStatus()">↻ Yenile</button>
+            </div>
+          </div>
+
+          </div><!-- /cfg-pane-host -->
 
         </div><!-- /page-tab-settings -->
 
@@ -7433,6 +7515,46 @@ const PAGE_STRINGS = {
     '🤖 AI Planı Oluştur':'🤖 Generate AI Plan',
     '🤖 AI ile Oluştur':'🤖 Create with AI',
     '🤖 AI ile VM Oluştur':'🤖 Create VM with AI',
+    /* ── VM Detail (missing) ── */
+    'Duraklat':'Pause','Devam Et':'Resume','Migrate':'Migrate','Not':'Notes',
+    'Konsol':'Console','Format':'Format',
+    /* ── Dashboard (missing) ── */
+    'Yükleniyor':'Loading','kayıtlı':'registered',
+    'VM Bilgileri':'VM Info','Kaynak Kullanımı':'Resource Usage',
+    'Bus':'Bus',
+    /* ── Network (missing) ── */
+    'Bağlı VM':'Connected VMs',
+    /* ── System (missing) ── */
+    'Kaynaklar':'Resources','Zamanlama':'Scheduling','Ağ / Bağlantı':'Network / Connectivity',
+    'Toplu Taşıma':'Bulk Migration','Host':'Host',
+    /* ── Settings (missing) ── */
+    'CPU Güç Yönetimi':'CPU Power Management','Kernel Sysctl Ayarları':'Kernel Sysctl Settings',
+    'NTP & Saat Dilimi':'NTP & Timezone','Host Bilgileri':'Host Information',
+    /* ── Auth/2FA (missing) ── */
+    'Güvenliğiniz için 2FA kurmayı unutmayın!':'Don\'t forget to set up 2FA for your security!',
+    '2FA PASİF':'2FA INACTIVE','2FA Kur':'Setup 2FA',
+    /* ── Common (missing) ── */
+    'Uygula':'Apply','Evet':'Yes','Hayır':'No','Yükle':'Load',
+    'Aktif':'Active','Pasif':'Inactive','Bilgi':'Info',
+    /* ── Buttons/Labels (missing) ── */
+    'Hızlı Ayar':'Quick Setup','Hazır':'Ready',
+    'Bağlı PCI':'Attached PCI','Bağlı USB':'Attached USB',
+    'Çözüm:':'Solution:','YAKINDA':'COMING SOON',
+    'Otomatik Çıkış (Hareketsizlik)':'Auto-Logout (Inactivity)',
+    'Devre Dışı (Otomatik çıkış yok)':'Disabled (No auto-logout)',
+    /* ── Proxy (missing) ── */
+    'Yeni Site Ekle':'Add New Site','Site Ekle':'Add Site','Site yok':'No sites',
+    /* ── DNS (missing) ── */
+    'Kayıt yok':'No records',
+    /* ── Storage (missing) ── */
+    'Depolama Havuzları':'Storage Pools',
+    'NFS Havuz':'NFS Pool','Ceph Havuz':'Ceph Pool','Ceph Durum':'Ceph Status',
+    /* ── WireGuard (missing) ── */
+    'Peer Listesi':'Peer List','Peer yok':'No peers','Peer Ekle':'Add Peer',
+    /* ── Backup (missing) ── */
+    'Zamanlanmış Backup':'Scheduled Backup',
+    /* ── IPAM (missing) ── */
+    'Yeni Havuz':'New Pool','IP Havuzu':'IP Pool','Toplam IP':'Total IPs',
   },
   tr: {},  /* TR zaten varsayılan — boş bırak */
   es: {
@@ -9408,42 +9530,58 @@ async function loadVMDetail(vmId) {
     // ── Action buttons ────────────────────────────────────────────────────────
     const _vid = v.id;
     const _vnm = escHtml(v.name);
-    let actHtml = "";
 
-    // State-dependent primary controls
+    // Row 1: primary state-dependent controls
+    let primaryHtml = "";
     if (v.state !== "running") {
-      actHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','start')">▶ Başlat</button>`;
+      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','start')">▶ Başlat</button>`;
     } else {
-      actHtml += `<button class="vd-btn danger" onclick="vmForceStop('${_vid}')">⏻ Durdur</button>`;
-      actHtml += `<button class="vd-btn primary" onclick="openConsole('${_vid}')">▣ Konsol</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmAction('${_vid}','reboot')">↺ Yeniden Başlat</button>`;
-      actHtml += `<button class="vd-btn warning" onclick="vmAction('${_vid}','pause')">⏸ Duraklat</button>`;
+      primaryHtml += `<button class="vd-btn danger" onclick="vmForceStop('${_vid}')">⏻ Durdur</button>`;
+      primaryHtml += `<button class="vd-btn primary" onclick="openConsole('${_vid}')">▣ Konsol</button>`;
+      primaryHtml += `<button class="vd-btn" onclick="vmAction('${_vid}','reboot')">↺ Yeniden Başlat</button>`;
+      primaryHtml += `<button class="vd-btn warning" onclick="vmAction('${_vid}','pause')">⏸ Duraklat</button>`;
     }
     if (v.state === "paused") {
-      actHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','resume')">▶ Devam Et</button>`;
+      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','resume')">▶ Devam Et</button>`;
     }
 
-    // Admin/operator full action set
+    // Row 2: management actions grouped by category (admin/operator only)
+    let secondaryHtml = "";
     if (_currentRole() !== "vm-user") {
-      actHtml += `<button class="vd-btn" onclick="openLiveMigrate('${_vid}','${_vnm}')" title="Canlı Geçiş" style="color:#f97316">🚀 Migrate</button>`;
-      actHtml += `<button class="vd-btn" onclick="cloneVM('${_vid}','${_vnm}')" title="Klonla" style="color:var(--accent-lt)">⧉ Klonla</button>`;
-      actHtml += `<button class="vd-btn" onclick="openDiskResize('${_vid}','${_vnm}')" title="Disk Genişlet" style="color:#f59e0b">⊞ Disk</button>`;
-      actHtml += `<button class="vd-btn" onclick="openVmMetaModal('${_vid}','${_vnm}')" title="Not & Etiket" style="color:#a78bfa">📝 Not</button>`;
-      actHtml += `<button class="vd-btn" onclick="openCdromModal('${_vid}','${_vnm}')" title="CD-ROM">💿 CD-ROM</button>`;
-      actHtml += `<button class="vd-btn" onclick="exportVM('${_vid}','${_vnm}')" title="OVA Export" style="color:#34d399">⬇ Export</button>`;
-      actHtml += `<button class="vd-btn" onclick="sendWoL('${_vid}','${_vnm}')" title="Wake-on-LAN" style="color:#60a5fa">⚡ WoL</button>`;
-      actHtml += `<button class="vd-btn" onclick="openPciModal('${_vid}','${_vnm}')" title="PCI/USB Passthrough" style="color:#f97316">🔌 PCI</button>`;
-      actHtml += `<button class="vd-btn" onclick="openCpuPinModal('${_vid}','${_vnm}')" title="CPU Pinning" style="color:#e879f9">📌 CPU Pin</button>`;
-      actHtml += `<button class="vd-btn" onclick="openMacModal('${_vid}','${_vnm}')" title="MAC Adresi" style="color:#38bdf8">🔗 MAC</button>`;
-      actHtml += `<button class="vd-btn" onclick="toggleMaintenance('${_vid}','${_vnm}')" title="Bakım Modu" style="color:#fbbf24">🔧 Bakım</button>`;
-      actHtml += `<button class="vd-btn" onclick="openSpiceInfo('${_vid}','${_vnm}')" title="SPICE Konsol" style="color:#34d399">📺 SPICE</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmEnableSsh('${_vid}')" title="SSH">🔑 SSH</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmResetPassword('${_vid}','${_vnm}')" title="VM içinde şifreyi sıfırla (QEMU Guest Agent)" style="color:#f59e0b">🔐 Şifre Sıfırla</button>`;
-      actHtml += `<button class="vd-btn" onclick="vmNatSync('${_vid}')" title="NAT Sync">🔄 NAT</button>`;
-      actHtml += `<button class="vd-btn" onclick="openVmAssignModal('${_vid}','${_vnm}')">👤 Atama</button>`;
-      actHtml += `<button class="vd-btn danger" onclick="deleteVM('${_vid}','${_vnm}')">✕ Sil</button>`;
+      secondaryHtml += `<div class="vd-actions-group">`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openLiveMigrate('${_vid}','${_vnm}')" title="Canlı Geçiş" style="color:#f97316">🚀 Migrate</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="cloneVM('${_vid}','${_vnm}')" title="Klonla" style="color:var(--accent-lt)">⧉ Klonla</button>`;
+      secondaryHtml += `</div>`;
+      secondaryHtml += `<div class="vd-actions-divider"></div>`;
+      secondaryHtml += `<div class="vd-actions-group">`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openDiskResize('${_vid}','${_vnm}')" title="Disk Genişlet" style="color:#f59e0b">⊞ Disk</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="exportVM('${_vid}','${_vnm}')" title="OVA Export" style="color:#34d399">⬇ Export</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openVmMetaModal('${_vid}','${_vnm}')" title="Not & Etiket" style="color:#a78bfa">📝 Not</button>`;
+      secondaryHtml += `</div>`;
+      secondaryHtml += `<div class="vd-actions-divider"></div>`;
+      secondaryHtml += `<div class="vd-actions-group">`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openCdromModal('${_vid}','${_vnm}')" title="CD-ROM">💿 CD-ROM</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openPciModal('${_vid}','${_vnm}')" title="PCI/USB Passthrough" style="color:#f97316">🔌 PCI</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openCpuPinModal('${_vid}','${_vnm}')" title="CPU Pinning" style="color:#e879f9">📌 CPU Pin</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openMacModal('${_vid}','${_vnm}')" title="MAC Adresi" style="color:#38bdf8">🔗 MAC</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openSpiceInfo('${_vid}','${_vnm}')" title="SPICE Konsol" style="color:#34d399">📺 SPICE</button>`;
+      secondaryHtml += `</div>`;
+      secondaryHtml += `<div class="vd-actions-divider"></div>`;
+      secondaryHtml += `<div class="vd-actions-group">`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="vmEnableSsh('${_vid}')" title="SSH">🔑 SSH</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="vmResetPassword('${_vid}','${_vnm}')" title="VM içinde şifreyi sıfırla (QEMU Guest Agent)" style="color:#f59e0b">🔐 Şifre</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="sendWoL('${_vid}','${_vnm}')" title="Wake-on-LAN" style="color:#60a5fa">⚡ WoL</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="toggleMaintenance('${_vid}','${_vnm}')" title="Bakım Modu" style="color:#fbbf24">🔧 Bakım</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="vmNatSync('${_vid}')" title="NAT Sync">🔄 NAT</button>`;
+      secondaryHtml += `<button class="vd-btn-icon" onclick="openVmAssignModal('${_vid}','${_vnm}')">👤 Atama</button>`;
+      secondaryHtml += `</div>`;
+      secondaryHtml += `<div class="vd-actions-divider"></div>`;
+      secondaryHtml += `<button class="vd-btn danger" onclick="deleteVM('${_vid}','${_vnm}')" style="font-size:11px;padding:5px 10px">✕ Sil</button>`;
     }
-    document.getElementById("vd-actions").innerHTML = actHtml;
+
+    document.getElementById("vd-actions").innerHTML =
+      `<div class="vd-actions-primary">${primaryHtml}</div>` +
+      (secondaryHtml ? `<div class="vd-actions-secondary">${secondaryHtml}</div>` : "");
 
     // ── Overview panel ────────────────────────────────────────────────────────
     document.getElementById("ov-uuid").textContent = v.id || "—";
@@ -9534,7 +9672,7 @@ async function loadVMDetail(vmId) {
 }
 
 // ── Settings Sub-Tab Switch ────────────────────────────────────────────────────
-const _cfgPanes = ['general','resources','schedule','network','migration'];
+const _cfgPanes = ['general','resources','schedule','network','migration','host'];
 function cfgTab(name) {
   _cfgPanes.forEach(p => {
     const pane = document.getElementById(`cfg-pane-${p}`);
@@ -9547,6 +9685,7 @@ function cfgTab(name) {
   if (name === 'schedule')   loadVmSchedules();
   if (name === 'network')    loadBgpSettings();
   if (name === 'migration')  migRefreshJobs();
+  if (name === 'host')       { loadHostInfo(); loadNtpStatus(); }
 }
 
 // ── VM Detail Tab Switch ──────────────────────────────────────────────────────
@@ -16416,6 +16555,62 @@ async function migRefreshJobs() {
     el.textContent = 'Yüklenemedi: ' + (e.message || String(e));
     el.style.color = '#f43f5e';
   }
+}
+
+// ── Host Settings ─────────────────────────────────────────────────────────────
+async function loadHostInfo() {
+  const d = await _api('/api/system/host-info');
+  const el = document.getElementById('host-info-grid');
+  if (!el || !d) return;
+  const rows = [
+    ['Hostname', d.hostname || '—'],
+    ['OS', d.os || '—'],
+    ['Kernel', d.kernel || '—'],
+    ['CPU', d.cpu_model || '—'],
+    ['vCPU Sayısı', d.cpu_count || '—'],
+    ['RAM', d.ram_total_gb ? d.ram_total_gb + ' GB' : '—'],
+    ['Uptime', d.uptime || '—'],
+    ['KVM', d.kvm_available ? '✓ Aktif' : '✗ Kullanılamıyor'],
+  ];
+  el.innerHTML = rows.map(([k,v]) => `
+    <div style="display:flex;justify-content:space-between;padding:6px 8px;background:var(--surface2);border-radius:5px">
+      <span style="color:var(--text-muted)">${escHtml(k)}</span>
+      <span style="font-family:monospace;color:var(--text)">${escHtml(String(v))}</span>
+    </div>
+  `).join('');
+}
+
+async function setCpuGovernor() {
+  const gov = document.getElementById('cpu-gov-sel')?.value;
+  if (!gov) return;
+  const d = await _api('/api/system/cpu-governor', 'POST', {governor: gov});
+  toast(d.ok ? `Governor: ${gov}` : (d.error || 'Hata'), d.ok ? 'success' : 'error');
+}
+
+async function applySysctl() {
+  const params = {
+    'vm.swappiness': document.getElementById('sysctl-swappiness')?.value,
+    'net.ipv4.ip_forward': document.getElementById('sysctl-ipforward')?.value,
+    'net.core.somaxconn': document.getElementById('sysctl-somaxconn')?.value,
+  };
+  const d = await _api('/api/system/sysctl', 'POST', {params});
+  const msg = document.getElementById('sysctl-msg');
+  if (msg) { msg.textContent = d.ok ? 'Ayarlar uygulandı.' : (d.error || 'Hata'); msg.style.color = d.ok ? '#22c55e' : '#ef4444'; }
+}
+
+async function syncNtp() {
+  const server = document.getElementById('ntp-server-input')?.value || 'pool.ntp.org';
+  const d = await _api('/api/system/ntp-sync', 'POST', {server});
+  toast(d.ok ? 'NTP senkronize edildi' : (d.error || 'Hata'), d.ok ? 'success' : 'error');
+  loadNtpStatus();
+}
+
+async function loadNtpStatus() {
+  const d = await _api('/api/system/ntp-status');
+  const el = document.getElementById('ntp-status');
+  const te = document.getElementById('host-time');
+  if (el) el.innerHTML = d.synchronized ? '<span style="color:#22c55e">✓ Senkronize</span>' : '<span style="color:#f59e0b">⚠ Senkronize Değil</span>';
+  if (te && d.time) te.textContent = d.time;
 }
 
 // ── OVA Import ───────────────────────────────────────────────────────────────
