@@ -11,6 +11,59 @@ set -uo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; WHITE='\033[1;37m'; NC='\033[0m'
+DARK_GRAY='\033[0;90m'
+
+# ── İlerleme Çubuğu ───────────────────────────────────────────
+TOTAL_STEPS=21
+CURRENT_STEP=0
+START_TIME=0
+
+progress_bar() {
+    local pct=$1
+    local label=$2
+    local elapsed=$3
+    local bar_width=30
+    local filled=$(( pct * bar_width / 100 ))
+    local empty=$(( bar_width - filled ))
+    local bar=""
+    local i
+    for (( i=0; i<filled; i++ )); do bar+="█"; done
+    for (( i=0; i<empty;  i++ )); do bar+="░"; done
+    printf "\r\033[0;32m[%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %s  \033[0;90m(%s geçti)\033[0m   " \
+        "$(printf '\033[0;32m%s' "$bar" | head -c $(( filled * 3 + 7 )))" \
+        "$(printf '\033[0;90m')" \
+        "$pct" \
+        "$label" \
+        "$elapsed" >&2
+}
+
+advance_progress() {
+    local label="${1:-}"
+    CURRENT_STEP=$(( CURRENT_STEP + 1 ))
+    local pct=$(( CURRENT_STEP * 100 / TOTAL_STEPS ))
+    local now elapsed_s elapsed_fmt
+    now=$(date +%s)
+    elapsed_s=$(( now - START_TIME ))
+    local mins=$(( elapsed_s / 60 ))
+    local secs=$(( elapsed_s % 60 ))
+    elapsed_fmt=$(printf "%02d:%02d" "$mins" "$secs")
+    # Draw bar: green filled blocks, dark gray empty blocks
+    local bar_width=30
+    local filled=$(( pct * bar_width / 100 ))
+    local empty=$(( bar_width - filled ))
+    local filled_str="" empty_str=""
+    local i
+    for (( i=0; i<filled; i++ )); do filled_str+="█"; done
+    for (( i=0; i<empty;  i++ )); do empty_str+="░"; done
+    printf "\r\033[0;32m[\033[0;32m%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %-45s  \033[0;90m(%s geçti)\033[0m   " \
+        "$filled_str" \
+        "$empty_str" \
+        "$pct" \
+        "$label" \
+        "$elapsed_fmt" >&2
+    # Move to next line so subsequent step() / log() output is below
+    printf "\n" >&2
+}
 
 OXWARE_VERSION="2.5.0"
 REPO_URL="https://github.com/ShinnAsukha/oxware-hypervisor.git"
@@ -1134,6 +1187,8 @@ main() {
         exit 0
     fi
 
+    START_TIME=$(date +%s)
+
     print_banner
     check_root
     check_os
@@ -1153,27 +1208,58 @@ main() {
     read -p "Kuruluma devam edilsin mi? [E/h]: " -r
     [[ $REPLY =~ ^[Hh]$ ]] && exit 0
 
+    advance_progress "Sistem güncelleniyor"
     update_system
+    advance_progress "Paketler kuruluyor"
     install_packages
+    advance_progress "Kaynak kod indiriliyor"
     clone_repo
+    advance_progress "KVM/libvirt yapılandırılıyor"
     configure_libvirt
+    advance_progress "Python ortamı hazırlanıyor"
     setup_python
+    advance_progress "Font Awesome indiriliyor"
     download_fontawesome
+    advance_progress "SSL sertifikası oluşturuluyor"
     generate_ssl
+    advance_progress "Konfigürasyon yazılıyor"
     write_config
+    advance_progress "noVNC kuruluyor"
     install_novnc
+    advance_progress "Systemd servisi oluşturuluyor"
     create_service
+    advance_progress "SSH yapılandırılıyor"
     configure_ssh
+    advance_progress "Hostname yapılandırılıyor"
     configure_hostname
+    advance_progress "Güvenlik duvarı (UFW) yapılandırılıyor"
     configure_firewall
+    advance_progress "Fail2ban yapılandırılıyor"
     configure_fail2ban
+    advance_progress "OpenVSwitch kuruluyor"
     install_ovs          # OVS bridge setup'tan önce başlatılmalı — netplan apply OVS'ye ulaşmaya çalışır
+    advance_progress "Host bridge (oxbr0) kuruluyor"
     setup_host_bridge
+    advance_progress "Reboot kararlılığı yapılandırılıyor"
     fix_reboot_stability
+    advance_progress "MOTD kuruluyor"
     install_motd
+    advance_progress "CLI araçları kuruluyor (ox / oxupdate)"
     install_cli_tools
+    advance_progress "Servisler başlatılıyor"
     start_services
+    advance_progress "Lisans aktivasyonu"
     activate_license
+
+    # Final completion message
+    local now elapsed_s mins secs
+    now=$(date +%s)
+    elapsed_s=$(( now - START_TIME ))
+    mins=$(( elapsed_s / 60 ))
+    secs=$(( elapsed_s % 60 ))
+    printf "\n\033[0;32m[████████████████████████████████] 100%% — Kurulum tamamlandı! (%02d:%02d)\033[0m\n\n" \
+        "$mins" "$secs" >&2
+
     print_done
 }
 
