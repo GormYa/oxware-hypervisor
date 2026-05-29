@@ -3848,6 +3848,11 @@
               </div>
               <button class="btn-primary" onclick="validateLicense()" style="white-space:nowrap"><i class="fa-solid fa-circle-check"></i> Doğrula</button>
             </div>
+            <div id="lic-buy-row" style="margin-top:10px">
+              <a href="https://oxware.top/pricing/" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);color:#58a6ff;text-decoration:none;transition:background .2s" onmouseover="this.style.background='rgba(88,166,255,.2)'" onmouseout="this.style.background='rgba(88,166,255,.1)'">
+                <i class="fa-solid fa-cart-shopping"></i> Lisans Satın Al
+              </a>
+            </div>
             <div id="lic-deactivate-row" style="display:none;margin-top:10px">
               <button class="btn" onclick="deactivateLicense()" style="color:#ef4444;border-color:rgba(239,68,68,.4);font-size:12px">
                 <i class="fa-solid fa-circle-xmark"></i> Lisansı Deaktive Et
@@ -7891,6 +7896,7 @@ function _applyLicenseUI(d) {
   const activeInfo   = document.getElementById('lic-active-info');
   const inputRow     = document.getElementById('lic-input-row');
   const deactRow     = document.getElementById('lic-deactivate-row');
+  const buyRow       = document.getElementById('lic-buy-row');
   if (!badge) return;
   if (d.active) {
     badge.style.display      = 'inline-flex';
@@ -7898,6 +7904,7 @@ function _applyLicenseUI(d) {
     activeInfo.style.display = 'block';
     inputRow.style.display   = 'none';
     deactRow.style.display   = 'block';
+    if (buyRow) buyRow.style.display = 'none';
     const pfx = document.getElementById('lic-prefix');
     const aat = document.getElementById('lic-activated-at');
     if (pfx) pfx.textContent = d.code_prefix || '';
@@ -7908,6 +7915,7 @@ function _applyLicenseUI(d) {
     activeInfo.style.display = 'none';
     inputRow.style.display   = 'flex';
     deactRow.style.display   = 'none';
+    if (buyRow) buyRow.style.display = 'block';
   }
 }
 
