@@ -8124,6 +8124,12 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="topology" onclick="navigate('topology');closeMobileNav()">
       <i class="fa-solid fa-diagram-project fa-fw"></i>${t('topology')}
     </div>
+    <div class="ctx-item" data-page="containers" onclick="navigate('containers');closeMobileNav()">
+      <i class="fa-brands fa-docker fa-fw"></i>Containers
+    </div>
+    <div class="ctx-item" data-page="ha" onclick="navigate('ha');closeMobileNav()">
+      <i class="fa-solid fa-circle-nodes fa-fw"></i>HA Cluster
+    </div>
     ${isOperator ? `<div class="ctx-item" data-page="tab-templates" onclick="navigate('tab-templates');closeMobileNav()">
       <i class="fa-solid fa-clone fa-fw"></i>${t('templates')}
     </div>
@@ -8186,7 +8192,10 @@ function buildContextNav(type) {
       <i class="fa-solid fa-plug fa-fw"></i>${t('integrations')}
     </div>
     <div class="ctx-item" data-page="tab-hosting" onclick="navigate('tab-hosting');closeMobileNav()">
-      <i class="fa-solid fa-server fa-fw"></i>Hosting Eklentileri
+      <i class="fa-solid fa-box-open fa-fw"></i>Hosting API
+    </div>
+    <div class="ctx-item" data-page="cf-tunnels" onclick="navigate('cf-tunnels');closeMobileNav()">
+      <i class="fa-brands fa-cloudflare fa-fw"></i>CF Tunnels
     </div>
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
@@ -8703,6 +8712,9 @@ function navigate(page) {
     updates: loadUpdates,
     'tab-integrations': loadIntegrationsPage,
     'tab-hosting': loadHostingPage,
+    containers: loadContainers,
+    ha: loadHaPage,
+    'cf-tunnels': loadCfTunnels,
   };
   if (loaders[page]) {
     loaders[page]();

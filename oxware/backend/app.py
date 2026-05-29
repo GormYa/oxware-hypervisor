@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.0
+OXware Hypervisor Management API v2.5.0
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -682,9 +682,9 @@ _ISO_SEARCH_PATHS = [
     "/opt/oxware/OXware-Hypervisor-2.5.0-amd64.iso",
     "/root/OXware-Hypervisor-2.5.0-amd64.iso",
     "/tmp/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.0.0-amd64.iso",
-    "/root/OXware-Hypervisor-2.0.0-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.0.0-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.0-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.0-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.0-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -8483,7 +8483,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.3</span>
+  <span id="ver-badge">v2.5.0</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -8717,7 +8717,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.2.0",
+            "version": "2.5.0",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -10126,7 +10126,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.0.0", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.0", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -13401,7 +13401,7 @@ _startup_ensure_physnet()
 
 
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.0 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.0 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
