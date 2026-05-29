@@ -1588,6 +1588,55 @@
             </div>
           </div>
 
+          <!-- ══ Port Yönlendirme Kartı (host IP çakışması veya NAT modu) ══ -->
+          <div id="vd-port-forward-card" style="display:none;margin-top:12px">
+            <div class="card" style="border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.04)">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-right-left" style="color:#f87171"></i>
+                Port Yönlendirme
+                <span id="vd-pf-host-ip-warn" style="display:none;font-size:11px;color:#f87171;margin-left:4px">⛔ Pool IP = sunucu IP'si — tam NAT mümkün değil, port bazlı yönlendirme kullanın</span>
+                <button class="btn sm" onclick="loadPortForwards(currentVmId)" style="margin-left:auto">↻ Yenile</button>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+                VM'in iç IP'si üzerinde belirli portları dışarıya açar.
+                Örnek: <code>31.58.236.60:2222 → 192.168.122.100:22</code> (SSH erişimi)
+              </div>
+              <!-- Add rule form -->
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:10px;background:var(--surface2);border-radius:7px;margin-bottom:10px">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px;color:var(--text-muted)">Protokol</label>
+                  <select id="pf-proto" class="form-control" style="width:70px">
+                    <option value="tcp">TCP</option>
+                    <option value="udp">UDP</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px;color:var(--text-muted)">Host Port</label>
+                  <input id="pf-host-port" type="number" class="form-control" placeholder="2222" style="width:80px" min="1" max="65535">
+                </div>
+                <div style="font-size:18px;color:var(--text-muted);padding-bottom:4px">→</div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px;color:var(--text-muted)">VM İç IP</label>
+                  <input id="pf-vm-ip" type="text" class="form-control" placeholder="192.168.122.100" style="width:140px">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px;color:var(--text-muted)">VM Port</label>
+                  <input id="pf-vm-port" type="number" class="form-control" placeholder="22" style="width:80px" min="1" max="65535">
+                </div>
+                <button class="btn-primary" onclick="addPortForward(currentVmId)" style="white-space:nowrap">
+                  <i class="fa-solid fa-plus"></i> Kural Ekle
+                </button>
+              </div>
+              <!-- Kural listesi -->
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Protokol</th><th>Host Port</th><th>VM IP</th><th>VM Port</th><th>Sil</th></tr></thead>
+                  <tbody id="pf-rules-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Kural yok —</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           <!-- ══ Donanım Pane ══ -->
           <div id="vd-pane-hw" style="display:none">
             <!-- CPU -->
@@ -9946,20 +9995,30 @@ async function loadVMDetail(vmId) {
       // Pool IP is primary — show it big
       ipEl.textContent = poolIp;
       ipEl.title = poolIp;
-      ipSubEl.textContent = poolName ? `Havuz: ${poolName}` : "IP Havuzu";
-      // NAT mode: show internal IP or restart hint — NOT "DHCP bekleniyor"
       const natMode    = v.nat_mode    || false;
-      const internalIp = v.internal_ip || "";
+      const internalIp = v.internal_ip || dhcpIp || "";
+      const hostIpConflict = v.host_ip_conflict || false;
+
+      // Host IP conflict warning
+      if (hostIpConflict) {
+        ipSubEl.innerHTML = `<span style="color:#ef4444;font-size:11px">⛔ Bu IP sunucunun kendisi! Port yönlendirme kullan ↓</span>`;
+      } else {
+        ipSubEl.textContent = poolName ? `Havuz: ${poolName}` : "IP Havuzu";
+      }
+
+      // Secondary line
       if (natMode) {
-        if (internalIp) {
-          ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">NAT iç IP: </span><span style="font-family:monospace;color:#86efac">${escHtml(internalIp)}</span>`;
+        if (internalIp && internalIp !== poolIp) {
+          ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">İç IP: </span><span style="font-family:monospace;color:#86efac">${escHtml(internalIp)}</span>`;
         } else if (v.state === "running") {
-          ipDhcpEl.innerHTML = `<span style="color:#f59e0b;font-size:11px">⚠ NAT: VM'yi yeniden başlatın (DHCP lease bekleniyor)</span>`;
+          ipDhcpEl.innerHTML = `<span style="color:#f59e0b;font-size:11px">İç IP bekleniyor — VM'yi yeniden başlatın</span>`;
         } else {
           ipDhcpEl.textContent = "";
         }
       } else if (dhcpIp && dhcpIp !== poolIp) {
         ipDhcpEl.innerHTML = `<span style="color:var(--text-muted)">DHCP: </span><span style="font-family:monospace">${escHtml(dhcpIp)}</span>`;
+      } else if (!dhcpIp && v.state === "running") {
+        ipDhcpEl.innerHTML = `<span style="color:var(--text-muted);font-size:11px">DHCP: bekleniyor…</span>`;
       } else {
         ipDhcpEl.textContent = "";
       }
@@ -10035,6 +10094,16 @@ async function loadVMDetail(vmId) {
     document.getElementById("vd-actions").innerHTML =
       `<div class="vd-actions-primary">${primaryHtml}</div>` +
       (secondaryHtml ? `<div class="vd-actions-secondary">${secondaryHtml}</div>` : "");
+
+    // ── Port Yönlendirme kartı: host IP çakışması veya NAT modunda göster ───────
+    const pfCard = document.getElementById('vd-port-forward-card');
+    const pfWarn = document.getElementById('vd-pf-host-ip-warn');
+    if (pfCard) {
+      const showPf = v.host_ip_conflict || v.nat_mode;
+      pfCard.style.display = showPf ? 'block' : 'none';
+      if (pfWarn) pfWarn.style.display = v.host_ip_conflict ? 'inline' : 'none';
+      if (showPf) loadPortForwards(v.id || vmId);
+    }
 
     // ── Overview panel ────────────────────────────────────────────────────────
     document.getElementById("ov-uuid").textContent = v.id || "—";
@@ -12025,6 +12094,67 @@ async function vmNatSync(id) {
     completeTaskPanel(taskId, 'error');
     toast("NAT sync hatası: " + escHtml(e.message || String(e)), "error");
   }
+}
+
+// ══════════════════ Port Yönlendirme ══════════════════
+async function loadPortForwards(vmId) {
+  if (!vmId) return;
+  const d = await _api(`/api/vms/${vmId}/port-forwards`);
+  if (!d) return;
+
+  // Show/hide card based on host_ip_conflict or nat_mode
+  const card = document.getElementById('vd-port-forward-card');
+  const warn = document.getElementById('vd-pf-host-ip-warn');
+  if (card) card.style.display = 'block';
+  if (warn) warn.style.display = d.host_ips && d.host_ips.some(h => {
+    const pfVmIp = document.getElementById('pf-vm-ip');
+    return false; // shown via loadVMDetail v.host_ip_conflict
+  }) ? 'inline' : 'none';
+
+  // Auto-fill VM internal IP
+  if (d.internal_ip) {
+    const el = document.getElementById('pf-vm-ip');
+    if (el && !el.value) el.value = d.internal_ip;
+  }
+
+  // Populate rules table
+  const tbody = document.getElementById('pf-rules-tbody');
+  if (!tbody) return;
+  const rules = d.rules || [];
+  tbody.innerHTML = rules.length ? rules.map(r => `
+    <tr>
+      <td><span class="badge-muted">${escHtml(r.proto.toUpperCase())}</span></td>
+      <td style="font-family:monospace;color:var(--accent-lt)">${escHtml(r.host_ip||'')}:<b>${escHtml(r.host_port)}</b></td>
+      <td style="font-family:monospace">${escHtml(r.vm_ip)}</td>
+      <td style="font-family:monospace">${escHtml(r.vm_port)}</td>
+      <td>
+        <button class="btn-danger" style="font-size:11px;padding:3px 8px" onclick="deletePortForward('${escHtml(vmId)}','${escHtml(r.proto)}','${escHtml(r.host_ip||'')}','${escHtml(r.host_port)}','${escHtml(r.vm_ip)}','${escHtml(r.vm_port)}')">✕</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:10px">— Kural yok. Yukarıdan ekleyin. —</td></tr>';
+}
+
+async function addPortForward(vmId) {
+  const proto    = document.getElementById('pf-proto')?.value || 'tcp';
+  const hostPort = document.getElementById('pf-host-port')?.value;
+  const vmIp     = document.getElementById('pf-vm-ip')?.value;
+  const vmPort   = document.getElementById('pf-vm-port')?.value;
+  if (!hostPort || !vmIp || !vmPort) { toast('Tüm alanları doldurun', 'error'); return; }
+  const d = await _api(`/api/vms/${vmId}/port-forwards`, 'POST', {proto, host_port: hostPort, vm_ip: vmIp, vm_port: vmPort});
+  if (!d) return;
+  if (d.ok || d.added) {
+    toast(`✓ ${escHtml(d.message || 'Kural eklendi')}`, 'success');
+    loadPortForwards(vmId);
+  } else {
+    toast('Hata: ' + escHtml(d.error || 'Kural eklenemedi'), 'error');
+  }
+}
+
+async function deletePortForward(vmId, proto, hostIp, hostPort, vmIp, vmPort) {
+  if (!await showConfirm(`Kural silinecek: ${hostIp}:${hostPort} → ${vmIp}:${vmPort}`, 'Kural Sil', true)) return;
+  const d = await _api(`/api/vms/${vmId}/port-forwards`, 'DELETE', {proto, host_ip: hostIp, host_port: hostPort, vm_ip: vmIp, vm_port: vmPort});
+  if (d && d.deleted) { toast('Kural silindi', 'success'); loadPortForwards(vmId); }
+  else toast('Silinemedi: ' + escHtml(d?.error || ''), 'error');
 }
 
 // ── VNC Console — SocketIO TCP Proxy ─────────────────────────────────────────

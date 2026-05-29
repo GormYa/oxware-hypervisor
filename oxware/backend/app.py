@@ -1221,13 +1221,30 @@ def api_get_vm(vm_id):
                 except Exception:
                     pass
                 vm["nat_mode"] = _nat_mode
-                # Internal IP (from __internal__ pool or derived from MAC)
-                if _nat_mode:
+                # Detect if pool IP is the host's own IP (VPS single-IP problem)
+                _host_ip_conflict = False
+                try:
+                    _host_ips_set = set(_get_host_ips())
+                    _host_ip_conflict = _pub_ip in _host_ips_set
+                except Exception:
+                    pass
+                vm["host_ip_conflict"] = _host_ip_conflict
+                # Internal IP (from __internal__ pool, libvirt DHCP lease, or derived from MAC)
+                if _nat_mode or _host_ip_conflict:
                     try:
-                        _int_assigns = ip_pool_mgr.list_assignments("__internal__")
                         _vm_mac = vm.get("mac", "") or (vm.get("networks", [{}])[0].get("mac", "") if vm.get("networks") else "")
+                        # Check __internal__ first
+                        _int_assigns = ip_pool_mgr.list_assignments("__internal__")
                         _int_entry = next((a for a in _int_assigns if a.get("mac") == _vm_mac), None)
-                        _internal_ip_val = _int_entry["ip"] if _int_entry else ""
+                        if _int_entry:
+                            _internal_ip_val = _int_entry["ip"]
+                        else:
+                            # Try libvirt DHCP leases
+                            _vm_nets = vm.get("networks", [])
+                            for _n in _vm_nets:
+                                if _n.get("ip") and _n["ip"] != _pub_ip:
+                                    _internal_ip_val = _n["ip"]
+                                    break
                     except Exception:
                         pass
                 vm["internal_ip"] = _internal_ip_val
@@ -2439,6 +2456,191 @@ def api_vm_reset_password(vm_id):
     except Exception as e:
         _log.error("reset-password hata vm=%s: %s", vm_id, e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 200
+
+
+@app.route("/api/vms/<vm_id>/port-forwards", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_port_forwards_list(vm_id):
+    """VM için aktif port yönlendirme (DNAT) kurallarını listele."""
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        _vm_mac = vm.get("mac", "")
+        _host_ips = set(_get_host_ips())
+        # Find VM internal IP
+        _int_ip = ""
+        try:
+            _int_assigns = ip_pool_mgr.list_assignments("__internal__")
+            _int_entry = next((a for a in _int_assigns if a.get("mac") == _vm_mac), None)
+            if _int_entry:
+                _int_ip = _int_entry["ip"]
+            if not _int_ip:
+                for _n in (vm.get("networks") or []):
+                    if _n.get("ip") and _n["ip"] not in _host_ips:
+                        _int_ip = _n["ip"]
+                        break
+        except Exception:
+            pass
+        # Get current DNAT rules
+        rules = []
+        try:
+            r = subprocess.run(["iptables", "-t", "nat", "-S", "PREROUTING"],
+                               capture_output=True, text=True, timeout=5)
+            import re as _re
+            for line in r.stdout.splitlines():
+                if "DNAT" not in line:
+                    continue
+                # Match: -A PREROUTING -p tcp -d HOST_IP --dport PORT -j DNAT --to-destination INTERNAL_IP:PORT
+                m = _re.search(
+                    r"-p (\w+).*?(?:-d ([\d.]+)\s)?.*?--dport (\d+).*?--to-destination ([\d.:]+)",
+                    line
+                )
+                if m:
+                    proto, dest_ip, host_port, to_dest = m.groups()
+                    to_parts = to_dest.split(":")
+                    vm_ip   = to_parts[0]
+                    vm_port = to_parts[1] if len(to_parts) > 1 else host_port
+                    # Only show rules relevant to this VM's internal IP
+                    if not _int_ip or vm_ip == _int_ip:
+                        rules.append({
+                            "proto": proto,
+                            "host_ip": dest_ip or "",
+                            "host_port": host_port,
+                            "vm_ip": vm_ip,
+                            "vm_port": vm_port,
+                            "rule": line.strip(),
+                        })
+        except Exception as _re_e:
+            log.warning("port-forwards list hatası: %s", _re_e)
+        return ok(rules=rules, internal_ip=_int_ip, host_ips=list(_host_ips))
+    except Exception as e:
+        return err(e)
+
+
+@app.route("/api/vms/<vm_id>/port-forwards", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_port_forwards_add(vm_id):
+    """VM'e port yönlendirme (DNAT) kuralı ekle."""
+    try:
+        d = request.get_json(silent=True) or {}
+        proto     = d.get("proto", "tcp").lower()
+        host_ip   = d.get("host_ip", "")
+        host_port = str(d.get("host_port", ""))
+        vm_ip     = d.get("vm_ip", "")
+        vm_port   = str(d.get("vm_port", host_port))
+
+        if proto not in ("tcp", "udp"):
+            return err("proto tcp veya udp olmalı", 400)
+        if not host_port.isdigit() or not vm_port.isdigit():
+            return err("Geçerli port numarası girin", 400)
+        if not vm_ip:
+            return err("vm_ip zorunlu", 400)
+
+        # Auto-detect host IP if not specified
+        if not host_ip:
+            _hips = _get_host_ips()
+            host_ip = _hips[0] if _hips else ""
+        if not host_ip:
+            return err("Host IP tespit edilemedi", 400)
+
+        # Enable ip_forward
+        subprocess.run(["sysctl", "-w", "net.ipv4.ip_forward=1"],
+                       capture_output=True, timeout=5)
+
+        # Ensure MASQUERADE for VM network
+        try:
+            _vm_net = str(ipaddress.IPv4Network(f"{vm_ip}/24", strict=False))
+            subprocess.run([
+                "iptables", "-t", "nat", "-C", "POSTROUTING",
+                "-s", _vm_net, "!", "-d", _vm_net, "-j", "MASQUERADE"
+            ], capture_output=True, timeout=5)
+        except Exception:
+            try:
+                _vm_net = str(ipaddress.IPv4Network(f"{vm_ip}/24", strict=False))
+                subprocess.run([
+                    "iptables", "-t", "nat", "-A", "POSTROUTING",
+                    "-s", _vm_net, "!", "-d", _vm_net, "-j", "MASQUERADE"
+                ], capture_output=True, timeout=5)
+            except Exception:
+                pass
+
+        # Check if rule already exists
+        check = subprocess.run([
+            "iptables", "-t", "nat", "-C", "PREROUTING",
+            "-p", proto, "-d", host_ip, "--dport", host_port,
+            "-j", "DNAT", "--to-destination", f"{vm_ip}:{vm_port}"
+        ], capture_output=True, timeout=5)
+
+        if check.returncode == 0:
+            return ok(message="Kural zaten mevcut", host_port=host_port, vm_ip=vm_ip, vm_port=vm_port)
+
+        # Add DNAT rule
+        r = subprocess.run([
+            "iptables", "-t", "nat", "-A", "PREROUTING",
+            "-p", proto, "-d", host_ip, "--dport", host_port,
+            "-j", "DNAT", "--to-destination", f"{vm_ip}:{vm_port}"
+        ], capture_output=True, text=True, timeout=10)
+
+        # Also add FORWARD rule to allow traffic
+        subprocess.run([
+            "iptables", "-A", "FORWARD",
+            "-p", proto, "-d", vm_ip, "--dport", vm_port, "-j", "ACCEPT"
+        ], capture_output=True, timeout=5)
+
+        if r.returncode == 0:
+            _bg_notify(
+                f"Port yönlendirme eklendi: {host_ip}:{host_port} → {vm_ip}:{vm_port} ({proto.upper()})",
+                level="INFO", category="network",
+                details={"proto": proto, "host_port": host_port, "vm_ip": vm_ip, "vm_port": vm_port}
+            )
+            ev.info(f"Port yönlendirme eklendi: {host_ip}:{host_port} → {vm_ip}:{vm_port}", category="network")
+            return ok(
+                added=True, proto=proto,
+                host_ip=host_ip, host_port=host_port,
+                vm_ip=vm_ip, vm_port=vm_port,
+                message=f"{host_ip}:{host_port} → {vm_ip}:{vm_port} ({proto.upper()}) eklendi"
+            )
+        else:
+            return err(f"iptables hatası: {r.stderr.strip()}", 500)
+    except Exception as e:
+        return err(e)
+
+
+@app.route("/api/vms/<vm_id>/port-forwards", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_vm_port_forwards_delete(vm_id):
+    """Port yönlendirme kuralını sil."""
+    try:
+        d = request.get_json(silent=True) or {}
+        proto     = d.get("proto", "tcp").lower()
+        host_ip   = d.get("host_ip", "")
+        host_port = str(d.get("host_port", ""))
+        vm_ip     = d.get("vm_ip", "")
+        vm_port   = str(d.get("vm_port", host_port))
+
+        if not all([proto, host_port, vm_ip, vm_port]):
+            return err("Tüm alanlar zorunlu", 400)
+
+        r = subprocess.run([
+            "iptables", "-t", "nat", "-D", "PREROUTING",
+            "-p", proto, "-d", host_ip, "--dport", host_port,
+            "-j", "DNAT", "--to-destination", f"{vm_ip}:{vm_port}"
+        ], capture_output=True, text=True, timeout=10)
+
+        subprocess.run([
+            "iptables", "-D", "FORWARD",
+            "-p", proto, "-d", vm_ip, "--dport", vm_port, "-j", "ACCEPT"
+        ], capture_output=True, timeout=5)
+
+        if r.returncode == 0:
+            ev.info(f"Port yönlendirme silindi: {host_ip}:{host_port} → {vm_ip}:{vm_port}", category="network")
+            return ok(deleted=True)
+        else:
+            return err(f"iptables hatası: {r.stderr.strip()}", 500)
+    except Exception as e:
+        return err(e)
 
 
 @app.route("/api/vms/<vm_id>/nat-sync", methods=["POST"])
