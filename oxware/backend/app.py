@@ -1259,29 +1259,22 @@ def api_get_vm(vm_id):
             vm["nat_mode"]    = False
             vm["internal_ip"] = ""
 
-        # is_nat_vm: VM libvirt NAT ağında mı? (pool atamasından bağımsız)
-        # Port yönlendirme kartını her NAT VM'de göstermek için kullanılır
+        # is_nat_vm: VM NAT ağında mı? — cached, her request'te list_networks() çağırmaz
         try:
-            _vm_networks  = vm.get("networks", [])
-            _vm_net_names = [n.get("network", "") for n in _vm_networks if n.get("network")]
-            if not _vm_net_names:
-                _vm_net_names = [vm.get("network", "default")]
-            _lv_all_nets  = network_manager.list_networks()
-            _is_nat_vm    = False
-            _nat_vm_ip    = vm.get("internal_ip", "")
-            for _vnn in _vm_net_names:
-                _lv_net = next((n for n in _lv_all_nets if n.get("name") == _vnn), None)
-                if _lv_net and _lv_net.get("forward_mode") in ("nat", "", None, "route"):
-                    _is_nat_vm = True
-                    break
-            # NAT VM'nin iç IP'sini ağ listesinden al
-            if _is_nat_vm and not _nat_vm_ip:
+            _vm_networks = vm.get("networks", [])
+            _vm_net_name = (_vm_networks[0].get("network") if _vm_networks else None) or vm.get("network", "default")
+            # default/virbr0 = NAT — libvirt default network her zaman NAT
+            # Sadece açıkça "bridge"/"passthrough" olanlar NAT değil
+            _is_nat_vm = _vm_net_name in ("default", "") or not _vm_net_name
+            # NAT iç IP — VM'in DHCP'den aldığı gerçek IP
+            _nat_vm_ip = vm.get("internal_ip", "")
+            if not _nat_vm_ip:
                 for _n in _vm_networks:
                     if _n.get("ip"):
                         _nat_vm_ip = _n["ip"]
                         break
-            vm["is_nat_vm"]   = _is_nat_vm
-            if _is_nat_vm and _nat_vm_ip:
+            vm["is_nat_vm"] = _is_nat_vm
+            if _nat_vm_ip:
                 vm["internal_ip"] = _nat_vm_ip
         except Exception:
             vm["is_nat_vm"] = False

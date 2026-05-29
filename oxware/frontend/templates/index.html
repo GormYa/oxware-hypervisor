@@ -2613,6 +2613,7 @@
             <button class="settings-tab" data-stab="isos" onclick="switchStorageTab('isos')">◎ ISO Library</button>
             <button class="settings-tab" data-stab="hostdisk" onclick="switchStorageTab('hostdisk')">▣ Host Disks</button>
             <button class="settings-tab" data-stab="vsan" onclick="switchStorageTab('vsan');loadVsanStatus()">🗃 vSAN/Ceph</button>
+            <button class="settings-tab" data-stab="content-lib" onclick="switchStorageTab('content-lib');loadContentLibrary()">📚 İçerik Kütüphanesi</button>
           </div>
           <div id="storage-tab-pools">
             <!-- Ceph status card (hidden until loaded) -->
@@ -2713,6 +2714,62 @@
               </div>
             </div>
           </div>
+
+          <!-- Content Library (Storage sekmesinde) -->
+          <div id="storage-tab-content-lib" style="display:none">
+            <div class="section-header" style="margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-photo-film" style="color:var(--accent-lt)"></i>
+                <div>
+                  <span style="font-weight:600">İçerik Kütüphanesi</span>
+                  <div style="font-size:11px;color:var(--text-muted)">ISO ve disk template merkezi deposu</div>
+                </div>
+              </div>
+              <div class="spacer"></div>
+              <button class="btn" onclick="syncContentLibrary()"><i class="fa-solid fa-rotate fa-fw"></i> Senkronize Et</button>
+              <button class="btn-primary" onclick="openAddContentItem()">+ Ekle</button>
+            </div>
+            <!-- Stats -->
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+              <div class="card" style="flex:1;min-width:90px;text-align:center;padding:10px">
+                <div style="font-size:20px;font-weight:700;color:var(--accent-lt)" id="cls-total">—</div>
+                <div style="font-size:11px;color:var(--text-muted)">Toplam</div>
+              </div>
+              <div class="card" style="flex:1;min-width:90px;text-align:center;padding:10px">
+                <div style="font-size:20px;font-weight:700;color:#60a5fa" id="cls-iso">—</div>
+                <div style="font-size:11px;color:var(--text-muted)">ISO</div>
+              </div>
+              <div class="card" style="flex:1;min-width:90px;text-align:center;padding:10px">
+                <div style="font-size:20px;font-weight:700;color:#34d399" id="cls-ova">—</div>
+                <div style="font-size:11px;color:var(--text-muted)">Template</div>
+              </div>
+              <div class="card" style="flex:1;min-width:90px;text-align:center;padding:10px">
+                <div style="font-size:20px;font-weight:700;color:var(--text-muted)" id="cls-other">—</div>
+                <div style="font-size:11px;color:var(--text-muted)">Diğer</div>
+              </div>
+            </div>
+            <!-- Items table -->
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Ad</th><th>Tür</th><th>Boyut</th><th>Tarih</th><th>Sil</th></tr></thead>
+                <tbody id="content-lib-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+            <!-- Add form -->
+            <div id="content-lib-add-form" style="display:none;margin-top:14px;padding:14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+              <div class="card-title" style="margin-bottom:10px">İçerik Ekle</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div class="form-group"><label>Ad</label><input id="cl-add-name" type="text" class="form-control" placeholder="Ubuntu 22.04 ISO"></div>
+                <div class="form-group"><label>Tür</label><select id="cl-add-type" class="form-control"><option value="iso">ISO</option><option value="disk_template">Disk Template</option><option value="other">Diğer</option></select></div>
+                <div class="form-group" style="grid-column:1/-1"><label>URL (ISO indir) veya Sunucu Yolu</label><input id="cl-add-url" type="text" class="form-control" placeholder="https://... veya /path/to/file.iso"></div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn-primary" onclick="addContentItem()">Ekle</button>
+                <button class="btn" onclick="document.getElementById('content-lib-add-form').style.display='none'">İptal</button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <!-- ─────── Monitor Page ─────── -->
@@ -5097,8 +5154,8 @@
           </div>
         </div><!-- /page-tab-syslog -->
 
-        <!-- ─────── tab-content-library ─────── -->
-        <div class="page" id="page-tab-content-library">
+        <!-- ─────── tab-content-library (standalone page kaldırıldı — Storage sekmesine taşındı) ─────── -->
+        <div class="page" id="page-tab-content-library" style="display:none!important">
           <div class="section-header">
             <h2><i class="fa-solid fa-photo-film fa-fw" style="color:var(--accent-lt)"></i> İçerik Kütüphanesi</h2>
             <div class="spacer"></div>
@@ -9145,9 +9202,7 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="tab-syslog" onclick="navigate('tab-syslog');closeMobileNav()">
       <i class="fa-solid fa-scroll fa-fw"></i>Syslog
     </div>
-    <div class="ctx-item" data-page="tab-content-library" onclick="navigate('tab-content-library');closeMobileNav()">
-      <i class="fa-solid fa-photo-film fa-fw"></i>İçerik Kütüphanesi
-    </div>` : ''}
+` : ''}
   </div>
 
   ${isAdmin ? `
@@ -13204,6 +13259,8 @@ function switchStorageTab(tab) {
   document.getElementById("storage-tab-hostdisk").style.display = tab === "hostdisk" ? "" : "none";
   const vsanEl = document.getElementById("storage-tab-vsan");
   if (vsanEl) vsanEl.style.display = tab === "vsan" ? "" : "none";
+  const clEl = document.getElementById("storage-tab-content-lib");
+  if (clEl) clEl.style.display = tab === "content-lib" ? "" : "none";
   if (tab === "hostdisk") { loadVMDiskPools(); loadBlockDevices(); }
   if (tab === "isos") loadISOList();
 }
@@ -15094,7 +15151,7 @@ async function loadTabData(tabId) {
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
     case 'tab-syslog':        activateSyslogTab('journald'); break;
-    case 'tab-content-library': loadContentLibrary(); break;
+    case 'tab-content-library': navigate('storage'); switchStorageTab('content-lib'); loadContentLibrary(); break;
     case 'tab-datastore':     loadDatastore(); break;
   }
 }
