@@ -8595,6 +8595,16 @@ function toggleNavSection(btn) {
   if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(90deg)';
 }
 
+function toggleStorageSubnav(e) {
+  e.stopPropagation();
+  const sub = document.getElementById('storage-subnav');
+  const chevron = document.getElementById('storage-chevron');
+  if (!sub) return;
+  const open = sub.style.display === 'none' || sub.style.display === '';
+  sub.style.display = open ? 'block' : 'none';
+  if (chevron) chevron.style.transform = open ? 'rotate(90deg)' : '';
+}
+
 function toggleVmSubList(e) {
   e.stopPropagation();
   const btn = e.currentTarget;
@@ -9095,11 +9105,18 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="networks" onclick="navigate('networks');closeMobileNav()">
       <i class="fa-solid fa-network-wired fa-fw"></i>${t('networks')}
     </div>
-    <div class="ctx-item" data-page="storage" onclick="navigate('storage');closeMobileNav()">
-      <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
+    <div class="ctx-item" data-page="storage" style="display:flex;align-items:center;justify-content:space-between;padding-right:6px">
+      <span onclick="navigate('storage');closeMobileNav()" style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer">
+        <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
+      </span>
+      <span id="storage-expand-btn" onclick="toggleStorageSubnav(event)" style="padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:11px;border-radius:4px;transition:background .15s" title="Alt menüyü aç/kapat">
+        <i id="storage-chevron" class="fa-solid fa-chevron-right" style="font-size:9px;transition:transform .2s"></i>
+      </span>
     </div>
-    <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()" style="padding-left:28px;font-size:12px">
-      <i class="fa-solid fa-folder-open fa-fw" style="font-size:11px"></i>Datastore
+    <div id="storage-subnav" style="display:none;overflow:hidden">
+      <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()" style="padding-left:26px;font-size:12px">
+        <i class="fa-solid fa-folder-open fa-fw" style="font-size:11px;color:var(--accent-lt)"></i>Datastore
+      </div>
     </div>` : ''}
     <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
       <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
@@ -9704,6 +9721,13 @@ function navigate(page) {
   document.querySelectorAll(".ctx-item").forEach(n => n.classList.remove("active"));
   const ctxItem = document.querySelector(`.ctx-item[data-page="${page}"]`);
   if (ctxItem) ctxItem.classList.add("active");
+  // Datastore aktifse storage sub-nav'ı otomatik aç
+  if (page === 'tab-datastore') {
+    const sub = document.getElementById('storage-subnav');
+    const chevron = document.getElementById('storage-chevron');
+    if (sub) sub.style.display = 'block';
+    if (chevron) chevron.style.transform = 'rotate(90deg)';
+  }
 
   // page-specific loaders
   const loaders = {
