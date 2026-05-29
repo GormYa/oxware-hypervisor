@@ -2628,19 +2628,6 @@
               </table>
             </div>
 
-            <div class="section-header">
-              <h2>IDS/IPS Uyarıları (Suricata)</h2>
-              <div class="spacer"></div>
-              <button class="btn sm" onclick="loadIdsStatus()">&#x21BB; Yenile</button>
-            </div>
-            <div id="idsStatusCard" class="card" style="margin-bottom:14px"></div>
-            <div class="table-wrap" style="margin-bottom:14px">
-              <table>
-                <thead><tr><th>Zaman</th><th>Kaynak IP</th><th>Hedef</th><th>İmza</th><th>Severity</th></tr></thead>
-                <tbody id="idsAlertsTbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">— Yüklemek için &#x21BB; Yenile tıklayın —</td></tr></tbody>
-              </table>
-            </div>
-
             <!-- Maliyet Tahmini -->
             <div class="card" style="margin-top:14px">
               <div class="card-title" style="display:flex;align-items:center;gap:8px">
@@ -4396,8 +4383,13 @@
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div class="card">
-              <div class="card-title">SDN Durumu (OVS)</div>
-              <div id="sdnStatusCard" style="padding:8px 0"></div>
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                SDN Durumu (OVS)
+                <button class="btn sm" onclick="loadSdnStatus()" style="margin-left:auto" title="Yenile"><i class="fa-solid fa-rotate-right"></i></button>
+              </div>
+              <div id="sdnStatusCard" style="padding:8px 0">
+                <div style="font-size:12px;color:var(--text-muted)">Yükleniyor...</div>
+              </div>
             </div>
             <div class="card">
               <div class="card-title">SSL Sertifika Yönetimi</div>
@@ -7028,7 +7020,6 @@ const PAGE_STRINGS = {
     'SMART Disk Sağlığı':'SMART Disk Health','Sıcaklık':'Temperature',
     'Güç Saati':'Power Hours','Sağlık':'Health','VM Uptime':'VM Uptime',
     'Toplam Uptime':'Total Uptime','Kullanılabilirlik':'Availability','Boot Sayısı':'Boot Count',
-    'IDS/IPS Uyarıları (Suricata)':'IDS/IPS Alerts (Suricata)',
     'İmza':'Signature','Severity':'Severity',
     /* ── AI Asistan ── */
     'AI Asistan':'AI Assistant','Öneriler':'Recommendations',
@@ -15621,11 +15612,49 @@ async function requestLetsEncrypt() {
 async function loadSdnStatus() {
   const d = await _api('/api/sdn/status');
   const el = document.getElementById('sdnStatusCard');
-  if (el) el.innerHTML = `
-    <span class="badge-${d.ovs_available?'success':'danger'}">${d.ovs_available?'OVS Aktif':'OVS Kurulu Değil'}</span>
-    ${d.version ? `<span class="text-muted" style="margin-left:6px">${escHtml(d.version)}</span>` : ''}
-    ${d.bridges?.length ? `<span class="text-muted" style="margin-left:6px">${d.bridges.length} bridge</span>` : ''}
+  if (!el) return;
+
+  const statusBadge = `<span class="badge-${d.ovs_available?'success':'danger'}">${d.ovs_available?'OVS Aktif':'OVS Kurulu Değil'}</span>`;
+  const versionStr  = d.version ? `<span style="font-size:11px;color:var(--text-muted);margin-left:8px">${escHtml(d.version)}</span>` : '';
+
+  let bridgesHtml = '';
+  if (d.bridges && d.bridges.length > 0) {
+    bridgesHtml = `
+      <div style="margin-top:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Bridge'ler</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${d.bridges.map(b => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface3);border-radius:5px;font-size:12px">
+              <i class="fa-solid fa-network-wired" style="color:var(--accent-lt);width:14px"></i>
+              <code style="color:var(--accent-lt)">${escHtml(b)}</code>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  } else if (d.ovs_available) {
+    bridgesHtml = `<div style="margin-top:10px;font-size:12px;color:var(--text-muted)">Bridge yok — <a href="javascript:void(0)" onclick="showOvsBridgeHelp()" style="color:var(--accent-lt)">Bridge oluştur</a></div>`;
+  }
+
+  let notAvailableHtml = '';
+  if (!d.ovs_available) {
+    notAvailableHtml = `
+      <div style="margin-top:10px;background:var(--surface3);border-radius:6px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">OVS kurulu değil — kurmak için:</div>
+        <code style="font-size:11px;color:#86efac;display:block">apt install openvswitch-switch -y && systemctl enable --now ovs-vswitchd</code>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      ${statusBadge}${versionStr}
+    </div>
+    ${bridgesHtml}
+    ${notAvailableHtml}
   `;
+}
+
+function showOvsBridgeHelp() {
+  toast('Terminal: ovs-vsctl add-br oxbr0 && ovs-vsctl add-port oxbr0 eth0', 'info', 8000);
 }
 
 /* ══════════════════ Auto Scaler ══════════════════ */
