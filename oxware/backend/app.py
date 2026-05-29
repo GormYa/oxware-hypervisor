@@ -14448,7 +14448,16 @@ def api_cl_delete(item_id):
 def api_cl_sync():
     if not cl_mgr: return err("Content Library modülü yüklenemedi")
     iso_dir = (request.get_json(silent=True) or {}).get("iso_dir", "/var/lib/libvirt/images")
-    return ok(**cl_mgr.sync_from_iso_pool(iso_dir))
+    try:
+        result = cl_mgr.sync_from_iso_pool(iso_dir)
+        return ok(**result)
+    except FileNotFoundError:
+        return ok(imported=[], count=0,
+                  message=f"ISO dizini bulunamadı: {iso_dir}")
+    except PermissionError:
+        return err(f"İzin hatası: {iso_dir} dizinine erişilemiyor")
+    except Exception as e:
+        return err(str(e), 500)
 
 
 # ── Host Profiles ─────────────────────────────────────────────────────────────

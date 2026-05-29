@@ -20542,9 +20542,19 @@ async function deleteContentItem(id) {
 
 async function syncContentLibrary() {
   toast('Senkronizasyon başlatılıyor...', 'info');
-  const d = await _api('/api/content-library/sync', 'POST');
-  toast(d && d.ok ? 'Senkronizasyon tamamlandı' : ('Hata: ' + (d?.error || '')), d && d.ok ? 'success' : 'error');
-  if (d && d.ok) loadContentLibrary();
+  try {
+    const d = await _api('/api/content-library/sync', 'POST');
+    if (!d) { toast('Sunucu yanıt vermedi', 'error'); return; }
+    if (d.ok) {
+      const msg = d.message || `${d.count || 0} ISO içe aktarıldı`;
+      toast('✓ ' + msg, 'success');
+      loadContentLibrary();
+    } else {
+      toast('Hata: ' + (d.error || 'ISO dizini bulunamadı veya boş'), 'error');
+    }
+  } catch(e) {
+    toast('Senkronizasyon hatası: ' + (e.message || String(e)), 'error');
+  }
 }
 
 /* ══════════════════ Datastore Browser ══════════════════ */
