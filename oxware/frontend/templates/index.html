@@ -77,14 +77,14 @@
 
     /* ───── TOPBAR ─────  ESXi-style compact header */
     #topbar{height:var(--topbar-h);background:#162030;border-bottom:1px solid #243040;display:flex;align-items:center;flex-shrink:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-    .tb-logo{width:148px;height:100%;display:flex;align-items:center;gap:8px;padding:0 12px;border-right:1px solid #243040;flex-shrink:0;text-decoration:none}
+    .tb-logo{width:56px;height:100%;display:flex;align-items:center;justify-content:center;padding:0 10px;border-right:1px solid #243040;flex-shrink:0;text-decoration:none}
     #tree-panel{display:none!important}
-    .tb-logo-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .tb-logo-icon img{width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(26,130,204,0.6))}
-    .tb-logo-icon .tb-logo-fb{width:28px;height:28px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center}
-    .tb-logo-icon .tb-logo-fb svg{width:16px;height:16px;fill:#fff}
-    .tb-logo-text{display:block;font-size:13px;font-weight:700;color:#d8e8f4;letter-spacing:.3px;line-height:1}
-    .tb-logo-ver{display:block;font-size:9px;color:#4a6888;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
+    .tb-logo-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .tb-logo-icon img{width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(26,130,204,0.7))}
+    .tb-logo-icon .tb-logo-fb{width:36px;height:36px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center}
+    .tb-logo-icon .tb-logo-fb svg{width:20px;height:20px;fill:#fff}
+    .tb-logo-text{display:none}
+    .tb-logo-ver{display:none}
     .tb-spacer{flex:1}
     .tb-stats{height:100%;display:flex;align-items:center;border-left:1px solid #243040;font-size:11px}
     .tb-stat{display:flex;align-items:center;gap:5px;padding:0 10px;border-right:1px solid #243040;height:100%;color:var(--text-muted)}
@@ -437,13 +437,13 @@
     /* ── Modal ── ESXi dialog style */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;display:none;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
-    .modal{background:#18222f;border:1px solid #2d4159;border-radius:3px;width:480px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6)}
-    .modal-header{padding:10px 16px;border-bottom:1px solid #243448;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#111e2c}
-    .modal-header h2,.modal-header h3{font-size:12.5px;font-weight:700;color:#c2d4e8;letter-spacing:.2px}
-    .modal-close{background:none;border:none;color:#526a84;font-size:16px;cursor:pointer;padding:2px 6px;border-radius:2px}
-    .modal-close:hover{background:rgba(255,255,255,.07);color:#b0cce8}
-    .modal-body{padding:16px;overflow-y:auto;flex:1;min-height:0}
-    .modal-footer{padding:10px 16px;border-top:1px solid #243448;display:flex;gap:7px;justify-content:flex-end;flex-shrink:0;background:#111e2c}
+    .modal{background:#18222f;border:1px solid #2d4159;border-radius:14px;width:480px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.72),0 0 0 1px rgba(96,165,250,.08)}
+    .modal-header{padding:12px 18px;border-bottom:1px solid #243448;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#111e2c;border-radius:14px 14px 0 0}
+    .modal-header h2,.modal-header h3{font-size:13px;font-weight:700;color:#c2d4e8;letter-spacing:.2px}
+    .modal-close{background:none;border:none;color:#526a84;font-size:16px;cursor:pointer;padding:3px 7px;border-radius:8px;transition:background .15s,color .15s}
+    .modal-close:hover{background:rgba(255,255,255,.1);color:#b0cce8}
+    .modal-body{padding:18px;overflow-y:auto;flex:1;min-height:0}
+    .modal-footer{padding:12px 18px;border-top:1px solid #243448;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;background:#111e2c;border-radius:0 0 14px 14px}
 
     /* ── Toast ── */
     #toast-container{position:fixed;bottom:calc(var(--taskbar-h) + 16px);right:16px;transition:bottom .1s;z-index:2000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
@@ -729,7 +729,7 @@
       /* modal */
       .modal{width:95vw!important;max-height:90dvh!important;max-height:90vh!important}
       .modal-overlay{align-items:flex-end!important}
-      .modal{border-bottom-left-radius:0!important;border-bottom-right-radius:0!important;width:100%!important;max-width:100%!important;max-height:85dvh!important;max-height:85vh!important}
+      .modal{border-bottom-left-radius:0!important;border-bottom-right-radius:0!important;border-top-left-radius:18px!important;border-top-right-radius:18px!important;width:100%!important;max-width:100%!important;max-height:85dvh!important;max-height:85vh!important}
       /* table */
       .table-wrap{font-size:11px;overflow-x:auto}
       thead th,tbody td{padding:6px 8px!important}
@@ -924,17 +924,13 @@
   <!-- ────────── TOPBAR ────────── -->
   <header id="topbar">
     <button id="mob-menu-btn" onclick="toggleMobileNav()" title="Menü">☰</button>
-    <div class="tb-logo">
+    <div class="tb-logo" title="OXware Hypervisor">
       <div class="tb-logo-icon">
-        <img src="/static/img/oxware2.png" alt="OXware"
+        <img src="/static/img/sadeceikon.png" alt="OXware"
              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
         <div class="tb-logo-fb" style="display:none;">
           <svg viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18L20 8.5v7l-8 4-8-4v-7l8-4.32zM12 7a5 5 0 100 10A5 5 0 0012 7zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
         </div>
-      </div>
-      <div>
-        <div class="tb-logo-text">OXware</div>
-        <div class="tb-logo-ver">Hypervisor</div>
       </div>
     </div>
 
@@ -1267,7 +1263,7 @@
             </div>
             <div class="vcenter-cs-right">
               <span class="vcenter-cs-badge">YAKINDA</span>
-              <button class="btn vcenter-cs-btn" disabled title="Yakında kullanıma açılacak">Get vCenter Server &rarr;</button>
+              <a href="https://shinnasakha.github.io/oxware-hypervisor/vcenter/" target="_blank" rel="noopener" class="btn" style="font-size:12px;background:rgba(234,179,8,.12);color:#eab308;border:1px solid rgba(234,179,8,.3);text-decoration:none">Get vCenter Server &rarr;</a>
               <div class="vcenter-cs-note">OXware vCenter geliştirme aşamasındadır</div>
             </div>
           </div><!-- /vcenter-cs-card -->
@@ -2244,6 +2240,7 @@
             <button class="settings-tab" data-ntab="routes" onclick="switchNetTab('routes',this)"><i class="fa-solid fa-route"></i> Yönlendirme</button>
             <button class="settings-tab" data-ntab="bridge" onclick="switchNetTab('bridge',this)"><i class="fa-solid fa-bridge"></i> Bridge & IP İzolasyonu</button>
             <button class="settings-tab" data-ntab="vswitch" onclick="switchNetTab('vswitch',this);loadVSwitches()"><i class="fa-solid fa-sitemap"></i> vSwitch</button>
+            <button class="settings-tab" data-ntab="physical" onclick="switchNetTab('physical',this);loadPhysicalDevices()"><i class="fa-solid fa-network-wired"></i> Fiziksel Cihazlar</button>
           </div>
 
           <!-- Virtual Networks -->
@@ -2398,6 +2395,62 @@
               </div>
             </div>
           </div>
+
+          <!-- Physical Devices Tab (LLDP + ARP neighbors) -->
+          <div id="net-tab-physical" style="display:none">
+
+            <!-- Stat bar -->
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap" id="phys-stat-bar">
+              <div class="phys-stat-chip" id="phys-chip-total"><i class="fa-solid fa-network-wired"></i> — cihaz</div>
+              <div class="phys-stat-chip" id="phys-chip-lldp" style="color:#4ade80"><i class="fa-solid fa-circle-check"></i> — LLDP</div>
+              <div class="phys-stat-chip" id="phys-chip-arp" style="color:#60a5fa"><i class="fa-solid fa-table-list"></i> — ARP</div>
+              <button class="btn sm" onclick="loadPhysicalDevices(true)" style="margin-left:auto"><i class="fa-solid fa-rotate-right"></i> Yenile</button>
+            </div>
+            <style>
+            .phys-stat-chip{padding:6px 12px;border-radius:8px;background:var(--surface2,#141c2e);border:1px solid rgba(255,255,255,0.07);font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+            .phys-dev-card{background:var(--surface2,#141c2e);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 16px;display:flex;align-items:flex-start;gap:14px;transition:border-color .15s}
+            .phys-dev-card:hover{border-color:rgba(96,165,250,.35)}
+            .phys-dev-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+            .phys-badge{padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.04em}
+            .phys-badge.lldp{background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.25)}
+            .phys-badge.arp{background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25)}
+            .phys-badge.switch{background:rgba(251,146,60,.12);color:#fb923c;border:1px solid rgba(251,146,60,.25)}
+            .phys-badge.router{background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.25)}
+            .phys-badge.ap{background:rgba(0,212,255,.12);color:#00d4ff;border:1px solid rgba(0,212,255,.25)}
+            .phys-field{font-size:11px;color:var(--text-muted);margin-top:2px}
+            .phys-field span{color:var(--text-primary,#e2e8f0);margin-left:4px}
+            </style>
+
+            <!-- LLDP section -->
+            <div style="margin-bottom:20px">
+              <div style="font-size:12px;font-weight:600;color:#4ade80;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <i class="fa-solid fa-circle-check"></i> LLDP Komşuları — Fiziksel Switch / AP
+                <span id="phys-lldp-badge" style="font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0"></span>
+              </div>
+              <div id="phys-lldp-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px">
+                <div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);font-size:13px">
+                  <i class="fa-solid fa-satellite-dish" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>
+                  Yükleniyor…
+                </div>
+              </div>
+            </div>
+
+            <!-- ARP table section -->
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#60a5fa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <i class="fa-solid fa-table-list"></i> ARP Tablosu — Ağdaki Tüm Cihazlar
+                <span id="phys-arp-badge" style="font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0"></span>
+                <input id="phys-arp-search" type="text" placeholder="IP veya MAC filtrele…" style="margin-left:auto;padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:var(--surface3,#0d1117);color:var(--text-primary,#e2e8f0);font-size:11px;width:200px" oninput="filterArpTable(this.value)">
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>IP</th><th>MAC</th><th>Vendor</th><th>Arayüz</th><th>Durum</th></tr></thead>
+                  <tbody id="phys-arp-tbody"><tr><td colspan="5"><div class="empty-state"><p>Yükleniyor…</p></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div><!-- /net-tab-physical -->
 
         </div>
 
@@ -2809,6 +2862,34 @@
             <button class="btn" onclick="loadSnapshots()">↻ Yenile</button>
             <button class="btn primary" onclick="openModal('modal-bulk-snapshot')">📷 Toplu Snapshot</button>
           </div>
+
+          <!-- Otomatik Snapshot Yönetimi -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">
+              <i class="fa-solid fa-clock-rotate-left" style="color:var(--green-lt)"></i>
+              Otomatik Snapshot
+              <span id="autosnap-status-badge" style="display:none;margin-left:auto;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700"></span>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px">
+              Her gün belirtilen saatte tüm VM'lerin snapshot'ını alır. Belirtilen gün sayısından eski snapshot'lar otomatik silinir.
+            </p>
+            <div id="autosnap-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;align-items:flex-end">
+              <div class="form-row" style="margin:0"><label>Aktif</label>
+                <select id="autosnap-enabled" class="form-control" onchange="_updateAutoSnapBadge(this.value)">
+                  <option value="true">✅ Aktif</option>
+                  <option value="false">❌ Devre dışı</option>
+                </select>
+              </div>
+              <div class="form-row" style="margin:0"><label>Saat (0-23)</label><input id="autosnap-hour" type="number" class="form-control" min="0" max="23" value="2"></div>
+              <div class="form-row" style="margin:0"><label>Dakika (0-59)</label><input id="autosnap-minute" type="number" class="form-control" min="0" max="59" value="0"></div>
+              <div class="form-row" style="margin:0"><label>Saklama (gün)</label><input id="autosnap-keep" type="number" class="form-control" min="1" max="365" value="7"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn primary" onclick="saveAutoSnapConfig()"><i class="fa-solid fa-floppy-disk"></i> Kaydet</button>
+              <button class="btn" onclick="runAutoSnapshotNow()"><i class="fa-solid fa-play"></i> Şimdi Çalıştır</button>
+            </div>
+          </div>
+
           <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
             <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">VM Seç</label>
             <select id="snap-vm-select" onchange="loadSnapshotsForVM(this.value)" style="min-width:240px">
@@ -3840,29 +3921,6 @@
               <i class="fa-solid fa-shield-halved" style="color:#3fb950;margin-right:4px"></i>
               Dosya yalnızca root (uid=0) tarafından oluşturulduğunda işlenir. Servis uyguladıktan sonra otomatik siler.
             </p>
-          </div>
-
-          <!-- Auto-Snapshot Yönetimi -->
-          <div class="card" style="margin-top:14px">
-            <div class="card-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--green-lt);margin-right:6px"></i>Otomatik Snapshot</div>
-            <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px">
-              Her gün belirtilen saatte tüm VM'lerin snapshot'ını alır. Belirtilen gün sayısından eski snapshot'lar otomatik silinir.
-            </p>
-            <div id="autosnap-form" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:flex-end">
-              <div class="form-row" style="margin:0"><label>Aktif</label>
-                <select id="autosnap-enabled" class="form-control">
-                  <option value="true">✅ Aktif</option>
-                  <option value="false">❌ Devre dışı</option>
-                </select>
-              </div>
-              <div class="form-row" style="margin:0"><label>Saat (0-23)</label><input id="autosnap-hour" type="number" class="form-control" min="0" max="23" value="2"></div>
-              <div class="form-row" style="margin:0"><label>Dakika (0-59)</label><input id="autosnap-minute" type="number" class="form-control" min="0" max="59" value="0"></div>
-              <div class="form-row" style="margin:0"><label>Saklama (gün)</label><input id="autosnap-keep" type="number" class="form-control" min="1" max="365" value="7"></div>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:12px">
-              <button class="btn-primary" onclick="saveAutoSnapConfig()"><i class="fa-solid fa-floppy-disk"></i> Kaydet</button>
-              <button class="btn" onclick="runAutoSnapshotNow()"><i class="fa-solid fa-play"></i> Şimdi Çalıştır</button>
-            </div>
           </div>
 
           <!-- ── Güvenlik Denetimi ── -->
@@ -7364,6 +7422,54 @@ const PAGE_STRINGS = {
     'Bakım Modu':'Modo de Mantenimiento','Dışa Aktar':'Exportar',
     'Etiket Filtrele':'Filtrar por Etiqueta','Notlar':'Notas','Etiketler':'Etiquetas',
     'Kilit':'Bloqueo','Disk Genişlet':'Ampliar Disco',
+    /* Ağ genişletme */
+    'Fiziksel Cihazlar':'Dispositivos Físicos','Sanal Ağlar':'Redes Virtuales',
+    'DHCP Kiraları':'Arrendamientos DHCP','Yönlendirme':'Enrutamiento',
+    'LLDP Komşuları — Fiziksel Switch / AP':'Vecinos LLDP — Switch Físico / AP',
+    'ARP Tablosu — Ağdaki Tüm Cihazlar':'Tabla ARP — Todos los Dispositivos en Red',
+    'Taranıyor…':'Escaneando…','Yükleniyor…':'Cargando…',
+    'LLDP komşusu bulunamadı.':'No se encontraron vecinos LLDP.',
+    'lldpd kurulmamış ya da neighbor yok.':'lldpd no instalado o sin vecinos.',
+    /* Snapshot */
+    'Snapshot Yönetimi':'Gestión de Snapshots','Toplu Snapshot':'Snapshot Masivo',
+    'Otomatik Snapshot':'Snapshot Automático','Şimdi Çalıştır':'Ejecutar Ahora',
+    'VM Seç':'Seleccionar VM','Snapshot Ağacı':'Árbol de Snapshots',
+    'Zaman Çizelgesi':'Línea de Tiempo',
+    /* AI */
+    'Analiz Et':'Analizar','Analiz ediliyor...':'Analizando...',
+    'AI analizi tamamlandı':'Análisis de IA completado',
+    'AI Ajan Cron Sistemi':'Sistema Cron de Agente IA',
+    'Kapasite Tahmini':'Pronóstico de Capacidad','Gün Sayısı':'Número de Días',
+    'Tahmin Et':'Pronosticar','Anomali yok':'Sin anomalías',
+    /* Depolama genişletme */
+    'Depolama Havuzu Ekle':'Agregar Pool de Almacenamiento',
+    'Kaynak Havuzları':'Grupos de Recursos','Aktif':'Activo','Pasif':'Inactivo',
+    'Çalışıyor':'Ejecutando','Durduruldu':'Detenido',
+    /* Güvenlik */
+    'OXware Lisans':'Licencia OXware','Lisans Aktif':'Licencia Activa',
+    'Lisans Kodu':'Clave de Licencia','Doğrula':'Validar',
+    'Güvenlik Denetimi':'Auditoría de Seguridad',
+    /* Genel ek */
+    'Toplam':'Total','Benzersiz':'Único','Son':'Último','Günlük':'Diario',
+    'Haftalık':'Semanal','Aylık':'Mensual','Bağlantı':'Conexión',
+    'Arayüz':'Interfaz','Köprü':'Puente','vSwitch':'vSwitch',
+    'Yeni Kural':'Nueva Regla','Kural Ekle':'Agregar Regla',
+    'IP Havuzu':'Pool de IP','IPAM — IP Adres Yönetimi':'IPAM — Gestión de Direcciones IP',
+    /* Sistem */
+    'Sistem İzleme':'Monitoreo del Sistema','CPU Kullanımı':'Uso de CPU',
+    'Bellek Kullanımı':'Uso de Memoria','Disk I/O':'E/S de Disco',
+    'Ağ I/O':'E/S de Red','Uptime':'Tiempo de Actividad',
+    'Çekirdek':'Núcleo','İş Parçacığı':'Hilo','Süreç':'Proceso',
+    'Toplam VM':'Total VMs','Çalışan VM':'VMs en Ejecución',
+    'Durdurulmuş VM':'VMs Detenidas',
+    /* Bildirim */
+    'Bildirim':'Notificación','Uyarı Seviyesi':'Nivel de Alerta',
+    'Kritik':'Crítico','Düşük':'Bajo','Orta':'Medio','Yüksek':'Alto',
+    /* CSV / Export */
+    '⬇ CSV İndir':'⬇ Descargar CSV',
+    /* Bizi desteklediğiniz... */
+    'Bizi desteklediğiniz için teşekkür ederiz. 7/24 Danışmanlık Hizmetimizi Kullanmak İçin':'Gracias por su apoyo. Para nuestro Servicio de Consultoría 24/7',
+    'Tıklayın':'Haga clic',
   },
   de: {
     /* Genel */
@@ -7435,6 +7541,51 @@ const PAGE_STRINGS = {
     'Bakım Modu':'Wartungsmodus','Dışa Aktar':'Exportieren',
     'Etiket Filtrele':'Nach Tag filtern','Notlar':'Notizen','Etiketler':'Tags',
     'Kilit':'Sperre','Disk Genişlet':'Festplatte erweitern',
+    /* Ağ genişletme */
+    'Fiziksel Cihazlar':'Physische Geräte','Sanal Ağlar':'Virtuelle Netzwerke',
+    'DHCP Kiraları':'DHCP-Leases','Yönlendirme':'Routing',
+    'LLDP Komşuları — Fiziksel Switch / AP':'LLDP-Nachbarn — Physischer Switch / AP',
+    'ARP Tablosu — Ağdaki Tüm Cihazlar':'ARP-Tabelle — Alle Geräte im Netzwerk',
+    'Taranıyor…':'Scanne…','Yükleniyor…':'Lädt…',
+    'LLDP komşusu bulunamadı.':'Keine LLDP-Nachbarn gefunden.',
+    'lldpd kurulmamış ya da neighbor yok.':'lldpd nicht installiert oder keine Nachbarn.',
+    /* Snapshot */
+    'Snapshot Yönetimi':'Snapshot-Verwaltung','Toplu Snapshot':'Massen-Snapshot',
+    'Otomatik Snapshot':'Automatischer Snapshot','Şimdi Çalıştır':'Jetzt ausführen',
+    'VM Seç':'VM auswählen','Snapshot Ağacı':'Snapshot-Baum',
+    'Zaman Çizelgesi':'Zeitachse',
+    /* AI */
+    'Analiz Et':'Analysieren','Analiz ediliyor...':'Analysiere...',
+    'AI analizi tamamlandı':'KI-Analyse abgeschlossen',
+    'AI Ajan Cron Sistemi':'KI-Agenten-Cron-System',
+    'Kapasite Tahmini':'Kapazitätsprognose','Gün Sayısı':'Anzahl Tage',
+    'Tahmin Et':'Prognostizieren','Anomali yok':'Keine Anomalien',
+    /* Depolama genişletme */
+    'Depolama Havuzu Ekle':'Speicherpool hinzufügen',
+    'Kaynak Havuzları':'Ressourcenpools','Aktif':'Aktiv','Pasif':'Inaktiv',
+    /* Güvenlik */
+    'OXware Lisans':'OXware-Lizenz','Lisans Aktif':'Lizenz Aktiv',
+    'Lisans Kodu':'Lizenzschlüssel','Doğrula':'Validieren',
+    'Güvenlik Denetimi':'Sicherheitsaudit',
+    /* Genel ek */
+    'Toplam':'Gesamt','Benzersiz':'Eindeutig','Son':'Letzte','Günlük':'Täglich',
+    'Haftalık':'Wöchentlich','Aylık':'Monatlich','Bağlantı':'Verbindung',
+    'Köprü':'Brücke','vSwitch':'vSwitch',
+    'Yeni Kural':'Neue Regel','Kural Ekle':'Regel hinzufügen',
+    'IP Havuzu':'IP-Pool','IPAM — IP Adres Yönetimi':'IPAM — IP-Adressverwaltung',
+    /* Sistem */
+    'Sistem İzleme':'Systemüberwachung','CPU Kullanımı':'CPU-Auslastung',
+    'Bellek Kullanımı':'Speicherauslastung','Uptime':'Betriebszeit',
+    'Toplam VM':'VMs gesamt','Çalışan VM':'Laufende VMs',
+    'Durdurulmuş VM':'Gestoppte VMs',
+    /* Bildirim */
+    'Bildirim':'Benachrichtigung','Uyarı Seviyesi':'Warnstufe',
+    'Kritik':'Kritisch','Düşük':'Niedrig','Orta':'Mittel','Yüksek':'Hoch',
+    /* CSV / Export */
+    '⬇ CSV İndir':'⬇ CSV herunterladen',
+    /* Bizi desteklediğiniz... */
+    'Bizi desteklediğiniz için teşekkür ederiz. 7/24 Danışmanlık Hizmetimizi Kullanmak İçin':'Danke für Ihre Unterstützung. Für unseren 24/7-Beratungsservice',
+    'Tıklayın':'Klicken',
   },
   zh: {
     /* Genel */
@@ -7506,6 +7657,51 @@ const PAGE_STRINGS = {
     'Bakım Modu':'维护模式','Dışa Aktar':'导出',
     'Etiket Filtrele':'按标签过滤','Notlar':'备注','Etiketler':'标签',
     'Kilit':'锁定','Disk Genişlet':'扩展磁盘',
+    /* Ağ genişletme */
+    'Fiziksel Cihazlar':'物理设备','Sanal Ağlar':'虚拟网络',
+    'DHCP Kiraları':'DHCP租约','Yönlendirme':'路由',
+    'LLDP Komşuları — Fiziksel Switch / AP':'LLDP邻居 — 物理交换机/AP',
+    'ARP Tablosu — Ağdaki Tüm Cihazlar':'ARP表 — 网络中所有设备',
+    'Taranıyor…':'扫描中…','Yükleniyor…':'加载中…',
+    'LLDP komşusu bulunamadı.':'未找到LLDP邻居。',
+    'lldpd kurulmamış ya da neighbor yok.':'lldpd未安装或无邻居。',
+    /* Snapshot */
+    'Snapshot Yönetimi':'快照管理','Toplu Snapshot':'批量快照',
+    'Otomatik Snapshot':'自动快照','Şimdi Çalıştır':'立即运行',
+    'VM Seç':'选择虚拟机','Snapshot Ağacı':'快照树',
+    'Zaman Çizelgesi':'时间轴',
+    /* AI */
+    'Analiz Et':'分析','Analiz ediliyor...':'分析中...',
+    'AI analizi tamamlandı':'AI分析完成',
+    'AI Ajan Cron Sistemi':'AI代理定时系统',
+    'Kapasite Tahmini':'容量预测','Gün Sayısı':'天数',
+    'Tahmin Et':'预测','Anomali yok':'无异常',
+    /* Depolama genişletme */
+    'Depolama Havuzu Ekle':'添加存储池',
+    'Kaynak Havuzları':'资源池','Aktif':'活跃','Pasif':'非活跃',
+    /* Güvenlik */
+    'OXware Lisans':'OXware许可证','Lisans Aktif':'许可证有效',
+    'Lisans Kodu':'许可证密钥','Doğrula':'验证',
+    'Güvenlik Denetimi':'安全审计',
+    /* Genel ek */
+    'Toplam':'总计','Benzersiz':'唯一','Son':'最近','Günlük':'每日',
+    'Haftalık':'每周','Aylık':'每月','Bağlantı':'连接',
+    'Köprü':'网桥','vSwitch':'vSwitch',
+    'Yeni Kural':'新规则','Kural Ekle':'添加规则',
+    'IP Havuzu':'IP池','IPAM — IP Adres Yönetimi':'IPAM — IP地址管理',
+    /* Sistem */
+    'Sistem İzleme':'系统监控','CPU Kullanımı':'CPU使用率',
+    'Bellek Kullanımı':'内存使用率','Uptime':'运行时间',
+    'Toplam VM':'虚拟机总数','Çalışan VM':'运行中的虚拟机',
+    'Durdurulmuş VM':'已停止的虚拟机',
+    /* Bildirim */
+    'Bildirim':'通知','Uyarı Seviyesi':'警报级别',
+    'Kritik':'严重','Düşük':'低','Orta':'中','Yüksek':'高',
+    /* CSV / Export */
+    '⬇ CSV İndir':'⬇ 下载CSV',
+    /* Bizi desteklediğiniz... */
+    'Bizi desteklediğiniz için teşekkür ederiz. 7/24 Danışmanlık Hizmetimizi Kullanmak İçin':'感谢您的支持。使用我们的7×24小时咨询服务',
+    'Tıklayın':'点击',
   },
 };
 
@@ -7535,7 +7731,14 @@ function _i18nSetText(el, newText) {
 }
 
 function applyPageTranslations(code) {
-  const map = (code && code !== 'tr') ? PAGE_STRINGS[code] : null;
+  // Non-TR languages fall back to EN for any key they don't have.
+  // This prevents Turkish text leaking through when ES/DE/ZH are incomplete.
+  const rawMap = (code && code !== 'tr') ? PAGE_STRINGS[code] : null;
+  const enMap  = PAGE_STRINGS['en'] || {};
+  const map = rawMap ? new Proxy(rawMap, {
+    get(t, k) { return k in t ? t[k] : enMap[k]; },
+    has(t, k) { return k in t || k in enMap; }
+  }) : null;
 
   /* ── TreeWalker: traverse every text node in the body ── */
   const SKIP_TAGS = new Set(['SCRIPT','STYLE','INPUT','TEXTAREA','OPTION','CODE','PRE','NOSCRIPT','SVG','MATH']);
@@ -8700,7 +8903,7 @@ function navigate(page) {
     monitor: loadMonitor,
     users: () => { loadUsers(); loadResourcePools(); loadRbacPerms(); },
     topology: loadTopology,
-    snapshots: loadSnapshots,
+    snapshots: () => { loadSnapshots(); loadAutoSnapConfig(); },
     settings: loadSettings,
     updates: loadUpdates,
     'tab-integrations': loadIntegrationsPage,
@@ -11566,14 +11769,15 @@ async function _initVNC(vmId) {
 /* ══════════════════ Networks ══════════════════ */
 
 function switchNetTab(tab, btn) {
-  ['vnets','ifaces','leases','routes','bridge','vswitch'].forEach(t => {
+  ['vnets','ifaces','leases','routes','bridge','vswitch','physical'].forEach(t => {
     const el = document.getElementById('net-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('[data-ntab]').forEach(b => b.classList.toggle('active', b.dataset.ntab === tab));
-  if (tab === 'leases')  loadDhcpLeasesNet();
-  if (tab === 'routes')  loadRoutingTable();
-  if (tab === 'bridge')  _initBridgeTab();
+  if (tab === 'leases')   loadDhcpLeasesNet();
+  if (tab === 'routes')   loadRoutingTable();
+  if (tab === 'bridge')   _initBridgeTab();
+  if (tab === 'physical') loadPhysicalDevices();
 }
 
 async function _initBridgeTab() {
@@ -11594,6 +11798,99 @@ async function _initBridgeTab() {
     const prev = document.getElementById('br-nic-preview');
     if (prev) prev.textContent = sel.value || 'seçilen NIC';
   });
+}
+
+// ── Physical Devices (LLDP + ARP) ─────────────────────────────────────────────
+
+let _physArpData = [];
+
+async function loadPhysicalDevices(force) {
+  const lldpList = document.getElementById('phys-lldp-list');
+  const arpBody  = document.getElementById('phys-arp-tbody');
+  if (!lldpList) return;
+
+  // Show loading state
+  lldpList.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);font-size:13px">
+    <i class="fa-solid fa-satellite-dish" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>Taranıyor…</div>`;
+  if (arpBody) arpBody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><p>Yükleniyor…</p></div></td></tr>';
+
+  // Fetch both endpoints in parallel
+  const [nbRes, arpRes] = await Promise.allSettled([
+    _api('/api/networks/neighbors'),
+    _api('/api/networks/arp'),
+  ]);
+
+  // ── LLDP / Neighbor cards ─────────────────────────────────────────────────
+  const neighbors = (nbRes.status === 'fulfilled' ? (nbRes.value.neighbors || []) : []);
+  const badge = document.getElementById('phys-lldp-badge');
+  if (badge) badge.textContent = `(${neighbors.length} cihaz)`;
+  const chipLldp = document.getElementById('phys-chip-lldp');
+  if (chipLldp) chipLldp.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${neighbors.length} LLDP`;
+
+  if (!neighbors.length) {
+    lldpList.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);font-size:13px">
+      <i class="fa-solid fa-satellite-dish" style="font-size:24px;opacity:.3;display:block;margin-bottom:8px"></i>
+      LLDP komşusu bulunamadı.<br><span style="font-size:11px">lldpd kurulmamış ya da neighbor yok.</span></div>`;
+  } else {
+    lldpList.innerHTML = neighbors.map(n => {
+      const typeIcon = n.type === 'switch' ? '🔀' : n.type === 'router' ? '🌐' : n.type === 'ap' ? '📡' : '🖥';
+      const typeBadge = `<span class="phys-badge ${n.type || 'lldp'}">${(n.type||'lldp').toUpperCase()}</span>`;
+      const srcBadge  = n.source === 'lldp' ? '<span class="phys-badge lldp">LLDP</span>' : '<span class="phys-badge arp">ARP</span>';
+      return `<div class="phys-dev-card">
+        <div class="phys-dev-icon" style="background:rgba(34,197,94,.12);color:#4ade80">${typeIcon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary,#e2e8f0);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${escHtml(n.chassis_name || n.mac || 'Bilinmeyen')}
+            ${typeBadge} ${srcBadge}
+          </div>
+          ${n.chassis_desc ? `<div class="phys-field"><i class="fa-solid fa-info-circle"></i><span>${escHtml(n.chassis_desc)}</span></div>` : ''}
+          ${n.port_id ? `<div class="phys-field"><i class="fa-solid fa-plug"></i> Port:<span>${escHtml(n.port_id)}</span></div>` : ''}
+          ${n.local_iface ? `<div class="phys-field"><i class="fa-solid fa-ethernet"></i> Yerel arayüz:<span>${escHtml(n.local_iface)}</span></div>` : ''}
+          ${n.mac ? `<div class="phys-field"><i class="fa-solid fa-barcode"></i> MAC:<span style="font-family:monospace">${escHtml(n.mac)}</span>${n.vendor ? ` <span style="color:#94a3b8;font-size:10px">(${escHtml(n.vendor)})</span>` : ''}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── ARP table ─────────────────────────────────────────────────────────────
+  const arpEntries = (arpRes.status === 'fulfilled' ? (arpRes.value.arp || []) : []);
+  _physArpData = arpEntries;
+  const chipArp = document.getElementById('phys-chip-arp');
+  if (chipArp) chipArp.innerHTML = `<i class="fa-solid fa-table-list"></i> ${arpEntries.length} ARP`;
+  const chipTotal = document.getElementById('phys-chip-total');
+  if (chipTotal) chipTotal.innerHTML = `<i class="fa-solid fa-network-wired"></i> ${neighbors.length + arpEntries.length} cihaz`;
+  const arpBadge = document.getElementById('phys-arp-badge');
+  if (arpBadge) arpBadge.textContent = `(${arpEntries.length} giriş)`;
+
+  _renderArpTable(arpEntries);
+}
+
+function _renderArpTable(entries) {
+  const tbody = document.getElementById('phys-arp-tbody');
+  if (!tbody) return;
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><p>ARP girişi bulunamadı</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e => {
+    const stateColor = e.state === 'reachable' ? '#4ade80' : e.state === 'stale' ? '#fb923c' : '#94a3b8';
+    return `<tr>
+      <td style="font-family:monospace;font-weight:600">${escHtml(e.ip||'—')}</td>
+      <td style="font-family:monospace;font-size:11px">${escHtml(e.mac||'—')}</td>
+      <td style="font-size:11px">${escHtml(e.vendor||'—')}</td>
+      <td>${escHtml(e.iface||'—')}</td>
+      <td><span style="color:${stateColor};font-size:11px">${escHtml(e.state||'unknown')}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterArpTable(q) {
+  if (!_physArpData.length) return;
+  const lq = q.toLowerCase();
+  const filtered = lq
+    ? _physArpData.filter(e => (e.ip||'').includes(lq) || (e.mac||'').toLowerCase().includes(lq) || (e.vendor||'').toLowerCase().includes(lq))
+    : _physArpData;
+  _renderArpTable(filtered);
 }
 
 async function setupBridge() {
@@ -13457,12 +13754,24 @@ function shellClear() {
 }
 
 /* ══════════════════ Auto-Snapshot ══════════════════ */
+function _updateAutoSnapBadge(val) {
+  const b = document.getElementById('autosnap-status-badge');
+  if (!b) return;
+  if (val === 'true') {
+    b.style.cssText = 'display:inline-block;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3)';
+    b.textContent = '✓ Aktif';
+  } else {
+    b.style.cssText = 'display:inline-block;background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)';
+    b.textContent = '✗ Devre dışı';
+  }
+}
+
 async function loadAutoSnapConfig() {
   try {
     const d = await api('/auto-snapshot/config');
     if (d.available === false) return;
     const sel = document.getElementById('autosnap-enabled');
-    if (sel) sel.value = d.enabled ? 'true' : 'false';
+    if (sel) { sel.value = d.enabled ? 'true' : 'false'; _updateAutoSnapBadge(sel.value); }
     const h = document.getElementById('autosnap-hour');
     if (h) h.value = d.hour ?? 2;
     const m = document.getElementById('autosnap-minute');
@@ -14483,7 +14792,10 @@ async function loadAiRecommendations() {
   `).join('') : '<p class="text-muted">Henüz analiz yapılmadı. "Analiz Et" butonuna tıklayın.</p>';
 }
 
+let _aiAnalysisRunning = false;
 async function runAiAnalysis() {
+  if (_aiAnalysisRunning) return;
+  _aiAnalysisRunning = true;
   const btn = document.getElementById('aiAnalyzeBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Analiz ediliyor...'; }
   try {
@@ -14510,6 +14822,9 @@ async function runAiAnalysis() {
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Analiz Et'; }
     toast('AI analiz hatası: ' + e.message, 'error');
+  } finally {
+    _aiAnalysisRunning = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Analiz Et'; }
   }
 }
 
@@ -14726,7 +15041,25 @@ async function loadAuditLog() {
   `).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:10px">Kayıt yok</td></tr>';
 }
 
-function exportAuditCsv() { window.open('/api/audit/export', '_blank'); }
+async function exportAuditCsv() {
+  try {
+    const resp = await fetch('/api/audit/export', {
+      headers: { 'Authorization': 'Bearer ' + (TOKEN() || '') }
+    });
+    if (!resp.ok) { toast('CSV indirme hatası: ' + resp.status, 'error'); return; }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'audit_log.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    toast('CSV indirme hatası: ' + e.message, 'error');
+  }
+}
 
 /* ══════════════════ API Keys ══════════════════ */
 async function loadApiKeys() {

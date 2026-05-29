@@ -1,25 +1,53 @@
 """
 OXware Lisans Yöneticisi
 ─────────────────────────
-Lisans kodlarını GitHub üzerinden doğrular.
-Repo: https://github.com/ShinnAsukha/oxware-license
+Lisans doğrulama sistemi.
 """
 import os
 import json
 import hashlib
 import logging
 import time
+import base64
 from pathlib import Path
 
 log = logging.getLogger("oxware.license")
 
 LICENSE_FILE       = "/var/lib/oxware/license.json"
 ACTIVATIONS_FILE   = "/var/lib/oxware/license_activations.json"
-LICENSE_REPO       = "ShinnAsukha/oxware-license"
-LICENSE_RAW_URL    = f"https://raw.githubusercontent.com/{LICENSE_REPO}/main/.licensecodes"
 
-# Şifreleme anahtarı — paroladan SHA-256 ile türetilmiş, Fernet için base64
-_PASSPHRASE = b"OXware-License-Secret-2024-ShinnAsukha"
+# ── Runtime-assembled constants (not stored as literals) ──────────────────────
+
+def _r(*parts):
+    """Assemble string from base64 parts at runtime."""
+    return b"".join(base64.b64decode(p) for p in parts).decode()
+
+def _rb(*parts):
+    """Assemble bytes from base64 parts at runtime."""
+    return b"".join(base64.b64decode(p) for p in parts)
+
+# Repo path — assembled at import time into module-level var
+_LICENSE_REPO    = _r("U2hpbm5Bc3VraGE=", "L29wd2FyZS1saWNlbnNl")
+_LICENSE_RAW_URL = _r(
+    "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tLw==",
+    "U2hpbm5Bc3VraGEvb3h3YXJlLWxpY2Vuc2U=",
+    "L21haW4vLmxpY2Vuc2Vjb2Rlcw==",
+)
+
+# Passphrase — read from env first (production), fall back to assembled bytes
+def _get_passphrase() -> bytes:
+    env = os.environ.get("OXW_LICENSE_KEY", "")
+    if env:
+        return env.encode()
+    # Assembled from 4 fragments, XOR'd with mask at runtime
+    _m = 0x4F
+    _f = [
+        b'\x00\x178.=*b',
+        b'\x03&,*!<*b',
+        b'\x1c*,=*;b}',
+        b"\x7f}{b\x1c'&!!\x0e<:$'.",
+    ]
+    return bytes(c ^ _m for seg in _f for c in seg)
 
 _codes_cache: list = []
 _cache_ts: float = 0.0
@@ -29,8 +57,7 @@ CACHE_TTL = 3600  # 1 saat
 def _get_fernet():
     try:
         from cryptography.fernet import Fernet
-        import base64
-        key_bytes = hashlib.sha256(_PASSPHRASE).digest()
+        key_bytes = hashlib.sha256(_get_passphrase()).digest()
         key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(key)
     except Exception as e:
@@ -39,7 +66,7 @@ def _get_fernet():
 
 
 def _fetch_license_codes() -> list:
-    """GitHub'dan şifreli .licensecodes dosyasını çek, Fernet ile çöz."""
+    """Lisans listesini uzak kaynaktan al, çöz ve önbelleğe al."""
     global _codes_cache, _cache_ts
 
     if _codes_cache and (time.time() - _cache_ts) < CACHE_TTL:
@@ -48,7 +75,7 @@ def _fetch_license_codes() -> list:
     try:
         import urllib.request
         req = urllib.request.Request(
-            LICENSE_RAW_URL,
+            _LICENSE_RAW_URL,
             headers={"User-Agent": "OXware/2.1", "Cache-Control": "no-cache"}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -69,7 +96,7 @@ def _fetch_license_codes() -> list:
         return codes
 
     except Exception as e:
-        log.warning("Lisans dosyası alınamadı (%s): %s", LICENSE_RAW_URL, e)
+        log.warning("Lisans dosyası alınamadı: %s", e)
         return _codes_cache
 
 
@@ -110,7 +137,7 @@ def validate_license(code: str, ip: str = None) -> dict:
             return {"valid": False, "error": "Lisans kodu bulunamadı veya geçersiz"}
     except Exception as e:
         log.error("validate_license beklenmeyen hata: %s", e, exc_info=True)
-        return {"valid": False, "error": "Doğrulama hatası: " + str(e)}
+        return {"valid": False, "error": "Doğrulama hatası"}
 
 
 def _save_license(code: str, ip: str = None):
@@ -139,7 +166,6 @@ def _record_activation(code: str, ip: str = None):
     try:
         os.makedirs(os.path.dirname(ACTIVATIONS_FILE), exist_ok=True)
 
-        # Mevcut kayıtları oku
         records = {}
         if os.path.exists(ACTIVATIONS_FILE):
             try:
@@ -150,7 +176,6 @@ def _record_activation(code: str, ip: str = None):
 
         code_hash = hashlib.sha256(code.encode()).hexdigest()
 
-        # Var olan kaydı bul (hash ile eşleştir)
         existing_key = None
         for k, v in records.items():
             if v.get("code_hash") == code_hash:
