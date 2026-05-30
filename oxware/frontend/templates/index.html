@@ -489,9 +489,11 @@
     .sk-row td{padding:11px 12px}
     .sk-cell{height:11px;width:80%}
 
-    /* ── Sparkline ── */
-    .spark-wrap{position:relative;height:26px;margin-top:5px;width:100%}
+    /* ── Sparkline (compact, sağa hizalı) ── */
+    .spark-wrap{position:absolute;top:-2px;right:0;height:14px;width:160px;opacity:.45;pointer-events:none;transition:opacity .2s}
     .spark-wrap svg{width:100%;height:100%;display:block;overflow:visible}
+    .esxi-res-block:hover .spark-wrap{opacity:.95}
+    .esxi-res-block{position:relative}
 
     /* ── Settings tabs ── */
     .settings-tab{background:none;border:none;border-bottom:2px solid transparent;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);transition:color .12s,border-color .12s;margin-bottom:-1px}
@@ -628,7 +630,8 @@
     .nav-sub-item:hover{background:var(--surface2);color:var(--text)}
     .nav-sub-item .sub-dot{width:5px;height:5px;border-radius:50%;background:var(--border2);flex-shrink:0}
     .nav-sub-item.running .sub-dot{background:var(--green-lt)}
-    .vm-expand-btn{margin-left:auto;font-size:9px;padding:2px 5px;cursor:pointer;color:var(--text-dim);transition:transform .2s}
+    .vm-expand-btn{margin-left:auto;padding:2px 5px;cursor:pointer;color:var(--text-dim);display:flex;align-items:center}
+    .vm-expand-btn i{font-size:9px;transition:transform .2s}
 
     /* Lang selector */
     .lang-opt{padding:7px 14px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap}
@@ -8791,7 +8794,8 @@ function toggleVmSubList(e) {
   if (!subList) return;
   const open = subList.style.display === 'none';
   subList.style.display = open ? 'block' : 'none';
-  btn.textContent = open ? '▾' : '▸';
+  const ic = btn.querySelector('i');
+  if (ic) ic.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
   if (open) loadVmSubList();
 }
 
@@ -9225,7 +9229,7 @@ function buildContextNav(type) {
   <div class="ctx-section-body">
     <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
       <i class="fa-solid fa-server fa-fw"></i>VM'lerim
-      <span class="vm-expand-btn" onclick="toggleVmSubList(event)">▸</span>
+      <span class="vm-expand-btn" onclick="toggleVmSubList(event)"><i class="fa-solid fa-chevron-right"></i></span>
     </div>
     <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
   </div>`;
@@ -9253,7 +9257,7 @@ function buildContextNav(type) {
   <div class="ctx-section-body collapsed">
     <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
       <i class="fa-solid fa-server fa-fw"></i>${t('vms')}
-      <span class="vm-expand-btn" onclick="toggleVmSubList(event)">▸</span>
+      <span class="vm-expand-btn" onclick="toggleVmSubList(event)"><i class="fa-solid fa-chevron-right"></i></span>
     </div>
     <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
     <div class="ctx-item" data-page="snapshots" onclick="navigate('snapshots');closeMobileNav()">
@@ -11517,14 +11521,41 @@ async function exportVM(vmId, vmName) {
   if (!await showConfirm(`"${vmName}" OVA formatında dışa aktarılacak. Disk boyutuna göre uzun sürebilir.`, 'OVA Export')) return;
   const taskId = 'export-' + Date.now();
   addTaskToPanel(taskId, `OVA Export: ${vmName}`, 'running');
+  let d;
   try {
-    const d = await api(`/vms/${vmId}/export`, { method: 'POST' });
-    completeTaskPanel(taskId, 'success');
-    toast(`Export başlatıldı: ${d.output_path}`, 'success');
+    d = await api(`/vms/${vmId}/export`, { method: 'POST' });
   } catch(e) {
     completeTaskPanel(taskId, 'error');
-    toast('Export hatası: ' + e.message, 'error');
+    toast('Export başlatılamadı: ' + (e.message || 'Bilinmeyen hata'), 'error', 6000);
+    return;
   }
+  if (!d || !d.job_id) {
+    completeTaskPanel(taskId, 'error');
+    toast('Export başlatılamadı: yanıt geçersiz', 'error');
+    return;
+  }
+  toast(`Export başladı (~${d.size_mb} MB) — arkaplanda devam ediyor`, 'info', 5000);
+  // Job poll
+  const poll = setInterval(async () => {
+    try {
+      const j = await api(`/vms/export/jobs/${d.job_id}`);
+      if (j.status === 'done') {
+        clearInterval(poll);
+        completeTaskPanel(taskId, 'success');
+        const mb = Math.round((j.size_bytes || 0) / 1048576);
+        toast(`✓ Export tamamlandı: ${j.path.split('/').pop()} (${mb} MB)`, 'success', 8000);
+      } else if (j.status === 'error') {
+        clearInterval(poll);
+        completeTaskPanel(taskId, 'error');
+        toast('Export hatası: ' + (j.error || 'bilinmeyen'), 'error', 8000);
+      } else {
+        updateTaskProgress && updateTaskProgress(taskId, j.progress || 0);
+      }
+    } catch(_) {
+      clearInterval(poll);
+      completeTaskPanel(taskId, 'error');
+    }
+  }, 3000);
 }
 
 /* ══════════════════ Disk Resize ══════════════════ */

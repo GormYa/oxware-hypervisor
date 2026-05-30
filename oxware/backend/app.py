@@ -6879,9 +6879,29 @@ def api_templates_list():
 @app.route("/api/templates", methods=["POST"])
 @require_auth
 def api_template_create():
-    if not template_mgr: return err("Template modülü yüklenemedi")
+    if not template_mgr: return err("Template modülü yüklenemedi — sunucu loglarını kontrol edin")
     d = request.json or {}
-    return ok(template_mgr.create_from_vm(d["vm_id"], d["name"], d.get("description",""), d.get("tags")))
+    if not d.get("vm_id") or not d.get("name"):
+        return err("vm_id ve name zorunlu alanlardır", 400)
+    try:
+        # VM'in mevcut olduğunu doğrula
+        try:
+            _vm_check = vm_manager.get_vm(d["vm_id"])
+            _vm_state = _vm_check.get("state", "")
+            if _vm_state == "running":
+                return err(f"VM çalışıyor ({_vm_state}). Template oluşturmak için VM'i durdurun.", 400)
+        except Exception as _ve:
+            return err(f"VM bulunamadı: {d['vm_id']} ({_ve})", 404)
+        result = template_mgr.create_from_vm(d["vm_id"], d["name"], d.get("description",""), d.get("tags"))
+        ev.info(f"Template oluşturuldu: {d['name']} (VM: {d['vm_id']})", category="template")
+        return ok(result)
+    except FileNotFoundError as e:
+        return err(f"Disk dosyası bulunamadı: {e}", 404)
+    except PermissionError as e:
+        return err(f"İzin hatası: {e}", 403)
+    except Exception as e:
+        log.error("Template oluşturma hatası: %s", e, exc_info=True)
+        return err(f"Template oluşturulamadı: {e}", 500)
 
 @app.route("/api/templates/<tid>", methods=["GET", "DELETE"])
 @require_auth
@@ -9124,56 +9144,142 @@ def api_vm_disk_attach_v2(vm_id):
         return err(e, 500)
 
 # ── OVA Export ────────────────────────────────────────────────────────────────
+_EXPORT_JOBS = {}  # job_id -> {status, path, error, started, finished, vm_name}
+
 @app.route("/api/vms/<vm_id>/export", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
 def api_vm_export(vm_id):
     """VM'i OVA benzeri tar arşivine aktar (XML + disk)."""
-    import threading as _thr, tarfile, datetime as _dt
+    import threading as _thr, tarfile, datetime as _dt, uuid as _uu
     try:
         info = vm_manager.get_vm(vm_id)
         vm_name = info.get("name", vm_id)
         import re as _re_sec
         vm_name_safe = _re_sec.sub(r'[^\w\-.]', '_', str(vm_name))[:64]
         disks = info.get("disks", [])
+
+        # Disk yollarını kontrol et
+        accessible_disks = []
+        missing_disks = []
+        for disk in disks:
+            src = disk.get("source") or disk.get("path", "")
+            if not src:
+                continue
+            if os.path.exists(src):
+                accessible_disks.append(src)
+            else:
+                missing_disks.append(src)
+
+        if missing_disks:
+            return err(f"Disk dosyaları erişilemiyor: {', '.join(missing_disks)}. VM çalışıyor olabilir veya dosyalar başka yerde.", 400)
+
+        if not accessible_disks:
+            return err("Export edilecek disk bulunamadı", 400)
+
+        # Toplam disk boyutu (öngörü için)
+        total_size = sum(os.path.getsize(d) for d in accessible_disks if os.path.exists(d))
+        size_mb = total_size / (1024 * 1024)
+
         ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        export_dir = f"/var/lib/oxware/backups/exports"
-        os.makedirs(export_dir, exist_ok=True)
+        export_dir = "/var/lib/oxware/backups/exports"
+
+        try:
+            os.makedirs(export_dir, exist_ok=True)
+        except PermissionError:
+            return err(f"İzin hatası: {export_dir} oluşturulamadı. Servisi root ile çalıştırın.", 403)
+
+        # Disk alanı kontrolü
+        try:
+            import shutil as _sh
+            free = _sh.disk_usage(export_dir).free
+            if free < total_size:
+                return err(f"Yetersiz disk alanı: {free//(1024**2)} MB boş, {int(size_mb)} MB gerekli", 507)
+        except Exception:
+            pass
+
         output_path = f"{export_dir}/{vm_name_safe}-{ts}.tar.gz"
+        job_id = _uu.uuid4().hex[:12]
+        _EXPORT_JOBS[job_id] = {
+            "status":   "running",
+            "path":     output_path,
+            "vm_name":  vm_name,
+            "started":  time.time(),
+            "size_mb":  round(size_mb, 1),
+            "progress": 0,
+        }
 
         def _do_export():
             try:
                 # XML dump
                 xr = subprocess.run(["virsh", "dumpxml", vm_id],
                     capture_output=True, text=True, timeout=30)
-                xml_content = xr.stdout
+                if xr.returncode != 0:
+                    raise RuntimeError(f"virsh dumpxml: {xr.stderr.strip()}")
 
                 with tarfile.open(output_path, "w:gz") as tar:
-                    # XML ekle
                     import io
-                    xml_bytes = xml_content.encode()
+                    xml_bytes = xr.stdout.encode()
                     info_obj = tarfile.TarInfo(name=f"{vm_name_safe}.xml")
                     info_obj.size = len(xml_bytes)
                     tar.addfile(info_obj, io.BytesIO(xml_bytes))
-                    # Diskleri ekle
-                    for disk in disks:
-                        src = disk.get("source") or disk.get("path", "")
-                        if src and os.path.exists(src):
-                            tar.add(src, arcname=os.path.basename(src))
-                ev.info(f"OVA export tamamlandı: {vm_name} → {output_path}", category="vm")
-            except Exception as ex:
-                ev.info(f"OVA export hatası: {ex}", category="vm")
+                    for idx, src in enumerate(accessible_disks):
+                        tar.add(src, arcname=os.path.basename(src))
+                        _EXPORT_JOBS[job_id]["progress"] = int((idx + 1) / len(accessible_disks) * 100)
 
-        t = _thr.Thread(target=_do_export, daemon=True)
-        t.start()
+                final_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+                _EXPORT_JOBS[job_id].update({
+                    "status":     "done",
+                    "finished":   time.time(),
+                    "size_bytes": final_size,
+                    "progress":   100,
+                })
+                ev.info(f"OVA export tamamlandı: {vm_name} → {output_path} ({final_size//(1024**2)} MB)", category="vm")
+                _bg_notify(f"OVA export tamamlandı: {vm_name}", level="INFO", category="vm")
+            except Exception as ex:
+                _EXPORT_JOBS[job_id].update({
+                    "status":   "error",
+                    "error":    str(ex),
+                    "finished": time.time(),
+                })
+                ev.info(f"OVA export hatası: {ex}", category="vm")
+                log.error("OVA export hatası (%s): %s", vm_name, ex, exc_info=True)
+                # Yarım kalan dosyayı sil
+                if os.path.exists(output_path):
+                    try: os.remove(output_path)
+                    except: pass
+
+        _thr.Thread(target=_do_export, daemon=True, name=f"ova-export-{job_id}").start()
         return ok({
-            "status": "started",
+            "status":      "started",
+            "job_id":      job_id,
             "output_path": output_path,
-            "vm_name": vm_name,
-            "message": "Export arkaplanda çalışıyor. Backups sayfasından indirin."
+            "vm_name":     vm_name,
+            "size_mb":     round(size_mb, 1),
+            "message":     f"Export başladı (~{int(size_mb)} MB). Job ID: {job_id}",
         })
     except Exception as e:
-        return err(e, 500)
+        log.error("OVA export başlatma hatası: %s", e, exc_info=True)
+        return err(f"Export başlatılamadı: {e}", 500)
+
+
+@app.route("/api/vms/export/jobs/<job_id>")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_export_job(job_id):
+    """OVA export job durumunu döndür."""
+    job = _EXPORT_JOBS.get(job_id)
+    if not job:
+        return err("Job bulunamadı", 404)
+    return ok(job)
+
+
+@app.route("/api/vms/export/jobs")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_export_jobs():
+    """Tüm export job'ları listele."""
+    return ok({"jobs": [{"id": k, **v} for k, v in _EXPORT_JOBS.items()]})
 
 # ── SSH Watchdog ──────────────────────────────────────────────────────────────
 
