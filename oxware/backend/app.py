@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.0
+OXware Hypervisor Management API v2.5.3
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -125,6 +125,28 @@ hotplug_mgr     = _safe_import("hotplug_manager")
 stor_mig        = _safe_import("storage_migration")
 net_qos         = _safe_import("network_qos")
 ssh_watchdog    = _safe_import("ssh_watchdog")
+
+# ── v2.5.3 Enterprise modules ────────────────────────────────────────────────
+vnc_thumb       = _safe_import("vnc_thumbnail")
+snapshot_clean  = _safe_import("snapshot_cleanup")
+affinity_mgr    = _safe_import("affinity_manager")
+backup_enc      = _safe_import("backup_encryption")
+linked_clone    = _safe_import("linked_clone")
+siem_exp        = _safe_import("siem_exporter")
+session_rec     = _safe_import("session_recorder")
+maint_mode      = _safe_import("maintenance_mode")
+evc_mgr         = _safe_import("evc_manager")
+nioc_mgr        = _safe_import("nioc_manager")
+predictive_fail = _safe_import("predictive_failure")
+right_sizing    = _safe_import("right_sizing")
+alert_corr      = _safe_import("alert_correlation")
+site_recovery   = _safe_import("site_recovery")
+drs_mgr         = _safe_import("drs_manager")
+lifecycle_mgr   = _safe_import("lifecycle_manager")
+compute_tune    = _safe_import("compute_tuning")
+storage_adv     = _safe_import("storage_advanced")
+network_adv     = _safe_import("network_advanced")
+automation_eng  = _safe_import("automation_engine")
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "templates")
@@ -694,12 +716,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.0-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.0-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.3-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4235,7 +4257,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.0",
+        oxware_version="2.5.3",
     )
 
 @app.route("/api/system/stats")
@@ -9371,7 +9393,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.0</span>
+  <span id="ver-badge">v2.5.3</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -9605,7 +9627,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.5.0",
+            "version": "2.5.3",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -10990,7 +11012,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.0", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.3", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -14644,8 +14666,598 @@ def api_ds_disk_usage():
     return ok(**ds_browser.get_disk_usage(pool_path))
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# v2.5.3 Enterprise Modules — Routes
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── VM Thumbnails ───────────────────────────────────────────────────────────
+@app.route("/api/vms/<vm_id>/thumbnail.png")
+@require_auth
+def api_vm_thumbnail(vm_id):
+    if not vnc_thumb:
+        return err("Thumbnail modülü yok", 503)
+    try:
+        vm = vm_manager.get_vm(vm_id)
+        if vm.get("state") != "running":
+            return err("VM çalışmıyor", 400)
+        png = vnc_thumb.get_thumbnail(vm_id, vm.get("name"))
+        if not png:
+            return err("Yakalama başarısız (libvirt/virsh erişimi?)", 503)
+        from flask import Response
+        return Response(png, mimetype="image/png",
+                        headers={"Cache-Control": "max-age=60"})
+    except Exception as e:
+        return err(e, 500)
+
+@app.route("/api/thumbnails/stats")
+@require_auth
+@require_role("admin", "administrator")
+def api_thumbnail_stats():
+    if not vnc_thumb: return ok(available=False)
+    return ok(**vnc_thumb.stats())
+
+
+# ── Snapshot Cleanup ────────────────────────────────────────────────────────
+@app.route("/api/snapshots/orphans")
+@require_auth
+@require_role("admin", "administrator")
+def api_snap_orphans():
+    if not snapshot_clean: return ok(orphans=[])
+    return ok(orphans=snapshot_clean.find_orphans())
+
+@app.route("/api/snapshots/cleanup", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_snap_cleanup():
+    if not snapshot_clean: return err("Modül yok")
+    dry = (request.get_json(silent=True) or {}).get("dry_run", True)
+    return ok(**snapshot_clean.cleanup_orphans(dry_run=dry))
+
+@app.route("/api/snapshots/policy", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_snap_policy():
+    if not snapshot_clean: return err("Modül yok")
+    if request.method == "GET":
+        return ok(policy=snapshot_clean.get_policy())
+    return ok(policy=snapshot_clean.set_policy(**(request.get_json(silent=True) or {})))
+
+
+# ── Affinity Rules ──────────────────────────────────────────────────────────
+@app.route("/api/affinity/rules", methods=["GET"])
+@require_auth
+def api_affinity_list():
+    if not affinity_mgr: return ok(rules=[])
+    return ok(rules=affinity_mgr.list_rules())
+
+@app.route("/api/affinity/rules", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_affinity_create():
+    if not affinity_mgr: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(rule=affinity_mgr.add_rule(**d))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/affinity/rules/<rule_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_affinity_delete(rule_id):
+    if not affinity_mgr: return err("Modül yok")
+    return ok(deleted=affinity_mgr.delete_rule(rule_id))
+
+
+# ── Backup Encryption ──────────────────────────────────────────────────────
+@app.route("/api/backup/encrypt", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_backup_encrypt():
+    if not backup_enc: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(**backup_enc.encrypt_file(d["src"], d["dst"], d.get("passphrase")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/backup/decrypt", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_backup_decrypt():
+    if not backup_enc: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(**backup_enc.decrypt_file(d["src"], d["dst"], d.get("passphrase")))
+    except Exception as e:
+        return err(e, 400)
+
+
+# ── Linked Clones ──────────────────────────────────────────────────────────
+@app.route("/api/linked-clones", methods=["GET"])
+@require_auth
+def api_lc_list():
+    if not linked_clone: return ok(linked_clones=[])
+    return ok(**linked_clone.stats())
+
+@app.route("/api/linked-clones", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_create():
+    if not linked_clone: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(**linked_clone.create_linked_clone(d["base_vm"], d["new_name"]))
+    except Exception as e:
+        return err(e, 400)
+
+
+# ── SIEM Exporter ──────────────────────────────────────────────────────────
+@app.route("/api/siem/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_siem_config():
+    if not siem_exp: return err("Modül yok")
+    if request.method == "GET":
+        return ok(config=siem_exp.get_config())
+    return ok(config=siem_exp.set_config(**(request.get_json(silent=True) or {})))
+
+@app.route("/api/siem/test", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_siem_test():
+    if not siem_exp: return err("Modül yok")
+    return ok(**siem_exp.test_connection())
+
+
+# ── Session Recording ──────────────────────────────────────────────────────
+@app.route("/api/recordings")
+@require_auth
+@require_role("admin", "administrator")
+def api_rec_list():
+    if not session_rec: return ok(recordings=[])
+    return ok(recordings=session_rec.list_recordings(),
+              stats=session_rec.stats())
+
+@app.route("/api/recordings/<rec_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_rec_get(rec_id):
+    if not session_rec: return err("Modül yok")
+    try:
+        data = session_rec.get_recording(rec_id)
+        from flask import Response
+        return Response(data, mimetype="application/x-asciicast",
+                        headers={"Content-Disposition": f"attachment; filename={rec_id}.cast"})
+    except Exception as e:
+        return err(e, 404)
+
+@app.route("/api/recordings/<rec_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_rec_delete(rec_id):
+    if not session_rec: return err("Modül yok")
+    return ok(deleted=session_rec.delete_recording(rec_id))
+
+
+# ── Maintenance Mode ───────────────────────────────────────────────────────
+@app.route("/api/maintenance/status")
+@require_auth
+def api_maint_status():
+    if not maint_mode: return ok(in_maintenance=False)
+    return ok(**maint_mode.get_status())
+
+@app.route("/api/maintenance/enter", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_maint_enter():
+    if not maint_mode: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    return ok(**maint_mode.enter_maintenance(
+        reason=d.get("reason", "Planned"),
+        target_hosts=d.get("target_hosts"),
+        dry_run=d.get("dry_run", False)
+    ))
+
+@app.route("/api/maintenance/exit", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_maint_exit():
+    if not maint_mode: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    return ok(**maint_mode.exit_maintenance(auto_start=d.get("auto_start", False)))
+
+
+# ── EVC (CPU Compatibility) ────────────────────────────────────────────────
+@app.route("/api/evc/baselines")
+@require_auth
+def api_evc_baselines():
+    if not evc_mgr: return ok(baselines=[])
+    return ok(baselines=evc_mgr.list_baselines(),
+              current=evc_mgr.get_current_baseline(),
+              host=evc_mgr.detect_host_capability())
+
+@app.route("/api/evc/set-baseline", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_evc_set():
+    if not evc_mgr: return err("Modül yok")
+    name = (request.get_json(silent=True) or {}).get("name")
+    return ok(config=evc_mgr.set_cluster_baseline(name))
+
+@app.route("/api/evc/apply/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_evc_apply(vm_id):
+    if not evc_mgr: return err("Modül yok")
+    baseline = (request.get_json(silent=True) or {}).get("baseline")
+    return ok(**evc_mgr.apply_baseline_to_vm(vm_id, baseline))
+
+
+# ── NIOC (Network IO Control) ──────────────────────────────────────────────
+@app.route("/api/nioc/profiles")
+@require_auth
+def api_nioc_profiles():
+    if not nioc_mgr: return ok(profiles=[])
+    return ok(profiles=nioc_mgr.list_profiles())
+
+@app.route("/api/nioc/vm/<vm_id>", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_nioc_vm(vm_id):
+    if not nioc_mgr: return err("Modül yok")
+    if request.method == "GET":
+        return ok(**nioc_mgr.get_vm_bandwidth(vm_id))
+    d = request.get_json(silent=True) or {}
+    if "profile" in d:
+        return ok(**nioc_mgr.apply_profile_to_vm(vm_id, d["profile"]))
+    return ok(**nioc_mgr.set_vm_bandwidth(
+        vm_id, d.get("in_kbps", 0), d.get("out_kbps", 0), d.get("burst_kbps", 1024)
+    ))
+
+
+# ── Predictive Failure ─────────────────────────────────────────────────────
+@app.route("/api/health/disks")
+@require_auth
+def api_health_disks():
+    if not predictive_fail: return ok(disks=[])
+    return ok(**predictive_fail.get_summary())
+
+@app.route("/api/health/predictions")
+@require_auth
+def api_health_predictions():
+    if not predictive_fail: return ok(predictions=[])
+    threshold = int(request.args.get("threshold", 40))
+    return ok(predictions=predictive_fail.get_predictions(threshold))
+
+
+# ── Right-Sizing + Capacity Planning ───────────────────────────────────────
+@app.route("/api/advisor/vm/<vm_id>")
+@require_auth
+def api_advisor_vm(vm_id):
+    if not right_sizing: return err("Modül yok")
+    period = request.args.get("period", "30d")
+    return ok(**right_sizing.analyze_vm(vm_id, period))
+
+@app.route("/api/advisor/recommendations")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_advisor_recs():
+    if not right_sizing: return ok(recommendations=[])
+    min_savings = int(request.args.get("min_savings", 10))
+    return ok(recommendations=right_sizing.list_recommendations(min_savings))
+
+@app.route("/api/advisor/capacity/<metric>")
+@require_auth
+def api_advisor_capacity(metric):
+    if not right_sizing: return err("Modül yok")
+    days = int(request.args.get("days", 90))
+    return ok(**right_sizing.forecast_capacity(metric, days))
+
+
+# ── Alert Correlation ──────────────────────────────────────────────────────
+@app.route("/api/correlation/rules", methods=["GET"])
+@require_auth
+def api_corr_rules():
+    if not alert_corr: return ok(rules=[])
+    return ok(rules=alert_corr.list_rules())
+
+@app.route("/api/correlation/incidents")
+@require_auth
+def api_corr_incidents():
+    if not alert_corr: return ok(incidents=[])
+    active = request.args.get("active_only", "1") == "1"
+    return ok(incidents=alert_corr.list_incidents(active_only=active))
+
+@app.route("/api/correlation/incidents/<inc_id>/resolve", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_corr_resolve(inc_id):
+    if not alert_corr: return err("Modül yok")
+    return ok(resolved=alert_corr.resolve_incident(inc_id))
+
+
+# ── Site Recovery (DR) ─────────────────────────────────────────────────────
+@app.route("/api/dr/plans", methods=["GET"])
+@require_auth
+def api_dr_plans():
+    if not site_recovery: return ok(plans=[])
+    return ok(plans=site_recovery.list_plans())
+
+@app.route("/api/dr/plans", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dr_create():
+    if not site_recovery: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(plan=site_recovery.create_dr_plan(**d))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/dr/plans/<plan_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dr_delete(plan_id):
+    if not site_recovery: return err("Modül yok")
+    return ok(deleted=site_recovery.delete_plan(plan_id))
+
+@app.route("/api/dr/plans/<plan_id>/execute", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dr_execute(plan_id):
+    if not site_recovery: return err("Modül yok")
+    mode = (request.get_json(silent=True) or {}).get("mode", "test")
+    return ok(**site_recovery.execute_plan(plan_id, mode))
+
+@app.route("/api/dr/rpo-rto")
+@require_auth
+def api_dr_sla():
+    if not site_recovery: return ok(plans=[])
+    return ok(**site_recovery.get_rpo_rto_status())
+
+
+# ── DRS ────────────────────────────────────────────────────────────────────
+@app.route("/api/drs/analyze")
+@require_auth
+def api_drs_analyze():
+    if not drs_mgr: return ok()
+    return ok(**drs_mgr.analyze())
+
+@app.route("/api/drs/policy", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_drs_policy():
+    if not drs_mgr: return err("Modül yok")
+    if request.method == "GET":
+        return ok(policy=drs_mgr.get_policy())
+    return ok(policy=drs_mgr.set_policy(**(request.get_json(silent=True) or {})))
+
+@app.route("/api/drs/suggest")
+@require_auth
+def api_drs_suggest():
+    if not drs_mgr: return ok(suggestions=[])
+    return ok(suggestions=drs_mgr.suggest_moves())
+
+
+# ── Lifecycle Manager ──────────────────────────────────────────────────────
+@app.route("/api/lifecycle/updates")
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_updates():
+    if not lifecycle_mgr: return err("Modül yok")
+    return ok(**lifecycle_mgr.check_updates())
+
+@app.route("/api/lifecycle/apply", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_apply():
+    if not lifecycle_mgr: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    return ok(**lifecycle_mgr.apply_updates(
+        packages=d.get("packages"),
+        dry_run=d.get("dry_run", False),
+        security_only=d.get("security_only", False)
+    ))
+
+@app.route("/api/lifecycle/baselines")
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_baselines():
+    if not lifecycle_mgr: return ok(baselines=[])
+    return ok(baselines=lifecycle_mgr.list_baselines())
+
+@app.route("/api/lifecycle/baselines/<name>/capture", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_capture(name):
+    if not lifecycle_mgr: return err("Modül yok")
+    return ok(baseline=lifecycle_mgr.capture_baseline(name))
+
+@app.route("/api/lifecycle/drift/<name>")
+@require_auth
+@require_role("admin", "administrator")
+def api_lc_drift(name):
+    if not lifecycle_mgr: return err("Modül yok")
+    return ok(**lifecycle_mgr.detect_drift(name))
+
+
+# ── Compute Tuning ─────────────────────────────────────────────────────────
+@app.route("/api/compute/hugepages", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_compute_hp():
+    if not compute_tune: return err("Modül yok")
+    if request.method == "GET":
+        return ok(**compute_tune.hugepages_status())
+    count = (request.get_json(silent=True) or {}).get("count", 0)
+    return ok(**compute_tune.hugepages_configure(int(count)))
+
+@app.route("/api/compute/ksm", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_compute_ksm():
+    if not compute_tune: return err("Modül yok")
+    if request.method == "GET":
+        return ok(**compute_tune.ksm_status())
+    d = request.get_json(silent=True) or {}
+    return ok(**compute_tune.ksm_configure(
+        d.get("enabled", True), d.get("pages_to_scan", 100), d.get("sleep_ms", 200)
+    ))
+
+@app.route("/api/compute/numa")
+@require_auth
+def api_compute_numa():
+    if not compute_tune: return ok(available=False)
+    return ok(**compute_tune.numa_topology())
+
+@app.route("/api/compute/pcie")
+@require_auth
+@require_role("admin", "administrator")
+def api_compute_pcie():
+    if not compute_tune: return ok(devices=[])
+    return ok(devices=compute_tune.list_pcie_devices(),
+              iommu=compute_tune.list_iommu_groups())
+
+
+# ── Storage Advanced ───────────────────────────────────────────────────────
+@app.route("/api/storage-adv/zfs")
+@require_auth
+def api_sa_zfs():
+    if not storage_adv: return ok(pools=[])
+    return ok(pools=storage_adv.zfs_pools(),
+              btrfs=storage_adv.btrfs_dedup_status())
+
+@app.route("/api/storage-adv/tiers", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_sa_tiers():
+    if not storage_adv: return err("Modül yok")
+    if request.method == "GET":
+        return ok(tiers=storage_adv.list_tier_policies())
+    d = request.get_json(silent=True) or {}
+    if "pool" in d and "tier" in d:
+        return ok(**storage_adv.assign_pool_to_tier(d["pool"], d["tier"]))
+    return ok(**storage_adv.save_tier_policies(d.get("tiers", [])))
+
+@app.route("/api/storage-adv/spbm", methods=["GET", "POST"])
+@require_auth
+def api_sa_spbm():
+    if not storage_adv: return ok(policies=[])
+    if request.method == "GET":
+        return ok(policies=storage_adv.list_spbm_policies())
+    d = request.get_json(silent=True) or {}
+    return ok(**storage_adv.save_spbm_policies(d.get("policies", [])))
+
+@app.route("/api/storage-adv/iscsi/sessions")
+@require_auth
+@require_role("admin", "administrator")
+def api_sa_iscsi():
+    if not storage_adv: return ok(sessions=[])
+    return ok(sessions=storage_adv.iscsi_initiator_sessions(),
+              target_status=storage_adv.iscsi_target_status())
+
+
+# ── Network Advanced ───────────────────────────────────────────────────────
+@app.route("/api/network-adv/vxlan", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_na_vxlan():
+    if not network_adv: return err("Modül yok")
+    if request.method == "GET":
+        return ok(vxlans=network_adv.vxlan_list())
+    d = request.get_json(silent=True) or {}
+    return ok(**network_adv.vxlan_create(
+        d["name"], int(d["vni"]), d.get("group", "239.1.1.1"),
+        d.get("dev", "eth0"), int(d.get("mtu", 1450))
+    ))
+
+@app.route("/api/network-adv/vxlan/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_na_vxlan_delete(name):
+    if not network_adv: return err("Modül yok")
+    return ok(**network_adv.vxlan_delete(name))
+
+@app.route("/api/network-adv/ipv6")
+@require_auth
+def api_na_ipv6():
+    if not network_adv: return ok(enabled=False)
+    return ok(**network_adv.ipv6_status())
+
+@app.route("/api/network-adv/ddos", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_na_ddos():
+    if not network_adv: return err("Modül yok")
+    if request.method == "GET":
+        return ok(config=network_adv.ddos_get_config())
+    return ok(**network_adv.ddos_apply(request.get_json(silent=True) or {}))
+
+
+# ── Automation Engine ──────────────────────────────────────────────────────
+@app.route("/api/automation/rules", methods=["GET"])
+@require_auth
+def api_auto_rules():
+    if not automation_eng: return ok(rules=[])
+    return ok(rules=automation_eng.list_rules())
+
+@app.route("/api/automation/rules", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_auto_create():
+    if not automation_eng: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(rule=automation_eng.create_rule(
+            d["name"], d["trigger"], d.get("condition"), d.get("actions"),
+            d.get("enabled", True), int(d.get("cooldown_sec", 60))
+        ))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/automation/rules/<rule_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_auto_delete(rule_id):
+    if not automation_eng: return err("Modül yok")
+    return ok(deleted=automation_eng.delete_rule(rule_id))
+
+@app.route("/api/automation/history")
+@require_auth
+def api_auto_history():
+    if not automation_eng: return ok(history=[])
+    return ok(history=automation_eng.get_history(int(request.args.get("limit", 50))))
+
+@app.route("/api/policies", methods=["GET"])
+@require_auth
+def api_policies_list():
+    if not automation_eng: return ok(policies=[])
+    return ok(policies=automation_eng.list_policies())
+
+@app.route("/api/policies", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_policies_create():
+    if not automation_eng: return err("Modül yok")
+    d = request.get_json(silent=True) or {}
+    try:
+        return ok(policy=automation_eng.add_policy(
+            d["name"], d["rule"], d["scope"], d.get("enabled", True)
+        ))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/policies/<policy_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_policies_delete(policy_id):
+    if not automation_eng: return err("Modül yok")
+    return ok(deleted=automation_eng.delete_policy(policy_id))
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.0 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.3 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")

@@ -65,7 +65,7 @@ advance_progress() {
     printf "\n" >&2
 }
 
-OXWARE_VERSION="2.5.0"
+OXWARE_VERSION="2.5.3"
 REPO_URL="https://github.com/ShinnAsukha/oxware-hypervisor.git"
 
 # ── Dizin Yapısı (sunucuyla tam uyumlu) ──────────────────────
@@ -1158,7 +1158,7 @@ send_install_ping() {
         PUB_IP=$(hostname -I | awk '{print $1}')
 
         JSON=$(cat <<EOF
-{"hostname":"${HOSTNAME_VAL}","os":"${OS_VAL}","cpu":"${CPU_VAL} (${CPU_CORES} core)","ram_gb":"${RAM_GB}","version":"2.5.0","ip":"${PUB_IP}"}
+{"hostname":"${HOSTNAME_VAL}","os":"${OS_VAL}","cpu":"${CPU_VAL} (${CPU_CORES} core)","ram_gb":"${RAM_GB}","version":"2.5.3","ip":"${PUB_IP}"}
 EOF
 )
         curl -fsSL --max-time 8 -X POST "$TRACKER_URL" \

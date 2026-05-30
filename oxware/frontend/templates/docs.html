@@ -536,7 +536,7 @@
         </tbody>
       </table>
 
-      <h3>Method 1 — Web UI (OVA Import button) <span class="tag">Updated v2.5.0</span></h3>
+      <h3>Method 1 — Web UI (OVA Import button) <span class="tag">Updated v2.5.3</span></h3>
       <ol>
         <li>Go to <strong>Virtual Machines</strong> dashboard.</li>
         <li>Click <strong>↑ OVA Import</strong> button (top-right area, next to New VM).</li>
@@ -546,7 +546,7 @@
       </ol>
       <p>Firmware (UEFI/BIOS), CPU, and RAM are auto-detected from VMX/OVF metadata when available. Adjust from VM Detail → Hardware after import.</p>
 
-      <h3>Method 2 — SFTP Browser (ESXi direct) <span class="tag tag-green">New v2.5.0</span></h3>
+      <h3>Method 2 — SFTP Browser (ESXi direct) <span class="tag tag-green">New v2.5.3</span></h3>
       <ol>
         <li>Go to <strong>Settings → Backup → SFTP/ESXi Yedek</strong>.</li>
         <li>Enter your ESXi host IP, SSH username, password or private key path.</li>
@@ -781,7 +781,7 @@ curl -X POST https://localhost:8006/api/import/ova \
       <h3>Per-VM Firewall</h3>
       <p>See <a href="#vm-detail">VM Detail → Firewall tab</a>. Rules use nftables and take effect immediately.</p>
 
-      <h3>Bridge IP Isolation <span class="tag tag-green">v2.5.0</span></h3>
+      <h3>Bridge IP Isolation <span class="tag tag-green">v2.5.3</span></h3>
       <p>Navigate to <strong>Network → Bridge &amp; IP İzolasyonu</strong>. Enter a bridge name (e.g. <code>oxbr0</code>), select the physical NIC, and click <strong>Kur</strong>. OXware will:</p>
       <ol>
         <li>Create the Linux bridge device with <code>ip link add oxbr0 type bridge</code></li>
@@ -793,7 +793,7 @@ curl -X POST https://localhost:8006/api/import/ova \
         <strong>Warning:</strong> Attaching the management NIC to the bridge interrupts SSH/panel access until the bridge gets an IP (from upstream DHCP or a static assignment). Use the host console or a second NIC for management.
       </div>
 
-      <h3>cloud-init Static IP <span class="tag tag-green">v2.5.0</span></h3>
+      <h3>cloud-init Static IP <span class="tag tag-green">v2.5.3</span></h3>
       <p>When creating a VM (advanced options), set <strong>Static IP / Gateway / Netmask / DNS</strong>. OXware generates a cloud-init <code>network-config v2</code> YAML and injects it via a NoCloud seed ISO. The VM configures its interface at first boot — no DHCP dependency.</p>
       <pre><code><span class="comment"># Generated network-config v2</span>
 version: 2
@@ -804,10 +804,10 @@ ethernets:
     nameservers:
       addresses: [8.8.8.8, 1.1.1.1]</code></pre>
 
-      <h3>Network DHCP Live Edit <span class="tag tag-green">v2.5.0</span></h3>
+      <h3>Network DHCP Live Edit <span class="tag tag-green">v2.5.3</span></h3>
       <p>Click the <strong>✏</strong> button on any virtual network to open the edit modal. You can modify Gateway, Netmask, DHCP Start, and DHCP End. OXware stops the network, redefines it with updated XML, then restarts it — matching the <code>virsh net-destroy / net-define / net-start</code> workflow.</p>
 
-      <h3>Subnet Calculator <span class="tag tag-green">v2.5.0</span></h3>
+      <h3>Subnet Calculator <span class="tag tag-green">v2.5.3</span></h3>
       <p>Available in <strong>Network → IPAM</strong> at the bottom of the page. Enter any CIDR (e.g. <code>10.0.1.0/22</code>) to instantly see: Network address, Broadcast, First/Last host, Host count, Subnet mask, Wildcard, IP class, RFC1918 status, and binary representation. No server round-trip.</p>
     </section>
 
