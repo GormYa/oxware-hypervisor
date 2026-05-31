@@ -354,6 +354,9 @@
     <a href="#ai"><i class="fas fa-robot"></i> AI Assistant (OXY)</a>
     <a href="#hosting"><i class="fas fa-cloud"></i> Hosting Integration</a>
 
+    <div class="sidebar-section">Enterprise (v2.5.3)</div>
+    <a href="#enterprise"><i class="fas fa-building"></i> Enterprise Features</a>
+
     <div class="sidebar-section">Reference</div>
     <a href="#api"><i class="fas fa-flask"></i> API Reference &amp; Explorer</a>
     <a href="/api/docs" target="_blank" style="color:var(--accent-lt)"><i class="fas fa-external-link-alt"></i> Open API Explorer ↗</a>
@@ -1085,6 +1088,68 @@ ethernets:
 
       <h3>Nginx + Let's Encrypt</h3>
       <p>Navigate to <strong>Settings → SSL / Domains</strong> to add a custom domain and issue a Let's Encrypt certificate. OXware uses <code>certbot</code> and reconfigures Nginx automatically.</p>
+    </section>
+
+    <!-- ENTERPRISE -->
+    <section id="enterprise">
+      <h2><i class="fas fa-building" style="color:var(--accent-lt)"></i> Enterprise Features (v2.5.3)</h2>
+      <p>OXware v2.5.3 introduces a datacenter-grade feature set, bringing VMware vSphere / Nutanix-class capabilities to open-source KVM. Each feature is exposed via the REST API and (where applicable) the web UI.</p>
+
+      <h3>Compute &amp; Scheduling</h3>
+      <ul>
+        <li><strong>DRS (Distributed Resource Scheduler)</strong> — analyze cluster load and rebalance VMs by CPU/RAM. <code>GET /api/drs/analyze</code>, <code>/api/drs/suggest</code>, <code>POST /api/drs/policy</code>.</li>
+        <li><strong>Affinity / Anti-affinity</strong> — pin VMs together or force apart. <code>/api/affinity/rules</code>.</li>
+        <li><strong>EVC</strong> — CPU masking for cross-generation migration. <code>/api/evc</code>.</li>
+        <li><strong>Maintenance Mode</strong> — auto-evacuate VMs before host maintenance. <code>POST /api/maintenance/enter</code>.</li>
+        <li><strong>NUMA-aware scheduling</strong> + HugePages tuning. <code>/api/numa/topology</code>.</li>
+        <li><strong>Right-sizing</strong> — detect over/under-provisioned VMs. <code>/api/right-sizing/report</code>.</li>
+        <li><strong>Predictive failure</strong> — SMART/ECC monitoring → evacuation alerts. <code>/api/predictive/health</code>.</li>
+      </ul>
+
+      <h3>Storage</h3>
+      <ul>
+        <li><strong>Linked clones</strong> — many VMs from one base + thin diffs. <code>POST /api/linked-clone</code>.</li>
+        <li><strong>App-consistent snapshots</strong> — DB-aware quiesce. <code>POST /api/snapshots/app-consistent</code>.</li>
+        <li><strong>Snapshot orphan cleanup</strong> — automatic stale snapshot removal. <code>/api/snapshots/cleanup</code>.</li>
+        <li><strong>Storage advanced</strong> — tiering, dedup/compression, SPBM placement.</li>
+      </ul>
+
+      <h3>Network</h3>
+      <ul>
+        <li><strong>NIOC</strong> — per-VM bandwidth guarantees &amp; QoS. <code>/api/nioc</code>.</li>
+        <li><strong>Microsegmentation</strong> — per-VM L7 firewall; <strong>VXLAN/Geneve</strong> overlay.</li>
+      </ul>
+
+      <h3>Security &amp; Compliance</h3>
+      <ul>
+        <li><strong>SSO (SAML / OIDC)</strong> + <strong>LDAP / Active Directory</strong> login.</li>
+        <li><strong>Audit log immutability</strong> — hash-chained, tamper-evident. <code>/api/audit/verify</code>.</li>
+        <li><strong>SIEM export</strong> — Splunk / Elastic / Wazuh (CEF/syslog). <code>/api/siem/config</code>.</li>
+        <li><strong>Session recording</strong> — SSH/VNC capture &amp; replay. <code>/api/sessions/recordings</code>.</li>
+        <li><strong>Backup encryption</strong> — AES with passphrase. <code>POST /api/backup/encrypt</code>.</li>
+        <li><strong>MFA enforcement per role</strong> — mandatory 2FA for admins.</li>
+      </ul>
+
+      <h3>Availability &amp; Disaster Recovery</h3>
+      <ul>
+        <li><strong>Site Recovery</strong> — DR runbooks, cross-site replication. <code>/api/dr/plans</code>, <code>POST /api/dr/execute</code>.</li>
+        <li><strong>RPO/RTO monitoring</strong> — SLA tracking. <code>/api/dr/rpo-rto</code>.</li>
+      </ul>
+
+      <h3>Operations &amp; Automation</h3>
+      <ul>
+        <li><strong>Lifecycle Manager</strong> — rolling host upgrades, drift detection. <code>/api/lifecycle/updates</code>.</li>
+        <li><strong>Capacity planning</strong> — forecasting + what-if analysis.</li>
+        <li><strong>Alert correlation</strong> — group related alerts into incidents.</li>
+        <li><strong>Webhook system</strong> — VM events → HTTP POST (Zapier/n8n). <code>/api/webhooks</code>.</li>
+        <li><strong>Automation engine</strong> — multi-step workflow orchestration.</li>
+        <li><strong>Live VNC thumbnails</strong> — real-time previews in the VM list.</li>
+        <li><strong>Terraform provider</strong> — <code>resource "oxware_vm"</code> Infrastructure-as-Code.</li>
+      </ul>
+
+      <div class="callout" style="background:rgba(88,166,255,.08);border-left:3px solid var(--accent-lt);padding:12px 16px;border-radius:6px;margin-top:16px">
+        <strong>Note:</strong> Cluster-dependent features (DRS auto-migration, FT, cross-site DR) require a multi-node setup. Single-node installs receive recommendations and local equivalents.
+      </div>
     </section>
 
     <!-- API -->
