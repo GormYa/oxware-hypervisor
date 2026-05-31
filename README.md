@@ -1,3 +1,15 @@
+<!-- SEO -->
+<!--
+OXware Hypervisor - Open Source KVM/QEMU Management Panel.
+Free alternative to VMware vSphere ESXi, Proxmox VE, Nutanix AHV.
+Enterprise features: DRS, HA, Live Migration, Snapshots, Backup, IPAM,
+Distributed Virtual Switch, vSAN/Ceph, Site Recovery, NUMA, vGPU support.
+Keywords: hypervisor, virtualization, KVM, QEMU, libvirt, VM management,
+data center, virtualization platform, open source vSphere alternative,
+proxmox alternative, free hypervisor, web-based VM manager, esxi alternative,
+self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
+-->
+
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -221,6 +233,77 @@
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.3
+
+The **Enterprise release** brings 23 datacenter-grade modules to open-source KVM, closing the feature gap with VMware vSphere and Nutanix AHV:
+
+- 🔄 **DRS** (Distributed Resource Scheduler) — cluster-wide automatic VM rebalancing
+- 🔗 **Affinity / Anti-Affinity Rules** — keep VMs together or force apart
+- 🛡 **EVC** (Enhanced vMotion Compatibility) — CPU masking across CPU generations
+- 📊 **NIOC** (Network I/O Control / QoS) — per-VM bandwidth guarantees
+- 🚧 **Maintenance Mode** with auto VM evacuation
+- 🌪 **Site Recovery Manager (DR)** — automated runbooks, cross-site replication
+- ♻ **Lifecycle Manager** — rolling host upgrades, drift detection
+- 🧠 **NUMA-aware scheduling** — pin VMs to physical NUMA nodes, HugePages
+- 💾 **Storage Advanced** (ZFS, tiering, SPBM, iSCSI)
+- 🌐 **Network Advanced** (VXLAN, IPv6 dual-stack)
+- 🔐 **SIEM Integration** (Splunk / Elastic / Wazuh CEF)
+- 📹 **Session Recording** (SSH/VNC replay)
+- 🔒 **Backup Encryption** (AES-256 + passphrase)
+- 🔗 **Linked Clones** — 100 VMs from 1 base + thin diffs
+- ♻ **Snapshot Cleanup** (orphan detector)
+- 🎯 **Right-Sizing Recommendations** — detect over/under-provisioned VMs
+- 🚨 **Alert Correlation Engine** — group related alerts into incidents
+- 🔮 **Predictive Failure Analysis** (SMART, ECC)
+- 🤖 **Automation Engine** (multi-step workflow runner)
+- 🔔 **Webhook System** (event → custom HTTP POST)
+- ⚡ **VNC Thumbnails** (live VM previews in list)
+- 🔄 **Compute Tuning** (KSM, ballooning, hugepages)
+- 🛡 **Maintenance Mode** (planned + emergency)
+
+---
+
+## 🛣 Coming Soon (Roadmap)
+
+The next wave of enterprise capabilities currently in design / development:
+
+**Compute & Availability**
+- Fault Tolerance (lockstep, zero-downtime failover)
+- Storage DRS (datastore-level rebalancing)
+- vGPU support (NVIDIA GRID, MIG partitioning)
+- SR-IOV passthrough
+- microVM (Firecracker)
+- Kata Containers
+- KubeVirt integration
+
+**Security & Compliance**
+- Microsegmentation (per-VM L7 firewall)
+- vTPM, Secure Boot enforcement
+- AMD SEV / Intel TDX confidential VMs
+- HashiCorp Vault integration
+- Audit log immutability (hash-chain)
+- Multi-tenancy hard isolation + chargeback
+
+**Provisioning & IaC**
+- Image-based bare-metal provisioning
+- Terraform / Ansible / Pulumi providers
+- Kubernetes CSI driver + Operator
+- GitOps (ArgoCD / Flux)
+- Policy-as-code (OPA / Rego)
+
+**Observability & Planning**
+- Capacity planning + what-if analysis
+- Distributed tracing (OpenTelemetry)
+- Topology + flow visualization
+- Cross-site replication
+
+**Clients**
+- Mobile app (iOS + Android)
+- Desktop client (Electron)
+- PWA support
 
 ---
 
