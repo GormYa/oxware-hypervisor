@@ -2,10 +2,18 @@
 vTPM Manager — Libvirt TPM passthrough + emulated (swtpm) support.
 """
 import subprocess
+import logging
 import xml.etree.ElementTree as ET
-import libvirt
+try:
+    import libvirt
+except ImportError:  # pragma: no cover
+    libvirt = None
+
+log = logging.getLogger("vtpm_manager")
 
 def _connect():
+    if libvirt is None:
+        raise RuntimeError("libvirt unavailable")
     import config
     return libvirt.open(config.LIBVIRT_URI)
 
@@ -83,3 +91,59 @@ def check_swtpm() -> dict:
         "path": r.stdout.strip(),
         "version": r2.stdout.strip().split("\n")[0] if r2.returncode == 0 else None,
     }
+
+
+# ── v2.5.4 spec API ─────────────────────────────────────────────────────────
+def enable_vtpm(vm_id: str, version: str = "2.0") -> dict:
+    """Add tpm-crb emulator (TPM 2.0) — Win11/BitLocker friendly."""
+    try:
+        return add_vtpm(vm_id, model="tpm-crb", version=version)
+    except Exception as e:
+        log.error("enable_vtpm: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+def disable_vtpm(vm_id: str) -> dict:
+    try:
+        return remove_vtpm(vm_id)
+    except Exception as e:
+        log.error("disable_vtpm: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+def vtpm_status(vm_id: str) -> dict:
+    try:
+        info = list_vm_tpm(vm_id)
+        return {
+            "enabled": bool(info.get("has_tpm")),
+            "version": info.get("version", "2.0"),
+            "model": info.get("model"),
+            "backend": info.get("backend"),
+        }
+    except Exception as e:
+        log.error("vtpm_status: %s", e)
+        return {"enabled": False, "version": "2.0", "error": str(e)}
+
+
+def list_vtpm_vms() -> list:
+    """List VMs that have vTPM enabled."""
+    if libvirt is None:
+        return []
+    try:
+        conn = _connect()
+        try:
+            out = []
+            for dom in conn.listAllDomains():
+                try:
+                    root = ET.fromstring(dom.XMLDesc(0))
+                    if root.find(".//tpm") is not None:
+                        out.append({"vm_id": dom.name(), "uuid": dom.UUIDString()})
+                except Exception:
+                    continue
+            return out
+        finally:
+            conn.close()
+    except Exception as e:
+        log.error("list_vtpm_vms: %s", e)
+        return []
+

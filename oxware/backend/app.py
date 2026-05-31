@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.3
+OXware Hypervisor Management API v2.5.4
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -147,6 +147,18 @@ compute_tune    = _safe_import("compute_tuning")
 storage_adv     = _safe_import("storage_advanced")
 network_adv     = _safe_import("network_advanced")
 automation_eng  = _safe_import("automation_engine")
+
+# ── v2.5.4 Enterprise modules ────────────────────────────────────────────────
+secboot_mgr     = _safe_import("secureboot_manager")
+vault_int_mgr   = _safe_import("vault_integration")
+audit_chain_mgr = _safe_import("audit_chain")
+hugepages_mgr   = _safe_import("hugepages_manager")
+sriov_mgr       = _safe_import("sriov_manager")
+vgpu_mgr        = _safe_import("vgpu_manager")
+cdp_mgr         = _safe_import("cdp_manager")
+boot_order_mgr  = _safe_import("boot_order_manager")
+geo_dns_mgr     = _safe_import("geo_dns_manager")
+# vtpm_manager is also re-imported below for legacy endpoints
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "templates")
@@ -15257,8 +15269,489 @@ def api_policies_delete(policy_id):
     return ok(deleted=automation_eng.delete_policy(policy_id))
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  v2.5.4 ENTERPRISE ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── vTPM (new spec) ──────────────────────────────────────────────────────────
+@app.route("/api/vtpm/<vm_id>/enable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vtpm_enable(vm_id):
+    if not vtpm_mgr: return ok({"ok": False, "error": "module unavailable"})
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**vtpm_mgr.enable_vtpm(vm_id, version=d.get("version", "2.0")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/vtpm/<vm_id>/disable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vtpm_disable(vm_id):
+    if not vtpm_mgr: return ok({"ok": False, "error": "module unavailable"})
+    try:
+        return ok(**vtpm_mgr.disable_vtpm(vm_id))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/vtpm/<vm_id>", methods=["GET"])
+@require_auth
+def api_v254_vtpm_status(vm_id):
+    if not vtpm_mgr: return ok({"enabled": False, "version": "2.0"})
+    try:
+        return ok(**vtpm_mgr.vtpm_status(vm_id))
+    except Exception as e:
+        return ok({"enabled": False, "error": str(e)})
+
+@app.route("/api/vtpm", methods=["GET"])
+@require_auth
+def api_v254_vtpm_list():
+    if not vtpm_mgr: return ok({"vms": []})
+    try:
+        return ok({"vms": vtpm_mgr.list_vtpm_vms()})
+    except Exception as e:
+        return ok({"vms": [], "error": str(e)})
+
+# ── Secure Boot ──────────────────────────────────────────────────────────────
+@app.route("/api/secureboot/<vm_id>/enable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_secboot_enable(vm_id):
+    if not secboot_mgr: return ok({"ok": False, "error": "module unavailable"})
+    try:
+        return ok(**secboot_mgr.enable_secureboot(vm_id))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/secureboot/<vm_id>/disable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_secboot_disable(vm_id):
+    if not secboot_mgr: return ok({"ok": False, "error": "module unavailable"})
+    try:
+        return ok(**secboot_mgr.disable_secureboot(vm_id))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/secureboot/<vm_id>", methods=["GET"])
+@require_auth
+def api_v254_secboot_status(vm_id):
+    if not secboot_mgr: return ok({"enabled": False, "firmware": "BIOS"})
+    try:
+        return ok(**secboot_mgr.secureboot_status(vm_id))
+    except Exception as e:
+        return ok({"enabled": False, "error": str(e)})
+
+@app.route("/api/secureboot", methods=["GET"])
+@require_auth
+def api_v254_secboot_list():
+    if not secboot_mgr: return ok({"vms": []})
+    try:
+        return ok({"vms": secboot_mgr.list_secureboot_vms()})
+    except Exception as e:
+        return ok({"vms": [], "error": str(e)})
+
+# ── Vault Integration ────────────────────────────────────────────────────────
+@app.route("/api/vault/config", methods=["GET"])
+@require_auth
+def api_v254_vault_config_get():
+    if not vault_int_mgr: return ok({})
+    try:
+        return ok(vault_int_mgr.get_config())
+    except Exception as e:
+        return ok({"error": str(e)})
+
+@app.route("/api/vault/config", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vault_config_set():
+    if not vault_int_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**vault_int_mgr.configure_vault(
+            d.get("url", ""), d.get("token", ""),
+            d.get("mount_path", "secret/"),
+            d.get("verify_ssl", True)))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/vault/test", methods=["GET"])
+@require_auth
+def api_v254_vault_test():
+    if not vault_int_mgr: return ok({"ok": False, "error": "module unavailable"})
+    try:
+        return ok(**vault_int_mgr.test_connection())
+    except Exception as e:
+        return ok({"ok": False, "error": str(e)})
+
+@app.route("/api/vault/secrets/", defaults={"path": ""}, methods=["GET"])
+@app.route("/api/vault/secrets/<path:path>", methods=["GET"])
+@require_auth
+def api_v254_vault_secret_get(path):
+    if not vault_int_mgr: return ok({"ok": False, "data": {}})
+    try:
+        if request.args.get("list") == "1" or not path:
+            return ok(**vault_int_mgr.list_secrets(path))
+        return ok(**vault_int_mgr.read_secret(path))
+    except Exception as e:
+        return ok({"ok": False, "error": str(e), "data": {}})
+
+@app.route("/api/vault/secrets/<path:path>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vault_secret_set(path):
+    if not vault_int_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**vault_int_mgr.write_secret(path, d.get("data", d)))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/vault/secrets/<path:path>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vault_secret_del(path):
+    if not vault_int_mgr: return err("module unavailable")
+    try:
+        return ok(**vault_int_mgr.delete_secret(path))
+    except Exception as e:
+        return err(e, 400)
+
+# ── Audit Chain ──────────────────────────────────────────────────────────────
+@app.route("/api/audit-chain/events", methods=["GET"])
+@require_auth
+def api_v254_audit_events():
+    if not audit_chain_mgr: return ok({"events": []})
+    try:
+        limit = int(request.args.get("limit", 100))
+        return ok({"events": audit_chain_mgr.get_events(
+            limit=limit,
+            filter_user=request.args.get("user"),
+            filter_event=request.args.get("event"))})
+    except Exception as e:
+        return ok({"events": [], "error": str(e)})
+
+@app.route("/api/audit-chain/verify", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_audit_verify():
+    if not audit_chain_mgr: return ok({"ok": False, "events": 0})
+    try:
+        return ok(**audit_chain_mgr.verify_chain())
+    except Exception as e:
+        return ok({"ok": False, "error": str(e)})
+
+@app.route("/api/audit-chain/stats", methods=["GET"])
+@require_auth
+def api_v254_audit_stats():
+    if not audit_chain_mgr: return ok({"total": 0})
+    try:
+        return ok(audit_chain_mgr.get_stats())
+    except Exception as e:
+        return ok({"total": 0, "error": str(e)})
+
+@app.route("/api/audit-chain/append", methods=["POST"])
+@require_auth
+def api_v254_audit_append():
+    if not audit_chain_mgr: return ok({"ok": False})
+    try:
+        d = request.get_json() or {}
+        return ok(**audit_chain_mgr.append_event(
+            d.get("event", "manual"),
+            user=d.get("user", "api"),
+            ip=request.remote_addr or "",
+            details=d.get("details") or {}))
+    except Exception as e:
+        return err(e, 400)
+
+# ── HugePages ────────────────────────────────────────────────────────────────
+@app.route("/api/hugepages/status", methods=["GET"])
+@require_auth
+def api_v254_hp_status():
+    if not hugepages_mgr: return ok({"nr_hugepages": 0, "free_hugepages": 0})
+    try:
+        return ok(hugepages_mgr.get_status())
+    except Exception as e:
+        return ok({"nr_hugepages": 0, "error": str(e)})
+
+@app.route("/api/hugepages/configure", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_hp_configure():
+    if not hugepages_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**hugepages_mgr.configure(
+            pages_2mb=int(d.get("pages_2mb", 0)),
+            pages_1gb=int(d.get("pages_1gb", 0))))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/hugepages/vm/<vm_id>/apply", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_hp_apply(vm_id):
+    if not hugepages_mgr: return err("module unavailable")
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**hugepages_mgr.apply_to_vm(vm_id, d.get("hugepage_size", "2M")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/hugepages/vm/<vm_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_hp_remove(vm_id):
+    if not hugepages_mgr: return err("module unavailable")
+    try:
+        return ok(**hugepages_mgr.remove_from_vm(vm_id))
+    except Exception as e:
+        return err(e, 400)
+
+# ── SR-IOV ───────────────────────────────────────────────────────────────────
+@app.route("/api/sriov/devices", methods=["GET"])
+@require_auth
+def api_v254_sriov_devices():
+    if not sriov_mgr: return ok({"devices": []})
+    try:
+        return ok({"devices": sriov_mgr.list_pf_devices()})
+    except Exception as e:
+        return ok({"devices": [], "error": str(e)})
+
+@app.route("/api/sriov/<pf>/vfs", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_sriov_create_vfs(pf):
+    if not sriov_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**sriov_mgr.create_vfs(pf, int(d.get("num_vfs", 0))))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/sriov/<pf>/vfs", methods=["GET"])
+@require_auth
+def api_v254_sriov_list_vfs(pf):
+    if not sriov_mgr: return ok({"vfs": []})
+    try:
+        return ok({"vfs": sriov_mgr.list_vfs(pf)})
+    except Exception as e:
+        return ok({"vfs": [], "error": str(e)})
+
+@app.route("/api/sriov/assign", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_sriov_assign():
+    if not sriov_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**sriov_mgr.assign_vf_to_vm(d["vm_id"], d["vf_pci_addr"]))
+    except Exception as e:
+        return err(e, 400)
+
+# ── vGPU ─────────────────────────────────────────────────────────────────────
+@app.route("/api/vgpu/devices", methods=["GET"])
+@require_auth
+def api_v254_vgpu_devices():
+    if not vgpu_mgr: return ok({"devices": []})
+    try:
+        return ok({"devices": vgpu_mgr.detect_gpu()})
+    except Exception as e:
+        return ok({"devices": [], "error": str(e)})
+
+@app.route("/api/vgpu/mdev-types", methods=["GET"])
+@require_auth
+def api_v254_vgpu_mdev_types():
+    if not vgpu_mgr: return ok({"types": []})
+    try:
+        return ok({"types": vgpu_mgr.list_mdev_types(),
+                   "active": vgpu_mgr.list_active_mdevs()})
+    except Exception as e:
+        return ok({"types": [], "error": str(e)})
+
+@app.route("/api/vgpu/mdev", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vgpu_mdev_create():
+    if not vgpu_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**vgpu_mgr.create_mdev(d["parent_pci"], d["mdev_type"],
+                                          d.get("uuid")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/vgpu/assign", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_vgpu_assign():
+    if not vgpu_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**vgpu_mgr.assign_mdev_to_vm(d["vm_id"], d["mdev_uuid"]))
+    except Exception as e:
+        return err(e, 400)
+
+# ── CDP ──────────────────────────────────────────────────────────────────────
+@app.route("/api/cdp/<vm_id>/enable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_cdp_enable(vm_id):
+    if not cdp_mgr: return err("module unavailable")
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**cdp_mgr.enable_cdp(vm_id,
+                                       retention_minutes=int(d.get("retention_minutes", 60)),
+                                       interval_sec=int(d.get("interval_sec", 60))))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/cdp/<vm_id>/disable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_cdp_disable(vm_id):
+    if not cdp_mgr: return err("module unavailable")
+    try:
+        return ok(**cdp_mgr.disable_cdp(vm_id))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/cdp/<vm_id>", methods=["GET"])
+@require_auth
+def api_v254_cdp_status(vm_id):
+    if not cdp_mgr: return ok({"enabled": False})
+    try:
+        return ok(**cdp_mgr.cdp_status(vm_id))
+    except Exception as e:
+        return ok({"enabled": False, "error": str(e)})
+
+@app.route("/api/cdp/<vm_id>/points", methods=["GET"])
+@require_auth
+def api_v254_cdp_points(vm_id):
+    if not cdp_mgr: return ok({"points": []})
+    try:
+        return ok({"points": cdp_mgr.list_recovery_points(vm_id)})
+    except Exception as e:
+        return ok({"points": [], "error": str(e)})
+
+@app.route("/api/cdp/<vm_id>/restore", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_cdp_restore(vm_id):
+    if not cdp_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**cdp_mgr.restore_to_point(vm_id, int(d.get("timestamp", 0))))
+    except Exception as e:
+        return err(e, 400)
+
+# ── Boot Order ───────────────────────────────────────────────────────────────
+@app.route("/api/boot-order", methods=["GET"])
+@require_auth
+def api_v254_bo_get():
+    if not boot_order_mgr: return ok({"order": []})
+    try:
+        return ok({"order": boot_order_mgr.get_boot_order()})
+    except Exception as e:
+        return ok({"order": [], "error": str(e)})
+
+@app.route("/api/boot-order", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_bo_set():
+    if not boot_order_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**boot_order_mgr.set_boot_order(d.get("order") or []))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/boot-order/execute", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_bo_run():
+    if not boot_order_mgr: return err("module unavailable")
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**boot_order_mgr.execute_boot_sequence(
+            dry_run=bool(d.get("dry_run", False))))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/boot-order/validate", methods=["POST"])
+@require_auth
+def api_v254_bo_validate():
+    if not boot_order_mgr: return ok({"ok": False})
+    try:
+        return ok(**boot_order_mgr.validate_dependencies())
+    except Exception as e:
+        return ok({"ok": False, "error": str(e)})
+
+# ── Geo DNS ──────────────────────────────────────────────────────────────────
+@app.route("/api/geo-dns/config", methods=["GET"])
+@require_auth
+def api_v254_geodns_cfg_get():
+    if not geo_dns_mgr: return ok({})
+    try:
+        return ok(geo_dns_mgr.get_config())
+    except Exception as e:
+        return ok({"error": str(e)})
+
+@app.route("/api/geo-dns/config", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_geodns_cfg_set():
+    if not geo_dns_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**geo_dns_mgr.configure(
+            provider=d.get("provider", "cloudflare"),
+            api_token=d.get("api_token", ""),
+            zone_id=d.get("zone_id", ""),
+            hosted_zone_id=d.get("hosted_zone_id", "")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/geo-dns/records", methods=["GET"])
+@require_auth
+def api_v254_geodns_records_list():
+    if not geo_dns_mgr: return ok({"records": []})
+    try:
+        return ok({"records": geo_dns_mgr.list_records(),
+                   "health": geo_dns_mgr.health_status()})
+    except Exception as e:
+        return ok({"records": [], "error": str(e)})
+
+@app.route("/api/geo-dns/records", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_geodns_records_add():
+    if not geo_dns_mgr: return err("module unavailable")
+    try:
+        d = request.get_json() or {}
+        return ok(**geo_dns_mgr.add_record(
+            d["name"], d["primary_ip"],
+            failover_ip=d.get("failover_ip", ""),
+            health_check_url=d.get("health_check_url", ""),
+            ttl=int(d.get("ttl", 60)),
+            rtype=d.get("type", "A")))
+    except Exception as e:
+        return err(e, 400)
+
+@app.route("/api/geo-dns/records/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_v254_geodns_records_del(name):
+    if not geo_dns_mgr: return err("module unavailable")
+    try:
+        return ok(**geo_dns_mgr.delete_record(name))
+    except Exception as e:
+        return err(e, 400)
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.3 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.4 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
