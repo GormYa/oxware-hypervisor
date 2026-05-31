@@ -1,0 +1,23 @@
+---
+namespace: oxware
+name: kvm
+version: 1.0.0
+readme: README.md
+authors:
+  - OXware <root@oxware.top>
+description: Ansible collection for OXware Hypervisor — manage VMs, networks, storage via REST API
+license:
+  - MIT
+tags:
+  - virtualization
+  - kvm
+  - qemu
+  - libvirt
+  - hypervisor
+  - vm
+  - oxware
+dependencies: {}
+repository: https://github.com/ShinnAsukha/oxware-hypervisor
+documentation: https://oxware.top/docs/
+homepage: https://oxware.top
+issues: https://github.com/ShinnAsukha/oxware-hypervisor/issues
