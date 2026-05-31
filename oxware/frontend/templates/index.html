@@ -709,12 +709,13 @@
     .ctx-section-body{overflow:hidden;transition:max-height .25s ease}
     .ctx-section-body.collapsed{display:none}
 
-    /* Enterprise compact grid (2 sütun) */
-    .ent-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;padding:4px 6px}
-    .ent-grid .ctx-item{padding:6px 6px;font-size:10.5px;gap:5px;border-radius:4px;flex-direction:column;align-items:center;text-align:center;line-height:1.15;min-height:48px;justify-content:center}
-    .ent-grid .ctx-item i{font-size:13px;margin-bottom:2px;color:var(--accent-lt);opacity:.85}
+    /* Enterprise compact grid (tek sütun, ince tile) */
+    .ent-grid{display:flex;flex-direction:column;gap:0;padding:2px 4px}
+    .ent-grid .ctx-item{padding:3px 8px 3px 22px;font-size:10.5px;gap:6px;border-radius:3px;line-height:1.2;min-height:0;flex-direction:row;align-items:center;text-align:left;justify-content:flex-start;position:relative}
+    .ent-grid .ctx-item i{font-size:10px;color:var(--accent-lt);opacity:.7;width:12px;text-align:center;flex-shrink:0;position:absolute;left:6px;top:50%;transform:translateY(-50%)}
     .ent-grid .ctx-item:hover i{opacity:1}
-    .ent-grid .ctx-item.active i{color:var(--accent)}
+    .ent-grid .ctx-item.active i{color:var(--accent);opacity:1}
+    .ent-grid .ctx-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .light-theme .ent-grid .ctx-item i{color:#0969da}
     .nav-sub-list{padding-left:20px;border-left:1px solid var(--border);margin:4px 0 4px 18px}
     .nav-sub-item{padding:4px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;border-radius:3px;display:flex;align-items:center;gap:6px}
