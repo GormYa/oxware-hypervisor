@@ -12553,44 +12553,6 @@ def api_ceph_status():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DRS (Distributed Resource Scheduler) — Basic VM rebalancing
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@app.route("/api/drs/analyze")
-@require_auth
-@require_role("admin", "administrator")
-def api_drs_analyze():
-    """Analyze resource distribution and recommend VM migrations."""
-    try:
-        vms = vm_manager.list_vms()
-        running = [v for v in vms if v.get("state") == "running"]
-        total_cpu = sum(v.get("cpu_percent", 0) for v in running)
-        total_mem = sum(v.get("memory_mb", 0) for v in running)
-        avg_cpu = total_cpu / len(running) if running else 0
-        # Find over-utilized VMs
-        hot_vms = [v for v in running if v.get("cpu_percent",0) > 80]
-        cold_vms = [v for v in running if v.get("cpu_percent",0) < 10]
-        recommendations = []
-        for vm in hot_vms:
-            recommendations.append({
-                "vm_id": vm["id"],
-                "vm_name": vm.get("name",""),
-                "reason": f"CPU {vm.get('cpu_percent',0):.1f}% — yüksek kullanım",
-                "action": "scale_cpu",
-                "suggested_vcpus": min(int(vm.get("vcpus",1)) * 2, 32),
-            })
-        return ok(
-            total_vms=len(vms), running=len(running),
-            avg_cpu=round(avg_cpu,1), total_mem_mb=total_mem,
-            hot_vms=len(hot_vms), cold_vms=len(cold_vms),
-            recommendations=recommendations,
-            note="Multi-node DRS: cluster kurulumu gerektirir. Şu an tek-node öneriler."
-        )
-    except Exception as e:
-        return err(str(e), 500)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # RBAC Fine-Grained (per-storage, per-network resource permissions)
 # ═══════════════════════════════════════════════════════════════════════════════
 
