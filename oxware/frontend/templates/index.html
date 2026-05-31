@@ -709,14 +709,9 @@
     .ctx-section-body{overflow:hidden;transition:max-height .25s ease}
     .ctx-section-body.collapsed{display:none}
 
-    /* Enterprise compact grid (tek sütun, ince tile) */
-    .ent-grid{display:flex;flex-direction:column;gap:0;padding:2px 4px}
-    .ent-grid .ctx-item{padding:3px 8px 3px 22px;font-size:10.5px;gap:6px;border-radius:3px;line-height:1.2;min-height:0;flex-direction:row;align-items:center;text-align:left;justify-content:flex-start;position:relative}
-    .ent-grid .ctx-item i{font-size:10px;color:var(--accent-lt);opacity:.7;width:12px;text-align:center;flex-shrink:0;position:absolute;left:6px;top:50%;transform:translateY(-50%)}
-    .ent-grid .ctx-item:hover i{opacity:1}
-    .ent-grid .ctx-item.active i{color:var(--accent);opacity:1}
-    .ent-grid .ctx-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .light-theme .ent-grid .ctx-item i{color:#0969da}
+    /* Enterprise group — same styling as Yönetim items */
+    .ent-grid{display:flex;flex-direction:column;gap:0}
+    .ent-grid .ctx-item{}  /* inherits default .ctx-item — same as Kullanıcılar/Güncellemeler */
     .nav-sub-list{padding-left:20px;border-left:1px solid var(--border);margin:4px 0 4px 18px}
     .nav-sub-item{padding:4px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;border-radius:3px;display:flex;align-items:center;gap:6px}
     .nav-sub-item:hover{background:var(--surface2);color:var(--text)}
@@ -9782,29 +9777,29 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
     </div>
-    <!-- Enterprise sub-grid (Yönetim altında) -->
-    <div style="padding:6px 12px 2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleEntGrid(this)" title="${t('Enterprise')||'Kurumsal'}">
+    <!-- Enterprise group (same style as Yönetim items) -->
+    <div style="padding:10px 12px 2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);display:flex;align-items:center;gap:6px;cursor:pointer;border-top:1px solid var(--border);margin-top:6px" onclick="toggleEntGrid(this)" title="${t('Enterprise')||'Kurumsal'}">
       <i class="fa-solid fa-building fa-fw" style="font-size:9px;opacity:.7"></i>
       <span data-i18n="Enterprise">${t('Enterprise')||'Kurumsal'}</span>
       <span style="flex:1"></span>
       <i class="fa-solid fa-chevron-down ent-grid-chev" style="font-size:8px;opacity:.6;transition:transform .2s"></i>
     </div>
     <div class="ent-grid" id="ent-grid-wrap">
-      <div class="ctx-item" data-page="tab-drs"        onclick="navigate('tab-drs');closeMobileNav()"        title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate"></i><span data-i18n="DRS Cluster">DRS Küme</span></div>
-      <div class="ctx-item" data-page="tab-affinity"   onclick="navigate('tab-affinity');closeMobileNav()"   title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link"></i><span data-i18n="Affinity Rules">Yakınlık</span></div>
-      <div class="ctx-item" data-page="tab-maint"      onclick="navigate('tab-maint');closeMobileNav()"      title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench"></i><span data-i18n="Maintenance Mode">Bakım Modu</span></div>
-      <div class="ctx-item" data-page="tab-evc"        onclick="navigate('tab-evc');closeMobileNav()"        title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved"></i><span data-i18n="EVC Baseline">EVC CPU</span></div>
-      <div class="ctx-item" data-page="tab-nioc"       onclick="navigate('tab-nioc');closeMobileNav()"       title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high"></i><span data-i18n="NIOC QoS">Ağ QoS</span></div>
-      <div class="ctx-item" data-page="tab-dr"         onclick="navigate('tab-dr');closeMobileNav()"         title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt"></i><span data-i18n="Disaster Recovery">Felaket Kurtarma</span></div>
-      <div class="ctx-item" data-page="tab-lifecycle"  onclick="navigate('tab-lifecycle');closeMobileNav()"  title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle"></i><span data-i18n="Lifecycle Manager">Yaşam Döngüsü</span></div>
-      <div class="ctx-item" data-page="tab-stor-adv"   onclick="navigate('tab-stor-adv');closeMobileNav()"   title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive"></i><span data-i18n="Storage Advanced">Depolama+</span></div>
-      <div class="ctx-item" data-page="tab-net-adv"    onclick="navigate('tab-net-adv');closeMobileNav()"    title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired"></i><span data-i18n="Network Advanced">Ağ+</span></div>
-      <div class="ctx-item" data-page="tab-siem"       onclick="navigate('tab-siem');closeMobileNav()"       title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock"></i><span data-i18n="SIEM Export">SIEM</span></div>
-      <div class="ctx-item" data-page="tab-sessrec"    onclick="navigate('tab-sessrec');closeMobileNav()"    title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video"></i><span data-i18n="Session Recording">Oturum Kaydı</span></div>
-      <div class="ctx-item" data-page="tab-numa"       onclick="navigate('tab-numa');closeMobileNav()"       title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip"></i><span data-i18n="NUMA Pinning">NUMA</span></div>
-      <div class="ctx-item" data-page="tab-bkup-enc"   onclick="navigate('tab-bkup-enc');closeMobileNav()"   title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key"></i><span data-i18n="Backup Encryption">Yedek Şifreleme</span></div>
-      <div class="ctx-item" data-page="tab-rightsize"  onclick="navigate('tab-rightsize');closeMobileNav()"  title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short"></i><span data-i18n="Right-Sizing">Boyutlandırma</span></div>
-      <div class="ctx-item" data-page="tab-alertcorr"  onclick="navigate('tab-alertcorr');closeMobileNav()"  title="Uyarı korelasyon — gürültü azalt"><i class="fa-solid fa-bell"></i><span data-i18n="Alert Correlation">Uyarı Korelasyon</span></div>
+      <div class="ctx-item" data-page="tab-drs"        onclick="navigate('tab-drs');closeMobileNav()"        title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate fa-fw"></i>DRS Küme</div>
+      <div class="ctx-item" data-page="tab-affinity"   onclick="navigate('tab-affinity');closeMobileNav()"   title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link fa-fw"></i>Yakınlık Kuralları</div>
+      <div class="ctx-item" data-page="tab-maint"      onclick="navigate('tab-maint');closeMobileNav()"      title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i>Bakım Modu</div>
+      <div class="ctx-item" data-page="tab-evc"        onclick="navigate('tab-evc');closeMobileNav()"        title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved fa-fw"></i>EVC CPU</div>
+      <div class="ctx-item" data-page="tab-nioc"       onclick="navigate('tab-nioc');closeMobileNav()"       title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high fa-fw"></i>Ağ QoS</div>
+      <div class="ctx-item" data-page="tab-dr"         onclick="navigate('tab-dr');closeMobileNav()"         title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt fa-fw"></i>Felaket Kurtarma</div>
+      <div class="ctx-item" data-page="tab-lifecycle"  onclick="navigate('tab-lifecycle');closeMobileNav()"  title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle fa-fw"></i>Yaşam Döngüsü</div>
+      <div class="ctx-item" data-page="tab-stor-adv"   onclick="navigate('tab-stor-adv');closeMobileNav()"   title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive fa-fw"></i>Depolama+</div>
+      <div class="ctx-item" data-page="tab-net-adv"    onclick="navigate('tab-net-adv');closeMobileNav()"    title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired fa-fw"></i>Ağ+</div>
+      <div class="ctx-item" data-page="tab-siem"       onclick="navigate('tab-siem');closeMobileNav()"       title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock fa-fw"></i>SIEM Aktarım</div>
+      <div class="ctx-item" data-page="tab-sessrec"    onclick="navigate('tab-sessrec');closeMobileNav()"    title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video fa-fw"></i>Oturum Kaydı</div>
+      <div class="ctx-item" data-page="tab-numa"       onclick="navigate('tab-numa');closeMobileNav()"       title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip fa-fw"></i>NUMA</div>
+      <div class="ctx-item" data-page="tab-bkup-enc"   onclick="navigate('tab-bkup-enc');closeMobileNav()"   title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key fa-fw"></i>Yedek Şifreleme</div>
+      <div class="ctx-item" data-page="tab-rightsize"  onclick="navigate('tab-rightsize');closeMobileNav()"  title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short fa-fw"></i>Boyutlandırma</div>
+      <div class="ctx-item" data-page="tab-alertcorr"  onclick="navigate('tab-alertcorr');closeMobileNav()"  title="Uyarı korelasyon — gürültü azalt"><i class="fa-solid fa-bell fa-fw"></i>Uyarı Korelasyon</div>
     </div>
 
     <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
