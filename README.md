@@ -11,7 +11,9 @@
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
-> **v2.5 (2026-05):** WHMCS & WiseCP billing panel integrations (OS reinstall, auto IP, credentials, console token), machine-ID independent credentials + password reset file, unified monitoring page with performance history graphs, VGA video driver default for VMs, network stat cards UI, clean ISO library filtering, ISO installer black screen fixed (vga=791/modesetting/quiet splash removed), optimized 30s polling.
+> **v2.5.3 (2026-05):** 🏢 **Enterprise release** — DRS auto-balancing, affinity rules, EVC, maintenance-mode VM evacuation, NUMA scheduling, right-sizing & predictive-failure analysis, linked clones, app-consistent snapshots, NIOC bandwidth QoS, SSO (SAML/OIDC), LDAP/AD, hash-chained audit logs, SIEM export, session recording, AES backup encryption, Site Recovery DR runbooks, RPO/RTO SLA tracking, Lifecycle Manager, capacity planning, alert correlation, webhook system, live VNC thumbnails, command palette, onboarding wizard, notifications panel. Full GH-Pages mobile responsive overhaul.
+>
+> **v2.5 (2026-05):** WHMCS & WiseCP billing panel integrations, machine-ID independent credentials + password reset, unified monitoring with performance history, VGA driver default, network stat cards, clean ISO library, ISO installer black-screen fix, optimized 30s polling.
 
 ---
 
@@ -172,6 +174,53 @@
 - **Keyboard shortcuts** — create VM, navigate panels, toggle fullscreen
 - **Mobile responsive** — full functionality on phone/tablet screens
 - **Interactive API explorer** — browse and test all endpoints at `/api/docs`
+
+### Enterprise (v2.5.3) — Datacenter-Grade
+
+> Bringing VMware vSphere / Nutanix-class capabilities to open-source KVM.
+
+**Compute & Scheduling**
+- **DRS** (Distributed Resource Scheduler) — cluster-wide automatic VM rebalancing by CPU/RAM load
+- **Affinity / Anti-affinity rules** — keep VMs together or force them apart across hosts
+- **EVC** (Enhanced vMotion Compatibility) — CPU masking for migration across CPU generations
+- **Maintenance mode** — auto-evacuate VMs to other hosts before host maintenance
+- **NUMA-aware scheduling** — pin VMs to physical NUMA nodes, HugePages tuning
+- **Right-sizing recommendations** — detect over/under-provisioned VMs automatically
+- **Predictive failure analysis** — SMART/ECC monitoring → proactive VM evacuation
+
+**Storage**
+- **Linked clones** — 100 VMs from 1 base image + thin diffs
+- **Application-consistent snapshots** — DB-aware quiesce (flush + freeze)
+- **Snapshot orphan cleanup** — automatic stale snapshot detection & removal
+- **Storage advanced** — tiering, dedup/compression hooks, policy-based placement (SPBM)
+
+**Network**
+- **NIOC** (Network I/O Control) — per-VM bandwidth guarantees & QoS
+- **Microsegmentation** — per-VM L7 firewall policies
+- **Advanced SDN** — VXLAN/Geneve overlay, service chaining hooks
+
+**Security & Compliance**
+- **SSO** — SAML / OIDC (Okta, Azure AD, Google Workspace)
+- **LDAP / Active Directory** — domain authentication
+- **Audit log immutability** — hash-chained, tamper-evident logs
+- **SIEM export** — Splunk / Elastic / Wazuh (CEF/syslog)
+- **Session recording** — SSH/VNC console capture & replay
+- **Backup encryption** — AES-encrypted backup archives with passphrase
+- **MFA enforcement per role** — mandatory 2FA for admins
+
+**Availability & DR**
+- **Site Recovery** — automated DR runbooks, cross-site replication
+- **RPO/RTO monitoring** — SLA tracking with burn-rate awareness
+- **Recovery drill automation** — non-destructive failover testing
+
+**Operations & Automation**
+- **Lifecycle Manager** — rolling host upgrades, configuration drift detection
+- **Capacity planning** — "storage full in N days" forecasting, what-if analysis
+- **Alert correlation engine** — group related alerts into single incidents
+- **Webhook system** — VM events → custom HTTP POST (Zapier/n8n)
+- **Automation engine** — multi-step workflow orchestration
+- **Live VNC thumbnails** — real-time VM previews in the list
+- **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
 
 ---
 
@@ -832,3 +881,15 @@ Bug reports and feature requests → [GitHub Issues](https://github.com/ShinnAsu
 [MIT License](LICENSE) — © 2026 Ada Gürsoy
 
 Free to use, modify, and distribute. Commercial use permitted. Attribution appreciated.
+
+---
+
+## Keywords
+
+OXware is an open-source **VMware ESXi alternative** and **Proxmox VE alternative** — a free **KVM hypervisor management panel** / **QEMU web UI** / **libvirt GUI** for Linux.
+
+**Topics:** hypervisor · KVM · QEMU · libvirt · virtualization · virtual-machines · vm-management · esxi-alternative · proxmox-alternative · vsphere-alternative · datacenter · self-hosted · homelab · noVNC · web-console · cloud-init · IPAM · SDN · live-migration · vmotion · DRS · high-availability · disaster-recovery · snapshots · backup · RBAC · 2FA · SSO · LDAP · SIEM · multi-tenancy · bare-metal · VPS · python · flask · open-source · MIT
+
+**Use cases:** Replace VMware vSphere/ESXi after Broadcom licensing changes · Self-host VMs on a dedicated server or VPS · Build a homelab virtualization cluster · Hosting provider VM panel (WHMCS/WiseCP integration) · On-prem private cloud · Run Windows & Linux VMs with web VNC console.
+
+> ⭐ **Star this repo** if OXware saves you VMware licensing costs!
