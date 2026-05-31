@@ -5369,6 +5369,325 @@
           <input type="hidden" id="ds-current-path" value="">
         </div><!-- /page-tab-datastore -->
 
+        <!-- ══════════ v2.5.3 ENTERPRISE PAGES ══════════ -->
+
+        <div class="page" id="page-tab-drs">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-arrows-rotate fa-fw" style="color:var(--accent-lt)"></i> DRS Cluster</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadDrsPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" id="drs-policy-card" style="margin-bottom:12px"><div class="card-title">Politika</div><div id="drs-policy-body" class="text-muted">Yükleniyor...</div></div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Cluster Analizi</div><div id="drs-analyze-body" class="text-muted">Yükleniyor...</div></div>
+          <div class="card"><div class="card-title">Önerilen Taşımalar</div><div id="drs-suggest-body" class="text-muted">Yükleniyor...</div></div>
+        </div>
+
+        <div class="page" id="page-tab-affinity">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-link fa-fw" style="color:var(--accent-lt)"></i> Affinity Rules</h2>
+            <div class="spacer"></div>
+            <button class="btn-primary" onclick="affinityCreatePrompt()" style="font-size:12px">+ Kural Ekle</button>
+            <button class="btn" onclick="loadAffinityPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>ID</th><th>Tür</th><th>VM Listesi</th><th>Açıklama</th><th></th></tr></thead>
+                <tbody id="affinity-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-maint">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-screwdriver-wrench fa-fw" style="color:var(--accent-lt)"></i> Maintenance Mode</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadMaintPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Durum</div><div id="maint-status-body" class="text-muted">Yükleniyor...</div></div>
+          <div class="card">
+            <div class="card-title">İşlemler</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <input id="maint-reason" class="form-control" placeholder="Sebep (örn. Planned upgrade)" style="min-width:260px">
+              <label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="maint-dryrun"> Dry-run</label>
+              <button class="btn-primary" onclick="maintEnter()" style="font-size:12px">Bakıma Al</button>
+              <label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="maint-autostart"> Çıkışta auto-start</label>
+              <button class="btn" onclick="maintExit()" style="font-size:12px">Bakımdan Çık</button>
+            </div>
+            <div id="maint-action-body" class="text-muted"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-evc">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-shield-halved fa-fw" style="color:var(--accent-lt)"></i> EVC Baseline</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadEvcPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Cluster Baseline</div>
+            <div id="evc-current-body" class="text-muted" style="margin-bottom:10px">Yükleniyor...</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select id="evc-baseline-sel" class="form-control" style="min-width:220px"><option>Yükleniyor...</option></select>
+              <button class="btn-primary" onclick="evcSetBaseline()" style="font-size:12px">Cluster için Uygula</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">VM'ye Uygula</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input id="evc-vm-id" class="form-control" placeholder="VM UUID veya ID" style="min-width:240px">
+              <select id="evc-baseline-vm-sel" class="form-control" style="min-width:220px"><option value="">(cluster baseline)</option></select>
+              <button class="btn-primary" onclick="evcApplyToVm()" style="font-size:12px">VM'ye Uygula</button>
+            </div>
+            <div id="evc-apply-body" class="text-muted" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-nioc">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-gauge-high fa-fw" style="color:var(--accent-lt)"></i> NIOC Network QoS</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadNiocPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Profiller</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Açıklama</th><th>In (Kbps)</th><th>Out (Kbps)</th><th>Burst</th></tr></thead>
+              <tbody id="nioc-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">VM Bandwidth Yönetimi</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <div><label style="font-size:11px;display:block">VM ID</label><input id="nioc-vm-id" class="form-control" placeholder="VM UUID" style="min-width:220px"></div>
+              <div><label style="font-size:11px;display:block">Profil</label><select id="nioc-profile-sel" class="form-control" style="min-width:180px"></select></div>
+              <button class="btn-primary" onclick="niocApplyProfile()" style="font-size:12px">Profili Uygula</button>
+              <button class="btn" onclick="niocGetVm()" style="font-size:12px">Mevcut Ayarı Göster</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
+              <div><label style="font-size:11px;display:block">In Kbps</label><input id="nioc-in" type="number" class="form-control" value="0" style="width:120px"></div>
+              <div><label style="font-size:11px;display:block">Out Kbps</label><input id="nioc-out" type="number" class="form-control" value="0" style="width:120px"></div>
+              <div><label style="font-size:11px;display:block">Burst Kbps</label><input id="nioc-burst" type="number" class="form-control" value="1024" style="width:120px"></div>
+              <button class="btn-primary" onclick="niocSetBw()" style="font-size:12px">Manuel Limit Uygula</button>
+            </div>
+            <div id="nioc-action-body" class="text-muted" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-dr">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-cloud-bolt fa-fw" style="color:var(--accent-lt)"></i> Disaster Recovery</h2>
+            <div class="spacer"></div>
+            <button class="btn-primary" onclick="drCreatePrompt()" style="font-size:12px">+ DR Planı</button>
+            <button class="btn" onclick="loadDrPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">RPO / RTO Durumu</div><div id="dr-rpo-body" class="text-muted">Yükleniyor...</div></div>
+          <div class="card">
+            <div class="card-title">DR Planları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Ad</th><th>VM'ler</th><th>Site</th><th>RPO</th><th>RTO</th><th>İşlem</th></tr></thead>
+              <tbody id="dr-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-lifecycle">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-recycle fa-fw" style="color:var(--accent-lt)"></i> Lifecycle Manager</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadLifecyclePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Sistem Güncellemeleri</div>
+            <div id="lc-updates-body" class="text-muted" style="margin-bottom:10px">Yükleniyor...</div>
+            <label style="display:inline-flex;gap:6px;align-items:center;font-size:12px;margin-right:10px"><input type="checkbox" id="lc-dryrun" checked> Dry-run</label>
+            <label style="display:inline-flex;gap:6px;align-items:center;font-size:12px;margin-right:10px"><input type="checkbox" id="lc-sec-only"> Yalnızca güvenlik</label>
+            <button class="btn-primary" onclick="lifecycleApply()" style="font-size:12px">Güncellemeleri Uygula</button>
+          </div>
+          <div class="card">
+            <div class="card-title">Baseline'lar</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+              <input id="lc-baseline-name" class="form-control" placeholder="Baseline adı" style="min-width:220px">
+              <button class="btn-primary" onclick="lifecycleCapture()" style="font-size:12px">Baseline Yakala</button>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Oluşturulma</th><th>Paket Sayısı</th><th>İşlem</th></tr></thead>
+              <tbody id="lc-baselines-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+            <div id="lc-drift-body" class="text-muted" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-stor-adv">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-hard-drive fa-fw" style="color:var(--accent-lt)"></i> Storage Advanced</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadStorAdvPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:8px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn" onclick="storAdvTab('zfs')" id="sa-tab-zfs">ZFS / Btrfs</button>
+              <button class="btn" onclick="storAdvTab('tiers')" id="sa-tab-tiers">Tiers</button>
+              <button class="btn" onclick="storAdvTab('spbm')" id="sa-tab-spbm">SPBM</button>
+              <button class="btn" onclick="storAdvTab('iscsi')" id="sa-tab-iscsi">iSCSI</button>
+            </div>
+          </div>
+          <div class="card" id="sa-body"><div class="text-muted">Bir sekme seçin.</div></div>
+        </div>
+
+        <div class="page" id="page-tab-net-adv">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-network-wired fa-fw" style="color:var(--accent-lt)"></i> Network Advanced</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadNetAdvPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:8px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn" onclick="netAdvTab('vxlan')" id="na-tab-vxlan">VXLAN</button>
+              <button class="btn" onclick="netAdvTab('ipv6')" id="na-tab-ipv6">IPv6</button>
+            </div>
+          </div>
+          <div class="card" id="na-body"><div class="text-muted">Bir sekme seçin.</div></div>
+        </div>
+
+        <div class="page" id="page-tab-siem">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-lock fa-fw" style="color:var(--accent-lt)"></i> SIEM Export</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadSiemPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card">
+            <div class="card-title">Yapılandırma</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:760px">
+              <div><label style="font-size:11px;display:block">Tür</label>
+                <select id="siem-type" class="form-control">
+                  <option value="syslog">Syslog (UDP/TCP)</option>
+                  <option value="splunk-hec">Splunk HEC</option>
+                  <option value="elastic">Elasticsearch</option>
+                  <option value="datadog">Datadog</option>
+                </select>
+              </div>
+              <div><label style="font-size:11px;display:block">Endpoint</label><input id="siem-endpoint" class="form-control" placeholder="https://siem.example.com:8088"></div>
+              <div><label style="font-size:11px;display:block">Token / API Key</label><input id="siem-token" class="form-control" type="password"></div>
+              <div><label style="font-size:11px;display:block">Index / Source</label><input id="siem-index" class="form-control" placeholder="oxware"></div>
+              <div><label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:18px"><input type="checkbox" id="siem-enabled"> Etkin</label></div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="btn-primary" onclick="siemSave()" style="font-size:12px">Kaydet</button>
+              <button class="btn" onclick="siemTest()" style="font-size:12px">Bağlantıyı Test Et</button>
+            </div>
+            <div id="siem-action-body" class="text-muted" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-sessrec">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-video fa-fw" style="color:var(--accent-lt)"></i> Session Recording</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadSessRecPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">İstatistikler</div><div id="sessrec-stats" class="text-muted">Yükleniyor...</div></div>
+          <div class="card">
+            <div class="card-title">Kayıtlar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Kullanıcı</th><th>Başlangıç</th><th>Süre</th><th>Boyut</th><th>İşlem</th></tr></thead>
+              <tbody id="sessrec-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-numa">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-microchip fa-fw" style="color:var(--accent-lt)"></i> NUMA Pinning</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadNumaPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">NUMA Topolojisi</div><div id="numa-body" class="text-muted">Yükleniyor...</div></div>
+          <div class="card">
+            <div class="card-title">HugePages</div>
+            <div id="hugepages-body" class="text-muted" style="margin-bottom:10px">Yükleniyor...</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input id="hp-count" type="number" class="form-control" placeholder="HugePages sayısı" style="width:180px">
+              <button class="btn-primary" onclick="hpConfigure()" style="font-size:12px">Uygula</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-bkup-enc">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-key fa-fw" style="color:var(--accent-lt)"></i> Backup Encryption</h2>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Yedek Şifrele</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:760px">
+              <div><label style="font-size:11px;display:block">Kaynak (src)</label><input id="be-src" class="form-control" placeholder="/var/backup/vm.qcow2"></div>
+              <div><label style="font-size:11px;display:block">Hedef (dst)</label><input id="be-dst" class="form-control" placeholder="/var/backup/vm.qcow2.enc"></div>
+              <div style="grid-column:1/3"><label style="font-size:11px;display:block">Parola</label><input id="be-pass" type="password" class="form-control"></div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px">
+              <button class="btn-primary" onclick="beEncrypt()" style="font-size:12px">Şifrele</button>
+              <button class="btn" onclick="beDecrypt()" style="font-size:12px">Çöz</button>
+            </div>
+            <div id="be-action-body" class="text-muted" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-rightsize">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-arrow-down-wide-short fa-fw" style="color:var(--accent-lt)"></i> Right-Sizing</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadRightsizePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Öneriler</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+              <label style="font-size:12px">Min tasarruf:</label>
+              <input id="rs-min" type="number" class="form-control" value="10" style="width:100px" onchange="loadRightsizePage()">
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM</th><th>Mevcut (CPU/RAM)</th><th>Önerilen</th><th>Tasarruf</th><th>Sebep</th></tr></thead>
+              <tbody id="rs-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">VM Analizi</div>
+            <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px">
+              <div><label style="font-size:11px;display:block">VM ID</label><input id="rs-vm-id" class="form-control" placeholder="VM UUID" style="min-width:240px"></div>
+              <div><label style="font-size:11px;display:block">Periyot</label>
+                <select id="rs-period" class="form-control"><option>7d</option><option selected>30d</option><option>90d</option></select>
+              </div>
+              <button class="btn-primary" onclick="rsAnalyzeVm()" style="font-size:12px">Analiz Et</button>
+            </div>
+            <pre id="rs-vm-out" style="background:var(--surface2);padding:10px;border-radius:6px;font-size:11px;max-height:280px;overflow:auto"></pre>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-alertcorr">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-bell fa-fw" style="color:var(--accent-lt)"></i> Alert Correlation</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadAlertCorrPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Korelasyon Kuralları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Ad</th><th>Pattern</th><th>Severity</th></tr></thead>
+              <tbody id="ac-rules-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Aktif Olaylar (Incidents)</div>
+            <label style="display:inline-flex;gap:6px;align-items:center;font-size:12px;margin-bottom:8px"><input type="checkbox" id="ac-active-only" checked onchange="loadAlertCorrPage()"> Sadece aktif</label>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Başlık</th><th>Severity</th><th>Başlangıç</th><th>İşlem</th></tr></thead>
+              <tbody id="ac-inc-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- ══════════ /v2.5.3 ENTERPRISE PAGES ══════════ -->
+
       </div><!-- /content -->
     </div><!-- /content-area -->
 
@@ -9413,6 +9732,28 @@ function buildContextNav(type) {
     </div>
 ` : ''}
   </div>
+
+  ${isOperator ? `
+  <div class="ctx-section-header" onclick="toggleNavSection(this)">
+    <span>🏢 Enterprise</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
+  </div>
+  <div class="ctx-section-body">
+    <div class="ctx-item" data-page="tab-drs" onclick="navigate('tab-drs');closeMobileNav()"><i class="fa-solid fa-arrows-rotate fa-fw"></i>DRS Cluster</div>
+    <div class="ctx-item" data-page="tab-affinity" onclick="navigate('tab-affinity');closeMobileNav()"><i class="fa-solid fa-link fa-fw"></i>Affinity Rules</div>
+    <div class="ctx-item" data-page="tab-maint" onclick="navigate('tab-maint');closeMobileNav()"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i>Maintenance Mode</div>
+    <div class="ctx-item" data-page="tab-evc" onclick="navigate('tab-evc');closeMobileNav()"><i class="fa-solid fa-shield-halved fa-fw"></i>EVC Baseline</div>
+    <div class="ctx-item" data-page="tab-nioc" onclick="navigate('tab-nioc');closeMobileNav()"><i class="fa-solid fa-gauge-high fa-fw"></i>NIOC QoS</div>
+    <div class="ctx-item" data-page="tab-dr" onclick="navigate('tab-dr');closeMobileNav()"><i class="fa-solid fa-cloud-bolt fa-fw"></i>Disaster Recovery</div>
+    <div class="ctx-item" data-page="tab-lifecycle" onclick="navigate('tab-lifecycle');closeMobileNav()"><i class="fa-solid fa-recycle fa-fw"></i>Lifecycle Manager</div>
+    <div class="ctx-item" data-page="tab-stor-adv" onclick="navigate('tab-stor-adv');closeMobileNav()"><i class="fa-solid fa-hard-drive fa-fw"></i>Storage Advanced</div>
+    <div class="ctx-item" data-page="tab-net-adv" onclick="navigate('tab-net-adv');closeMobileNav()"><i class="fa-solid fa-network-wired fa-fw"></i>Network Advanced</div>
+    <div class="ctx-item" data-page="tab-siem" onclick="navigate('tab-siem');closeMobileNav()"><i class="fa-solid fa-lock fa-fw"></i>SIEM Export</div>
+    <div class="ctx-item" data-page="tab-sessrec" onclick="navigate('tab-sessrec');closeMobileNav()"><i class="fa-solid fa-video fa-fw"></i>Session Recording</div>
+    <div class="ctx-item" data-page="tab-numa" onclick="navigate('tab-numa');closeMobileNav()"><i class="fa-solid fa-microchip fa-fw"></i>NUMA Pinning</div>
+    <div class="ctx-item" data-page="tab-bkup-enc" onclick="navigate('tab-bkup-enc');closeMobileNav()"><i class="fa-solid fa-key fa-fw"></i>Backup Encryption</div>
+    <div class="ctx-item" data-page="tab-rightsize" onclick="navigate('tab-rightsize');closeMobileNav()"><i class="fa-solid fa-arrow-down-wide-short fa-fw"></i>Right-Sizing</div>
+    <div class="ctx-item" data-page="tab-alertcorr" onclick="navigate('tab-alertcorr');closeMobileNav()"><i class="fa-solid fa-bell fa-fw"></i>Alert Correlation</div>
+  </div>` : ''}
 
   ${isAdmin ? `
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
@@ -15409,6 +15750,22 @@ async function loadTabData(tabId) {
     case 'tab-syslog':        activateSyslogTab('journald'); break;
     case 'tab-content-library': navigate('storage'); switchStorageTab('content-lib'); loadContentLibrary(); break;
     case 'tab-datastore':     loadDatastore(); break;
+    // v2.5.3 Enterprise
+    case 'tab-drs':           loadDrsPage(); break;
+    case 'tab-affinity':      loadAffinityPage(); break;
+    case 'tab-maint':         loadMaintPage(); break;
+    case 'tab-evc':           loadEvcPage(); break;
+    case 'tab-nioc':          loadNiocPage(); break;
+    case 'tab-dr':            loadDrPage(); break;
+    case 'tab-lifecycle':     loadLifecyclePage(); break;
+    case 'tab-stor-adv':      loadStorAdvPage(); break;
+    case 'tab-net-adv':       loadNetAdvPage(); break;
+    case 'tab-siem':          loadSiemPage(); break;
+    case 'tab-sessrec':       loadSessRecPage(); break;
+    case 'tab-numa':          loadNumaPage(); break;
+    case 'tab-bkup-enc':      /* form-only */ break;
+    case 'tab-rightsize':     loadRightsizePage(); break;
+    case 'tab-alertcorr':     loadAlertCorrPage(); break;
   }
 }
 
@@ -20980,6 +21337,623 @@ async function deleteHostProfile(id) {
   await _api('/api/host-profiles/' + encodeURIComponent(id), 'DELETE');
   loadHostProfiles();
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v2.5.3 ENTERPRISE FEATURES — Frontend JS
+   ══════════════════════════════════════════════════════════════════════════ */
+function _entOk(d) { return d && d.status === 'ok'; }
+function _entErr(d, prefix) {
+  toast((prefix || 'Hata') + ': ' + ((d && d.error) || 'bilinmeyen'), 'error');
+}
+function _esc(s) { return (s == null) ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _emptyRow(cols, text) {
+  return `<tr><td colspan="${cols}" class="text-center text-muted" style="padding:18px">
+    <div class="empty-state"><div class="icon">🏢</div><h3>${_esc(text || 'Henüz veri yok')}</h3></div>
+  </td></tr>`;
+}
+
+/* ───────── DRS Cluster ───────── */
+async function loadDrsPage() {
+  const policyEl = document.getElementById('drs-policy-body');
+  const anEl = document.getElementById('drs-analyze-body');
+  const sgEl = document.getElementById('drs-suggest-body');
+  if (!policyEl) return;
+  try {
+    const [pol, an, sg] = await Promise.all([
+      _api('/api/drs/policy'),
+      _api('/api/drs/analyze'),
+      _api('/api/drs/suggest'),
+    ]);
+    if (_entOk(pol) && pol.policy) {
+      const p = pol.policy;
+      policyEl.innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+          <div>Mod: <b>${_esc(p.mode || 'manual')}</b></div>
+          <div>Threshold: <b>${_esc(p.threshold ?? '-')}</b></div>
+          <div>Aralık: <b>${_esc(p.interval_min ?? '-')} dk</b></div>
+          <label style="display:flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="drs-pol-auto" ${p.auto_apply ? 'checked':''}> Otomatik Uygula</label>
+          <button class="btn-primary" onclick="drsSavePolicy()" style="font-size:12px">Politikayı Güncelle</button>
+        </div>`;
+    } else { policyEl.innerHTML = '<div class="text-muted">Politika yok</div>'; }
+
+    if (_entOk(an)) {
+      const hosts = an.hosts || [];
+      const imbalance = an.imbalance != null ? Number(an.imbalance).toFixed(2) : '-';
+      anEl.innerHTML = `<div style="margin-bottom:8px">Imbalance skoru: <b>${imbalance}</b></div>` +
+        (hosts.length ? `<div class="table-wrap"><table><thead><tr><th>Host</th><th>CPU%</th><th>RAM%</th><th>VM Sayısı</th></tr></thead><tbody>` +
+        hosts.map(h => `<tr><td>${_esc(h.host || h.name)}</td><td>${_esc(h.cpu_pct ?? '-')}</td><td>${_esc(h.mem_pct ?? '-')}</td><td>${_esc(h.vm_count ?? '-')}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="text-muted">Host verisi yok</div>');
+    } else { anEl.innerHTML = '<div class="text-muted">Analiz alınamadı</div>'; }
+
+    if (_entOk(sg)) {
+      const list = sg.suggestions || [];
+      sgEl.innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>VM</th><th>Kaynak Host</th><th>Hedef Host</th><th>Beklenen Kazanım</th></tr></thead><tbody>` +
+        list.map(s => `<tr><td>${_esc(s.vm || s.vm_id)}</td><td>${_esc(s.from || s.source)}</td><td>${_esc(s.to || s.target)}</td><td>${_esc(s.gain || s.benefit || '-')}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="empty-state"><div class="icon">✓</div><h3>Öneri yok</h3></div>';
+    } else { sgEl.innerHTML = '<div class="text-muted">Öneriler alınamadı</div>'; }
+  } catch (e) { toast('DRS yüklenemedi', 'error'); }
+}
+async function drsSavePolicy() {
+  const auto = document.getElementById('drs-pol-auto')?.checked || false;
+  const d = await _api('/api/drs/policy', 'POST', { auto_apply: auto });
+  if (_entOk(d)) { toast('Politika güncellendi', 'success'); loadDrsPage(); }
+  else _entErr(d, 'DRS');
+}
+
+/* ───────── Affinity Rules ───────── */
+async function loadAffinityPage() {
+  const tb = document.getElementById('affinity-tbody');
+  if (!tb) return;
+  const d = await _api('/api/affinity/rules');
+  if (!_entOk(d)) { tb.innerHTML = _emptyRow(5, 'Yüklenemedi'); return; }
+  const rules = d.rules || [];
+  if (!rules.length) { tb.innerHTML = _emptyRow(5, 'Henüz kural yok'); return; }
+  tb.innerHTML = rules.map(r => `
+    <tr>
+      <td><code>${_esc(r.id || '-')}</code></td>
+      <td>${_esc(r.type || r.rule_type || '-')}</td>
+      <td>${_esc(Array.isArray(r.vms) ? r.vms.join(', ') : (r.vms || '-'))}</td>
+      <td>${_esc(r.description || r.name || '')}</td>
+      <td><button class="btn" onclick="affinityDelete('${_esc(r.id)}')" style="font-size:11px;color:#f85149">Sil</button></td>
+    </tr>`).join('');
+}
+async function affinityCreatePrompt() {
+  const type = prompt('Kural türü (affinity / anti-affinity):', 'anti-affinity');
+  if (!type) return;
+  const vms = prompt('Etkilenen VM ID listesi (virgülle):', '');
+  if (!vms) return;
+  const desc = prompt('Açıklama (opsiyonel):', '');
+  const d = await _api('/api/affinity/rules', 'POST', {
+    type: type.trim(),
+    vms: vms.split(',').map(s => s.trim()).filter(Boolean),
+    description: desc || '',
+  });
+  if (_entOk(d)) { toast('Kural eklendi', 'success'); loadAffinityPage(); }
+  else _entErr(d, 'Affinity');
+}
+async function affinityDelete(id) {
+  if (!confirm('Kural silinsin mi?')) return;
+  const d = await _api('/api/affinity/rules/' + encodeURIComponent(id), 'DELETE');
+  if (_entOk(d)) { toast('Silindi', 'success'); loadAffinityPage(); }
+  else _entErr(d, 'Affinity');
+}
+
+/* ───────── Maintenance Mode ───────── */
+async function loadMaintPage() {
+  const el = document.getElementById('maint-status-body');
+  if (!el) return;
+  const d = await _api('/api/maintenance/status');
+  if (!_entOk(d)) { el.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+  const inM = d.in_maintenance;
+  el.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+      <div>Durum: <b style="color:${inM?'#f85149':'#3fb950'}">${inM ? 'BAKIM MODUNDA' : 'Normal Çalışma'}</b></div>
+      ${d.entered_at ? `<div>Giriş: ${_esc(d.entered_at)}</div>` : ''}
+      ${d.reason ? `<div>Sebep: ${_esc(d.reason)}</div>` : ''}
+      ${d.migrated_vms != null ? `<div>Taşınan VM: <b>${_esc(d.migrated_vms)}</b></div>` : ''}
+    </div>`;
+}
+async function maintEnter() {
+  const reason = document.getElementById('maint-reason').value.trim() || 'Planned';
+  const dry = document.getElementById('maint-dryrun').checked;
+  const out = document.getElementById('maint-action-body');
+  out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
+  const d = await _api('/api/maintenance/enter', 'POST', { reason, dry_run: dry });
+  if (_entOk(d)) {
+    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    toast(dry ? 'Dry-run tamamlandı' : 'Bakım moduna alındı', 'success');
+    loadMaintPage();
+  } else _entErr(d, 'Maintenance');
+}
+async function maintExit() {
+  const autoStart = document.getElementById('maint-autostart').checked;
+  const out = document.getElementById('maint-action-body');
+  out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
+  const d = await _api('/api/maintenance/exit', 'POST', { auto_start: autoStart });
+  if (_entOk(d)) {
+    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    toast('Bakımdan çıkıldı', 'success');
+    loadMaintPage();
+  } else _entErr(d, 'Maintenance');
+}
+
+/* ───────── EVC Baseline ───────── */
+async function loadEvcPage() {
+  const cur = document.getElementById('evc-current-body');
+  const sel = document.getElementById('evc-baseline-sel');
+  const sel2 = document.getElementById('evc-baseline-vm-sel');
+  if (!cur) return;
+  const d = await _api('/api/evc/baselines');
+  if (!_entOk(d)) { cur.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+  const baselines = d.baselines || [];
+  const current = d.current || '';
+  const host = d.host || {};
+  cur.innerHTML = `
+    <div>Mevcut Cluster Baseline: <b>${_esc(current || '(seçilmedi)')}</b></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Host yeteneği: ${_esc(host.vendor || '?')} / ${_esc(host.model || host.cpu || '?')}</div>`;
+  const opts = baselines.map(b => {
+    const name = typeof b === 'string' ? b : (b.name || b.id);
+    return `<option value="${_esc(name)}" ${name === current ? 'selected' : ''}>${_esc(name)}</option>`;
+  }).join('');
+  sel.innerHTML = opts || '<option>(yok)</option>';
+  sel2.innerHTML = '<option value="">(cluster baseline)</option>' + opts;
+}
+async function evcSetBaseline() {
+  const name = document.getElementById('evc-baseline-sel').value;
+  if (!name) return;
+  const d = await _api('/api/evc/set-baseline', 'POST', { name });
+  if (_entOk(d)) { toast('Baseline kaydedildi', 'success'); loadEvcPage(); }
+  else _entErr(d, 'EVC');
+}
+async function evcApplyToVm() {
+  const vm = document.getElementById('evc-vm-id').value.trim();
+  const baseline = document.getElementById('evc-baseline-vm-sel').value;
+  if (!vm) { toast('VM ID gerekli', 'error'); return; }
+  const out = document.getElementById('evc-apply-body');
+  out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
+  const d = await _api('/api/evc/apply/' + encodeURIComponent(vm), 'POST', { baseline });
+  if (_entOk(d)) {
+    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    toast('VM\'ye uygulandı', 'success');
+  } else _entErr(d, 'EVC');
+}
+
+/* ───────── NIOC ───────── */
+async function loadNiocPage() {
+  const tb = document.getElementById('nioc-tbody');
+  const sel = document.getElementById('nioc-profile-sel');
+  if (!tb) return;
+  const d = await _api('/api/nioc/profiles');
+  if (!_entOk(d)) { tb.innerHTML = _emptyRow(5, 'Yüklenemedi'); return; }
+  const profiles = d.profiles || [];
+  tb.innerHTML = profiles.length ? profiles.map(p => `
+    <tr>
+      <td><b>${_esc(p.name || p.id)}</b></td>
+      <td>${_esc(p.description || '')}</td>
+      <td>${_esc(p.in_kbps ?? p.ingress ?? '-')}</td>
+      <td>${_esc(p.out_kbps ?? p.egress ?? '-')}</td>
+      <td>${_esc(p.burst_kbps ?? '-')}</td>
+    </tr>`).join('') : _emptyRow(5, 'Profil yok');
+  sel.innerHTML = profiles.map(p => `<option value="${_esc(p.name || p.id)}">${_esc(p.name || p.id)}</option>`).join('');
+}
+async function niocApplyProfile() {
+  const vm = document.getElementById('nioc-vm-id').value.trim();
+  const profile = document.getElementById('nioc-profile-sel').value;
+  if (!vm) { toast('VM ID gerekli', 'error'); return; }
+  const out = document.getElementById('nioc-action-body');
+  const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm), 'POST', { profile });
+  out.innerHTML = _entOk(d) ? `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>` : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
+  if (_entOk(d)) toast('Profil uygulandı', 'success');
+}
+async function niocSetBw() {
+  const vm = document.getElementById('nioc-vm-id').value.trim();
+  if (!vm) { toast('VM ID gerekli', 'error'); return; }
+  const body = {
+    in_kbps: Number(document.getElementById('nioc-in').value) || 0,
+    out_kbps: Number(document.getElementById('nioc-out').value) || 0,
+    burst_kbps: Number(document.getElementById('nioc-burst').value) || 1024,
+  };
+  const out = document.getElementById('nioc-action-body');
+  const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm), 'POST', body);
+  out.innerHTML = _entOk(d) ? `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>` : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
+  if (_entOk(d)) toast('Limitler uygulandı', 'success');
+}
+async function niocGetVm() {
+  const vm = document.getElementById('nioc-vm-id').value.trim();
+  if (!vm) { toast('VM ID gerekli', 'error'); return; }
+  const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm));
+  const out = document.getElementById('nioc-action-body');
+  out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+}
+
+/* ───────── Disaster Recovery ───────── */
+async function loadDrPage() {
+  const tb = document.getElementById('dr-tbody');
+  const rpo = document.getElementById('dr-rpo-body');
+  if (!tb) return;
+  const [plans, sla] = await Promise.all([_api('/api/dr/plans'), _api('/api/dr/rpo-rto')]);
+  if (_entOk(sla)) {
+    const arr = sla.plans || [];
+    rpo.innerHTML = arr.length ? `<div class="table-wrap"><table><thead><tr><th>Plan</th><th>RPO (s)</th><th>RTO (s)</th><th>Son Replikasyon</th><th>Durum</th></tr></thead><tbody>` +
+      arr.map(p => `<tr><td>${_esc(p.name || p.id)}</td><td>${_esc(p.rpo_sec ?? p.rpo ?? '-')}</td><td>${_esc(p.rto_sec ?? p.rto ?? '-')}</td><td>${_esc(p.last_replication || '-')}</td><td>${_esc(p.status || '-')}</td></tr>`).join('') +
+      `</tbody></table></div>` : '<div class="text-muted">RPO/RTO verisi yok</div>';
+  } else { rpo.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; }
+  if (!_entOk(plans)) { tb.innerHTML = _emptyRow(7, 'Yüklenemedi'); return; }
+  const list = plans.plans || [];
+  tb.innerHTML = list.length ? list.map(p => `
+    <tr>
+      <td><code>${_esc(p.id || '-')}</code></td>
+      <td><b>${_esc(p.name || '')}</b></td>
+      <td>${_esc(Array.isArray(p.vms) ? p.vms.join(', ') : (p.vms || '-'))}</td>
+      <td>${_esc(p.target_site || p.site || '-')}</td>
+      <td>${_esc(p.rpo_sec ?? '-')}</td>
+      <td>${_esc(p.rto_sec ?? '-')}</td>
+      <td>
+        <button class="btn" onclick="drExecute('${_esc(p.id)}','test')" style="font-size:11px">Test</button>
+        <button class="btn" onclick="drExecute('${_esc(p.id)}','failover')" style="font-size:11px;color:#f85149">Failover</button>
+        <button class="btn" onclick="drDelete('${_esc(p.id)}')" style="font-size:11px;color:#f85149">Sil</button>
+      </td>
+    </tr>`).join('') : _emptyRow(7, 'DR planı yok');
+}
+async function drCreatePrompt() {
+  const name = prompt('Plan adı:', '');
+  if (!name) return;
+  const vms = prompt('VM ID listesi (virgülle):', '');
+  if (!vms) return;
+  const site = prompt('Hedef site (örn. dr-site-1):', 'dr-site-1');
+  const rpo = parseInt(prompt('RPO (saniye):', '300') || '300');
+  const rto = parseInt(prompt('RTO (saniye):', '600') || '600');
+  const d = await _api('/api/dr/plans', 'POST', {
+    name, vms: vms.split(',').map(s => s.trim()).filter(Boolean),
+    target_site: site, rpo_sec: rpo, rto_sec: rto
+  });
+  if (_entOk(d)) { toast('Plan oluşturuldu', 'success'); loadDrPage(); }
+  else _entErr(d, 'DR');
+}
+async function drDelete(id) {
+  if (!confirm('Plan silinsin mi?')) return;
+  const d = await _api('/api/dr/plans/' + encodeURIComponent(id), 'DELETE');
+  if (_entOk(d)) { toast('Silindi', 'success'); loadDrPage(); }
+  else _entErr(d, 'DR');
+}
+async function drExecute(id, mode) {
+  if (mode === 'failover' && !confirm('FAILOVER üretim trafiğini hedef siteye taşır. Devam?')) return;
+  toast('Plan çalıştırılıyor: ' + mode, 'info');
+  const d = await _api('/api/dr/plans/' + encodeURIComponent(id) + '/execute', 'POST', { mode });
+  if (_entOk(d)) { toast('Plan çalıştırıldı', 'success'); loadDrPage(); }
+  else _entErr(d, 'DR');
+}
+
+/* ───────── Lifecycle Manager ───────── */
+async function loadLifecyclePage() {
+  const u = document.getElementById('lc-updates-body');
+  const tb = document.getElementById('lc-baselines-tbody');
+  if (!u) return;
+  const [up, bl] = await Promise.all([_api('/api/lifecycle/updates'), _api('/api/lifecycle/baselines')]);
+  if (_entOk(up)) {
+    const pkgs = up.packages || up.updates || [];
+    const sec = up.security_count ?? '-';
+    u.innerHTML = `<div>Toplam güncelleme: <b>${pkgs.length}</b> &middot; Güvenlik: <b>${_esc(sec)}</b></div>` +
+      (pkgs.length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px">Paket listesi</summary><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px;max-height:240px;overflow:auto">${_esc(pkgs.map(p=>typeof p==='string'?p:(p.name+' '+(p.version||''))).join('\n'))}</pre></details>` : '');
+  } else { u.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; }
+  if (_entOk(bl)) {
+    const list = bl.baselines || [];
+    tb.innerHTML = list.length ? list.map(b => {
+      const name = typeof b === 'string' ? b : (b.name || b.id);
+      const created = (b && b.created_at) || '-';
+      const count = (b && (b.package_count ?? (b.packages ? b.packages.length : '-'))) || '-';
+      return `<tr><td>${_esc(name)}</td><td>${_esc(created)}</td><td>${_esc(count)}</td><td><button class="btn" onclick="lifecycleDrift('${_esc(name)}')" style="font-size:11px">Drift Kontrol</button></td></tr>`;
+    }).join('') : _emptyRow(4, 'Baseline yok');
+  } else { tb.innerHTML = _emptyRow(4, 'Yüklenemedi'); }
+}
+async function lifecycleApply() {
+  const dry = document.getElementById('lc-dryrun').checked;
+  const sec = document.getElementById('lc-sec-only').checked;
+  if (!dry && !confirm('Sistem güncellemeleri uygulanacak. Devam?')) return;
+  toast('Güncellemeler uygulanıyor...', 'info');
+  const d = await _api('/api/lifecycle/apply', 'POST', { dry_run: dry, security_only: sec });
+  if (_entOk(d)) { toast(dry ? 'Dry-run tamam' : 'Güncellemeler uygulandı', 'success'); loadLifecyclePage(); }
+  else _entErr(d, 'Lifecycle');
+}
+async function lifecycleCapture() {
+  const name = document.getElementById('lc-baseline-name').value.trim();
+  if (!name) { toast('Baseline adı gerekli', 'error'); return; }
+  const d = await _api('/api/lifecycle/baselines/' + encodeURIComponent(name) + '/capture', 'POST');
+  if (_entOk(d)) { toast('Baseline yakalandı', 'success'); loadLifecyclePage(); }
+  else _entErr(d, 'Lifecycle');
+}
+async function lifecycleDrift(name) {
+  const out = document.getElementById('lc-drift-body');
+  out.innerHTML = '<div class="text-muted">Drift hesaplanıyor...</div>';
+  const d = await _api('/api/lifecycle/drift/' + encodeURIComponent(name));
+  if (!_entOk(d)) { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; return; }
+  out.innerHTML = `<div style="margin-top:6px"><b>Drift: ${_esc(name)}</b></div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px;max-height:280px;overflow:auto">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+}
+
+/* ───────── Storage Advanced ───────── */
+let _saActive = 'zfs';
+function storAdvTab(tab) { _saActive = tab; loadStorAdvPage(); }
+async function loadStorAdvPage() {
+  const body = document.getElementById('sa-body');
+  if (!body) return;
+  body.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
+  try {
+    if (_saActive === 'zfs') {
+      const d = await _api('/api/storage-adv/zfs');
+      if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+      const pools = d.pools || [];
+      body.innerHTML = `<div class="card-title">ZFS Pools</div>` +
+        (pools.length ? `<div class="table-wrap"><table><thead><tr><th>Ad</th><th>Boyut</th><th>Kullanılan</th><th>Sağlık</th><th>Dedup</th></tr></thead><tbody>` +
+        pools.map(p => `<tr><td><b>${_esc(p.name)}</b></td><td>${_esc(p.size || '-')}</td><td>${_esc(p.used || p.alloc || '-')}</td><td>${_esc(p.health || '-')}</td><td>${_esc(p.dedup || '-')}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="text-muted">ZFS pool yok</div>') +
+        `<div class="card-title" style="margin-top:14px">Btrfs Dedup</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d.btrfs || {}, null, 2))}</pre>`;
+    } else if (_saActive === 'tiers') {
+      const d = await _api('/api/storage-adv/tiers');
+      if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+      const tiers = d.tiers || [];
+      body.innerHTML = `<div class="card-title">Storage Tiers</div>` +
+        (tiers.length ? `<div class="table-wrap"><table><thead><tr><th>Tier</th><th>Tür</th><th>Açıklama</th><th>Pools</th></tr></thead><tbody>` +
+        tiers.map(t => `<tr><td><b>${_esc(t.name || t.tier)}</b></td><td>${_esc(t.type || '-')}</td><td>${_esc(t.description || '')}</td><td>${_esc(Array.isArray(t.pools) ? t.pools.join(', ') : (t.pools || '-'))}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="text-muted">Tier yok</div>') +
+        `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+          <div><label style="font-size:11px;display:block">Pool</label><input id="sa-tier-pool" class="form-control" style="width:200px"></div>
+          <div><label style="font-size:11px;display:block">Tier (gold/silver/bronze)</label><input id="sa-tier-name" class="form-control" style="width:200px"></div>
+          <button class="btn-primary" onclick="saAssignTier()" style="font-size:12px">Pool'u Tier'a Ata</button>
+        </div>`;
+    } else if (_saActive === 'spbm') {
+      const d = await _api('/api/storage-adv/spbm');
+      if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+      const pol = d.policies || [];
+      body.innerHTML = `<div class="card-title">SPBM Policies</div>` +
+        (pol.length ? `<div class="table-wrap"><table><thead><tr><th>Ad</th><th>Min IOPS</th><th>Max Latency</th><th>Encryption</th></tr></thead><tbody>` +
+        pol.map(p => `<tr><td><b>${_esc(p.name)}</b></td><td>${_esc(p.min_iops ?? '-')}</td><td>${_esc(p.max_latency_ms ?? p.max_latency ?? '-')}</td><td>${_esc(p.encryption ? 'Evet' : 'Hayır')}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="text-muted">SPBM politikası yok</div>');
+    } else if (_saActive === 'iscsi') {
+      const d = await _api('/api/storage-adv/iscsi/sessions');
+      if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+      const ses = d.sessions || [];
+      body.innerHTML = `<div class="card-title">iSCSI Sessions</div>` +
+        (ses.length ? `<div class="table-wrap"><table><thead><tr><th>Target</th><th>Portal</th><th>State</th></tr></thead><tbody>` +
+        ses.map(s => `<tr><td>${_esc(s.target || s.iqn || '-')}</td><td>${_esc(s.portal || '-')}</td><td>${_esc(s.state || '-')}</td></tr>`).join('') +
+        `</tbody></table></div>` : '<div class="text-muted">Aktif session yok</div>') +
+        `<div class="card-title" style="margin-top:14px">Target Status</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d.target_status || {}, null, 2))}</pre>`;
+    }
+  } catch (e) { body.innerHTML = '<div style="color:#f85149">Hata: ' + _esc(e.message) + '</div>'; }
+}
+async function saAssignTier() {
+  const pool = document.getElementById('sa-tier-pool').value.trim();
+  const tier = document.getElementById('sa-tier-name').value.trim();
+  if (!pool || !tier) { toast('Pool ve tier gerekli', 'error'); return; }
+  const d = await _api('/api/storage-adv/tiers', 'POST', { pool, tier });
+  if (_entOk(d)) { toast('Pool atandı', 'success'); loadStorAdvPage(); }
+  else _entErr(d, 'Tier');
+}
+
+/* ───────── Network Advanced ───────── */
+let _naActive = 'vxlan';
+function netAdvTab(tab) { _naActive = tab; loadNetAdvPage(); }
+async function loadNetAdvPage() {
+  const body = document.getElementById('na-body');
+  if (!body) return;
+  body.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
+  if (_naActive === 'vxlan') {
+    const d = await _api('/api/network-adv/vxlan');
+    if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
+    const list = d.vxlans || d.tunnels || [];
+    body.innerHTML = `<div class="card-title">VXLAN Tunnels</div>
+      <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+        <div><label style="font-size:11px;display:block">Ad</label><input id="na-vxlan-name" class="form-control" style="width:160px"></div>
+        <div><label style="font-size:11px;display:block">VNI</label><input id="na-vxlan-vni" type="number" class="form-control" style="width:120px"></div>
+        <div><label style="font-size:11px;display:block">Remote IP</label><input id="na-vxlan-rem" class="form-control" style="width:160px"></div>
+        <div><label style="font-size:11px;display:block">Local IP</label><input id="na-vxlan-loc" class="form-control" style="width:160px"></div>
+        <button class="btn-primary" onclick="naCreateVxlan()" style="font-size:12px">VXLAN Oluştur</button>
+      </div>` +
+      (list.length ? `<div class="table-wrap"><table><thead><tr><th>Ad</th><th>VNI</th><th>Remote</th><th>Local</th><th>İşlem</th></tr></thead><tbody>` +
+      list.map(v => `<tr><td>${_esc(v.name)}</td><td>${_esc(v.vni)}</td><td>${_esc(v.remote || v.remote_ip || '-')}</td><td>${_esc(v.local || v.local_ip || '-')}</td><td><button class="btn" onclick="naDeleteVxlan('${_esc(v.name)}')" style="font-size:11px;color:#f85149">Sil</button></td></tr>`).join('') +
+      `</tbody></table></div>` : '<div class="text-muted">VXLAN yok</div>');
+  } else if (_naActive === 'ipv6') {
+    const d = await _api('/api/network-adv/ipv6');
+    body.innerHTML = `<div class="card-title">IPv6 Durumu</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d || {}, null, 2))}</pre>`;
+  }
+}
+async function naCreateVxlan() {
+  const name = document.getElementById('na-vxlan-name').value.trim();
+  const vni = parseInt(document.getElementById('na-vxlan-vni').value);
+  const remote = document.getElementById('na-vxlan-rem').value.trim();
+  const local = document.getElementById('na-vxlan-loc').value.trim();
+  if (!name || !vni) { toast('Ad ve VNI gerekli', 'error'); return; }
+  const d = await _api('/api/network-adv/vxlan', 'POST', { name, vni, remote_ip: remote, local_ip: local });
+  if (_entOk(d)) { toast('VXLAN oluşturuldu', 'success'); loadNetAdvPage(); }
+  else _entErr(d, 'VXLAN');
+}
+async function naDeleteVxlan(name) {
+  if (!confirm('VXLAN silinsin mi?')) return;
+  const d = await _api('/api/network-adv/vxlan/' + encodeURIComponent(name), 'DELETE');
+  if (_entOk(d)) { toast('Silindi', 'success'); loadNetAdvPage(); }
+  else _entErr(d, 'VXLAN');
+}
+
+/* ───────── SIEM Export ───────── */
+async function loadSiemPage() {
+  const d = await _api('/api/siem/config');
+  if (!_entOk(d)) { toast('SIEM yapılandırması yüklenemedi', 'error'); return; }
+  const c = d.config || {};
+  document.getElementById('siem-type').value = c.type || 'syslog';
+  document.getElementById('siem-endpoint').value = c.endpoint || '';
+  document.getElementById('siem-token').value = c.token || c.api_key || '';
+  document.getElementById('siem-index').value = c.index || c.source || '';
+  document.getElementById('siem-enabled').checked = !!c.enabled;
+}
+async function siemSave() {
+  const body = {
+    type: document.getElementById('siem-type').value,
+    endpoint: document.getElementById('siem-endpoint').value.trim(),
+    token: document.getElementById('siem-token').value,
+    index: document.getElementById('siem-index').value.trim(),
+    enabled: document.getElementById('siem-enabled').checked,
+  };
+  const d = await _api('/api/siem/config', 'POST', body);
+  const out = document.getElementById('siem-action-body');
+  if (_entOk(d)) { toast('SIEM yapılandırması kaydedildi', 'success'); out.innerHTML = ''; }
+  else { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; }
+}
+async function siemTest() {
+  const out = document.getElementById('siem-action-body');
+  out.innerHTML = '<div class="text-muted">Test ediliyor...</div>';
+  const d = await _api('/api/siem/test', 'POST');
+  out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+  if (_entOk(d)) toast('SIEM bağlantısı başarılı', 'success'); else toast('SIEM testi başarısız', 'error');
+}
+
+/* ───────── Session Recording ───────── */
+async function loadSessRecPage() {
+  const stats = document.getElementById('sessrec-stats');
+  const tb = document.getElementById('sessrec-tbody');
+  if (!stats) return;
+  const d = await _api('/api/recordings');
+  if (!_entOk(d)) { stats.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; tb.innerHTML = _emptyRow(6,'Yüklenemedi'); return; }
+  const s = d.stats || {};
+  stats.innerHTML = `<div style="display:flex;gap:14px;flex-wrap:wrap">
+    <div>Toplam Kayıt: <b>${_esc(s.total ?? (d.recordings||[]).length)}</b></div>
+    <div>Toplam Boyut: <b>${_esc(s.total_size_mb != null ? s.total_size_mb + ' MB' : '-')}</b></div>
+    <div>Toplam Süre: <b>${_esc(s.total_duration_sec != null ? s.total_duration_sec + ' s' : '-')}</b></div>
+  </div>`;
+  const list = d.recordings || [];
+  tb.innerHTML = list.length ? list.map(r => `
+    <tr>
+      <td><code>${_esc(r.id)}</code></td>
+      <td>${_esc(r.user || '-')}</td>
+      <td>${_esc(r.started_at || r.start || '-')}</td>
+      <td>${_esc(r.duration_sec != null ? r.duration_sec + 's' : '-')}</td>
+      <td>${_esc(r.size_bytes != null ? Math.round(r.size_bytes/1024) + ' KB' : '-')}</td>
+      <td>
+        <a class="btn" href="/api/recordings/${encodeURIComponent(r.id)}" style="font-size:11px">İndir (.cast)</a>
+        <button class="btn" onclick="sessRecDelete('${_esc(r.id)}')" style="font-size:11px;color:#f85149">Sil</button>
+      </td>
+    </tr>`).join('') : _emptyRow(6, 'Kayıt yok');
+}
+async function sessRecDelete(id) {
+  if (!confirm('Kayıt silinsin mi?')) return;
+  const d = await _api('/api/recordings/' + encodeURIComponent(id), 'DELETE');
+  if (_entOk(d)) { toast('Silindi', 'success'); loadSessRecPage(); }
+  else _entErr(d, 'Kayıt');
+}
+
+/* ───────── NUMA / HugePages ───────── */
+async function loadNumaPage() {
+  const n = document.getElementById('numa-body');
+  const h = document.getElementById('hugepages-body');
+  if (!n) return;
+  const [nd, hd] = await Promise.all([_api('/api/compute/numa'), _api('/api/compute/hugepages')]);
+  if (_entOk(nd)) {
+    if (nd.available === false) {
+      n.innerHTML = '<div class="text-muted">Bu sistemde NUMA topolojisi mevcut değil.</div>';
+    } else {
+      const nodes = nd.nodes || [];
+      n.innerHTML = nodes.length ? `<div class="table-wrap"><table><thead><tr><th>Node</th><th>CPU'lar</th><th>Bellek</th><th>Kullanılabilir</th></tr></thead><tbody>` +
+        nodes.map(no => `<tr><td><b>${_esc(no.node ?? no.id)}</b></td><td>${_esc(Array.isArray(no.cpus) ? no.cpus.join(', ') : (no.cpus || '-'))}</td><td>${_esc(no.mem_total_mb != null ? no.mem_total_mb+' MB' : (no.memory || '-'))}</td><td>${_esc(no.mem_free_mb != null ? no.mem_free_mb+' MB' : '-')}</td></tr>`).join('') +
+        `</tbody></table></div>` : `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(nd, null, 2))}</pre>`;
+    }
+  } else { n.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; }
+  if (_entOk(hd)) {
+    h.innerHTML = `<div>Toplam: <b>${_esc(hd.total ?? hd.nr_hugepages ?? '-')}</b> &middot; Free: <b>${_esc(hd.free ?? hd.free_hugepages ?? '-')}</b> &middot; Boyut: <b>${_esc(hd.size_kb ? hd.size_kb+' KB' : (hd.hugepagesize || '-'))}</b></div>`;
+    document.getElementById('hp-count').value = hd.total ?? hd.nr_hugepages ?? '';
+  } else { h.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; }
+}
+async function hpConfigure() {
+  const count = parseInt(document.getElementById('hp-count').value);
+  if (isNaN(count) || count < 0) { toast('Geçerli sayı girin', 'error'); return; }
+  if (!confirm('HugePages sayısı ' + count + ' olarak ayarlanacak. Devam?')) return;
+  const d = await _api('/api/compute/hugepages', 'POST', { count });
+  if (_entOk(d)) { toast('HugePages uygulandı', 'success'); loadNumaPage(); }
+  else _entErr(d, 'HugePages');
+}
+
+/* ───────── Backup Encryption ───────── */
+async function beEncrypt() {
+  const src = document.getElementById('be-src').value.trim();
+  const dst = document.getElementById('be-dst').value.trim();
+  const pass = document.getElementById('be-pass').value;
+  if (!src || !dst || !pass) { toast('Tüm alanlar gerekli', 'error'); return; }
+  const out = document.getElementById('be-action-body');
+  out.innerHTML = '<div class="text-muted">Şifreleniyor...</div>';
+  const d = await _api('/api/backup/encrypt', 'POST', { src, dst, passphrase: pass });
+  if (_entOk(d)) { out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`; toast('Şifrelendi', 'success'); }
+  else { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; }
+}
+async function beDecrypt() {
+  const src = document.getElementById('be-src').value.trim();
+  const dst = document.getElementById('be-dst').value.trim();
+  const pass = document.getElementById('be-pass').value;
+  if (!src || !dst || !pass) { toast('Tüm alanlar gerekli', 'error'); return; }
+  const out = document.getElementById('be-action-body');
+  out.innerHTML = '<div class="text-muted">Çözülüyor...</div>';
+  const d = await _api('/api/backup/decrypt', 'POST', { src, dst, passphrase: pass });
+  if (_entOk(d)) { out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`; toast('Çözüldü', 'success'); }
+  else { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; }
+}
+
+/* ───────── Right-Sizing ───────── */
+async function loadRightsizePage() {
+  const tb = document.getElementById('rs-tbody');
+  if (!tb) return;
+  const min = parseInt(document.getElementById('rs-min').value) || 10;
+  const d = await _api('/api/advisor/recommendations?min_savings=' + min);
+  if (!_entOk(d)) { tb.innerHTML = _emptyRow(5, 'Yüklenemedi'); return; }
+  const recs = d.recommendations || [];
+  tb.innerHTML = recs.length ? recs.map(r => `
+    <tr>
+      <td>${_esc(r.vm_name || r.vm_id || r.vm || '-')}</td>
+      <td>${_esc(r.current_cpu ?? '?')} vCPU / ${_esc(r.current_mem_mb ?? r.current_ram ?? '?')} MB</td>
+      <td>${_esc(r.suggested_cpu ?? '?')} vCPU / ${_esc(r.suggested_mem_mb ?? r.suggested_ram ?? '?')} MB</td>
+      <td><b style="color:#3fb950">${_esc(r.savings_pct ?? r.savings ?? '-')}%</b></td>
+      <td style="font-size:11px;color:var(--text-muted)">${_esc(r.reason || '')}</td>
+    </tr>`).join('') : _emptyRow(5, 'Öneri yok');
+}
+async function rsAnalyzeVm() {
+  const vm = document.getElementById('rs-vm-id').value.trim();
+  const period = document.getElementById('rs-period').value;
+  if (!vm) { toast('VM ID gerekli', 'error'); return; }
+  const out = document.getElementById('rs-vm-out');
+  out.textContent = 'Yükleniyor...';
+  const d = await _api('/api/advisor/vm/' + encodeURIComponent(vm) + '?period=' + period);
+  out.textContent = JSON.stringify(d, null, 2);
+}
+
+/* ───────── Alert Correlation ───────── */
+async function loadAlertCorrPage() {
+  const r = document.getElementById('ac-rules-tbody');
+  const i = document.getElementById('ac-inc-tbody');
+  if (!r) return;
+  const active = document.getElementById('ac-active-only').checked;
+  const [ru, inc] = await Promise.all([
+    _api('/api/correlation/rules'),
+    _api('/api/correlation/incidents?active_only=' + (active ? '1' : '0')),
+  ]);
+  if (_entOk(ru)) {
+    const rules = ru.rules || [];
+    r.innerHTML = rules.length ? rules.map(x => `
+      <tr><td><code>${_esc(x.id)}</code></td><td><b>${_esc(x.name)}</b></td><td style="font-size:11px"><code>${_esc(x.pattern || x.match || '-')}</code></td><td>${_esc(x.severity || '-')}</td></tr>
+    `).join('') : _emptyRow(4, 'Kural yok');
+  } else { r.innerHTML = _emptyRow(4, 'Yüklenemedi'); }
+  if (_entOk(inc)) {
+    const list = inc.incidents || [];
+    i.innerHTML = list.length ? list.map(x => `
+      <tr>
+        <td><code>${_esc(x.id)}</code></td>
+        <td>${_esc(x.title || x.summary || '-')}</td>
+        <td>${_esc(x.severity || '-')}</td>
+        <td>${_esc(x.started_at || x.start || '-')}</td>
+        <td>${x.resolved_at ? '<span style="color:#3fb950">çözüldü</span>' : `<button class="btn" onclick="acResolve('${_esc(x.id)}')" style="font-size:11px">Çözümle</button>`}</td>
+      </tr>`).join('') : _emptyRow(5, 'Aktif olay yok');
+  } else { i.innerHTML = _emptyRow(5, 'Yüklenemedi'); }
+}
+async function acResolve(id) {
+  const d = await _api('/api/correlation/incidents/' + encodeURIComponent(id) + '/resolve', 'POST');
+  if (_entOk(d)) { toast('Çözüldü', 'success'); loadAlertCorrPage(); }
+  else _entErr(d, 'Korelasyon');
+}
+
 </script>
 </body>
 </html>
