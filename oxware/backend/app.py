@@ -15086,38 +15086,64 @@ def api_compute_pcie():
 @app.route("/api/storage-adv/zfs")
 @require_auth
 def api_sa_zfs():
-    if not storage_adv: return ok(pools=[])
-    return ok(pools=storage_adv.zfs_pools(),
-              btrfs=storage_adv.btrfs_dedup_status())
+    if not storage_adv: return ok(pools=[], btrfs={}, note="storage_advanced modülü yüklü değil")
+    try:
+        pools = storage_adv.zfs_pools()
+    except Exception as e:
+        log.warning("zfs_pools hata: %s", e)
+        pools = []
+    try:
+        btrfs = storage_adv.btrfs_dedup_status()
+    except Exception as e:
+        log.warning("btrfs_dedup_status hata: %s", e)
+        btrfs = {}
+    return ok(pools=pools, btrfs=btrfs)
 
 @app.route("/api/storage-adv/tiers", methods=["GET", "POST"])
 @require_auth
 @require_role("admin", "administrator")
 def api_sa_tiers():
-    if not storage_adv: return err("Modül yok")
-    if request.method == "GET":
-        return ok(tiers=storage_adv.list_tier_policies())
-    d = request.get_json(silent=True) or {}
-    if "pool" in d and "tier" in d:
-        return ok(**storage_adv.assign_pool_to_tier(d["pool"], d["tier"]))
-    return ok(**storage_adv.save_tier_policies(d.get("tiers", [])))
+    if not storage_adv: return ok(tiers=[], note="storage_advanced modülü yüklü değil")
+    try:
+        if request.method == "GET":
+            return ok(tiers=storage_adv.list_tier_policies())
+        d = request.get_json(silent=True) or {}
+        if "pool" in d and "tier" in d:
+            return ok(**storage_adv.assign_pool_to_tier(d["pool"], d["tier"]))
+        return ok(**storage_adv.save_tier_policies(d.get("tiers", [])))
+    except Exception as e:
+        log.warning("tier policies hata: %s", e)
+        return ok(tiers=[], error=str(e))
 
 @app.route("/api/storage-adv/spbm", methods=["GET", "POST"])
 @require_auth
 def api_sa_spbm():
-    if not storage_adv: return ok(policies=[])
-    if request.method == "GET":
-        return ok(policies=storage_adv.list_spbm_policies())
-    d = request.get_json(silent=True) or {}
-    return ok(**storage_adv.save_spbm_policies(d.get("policies", [])))
+    if not storage_adv: return ok(policies=[], note="storage_advanced modülü yüklü değil")
+    try:
+        if request.method == "GET":
+            return ok(policies=storage_adv.list_spbm_policies())
+        d = request.get_json(silent=True) or {}
+        return ok(**storage_adv.save_spbm_policies(d.get("policies", [])))
+    except Exception as e:
+        log.warning("spbm hata: %s", e)
+        return ok(policies=[], error=str(e))
 
 @app.route("/api/storage-adv/iscsi/sessions")
 @require_auth
 @require_role("admin", "administrator")
 def api_sa_iscsi():
-    if not storage_adv: return ok(sessions=[])
-    return ok(sessions=storage_adv.iscsi_initiator_sessions(),
-              target_status=storage_adv.iscsi_target_status())
+    if not storage_adv: return ok(sessions=[], target_status={}, note="storage_advanced modülü yüklü değil")
+    try:
+        ses = storage_adv.iscsi_initiator_sessions()
+    except Exception as e:
+        log.warning("iscsi_initiator_sessions hata: %s", e)
+        ses = []
+    try:
+        tgt = storage_adv.iscsi_target_status()
+    except Exception as e:
+        log.warning("iscsi_target_status hata: %s", e)
+        tgt = {}
+    return ok(sessions=ses, target_status=tgt)
 
 
 # ── Network Advanced ───────────────────────────────────────────────────────
@@ -15125,27 +15151,40 @@ def api_sa_iscsi():
 @require_auth
 @require_role("admin", "administrator")
 def api_na_vxlan():
-    if not network_adv: return err("Modül yok")
-    if request.method == "GET":
-        return ok(vxlans=network_adv.vxlan_list())
-    d = request.get_json(silent=True) or {}
-    return ok(**network_adv.vxlan_create(
-        d["name"], int(d["vni"]), d.get("group", "239.1.1.1"),
-        d.get("dev", "eth0"), int(d.get("mtu", 1450))
-    ))
+    if not network_adv: return ok(vxlans=[], note="network_advanced modülü yüklü değil")
+    try:
+        if request.method == "GET":
+            return ok(vxlans=network_adv.vxlan_list())
+        d = request.get_json(silent=True) or {}
+        if not d.get("name") or not d.get("vni"):
+            return err("name ve vni zorunludur", 400)
+        return ok(**network_adv.vxlan_create(
+            d["name"], int(d["vni"]), d.get("group", "239.1.1.1"),
+            d.get("dev", "eth0"), int(d.get("mtu", 1450))
+        ))
+    except Exception as e:
+        log.warning("vxlan hata: %s", e)
+        return ok(vxlans=[], error=str(e))
 
 @app.route("/api/network-adv/vxlan/<name>", methods=["DELETE"])
 @require_auth
 @require_role("admin", "administrator")
 def api_na_vxlan_delete(name):
-    if not network_adv: return err("Modül yok")
-    return ok(**network_adv.vxlan_delete(name))
+    if not network_adv: return err("network_advanced modülü yüklü değil")
+    try:
+        return ok(**network_adv.vxlan_delete(name))
+    except Exception as e:
+        return err(str(e), 500)
 
 @app.route("/api/network-adv/ipv6")
 @require_auth
 def api_na_ipv6():
-    if not network_adv: return ok(enabled=False)
-    return ok(**network_adv.ipv6_status())
+    if not network_adv: return ok(enabled=False, note="network_advanced modülü yüklü değil")
+    try:
+        return ok(**network_adv.ipv6_status())
+    except Exception as e:
+        log.warning("ipv6_status hata: %s", e)
+        return ok(enabled=False, error=str(e))
 
 @app.route("/api/network-adv/ddos", methods=["GET", "POST"])
 @require_auth

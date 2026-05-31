@@ -708,6 +708,14 @@
     .ctx-section-arrow{font-size:9px;transition:transform .2s;opacity:.5;display:flex;align-items:center}
     .ctx-section-body{overflow:hidden;transition:max-height .25s ease}
     .ctx-section-body.collapsed{display:none}
+
+    /* Enterprise compact grid (2 sütun) */
+    .ent-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;padding:4px 6px}
+    .ent-grid .ctx-item{padding:6px 6px;font-size:10.5px;gap:5px;border-radius:4px;flex-direction:column;align-items:center;text-align:center;line-height:1.15;min-height:48px;justify-content:center}
+    .ent-grid .ctx-item i{font-size:13px;margin-bottom:2px;color:var(--accent-lt);opacity:.85}
+    .ent-grid .ctx-item:hover i{opacity:1}
+    .ent-grid .ctx-item.active i{color:var(--accent)}
+    .light-theme .ent-grid .ctx-item i{color:#0969da}
     .nav-sub-list{padding-left:20px;border-left:1px solid var(--border);margin:4px 0 4px 18px}
     .nav-sub-item{padding:4px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;border-radius:3px;display:flex;align-items:center;gap:6px}
     .nav-sub-item:hover{background:var(--surface2);color:var(--text)}
@@ -1069,12 +1077,6 @@
       <div class="tb-stat">VM <span class="val" id="tb-vms">0/0</span></div>
     </div>
 
-    <!-- Global Search Button (Ctrl+K) -->
-    <button class="tb-action" onclick="openGlobalSearchOverlay()" title="Ara (Ctrl+K)" style="gap:6px">
-      <span style="font-size:15px">🔍</span>
-      <kbd style="background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;font-size:10px;color:var(--text-muted)">Ctrl+K</kbd>
-    </button>
-
     <div class="tb-actions">
       <button class="tb-action primary" onclick="openCreateVMModal()">
         <svg viewBox="0 0 16 16"><path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/></svg>
@@ -1096,11 +1098,6 @@
         <svg viewBox="0 0 16 16"><path d="M8 16A8 8 0 118 0a8 8 0 010 16zM8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/><path d="M5.255 5.786a.237.237 0 00.241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 00.25.246h.811a.25.25 0 00.25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/></svg>
         <span data-i18n="Help">Help</span>
       </a>
-      <!-- Command Palette Trigger (Ctrl+Shift+P) -->
-      <button class="tb-action" onclick="openCmdPalette()" title="Komut Paleti (Ctrl+Shift+P)" style="gap:6px">
-        <i class="fa-solid fa-terminal"></i>
-        <span class="cmd-kbd" style="background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;font-size:10px;color:var(--text-muted)">Ctrl+Shift+P</span>
-      </button>
       <!-- Notifications Bell -->
       <button class="tb-action" id="notif-btn" onclick="toggleNotifPanel()" title="Bildirimler" style="position:relative">
         <i class="fa-solid fa-bell"></i>
@@ -9187,6 +9184,15 @@ document.addEventListener('click', (e) => {
 
 /* ══════════════════ Collapsible Nav Sections ══════════════════ */
 
+function toggleEntGrid(header) {
+  const grid = document.getElementById('ent-grid-wrap');
+  const chev = header.querySelector('.ent-grid-chev');
+  if (!grid) return;
+  const hidden = grid.style.display === 'none';
+  grid.style.display = hidden ? 'grid' : 'none';
+  if (chev) chev.style.transform = hidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+}
+
 function toggleNavSection(btn) {
   const body = btn.nextElementSibling;
   if (!body) return;
@@ -9749,28 +9755,6 @@ function buildContextNav(type) {
 ` : ''}
   </div>
 
-  ${isOperator ? `
-  <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>🏢 Enterprise</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body">
-    <div class="ctx-item" data-page="tab-drs" onclick="navigate('tab-drs');closeMobileNav()"><i class="fa-solid fa-arrows-rotate fa-fw"></i>DRS Cluster</div>
-    <div class="ctx-item" data-page="tab-affinity" onclick="navigate('tab-affinity');closeMobileNav()"><i class="fa-solid fa-link fa-fw"></i>Affinity Rules</div>
-    <div class="ctx-item" data-page="tab-maint" onclick="navigate('tab-maint');closeMobileNav()"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i>Maintenance Mode</div>
-    <div class="ctx-item" data-page="tab-evc" onclick="navigate('tab-evc');closeMobileNav()"><i class="fa-solid fa-shield-halved fa-fw"></i>EVC Baseline</div>
-    <div class="ctx-item" data-page="tab-nioc" onclick="navigate('tab-nioc');closeMobileNav()"><i class="fa-solid fa-gauge-high fa-fw"></i>NIOC QoS</div>
-    <div class="ctx-item" data-page="tab-dr" onclick="navigate('tab-dr');closeMobileNav()"><i class="fa-solid fa-cloud-bolt fa-fw"></i>Disaster Recovery</div>
-    <div class="ctx-item" data-page="tab-lifecycle" onclick="navigate('tab-lifecycle');closeMobileNav()"><i class="fa-solid fa-recycle fa-fw"></i>Lifecycle Manager</div>
-    <div class="ctx-item" data-page="tab-stor-adv" onclick="navigate('tab-stor-adv');closeMobileNav()"><i class="fa-solid fa-hard-drive fa-fw"></i>Storage Advanced</div>
-    <div class="ctx-item" data-page="tab-net-adv" onclick="navigate('tab-net-adv');closeMobileNav()"><i class="fa-solid fa-network-wired fa-fw"></i>Network Advanced</div>
-    <div class="ctx-item" data-page="tab-siem" onclick="navigate('tab-siem');closeMobileNav()"><i class="fa-solid fa-lock fa-fw"></i>SIEM Export</div>
-    <div class="ctx-item" data-page="tab-sessrec" onclick="navigate('tab-sessrec');closeMobileNav()"><i class="fa-solid fa-video fa-fw"></i>Session Recording</div>
-    <div class="ctx-item" data-page="tab-numa" onclick="navigate('tab-numa');closeMobileNav()"><i class="fa-solid fa-microchip fa-fw"></i>NUMA Pinning</div>
-    <div class="ctx-item" data-page="tab-bkup-enc" onclick="navigate('tab-bkup-enc');closeMobileNav()"><i class="fa-solid fa-key fa-fw"></i>Backup Encryption</div>
-    <div class="ctx-item" data-page="tab-rightsize" onclick="navigate('tab-rightsize');closeMobileNav()"><i class="fa-solid fa-arrow-down-wide-short fa-fw"></i>Right-Sizing</div>
-    <div class="ctx-item" data-page="tab-alertcorr" onclick="navigate('tab-alertcorr');closeMobileNav()"><i class="fa-solid fa-bell fa-fw"></i>Alert Correlation</div>
-  </div>` : ''}
-
   ${isAdmin ? `
   <div class="ctx-section-header" onclick="toggleNavSection(this)">
     <span>${t('management')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
@@ -9797,6 +9781,31 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
     </div>
+    <!-- Enterprise sub-grid (Yönetim altında) -->
+    <div style="padding:6px 12px 2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleEntGrid(this)" title="${t('Enterprise')||'Kurumsal'}">
+      <i class="fa-solid fa-building fa-fw" style="font-size:9px;opacity:.7"></i>
+      <span data-i18n="Enterprise">${t('Enterprise')||'Kurumsal'}</span>
+      <span style="flex:1"></span>
+      <i class="fa-solid fa-chevron-down ent-grid-chev" style="font-size:8px;opacity:.6;transition:transform .2s"></i>
+    </div>
+    <div class="ent-grid" id="ent-grid-wrap">
+      <div class="ctx-item" data-page="tab-drs"        onclick="navigate('tab-drs');closeMobileNav()"        title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate"></i><span data-i18n="DRS Cluster">DRS Küme</span></div>
+      <div class="ctx-item" data-page="tab-affinity"   onclick="navigate('tab-affinity');closeMobileNav()"   title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link"></i><span data-i18n="Affinity Rules">Yakınlık</span></div>
+      <div class="ctx-item" data-page="tab-maint"      onclick="navigate('tab-maint');closeMobileNav()"      title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench"></i><span data-i18n="Maintenance Mode">Bakım Modu</span></div>
+      <div class="ctx-item" data-page="tab-evc"        onclick="navigate('tab-evc');closeMobileNav()"        title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved"></i><span data-i18n="EVC Baseline">EVC CPU</span></div>
+      <div class="ctx-item" data-page="tab-nioc"       onclick="navigate('tab-nioc');closeMobileNav()"       title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high"></i><span data-i18n="NIOC QoS">Ağ QoS</span></div>
+      <div class="ctx-item" data-page="tab-dr"         onclick="navigate('tab-dr');closeMobileNav()"         title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt"></i><span data-i18n="Disaster Recovery">Felaket Kurtarma</span></div>
+      <div class="ctx-item" data-page="tab-lifecycle"  onclick="navigate('tab-lifecycle');closeMobileNav()"  title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle"></i><span data-i18n="Lifecycle Manager">Yaşam Döngüsü</span></div>
+      <div class="ctx-item" data-page="tab-stor-adv"   onclick="navigate('tab-stor-adv');closeMobileNav()"   title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive"></i><span data-i18n="Storage Advanced">Depolama+</span></div>
+      <div class="ctx-item" data-page="tab-net-adv"    onclick="navigate('tab-net-adv');closeMobileNav()"    title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired"></i><span data-i18n="Network Advanced">Ağ+</span></div>
+      <div class="ctx-item" data-page="tab-siem"       onclick="navigate('tab-siem');closeMobileNav()"       title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock"></i><span data-i18n="SIEM Export">SIEM</span></div>
+      <div class="ctx-item" data-page="tab-sessrec"    onclick="navigate('tab-sessrec');closeMobileNav()"    title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video"></i><span data-i18n="Session Recording">Oturum Kaydı</span></div>
+      <div class="ctx-item" data-page="tab-numa"       onclick="navigate('tab-numa');closeMobileNav()"       title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip"></i><span data-i18n="NUMA Pinning">NUMA</span></div>
+      <div class="ctx-item" data-page="tab-bkup-enc"   onclick="navigate('tab-bkup-enc');closeMobileNav()"   title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key"></i><span data-i18n="Backup Encryption">Yedek Şifreleme</span></div>
+      <div class="ctx-item" data-page="tab-rightsize"  onclick="navigate('tab-rightsize');closeMobileNav()"  title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short"></i><span data-i18n="Right-Sizing">Boyutlandırma</span></div>
+      <div class="ctx-item" data-page="tab-alertcorr"  onclick="navigate('tab-alertcorr');closeMobileNav()"  title="Uyarı korelasyon — gürültü azalt"><i class="fa-solid fa-bell"></i><span data-i18n="Alert Correlation">Uyarı Korelasyon</span></div>
+    </div>
+
     <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
       <i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap
     </div>
