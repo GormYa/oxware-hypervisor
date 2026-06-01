@@ -28,7 +28,7 @@
       --red:#be3226;--red-lt:#ef4444;
       --yellow:#a87210;--yellow-lt:#eab308;
       --orange:#c05a18;
-      --topbar-h:48px;--tree-w:0px;--nav-w:196px;--taskbar-h:170px;
+      --topbar-h:48px;--tree-w:0px;--nav-w:196px;--taskbar-h:150px;
       /* Tema değişkenleri */
       --bg-primary: #111822;
       --bg-secondary: #18222f;
@@ -236,7 +236,7 @@
     .page.active{display:block}
 
     /* ── Taskbar ── ESXi event log style */
-    #taskbar{height:var(--taskbar-h);background:#162030;border-top:1px solid #243040;flex-shrink:0;display:flex;flex-direction:column}
+    #taskbar{height:var(--taskbar-h);background:#162030;border-top:1px solid #243040;flex-shrink:0;display:flex;flex-direction:column;margin-top:auto}
     .tb-tabs{display:flex;border-bottom:1px solid #243040;flex-shrink:0;background:#111e2c}
     .tb-tab{padding:5px 14px;font-size:10.5px;font-weight:600;color:#526a84;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s;letter-spacing:.2px}
     .tb-tab.active{color:#4fb8f0;border-bottom-color:#1a82cc}
@@ -5385,35 +5385,17 @@
             <h2><i class="fa-solid fa-building fa-fw" style="color:var(--accent-lt)"></i> Enterprise Özellikleri</h2>
           </div>
 
-          <!-- Sub-tab navigation (kategoriye göre, scrollable horizontal) -->
-          <div class="sub-tabs" id="ent-subtabs" style="margin-bottom:14px;overflow-x:auto;white-space:nowrap;padding-bottom:4px;display:flex;gap:2px;border-bottom:1px solid var(--border)">
-            <button class="sub-tab active" onclick="entSubTab('drs')" title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate"></i> DRS Küme</button>
-            <button class="sub-tab" onclick="entSubTab('affinity')" title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link"></i> Yakınlık</button>
-            <button class="sub-tab" onclick="entSubTab('maint')" title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench"></i> Bakım</button>
-            <button class="sub-tab" onclick="entSubTab('evc')" title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved"></i> EVC CPU</button>
-            <button class="sub-tab" onclick="entSubTab('nioc')" title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high"></i> Ağ QoS</button>
-            <button class="sub-tab" onclick="entSubTab('dr')" title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt"></i> Felaket Kurtarma</button>
-            <button class="sub-tab" onclick="entSubTab('lifecycle')" title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle"></i> Yaşam Döngüsü</button>
-            <button class="sub-tab" onclick="entSubTab('stor-adv')" title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive"></i> Depolama+</button>
-            <button class="sub-tab" onclick="entSubTab('net-adv')" title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired"></i> Ağ+</button>
-            <button class="sub-tab" onclick="entSubTab('siem')" title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock"></i> SIEM</button>
-            <button class="sub-tab" onclick="entSubTab('sessrec')" title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video"></i> Oturum Kaydı</button>
-            <button class="sub-tab" onclick="entSubTab('numa')" title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip"></i> NUMA</button>
-            <button class="sub-tab" onclick="entSubTab('bkup-enc')" title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key"></i> Yedek Şifreleme</button>
-            <button class="sub-tab" onclick="entSubTab('rightsize')" title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short"></i> Boyutlandırma</button>
-            <button class="sub-tab" onclick="entSubTab('alertcorr')" title="Uyarı korelasyon"><i class="fa-solid fa-bell"></i> Uyarı Korelasyon</button>
-            <button class="sub-tab" onclick="entSubTab('cvm')" title="Confidential VM (AMD SEV / Intel TDX)"><i class="fa-solid fa-user-shield"></i> Gizli VM</button>
-            <button class="sub-tab" onclick="entSubTab('disk-enc')" title="VM disk şifreleme (LUKS2 + AES)"><i class="fa-solid fa-lock"></i> Disk Şifreleme</button>
-            <button class="sub-tab" onclick="entSubTab('compliance')" title="CIS / NIST / PCI-DSS / HIPAA / ISO27001"><i class="fa-solid fa-clipboard-check"></i> Uyumluluk</button>
-            <button class="sub-tab" onclick="entSubTab('dlp')" title="Veri sızıntı önleme (regex DLP)"><i class="fa-solid fa-shield-virus"></i> DLP</button>
-            <button class="sub-tab" onclick="entSubTab('forensics')" title="Adli analiz — memory dump + pcap"><i class="fa-solid fa-magnifying-glass"></i> Adli Analiz</button>
-            <button class="sub-tab" onclick="entSubTab('mfa-policy')" title="Rol bazlı 2FA zorunluluğu"><i class="fa-solid fa-id-badge"></i> 2FA Politikası</button>
-            <button class="sub-tab" onclick="entSubTab('sso')" title="SAML 2.0 + OpenID Connect SSO"><i class="fa-solid fa-id-card"></i> SSO</button>
-            <button class="sub-tab" onclick="entSubTab('tenants')" title="Tenant izolasyon + kotalar"><i class="fa-solid fa-building-user"></i> Tenants</button>
-            <button class="sub-tab" onclick="entSubTab('chargeback')" title="Tenant başı maliyet raporu"><i class="fa-solid fa-coins"></i> Chargeback</button>
-            <button class="sub-tab" onclick="entSubTab('svc-cat')" title="VM şablon mağazası"><i class="fa-solid fa-store"></i> Servis Kataloğu</button>
-            <button class="sub-tab" onclick="entSubTab('rate-limit')" title="Tenant API rate limit"><i class="fa-solid fa-gauge"></i> Rate Limit</button>
+          <!-- Category tab navigation (6 groups) -->
+          <div class="sub-tabs" id="ent-cat-tabs" style="margin-bottom:8px">
+            <button class="sub-tab active" onclick="entCat('compute')">⚙️ Compute</button>
+            <button class="sub-tab" onclick="entCat('storage')">💾 Depolama</button>
+            <button class="sub-tab" onclick="entCat('network')">🌐 Ağ</button>
+            <button class="sub-tab" onclick="entCat('security')">🔒 Güvenlik</button>
+            <button class="sub-tab" onclick="entCat('dr')">🌪 Felaket Kurtarma</button>
+            <button class="sub-tab" onclick="entCat('tenancy')">🏢 Multi-Tenancy</button>
           </div>
+          <!-- Feature sub-tab bar (populated by entCat()) -->
+          <div class="sub-tabs" id="ent-feat-tabs" style="margin-bottom:14px;overflow-x:auto;white-space:nowrap"></div>
 
         <div id="ent-pane-drs">
           <div class="section-header">
@@ -8436,7 +8418,7 @@ function _startIdleMonitor() {
     document.addEventListener(e, _resetIdle, { passive: true })
   );
   clearInterval(_idleCheckTimer);
-  _idleCheckTimer = setInterval(_checkIdle, 10000); // check every 10s
+  _idleCheckTimer = setInterval(() => { if (document.visibilityState === 'hidden') return; _checkIdle(); }, 10000); // check every 10s
 }
 
 _startIdleMonitor();
@@ -11472,7 +11454,7 @@ async function _loadVdMetricsOverview(vmId) {
   _stopPerfPoll();
   await _fetchAndRenderPerf(vmId);
   // Poll every 4 seconds (each call takes ~0.6 s server-side)
-  _perfPollTimer = setInterval(() => _fetchAndRenderPerf(vmId), 4000);
+  _perfPollTimer = setInterval(() => { if (document.visibilityState === 'hidden') return; _fetchAndRenderPerf(vmId); }, 5000);
 }
 
 async function _fetchAndRenderPerf(vmId) {
@@ -16226,7 +16208,7 @@ async function loadTabData(tabId) {
     case 'tab-content-library': navigate('storage'); switchStorageTab('content-lib'); loadContentLibrary(); break;
     case 'tab-datastore':     loadDatastore(); break;
     // v2.5.6+ Enterprise (unified sub-tab page)
-    case 'tab-enterprise':    entSubTab('drs'); break;
+    case 'tab-enterprise':    entCat('compute'); break;
   }
 }
 
@@ -20406,12 +20388,41 @@ function entSubTab(tab) {
     const p = document.getElementById('ent-pane-' + t);
     if (p) p.style.display = (t === tab) ? '' : 'none';
   });
-  document.querySelectorAll('#ent-subtabs .sub-tab').forEach(b => b.classList.remove('active'));
-  const i = ENT_SUB_TABS.indexOf(tab);
-  const bs = document.querySelectorAll('#ent-subtabs .sub-tab');
-  if (bs[i]) bs[i].classList.add('active');
+  document.querySelectorAll('#ent-feat-tabs .sub-tab').forEach(b => b.classList.remove('active'));
+  const featTabs = document.querySelectorAll('#ent-feat-tabs .sub-tab');
+  featTabs.forEach(b => { if (b.getAttribute('onclick') === `entSubTab('${tab}')`) b.classList.add('active'); });
   const fn = ENT_LOADERS[tab];
   if (fn) fn();
+}
+
+const ENT_CATEGORIES = {
+  compute:['drs','affinity','evc','numa','rightsize','maint'],
+  storage:['stor-adv','bkup-enc','disk-enc'],
+  network:['nioc','net-adv'],
+  security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','alertcorr'],
+  dr:['dr','lifecycle'],
+  tenancy:['tenants','chargeback','svc-cat','rate-limit']
+};
+let _entCurrentCat = 'compute';
+function entCat(cat) {
+  _entCurrentCat = cat;
+  // Update category tab active state
+  document.querySelectorAll('#ent-cat-tabs .sub-tab').forEach(b => b.classList.remove('active'));
+  const cats = Object.keys(ENT_CATEGORIES);
+  const bs = document.querySelectorAll('#ent-cat-tabs .sub-tab');
+  const ci = cats.indexOf(cat);
+  if (bs[ci]) bs[ci].classList.add('active');
+  // Build feature sub-tab bar for this category
+  const feats = ENT_CATEGORIES[cat] || [];
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit'};
+  const bar = document.getElementById('ent-feat-tabs');
+  bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
+  // Hide all panes, show first feature of this category
+  Object.keys(ENT_CATEGORIES).forEach(c => ENT_CATEGORIES[c].forEach(f => {
+    const p = document.getElementById('ent-pane-' + f);
+    if (p) p.style.display = 'none';
+  }));
+  if (feats[0]) entSubTab(feats[0]);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -23204,7 +23215,7 @@ async function notifMarkAllRead() {
   loadNotifications();
 }
 // Periodic refresh
-setInterval(() => { try { loadNotifications(); } catch(_) {} }, 30000);
+setInterval(() => { if (document.visibilityState === 'hidden') return; try { loadNotifications(); } catch(_) {} }, 30000);
 setTimeout(() => { try { loadNotifications(); } catch(_) {} }, 4000);
 
 /* ───── 4. Bulk Actions — extend existing batchVmAction with snapshot ───── */
