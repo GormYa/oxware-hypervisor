@@ -23,6 +23,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.5 (2026-06):** 🛡️ **Security & Compliance release** — AMD SEV / Intel TDX confidential VMs (memory encryption), live disk encryption with LUKS2 + AES-XTS-256, automated CIS / NIST 800-53 / PCI-DSS / HIPAA / ISO 27001 compliance scanner, hypervisor-level DLP engine (regex patterns: PII, credit cards, AWS keys, PEM, JWT, TC kimlik), forensics tooling (memory dump via `virsh dump`, packet capture per VM tap), MFA-per-role enforcement (admin = required by default), SAML 2.0 + OpenID Connect SSO with role mapping (Okta / Azure AD / Google Workspace ready). All v2.5.5 endpoints admin-only. Feature registry now tracks **81 capabilities**.
+>
 > **v2.5.4 (2026-06):** 🔐 **Security & Hardware release** — Virtual TPM 2.0 (Windows 11 / BitLocker), UEFI Secure Boot enforcement, HashiCorp Vault secret-manager integration, tamper-evident hash-chained audit log, automatic HugePages tuning for DB workloads, SR-IOV VF management, NVIDIA vGPU (GRID + MIG) detection & assignment, Continuous Data Protection (CDP, second-level RPO), DR boot order orchestration with dependency graph, Geo-DNS automatic failover (Cloudflare / Route53). Central feature registry tracking **74 enterprise capabilities** across 10 categories with per-feature enable/disable & audit log. All Enterprise endpoints `@require_role("admin", "administrator")` — strict RBAC.
 >
 > **v2.5.3 (2026-05):** 🏢 **Enterprise release** — DRS auto-balancing, affinity rules, EVC, maintenance-mode VM evacuation, NUMA scheduling, right-sizing & predictive-failure analysis, linked clones, app-consistent snapshots, NIOC bandwidth QoS, SSO (SAML/OIDC), LDAP/AD, hash-chained audit logs, SIEM export, session recording, AES backup encryption, Site Recovery DR runbooks, RPO/RTO SLA tracking, Lifecycle Manager, capacity planning, alert correlation, webhook system, live VNC thumbnails, command palette, onboarding wizard, notifications panel. Full GH-Pages mobile responsive overhaul.
@@ -235,6 +237,22 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.5
+
+The **Security & Compliance release** adds 7 enterprise-grade modules focused on confidential computing, regulatory compliance, and enterprise auth:
+
+- 🛡️ **Confidential VMs** — AMD SEV / SEV-ES / SEV-SNP + Intel TDX support, memory-encrypted VMs with `<launchSecurity>` libvirt injection
+- 🔐 **Live Disk Encryption** — qemu-img LUKS2 conversion, AES-XTS-256 + SHA-256, key rotation via `cryptsetup luksAddKey`
+- 📋 **Compliance Scanner** — automated audit against **CIS Ubuntu 24.04 Benchmark**, **NIST 800-53 Rev5**, **PCI-DSS v4.0**, **HIPAA Security Rule**, **ISO/IEC 27001:2022**. Pass/Fail/Warn per control + remediation hints
+- 🚨 **DLP Engine** — regex-based outbound traffic inspection. Default rules: credit cards, US SSN, AWS keys, PEM private keys, JWT tokens, TC Kimlik. Custom rules + severity levels
+- 🔬 **Forensics** — `virsh dump` memory snapshots (live/crash/memory-only), `tcpdump` packet capture per VM tap interface, artifact pruning, SHA-256 checksums
+- 🔑 **MFA per Role** — granular policy: admin = `required`, operator = `optional`, vm-user = `optional`. Login flow blocks users without TOTP when policy = required
+- 🌐 **SAML 2.0 + OIDC SSO** — Okta / Azure AD / Google Workspace / Keycloak ready. Role mapping IdP → OXware roles. Token exchange + claim extraction (signature verify hook ready for python3-saml/authlib)
+
+**Feature registry**: 74 → 81 capabilities tracked. All v2.5.5 endpoints `@require_role("admin", "administrator")`.
 
 ---
 

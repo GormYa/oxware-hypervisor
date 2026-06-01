@@ -70,14 +70,14 @@ FEATURE_MANIFEST = [
     {"id": "boot_order",     "name": "DR Boot Order",          "category": "dr",           "module": "boot_order_manager",  "status": "beta",   "version": "2.5.4"},
     {"id": "geo_dns",        "name": "Geo-DNS Failover",       "category": "dr",           "module": "geo_dns_manager",     "status": "experimental","version": "2.5.4"},
 
-    # Coming roadmap (v2.5.5+)
-    {"id": "sev_tdx",        "name": "AMD SEV / Intel TDX",    "category": "security",     "module": "confidential_vm",     "status": "planned","version": "2.5.5"},
-    {"id": "live_encrypt",   "name": "Live Disk Encryption",   "category": "security",     "module": "disk_encryption",     "status": "planned","version": "2.5.5"},
-    {"id": "compliance",     "name": "CIS/NIST/PCI-DSS",       "category": "security",     "module": "compliance_scanner",  "status": "planned","version": "2.5.5"},
-    {"id": "dlp",            "name": "DLP at Hypervisor",      "category": "security",     "module": "dlp_engine",          "status": "planned","version": "2.5.5"},
-    {"id": "forensics",      "name": "Forensics (mem/pcap)",   "category": "security",     "module": "forensics_engine",    "status": "planned","version": "2.5.5"},
-    {"id": "mfa_per_role",   "name": "MFA per Role",           "category": "security",     "module": "mfa_enforcement",     "status": "planned","version": "2.5.5"},
-    {"id": "saml_oidc",      "name": "SAML / OIDC SSO",        "category": "security",     "module": "sso_manager",         "status": "planned","version": "2.5.5"},
+    # v2.5.5 — Security & Compliance (NOW SHIPPING)
+    {"id": "sev_tdx",        "name": "AMD SEV / Intel TDX",    "category": "security",     "module": "confidential_vm",     "status": "beta",  "version": "2.5.5"},
+    {"id": "live_encrypt",   "name": "Live Disk Encryption",   "category": "security",     "module": "disk_encryption",     "status": "beta",  "version": "2.5.5"},
+    {"id": "compliance",     "name": "CIS/NIST/PCI-DSS",       "category": "security",     "module": "compliance_scanner",  "status": "stable","version": "2.5.5"},
+    {"id": "dlp",            "name": "DLP at Hypervisor",      "category": "security",     "module": "dlp_engine",          "status": "stable","version": "2.5.5"},
+    {"id": "forensics",      "name": "Forensics (mem/pcap)",   "category": "security",     "module": "forensics_engine",    "status": "stable","version": "2.5.5"},
+    {"id": "mfa_per_role",   "name": "MFA per Role",           "category": "security",     "module": "mfa_enforcement",     "status": "stable","version": "2.5.5"},
+    {"id": "saml_oidc",      "name": "SAML / OIDC SSO",        "category": "security",     "module": "sso_manager",         "status": "beta",  "version": "2.5.5"},
     {"id": "tenant_iso",     "name": "Hard Tenant Isolation",  "category": "multi-tenancy","module": "tenant_manager",      "status": "planned","version": "2.5.6"},
     {"id": "self_service",   "name": "Self-Service Portal",    "category": "multi-tenancy","module": "self_service_portal", "status": "planned","version": "2.5.6"},
     {"id": "chargeback",     "name": "Chargeback / Showback",  "category": "multi-tenancy","module": "chargeback_engine",   "status": "planned","version": "2.5.6"},

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.4
+OXware Hypervisor Management API v2.5.5
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -159,6 +159,18 @@ cdp_mgr         = _safe_import("cdp_manager")
 boot_order_mgr  = _safe_import("boot_order_manager")
 geo_dns_mgr     = _safe_import("geo_dns_manager")
 # vtpm_manager is also re-imported below for legacy endpoints
+
+# ── v2.5.5 Security & Compliance modules ─────────────────────────────────────
+confidential_vm  = _safe_import("confidential_vm")
+disk_encryption  = _safe_import("disk_encryption")
+compliance_scan  = _safe_import("compliance_scanner")
+dlp_engine       = _safe_import("dlp_engine")
+forensics        = _safe_import("forensics_engine")
+mfa_policy       = _safe_import("mfa_enforcement")
+sso_manager      = _safe_import("sso_manager")
+
+# Central feature registry
+feature_reg      = _safe_import("feature_registry")
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "templates")
@@ -728,12 +740,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.4-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.4-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.4-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.4-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.4-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.5-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4269,7 +4281,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.4",
+        oxware_version="2.5.5",
     )
 
 @app.route("/api/system/stats")
@@ -9405,7 +9417,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.4</span>
+  <span id="ver-badge">v2.5.5</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -11024,7 +11036,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.4", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.5", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -15749,8 +15761,322 @@ def api_v254_geodns_records_del(name):
         return err(e, 400)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.5 — Security & Compliance Endpoints (admin-only)
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Confidential VM (SEV/TDX) ─────────────────────────────────────────────────
+@app.route("/api/confidential-vm/support")
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_support():
+    if not confidential_vm: return ok(sev=False, tdx=False, note="modül yok")
+    try: return ok(**confidential_vm.detect_support())
+    except Exception as e: return ok(error=str(e))
+
+@app.route("/api/confidential-vm/vms")
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_list():
+    if not confidential_vm: return ok(vms=[])
+    return ok(vms=confidential_vm.list_protected_vms())
+
+@app.route("/api/confidential-vm/vms/<vm_id>", methods=["GET", "POST", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_vm(vm_id):
+    if not confidential_vm: return err("modül yok", 503)
+    try:
+        if request.method == "GET":
+            return ok(**confidential_vm.get_vm_config(vm_id))
+        if request.method == "DELETE":
+            return ok(**confidential_vm.disable_for_vm(vm_id))
+        d = request.get_json(silent=True) or {}
+        return ok(**confidential_vm.enable_for_vm(vm_id, d.get("mode", "sev")))
+    except Exception as e: return err(e, 400)
+
+
+# ── Disk Encryption ───────────────────────────────────────────────────────────
+@app.route("/api/disk-encryption")
+@require_auth
+@require_role("admin", "administrator")
+def api_de_list():
+    if not disk_encryption: return ok(disks=[])
+    return ok(disks=disk_encryption.list_encrypted_disks())
+
+@app.route("/api/disk-encryption/<vm_id>", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_de_status(vm_id):
+    if not disk_encryption: return ok(encrypted=False)
+    return ok(**disk_encryption.get_status(vm_id))
+
+@app.route("/api/disk-encryption/<vm_id>/encrypt", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_de_encrypt(vm_id):
+    if not disk_encryption: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    if not d.get("disk_path"): return err("disk_path zorunlu", 400)
+    try:
+        return ok(**disk_encryption.encrypt_disk(d["disk_path"], vm_id, d.get("passphrase")))
+    except Exception as e: return err(e, 500)
+
+@app.route("/api/disk-encryption/<vm_id>/rotate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_de_rotate(vm_id):
+    if not disk_encryption: return err("modül yok", 503)
+    return ok(**disk_encryption.rotate_key(vm_id))
+
+
+# ── Compliance Scanner ───────────────────────────────────────────────────────
+@app.route("/api/compliance/frameworks")
+@require_auth
+@require_role("admin", "administrator")
+def api_cmp_frameworks():
+    if not compliance_scan: return ok(frameworks=[])
+    return ok(frameworks=compliance_scan.list_frameworks())
+
+@app.route("/api/compliance/scan", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cmp_scan():
+    if not compliance_scan: return err("modül yok", 503)
+    fw = (request.get_json(silent=True) or {}).get("framework")
+    try:
+        return ok(**compliance_scan.run_scan(fw))
+    except Exception as e: return err(e, 500)
+
+@app.route("/api/compliance/last")
+@require_auth
+@require_role("admin", "administrator")
+def api_cmp_last():
+    if not compliance_scan: return ok()
+    return ok(**compliance_scan.last_scan())
+
+
+# ── DLP Engine ───────────────────────────────────────────────────────────────
+@app.route("/api/dlp/rules", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_rules():
+    if not dlp_engine: return ok(rules=[])
+    return ok(rules=dlp_engine.list_rules())
+
+@app.route("/api/dlp/rules", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_add_rule():
+    if not dlp_engine: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**dlp_engine.add_rule(d))
+
+@app.route("/api/dlp/rules/<rule_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_del_rule(rule_id):
+    if not dlp_engine: return err("modül yok", 503)
+    return ok(**dlp_engine.delete_rule(rule_id))
+
+@app.route("/api/dlp/scan", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_scan():
+    if not dlp_engine: return ok(matches=[])
+    d = request.get_json(silent=True) or {}
+    return ok(matches=dlp_engine.scan_text(d.get("text", ""), d.get("vm_id", "")))
+
+@app.route("/api/dlp/events")
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_events():
+    if not dlp_engine: return ok(events=[])
+    return ok(events=dlp_engine.get_events(int(request.args.get("limit", 100)),
+                                          request.args.get("severity")))
+
+@app.route("/api/dlp/stats")
+@require_auth
+@require_role("admin", "administrator")
+def api_dlp_stats():
+    if not dlp_engine: return ok()
+    return ok(**dlp_engine.get_stats())
+
+
+# ── Forensics ────────────────────────────────────────────────────────────────
+@app.route("/api/forensics/memdump/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_memdump(vm_id):
+    if not forensics: return err("modül yok", 503)
+    mode = (request.get_json(silent=True) or {}).get("mode", "live")
+    return ok(**forensics.memory_dump(vm_id, mode))
+
+@app.route("/api/forensics/pcap/<vm_id>/start", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_pcap_start(vm_id):
+    if not forensics: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**forensics.packet_capture_start(vm_id, int(d.get("duration", 60)),
+                                               int(d.get("snaplen", 1500)),
+                                               d.get("bpf_filter", "")))
+
+@app.route("/api/forensics/pcap/jobs/<job_id>/stop", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_pcap_stop(job_id):
+    if not forensics: return err("modül yok", 503)
+    return ok(**forensics.packet_capture_stop(job_id))
+
+@app.route("/api/forensics/pcap/jobs")
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_jobs():
+    if not forensics: return ok(jobs=[])
+    return ok(jobs=forensics.list_jobs())
+
+@app.route("/api/forensics/artifacts")
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_artifacts():
+    if not forensics: return ok(artifacts=[])
+    return ok(artifacts=forensics.list_artifacts(request.args.get("vm_id")))
+
+@app.route("/api/forensics/artifacts/<vm_id>/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_delete(vm_id, name):
+    if not forensics: return err("modül yok", 503)
+    return ok(**forensics.delete_artifact(vm_id, name))
+
+@app.route("/api/forensics/prune", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_forensics_prune():
+    if not forensics: return ok()
+    days = int((request.get_json(silent=True) or {}).get("days", 30))
+    return ok(**forensics.prune(days))
+
+
+# ── MFA per Role ─────────────────────────────────────────────────────────────
+@app.route("/api/mfa-policy")
+@require_auth
+@require_role("admin", "administrator")
+def api_mfa_get_policy():
+    if not mfa_policy: return ok(policy={})
+    return ok(policy=mfa_policy.get_policy())
+
+@app.route("/api/mfa-policy", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_mfa_set_policy():
+    if not mfa_policy: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    role = d.get("role", "")
+    pol  = d.get("policy", "optional")
+    return ok(**mfa_policy.set_role_policy(role, pol))
+
+
+# ── SSO (SAML / OIDC) ────────────────────────────────────────────────────────
+@app.route("/api/sso/config")
+@require_auth
+@require_role("admin", "administrator")
+def api_sso_get():
+    if not sso_manager: return ok(config={})
+    return ok(config=sso_manager.get_config())
+
+@app.route("/api/sso/config", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_sso_set():
+    if not sso_manager: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**sso_manager.update_config(saml=d.get("saml"),
+                                          oidc=d.get("oidc"),
+                                          role_map=d.get("role_map")))
+
+@app.route("/api/sso/saml/authn")
+def api_sso_saml_authn():
+    if not sso_manager: return err("modül yok", 503)
+    return ok(**sso_manager.saml_authn_request())
+
+@app.route("/api/sso/saml/acs", methods=["POST"])
+def api_sso_saml_acs():
+    if not sso_manager: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**sso_manager.saml_process_acs(d.get("SAMLResponse", ""), d.get("RelayState", "")))
+
+@app.route("/api/sso/oidc/authorize")
+def api_sso_oidc_authorize():
+    if not sso_manager: return err("modül yok", 503)
+    return ok(**sso_manager.oidc_authorize_url(request.args.get("state", "")))
+
+@app.route("/api/sso/oidc/callback", methods=["POST"])
+def api_sso_oidc_callback():
+    if not sso_manager: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**sso_manager.oidc_exchange_code(d.get("code", ""), d.get("state", "")))
+
+
+# ── Feature Registry ────────────────────────────────────────────────────────
+@app.route("/api/features")
+@require_auth
+@require_role("admin", "administrator")
+def api_features_list():
+    if not feature_reg: return ok(features=[])
+    return ok(features=feature_reg.list_features(request.args.get("category"),
+                                                 request.args.get("status")))
+
+@app.route("/api/features/<feature_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_features_get(feature_id):
+    if not feature_reg: return ok()
+    f = feature_reg.get_feature(feature_id)
+    return ok(**(f or {"error": "not found"}))
+
+@app.route("/api/features/<feature_id>/enable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_features_enable(feature_id):
+    if not feature_reg: return err("modül yok", 503)
+    user = ""
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        user = get_jwt_identity() or ""
+    except Exception: pass
+    return ok(**feature_reg.enable(feature_id, by_user=user or "admin"))
+
+@app.route("/api/features/<feature_id>/disable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_features_disable(feature_id):
+    if not feature_reg: return err("modül yok", 503)
+    user = ""
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        user = get_jwt_identity() or ""
+    except Exception: pass
+    return ok(**feature_reg.disable(feature_id, by_user=user or "admin"))
+
+@app.route("/api/features/summary")
+@require_auth
+@require_role("admin", "administrator")
+def api_features_summary():
+    if not feature_reg: return ok()
+    return ok(**feature_reg.summary())
+
+@app.route("/api/features/audit")
+@require_auth
+@require_role("admin", "administrator")
+def api_features_audit():
+    if not feature_reg: return ok(events=[])
+    return ok(events=feature_reg.get_audit_log(int(request.args.get("limit", 100))))
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.4 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.5 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
