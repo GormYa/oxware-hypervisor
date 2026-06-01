@@ -728,12 +728,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.3-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.3-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.3-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.3-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.3-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.3-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.4-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.4-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4269,7 +4269,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.3",
+        oxware_version="2.5.4",
     )
 
 @app.route("/api/system/stats")
@@ -7537,7 +7537,7 @@ def api_vault_delete(vm_id, cred_type):
     return ok()
 
 @app.route("/api/vault", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_vault_all():
     if not vault_mgr: return ok({"vault": {}})
     return ok({"vault": vault_mgr.list_all()})
@@ -9405,7 +9405,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.3</span>
+  <span id="ver-badge">v2.5.4</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -11024,7 +11024,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.3", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.4", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -14699,7 +14699,7 @@ def api_snap_policy():
 
 # ── Affinity Rules ──────────────────────────────────────────────────────────
 @app.route("/api/affinity/rules", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_affinity_list():
     if not affinity_mgr: return ok(rules=[])
     return ok(rules=affinity_mgr.list_rules())
@@ -14749,7 +14749,7 @@ def api_backup_decrypt():
 
 # ── Linked Clones ──────────────────────────────────────────────────────────
 @app.route("/api/linked-clones", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_lc_list():
     if not linked_clone: return ok(linked_clones=[])
     return ok(**linked_clone.stats())
@@ -14816,7 +14816,7 @@ def api_rec_delete(rec_id):
 
 # ── Maintenance Mode ───────────────────────────────────────────────────────
 @app.route("/api/maintenance/status")
-@require_auth
+@require_role("admin", "administrator")
 def api_maint_status():
     if not maint_mode: return ok(in_maintenance=False)
     return ok(**maint_mode.get_status())
@@ -14844,7 +14844,7 @@ def api_maint_exit():
 
 # ── EVC (CPU Compatibility) ────────────────────────────────────────────────
 @app.route("/api/evc/baselines")
-@require_auth
+@require_role("admin", "administrator")
 def api_evc_baselines():
     if not evc_mgr: return ok(baselines=[])
     return ok(baselines=evc_mgr.list_baselines(),
@@ -14870,7 +14870,7 @@ def api_evc_apply(vm_id):
 
 # ── NIOC (Network IO Control) ──────────────────────────────────────────────
 @app.route("/api/nioc/profiles")
-@require_auth
+@require_role("admin", "administrator")
 def api_nioc_profiles():
     if not nioc_mgr: return ok(profiles=[])
     return ok(profiles=nioc_mgr.list_profiles())
@@ -14953,7 +14953,7 @@ def api_corr_resolve(inc_id):
 
 # ── Site Recovery (DR) ─────────────────────────────────────────────────────
 @app.route("/api/dr/plans", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_dr_plans():
     if not site_recovery: return ok(plans=[])
     return ok(plans=site_recovery.list_plans())
@@ -14985,7 +14985,7 @@ def api_dr_execute(plan_id):
     return ok(**site_recovery.execute_plan(plan_id, mode))
 
 @app.route("/api/dr/rpo-rto")
-@require_auth
+@require_role("admin", "administrator")
 def api_dr_sla():
     if not site_recovery: return ok(plans=[])
     return ok(**site_recovery.get_rpo_rto_status())
@@ -14993,7 +14993,7 @@ def api_dr_sla():
 
 # ── DRS ────────────────────────────────────────────────────────────────────
 @app.route("/api/drs/analyze")
-@require_auth
+@require_role("admin", "administrator")
 def api_drs_analyze():
     if not drs_mgr: return ok()
     return ok(**drs_mgr.analyze())
@@ -15008,7 +15008,7 @@ def api_drs_policy():
     return ok(policy=drs_mgr.set_policy(**(request.get_json(silent=True) or {})))
 
 @app.route("/api/drs/suggest")
-@require_auth
+@require_role("admin", "administrator")
 def api_drs_suggest():
     if not drs_mgr: return ok(suggestions=[])
     return ok(suggestions=drs_mgr.suggest_moves())
@@ -15096,7 +15096,7 @@ def api_compute_pcie():
 
 # ── Storage Advanced ───────────────────────────────────────────────────────
 @app.route("/api/storage-adv/zfs")
-@require_auth
+@require_role("admin", "administrator")
 def api_sa_zfs():
     if not storage_adv: return ok(pools=[], btrfs={}, note="storage_advanced modülü yüklü değil")
     try:
@@ -15128,7 +15128,7 @@ def api_sa_tiers():
         return ok(tiers=[], error=str(e))
 
 @app.route("/api/storage-adv/spbm", methods=["GET", "POST"])
-@require_auth
+@require_role("admin", "administrator")
 def api_sa_spbm():
     if not storage_adv: return ok(policies=[], note="storage_advanced modülü yüklü değil")
     try:
@@ -15189,7 +15189,7 @@ def api_na_vxlan_delete(name):
         return err(str(e), 500)
 
 @app.route("/api/network-adv/ipv6")
-@require_auth
+@require_role("admin", "administrator")
 def api_na_ipv6():
     if not network_adv: return ok(enabled=False, note="network_advanced modülü yüklü değil")
     try:
@@ -15210,7 +15210,7 @@ def api_na_ddos():
 
 # ── Automation Engine ──────────────────────────────────────────────────────
 @app.route("/api/automation/rules", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_auto_rules():
     if not automation_eng: return ok(rules=[])
     return ok(rules=automation_eng.list_rules())
@@ -15237,7 +15237,7 @@ def api_auto_delete(rule_id):
     return ok(deleted=automation_eng.delete_rule(rule_id))
 
 @app.route("/api/automation/history")
-@require_auth
+@require_role("admin", "administrator")
 def api_auto_history():
     if not automation_eng: return ok(history=[])
     return ok(history=automation_eng.get_history(int(request.args.get("limit", 50))))
@@ -15296,7 +15296,7 @@ def api_v254_vtpm_disable(vm_id):
         return err(e, 400)
 
 @app.route("/api/vtpm/<vm_id>", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vtpm_status(vm_id):
     if not vtpm_mgr: return ok({"enabled": False, "version": "2.0"})
     try:
@@ -15305,7 +15305,7 @@ def api_v254_vtpm_status(vm_id):
         return ok({"enabled": False, "error": str(e)})
 
 @app.route("/api/vtpm", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vtpm_list():
     if not vtpm_mgr: return ok({"vms": []})
     try:
@@ -15335,7 +15335,7 @@ def api_v254_secboot_disable(vm_id):
         return err(e, 400)
 
 @app.route("/api/secureboot/<vm_id>", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_secboot_status(vm_id):
     if not secboot_mgr: return ok({"enabled": False, "firmware": "BIOS"})
     try:
@@ -15344,7 +15344,7 @@ def api_v254_secboot_status(vm_id):
         return ok({"enabled": False, "error": str(e)})
 
 @app.route("/api/secureboot", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_secboot_list():
     if not secboot_mgr: return ok({"vms": []})
     try:
@@ -15354,7 +15354,7 @@ def api_v254_secboot_list():
 
 # ── Vault Integration ────────────────────────────────────────────────────────
 @app.route("/api/vault/config", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vault_config_get():
     if not vault_int_mgr: return ok({})
     try:
@@ -15377,7 +15377,7 @@ def api_v254_vault_config_set():
         return err(e, 400)
 
 @app.route("/api/vault/test", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vault_test():
     if not vault_int_mgr: return ok({"ok": False, "error": "module unavailable"})
     try:
@@ -15386,8 +15386,7 @@ def api_v254_vault_test():
         return ok({"ok": False, "error": str(e)})
 
 @app.route("/api/vault/secrets/", defaults={"path": ""}, methods=["GET"])
-@app.route("/api/vault/secrets/<path:path>", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vault_secret_get(path):
     if not vault_int_mgr: return ok({"ok": False, "data": {}})
     try:
@@ -15420,7 +15419,7 @@ def api_v254_vault_secret_del(path):
 
 # ── Audit Chain ──────────────────────────────────────────────────────────────
 @app.route("/api/audit-chain/events", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_audit_events():
     if not audit_chain_mgr: return ok({"events": []})
     try:
@@ -15443,7 +15442,7 @@ def api_v254_audit_verify():
         return ok({"ok": False, "error": str(e)})
 
 @app.route("/api/audit-chain/stats", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_audit_stats():
     if not audit_chain_mgr: return ok({"total": 0})
     try:
@@ -15452,7 +15451,7 @@ def api_v254_audit_stats():
         return ok({"total": 0, "error": str(e)})
 
 @app.route("/api/audit-chain/append", methods=["POST"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_audit_append():
     if not audit_chain_mgr: return ok({"ok": False})
     try:
@@ -15467,7 +15466,7 @@ def api_v254_audit_append():
 
 # ── HugePages ────────────────────────────────────────────────────────────────
 @app.route("/api/hugepages/status", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_hp_status():
     if not hugepages_mgr: return ok({"nr_hugepages": 0, "free_hugepages": 0})
     try:
@@ -15511,7 +15510,7 @@ def api_v254_hp_remove(vm_id):
 
 # ── SR-IOV ───────────────────────────────────────────────────────────────────
 @app.route("/api/sriov/devices", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_sriov_devices():
     if not sriov_mgr: return ok({"devices": []})
     try:
@@ -15531,7 +15530,7 @@ def api_v254_sriov_create_vfs(pf):
         return err(e, 400)
 
 @app.route("/api/sriov/<pf>/vfs", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_sriov_list_vfs(pf):
     if not sriov_mgr: return ok({"vfs": []})
     try:
@@ -15552,7 +15551,7 @@ def api_v254_sriov_assign():
 
 # ── vGPU ─────────────────────────────────────────────────────────────────────
 @app.route("/api/vgpu/devices", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vgpu_devices():
     if not vgpu_mgr: return ok({"devices": []})
     try:
@@ -15561,7 +15560,7 @@ def api_v254_vgpu_devices():
         return ok({"devices": [], "error": str(e)})
 
 @app.route("/api/vgpu/mdev-types", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_vgpu_mdev_types():
     if not vgpu_mgr: return ok({"types": []})
     try:
@@ -15618,7 +15617,7 @@ def api_v254_cdp_disable(vm_id):
         return err(e, 400)
 
 @app.route("/api/cdp/<vm_id>", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_cdp_status(vm_id):
     if not cdp_mgr: return ok({"enabled": False})
     try:
@@ -15627,7 +15626,7 @@ def api_v254_cdp_status(vm_id):
         return ok({"enabled": False, "error": str(e)})
 
 @app.route("/api/cdp/<vm_id>/points", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_cdp_points(vm_id):
     if not cdp_mgr: return ok({"points": []})
     try:
@@ -15648,7 +15647,7 @@ def api_v254_cdp_restore(vm_id):
 
 # ── Boot Order ───────────────────────────────────────────────────────────────
 @app.route("/api/boot-order", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_bo_get():
     if not boot_order_mgr: return ok({"order": []})
     try:
@@ -15680,7 +15679,7 @@ def api_v254_bo_run():
         return err(e, 400)
 
 @app.route("/api/boot-order/validate", methods=["POST"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_bo_validate():
     if not boot_order_mgr: return ok({"ok": False})
     try:
@@ -15690,7 +15689,7 @@ def api_v254_bo_validate():
 
 # ── Geo DNS ──────────────────────────────────────────────────────────────────
 @app.route("/api/geo-dns/config", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_geodns_cfg_get():
     if not geo_dns_mgr: return ok({})
     try:
@@ -15714,7 +15713,7 @@ def api_v254_geodns_cfg_set():
         return err(e, 400)
 
 @app.route("/api/geo-dns/records", methods=["GET"])
-@require_auth
+@require_role("admin", "administrator")
 def api_v254_geodns_records_list():
     if not geo_dns_mgr: return ok({"records": []})
     try:
