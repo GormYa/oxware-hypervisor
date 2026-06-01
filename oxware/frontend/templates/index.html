@@ -5378,9 +5378,44 @@
           <input type="hidden" id="ds-current-path" value="">
         </div><!-- /page-tab-datastore -->
 
-        <!-- ══════════ v2.5.3 ENTERPRISE PAGES ══════════ -->
+        <!-- ══════════ v2.5.6+ ENTERPRISE (unified page with sub-tabs) ══════════ -->
 
-        <div class="page" id="page-tab-drs">
+        <div class="page" id="page-tab-enterprise">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-building fa-fw" style="color:var(--accent-lt)"></i> Enterprise Özellikleri</h2>
+          </div>
+
+          <!-- Sub-tab navigation (kategoriye göre, scrollable horizontal) -->
+          <div class="sub-tabs" id="ent-subtabs" style="margin-bottom:14px;overflow-x:auto;white-space:nowrap;padding-bottom:4px;display:flex;gap:2px;border-bottom:1px solid var(--border)">
+            <button class="sub-tab active" onclick="entSubTab('drs')" title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate"></i> DRS Küme</button>
+            <button class="sub-tab" onclick="entSubTab('affinity')" title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link"></i> Yakınlık</button>
+            <button class="sub-tab" onclick="entSubTab('maint')" title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench"></i> Bakım</button>
+            <button class="sub-tab" onclick="entSubTab('evc')" title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved"></i> EVC CPU</button>
+            <button class="sub-tab" onclick="entSubTab('nioc')" title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high"></i> Ağ QoS</button>
+            <button class="sub-tab" onclick="entSubTab('dr')" title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt"></i> Felaket Kurtarma</button>
+            <button class="sub-tab" onclick="entSubTab('lifecycle')" title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle"></i> Yaşam Döngüsü</button>
+            <button class="sub-tab" onclick="entSubTab('stor-adv')" title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive"></i> Depolama+</button>
+            <button class="sub-tab" onclick="entSubTab('net-adv')" title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired"></i> Ağ+</button>
+            <button class="sub-tab" onclick="entSubTab('siem')" title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock"></i> SIEM</button>
+            <button class="sub-tab" onclick="entSubTab('sessrec')" title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video"></i> Oturum Kaydı</button>
+            <button class="sub-tab" onclick="entSubTab('numa')" title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip"></i> NUMA</button>
+            <button class="sub-tab" onclick="entSubTab('bkup-enc')" title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key"></i> Yedek Şifreleme</button>
+            <button class="sub-tab" onclick="entSubTab('rightsize')" title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short"></i> Boyutlandırma</button>
+            <button class="sub-tab" onclick="entSubTab('alertcorr')" title="Uyarı korelasyon"><i class="fa-solid fa-bell"></i> Uyarı Korelasyon</button>
+            <button class="sub-tab" onclick="entSubTab('cvm')" title="Confidential VM (AMD SEV / Intel TDX)"><i class="fa-solid fa-user-shield"></i> Gizli VM</button>
+            <button class="sub-tab" onclick="entSubTab('disk-enc')" title="VM disk şifreleme (LUKS2 + AES)"><i class="fa-solid fa-lock"></i> Disk Şifreleme</button>
+            <button class="sub-tab" onclick="entSubTab('compliance')" title="CIS / NIST / PCI-DSS / HIPAA / ISO27001"><i class="fa-solid fa-clipboard-check"></i> Uyumluluk</button>
+            <button class="sub-tab" onclick="entSubTab('dlp')" title="Veri sızıntı önleme (regex DLP)"><i class="fa-solid fa-shield-virus"></i> DLP</button>
+            <button class="sub-tab" onclick="entSubTab('forensics')" title="Adli analiz — memory dump + pcap"><i class="fa-solid fa-magnifying-glass"></i> Adli Analiz</button>
+            <button class="sub-tab" onclick="entSubTab('mfa-policy')" title="Rol bazlı 2FA zorunluluğu"><i class="fa-solid fa-id-badge"></i> 2FA Politikası</button>
+            <button class="sub-tab" onclick="entSubTab('sso')" title="SAML 2.0 + OpenID Connect SSO"><i class="fa-solid fa-id-card"></i> SSO</button>
+            <button class="sub-tab" onclick="entSubTab('tenants')" title="Tenant izolasyon + kotalar"><i class="fa-solid fa-building-user"></i> Tenants</button>
+            <button class="sub-tab" onclick="entSubTab('chargeback')" title="Tenant başı maliyet raporu"><i class="fa-solid fa-coins"></i> Chargeback</button>
+            <button class="sub-tab" onclick="entSubTab('svc-cat')" title="VM şablon mağazası"><i class="fa-solid fa-store"></i> Servis Kataloğu</button>
+            <button class="sub-tab" onclick="entSubTab('rate-limit')" title="Tenant API rate limit"><i class="fa-solid fa-gauge"></i> Rate Limit</button>
+          </div>
+
+        <div id="ent-pane-drs">
           <div class="section-header">
             <h2><i class="fa-solid fa-arrows-rotate fa-fw" style="color:var(--accent-lt)"></i> DRS Cluster</h2>
             <div class="spacer"></div>
@@ -5396,7 +5431,7 @@
           <div class="card"><div class="card-title">Önerilen Taşımalar</div><div id="drs-suggest-body" class="text-muted">Yükleniyor...</div></div>
         </div>
 
-        <div class="page" id="page-tab-affinity">
+        <div id="ent-pane-affinity" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-link fa-fw" style="color:var(--accent-lt)"></i> Affinity Rules</h2>
             <div class="spacer"></div>
@@ -5418,7 +5453,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-maint">
+        <div id="ent-pane-maint" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-screwdriver-wrench fa-fw" style="color:var(--accent-lt)"></i> Maintenance Mode</h2>
             <div class="spacer"></div>
@@ -5443,7 +5478,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-evc">
+        <div id="ent-pane-evc" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-shield-halved fa-fw" style="color:var(--accent-lt)"></i> EVC Baseline</h2>
             <div class="spacer"></div>
@@ -5473,7 +5508,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-nioc">
+        <div id="ent-pane-nioc" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-gauge-high fa-fw" style="color:var(--accent-lt)"></i> NIOC Network QoS</h2>
             <div class="spacer"></div>
@@ -5509,7 +5544,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-dr">
+        <div id="ent-pane-dr" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-cloud-bolt fa-fw" style="color:var(--accent-lt)"></i> Disaster Recovery</h2>
             <div class="spacer"></div>
@@ -5531,7 +5566,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-lifecycle">
+        <div id="ent-pane-lifecycle" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-recycle fa-fw" style="color:var(--accent-lt)"></i> Lifecycle Manager</h2>
             <div class="spacer"></div>
@@ -5563,7 +5598,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-stor-adv">
+        <div id="ent-pane-stor-adv" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-hard-drive fa-fw" style="color:var(--accent-lt)"></i> Storage Advanced</h2>
             <div class="spacer"></div>
@@ -5585,7 +5620,7 @@
           <div class="card" id="sa-body"><div class="text-muted">Bir sekme seçin.</div></div>
         </div>
 
-        <div class="page" id="page-tab-net-adv">
+        <div id="ent-pane-net-adv" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-network-wired fa-fw" style="color:var(--accent-lt)"></i> Network Advanced</h2>
             <div class="spacer"></div>
@@ -5605,7 +5640,7 @@
           <div class="card" id="na-body"><div class="text-muted">Bir sekme seçin.</div></div>
         </div>
 
-        <div class="page" id="page-tab-siem">
+        <div id="ent-pane-siem" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-lock fa-fw" style="color:var(--accent-lt)"></i> SIEM Export</h2>
             <div class="spacer"></div>
@@ -5640,7 +5675,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-sessrec">
+        <div id="ent-pane-sessrec" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-video fa-fw" style="color:var(--accent-lt)"></i> Session Recording</h2>
             <div class="spacer"></div>
@@ -5661,7 +5696,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-numa">
+        <div id="ent-pane-numa" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-microchip fa-fw" style="color:var(--accent-lt)"></i> NUMA Pinning</h2>
             <div class="spacer"></div>
@@ -5683,7 +5718,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-bkup-enc">
+        <div id="ent-pane-bkup-enc" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-key fa-fw" style="color:var(--accent-lt)"></i> Backup Encryption</h2>
           </div>
@@ -5707,7 +5742,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-rightsize">
+        <div id="ent-pane-rightsize" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-arrow-down-wide-short fa-fw" style="color:var(--accent-lt)"></i> Right-Sizing</h2>
             <div class="spacer"></div>
@@ -5742,7 +5777,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-alertcorr">
+        <div id="ent-pane-alertcorr" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-bell fa-fw" style="color:var(--accent-lt)"></i> Alert Correlation</h2>
             <div class="spacer"></div>
@@ -5775,7 +5810,7 @@
         <!-- ══════════ v2.5.5 SECURITY & COMPLIANCE PAGES ══════════ -->
 
         <!-- Confidential VM (SEV/TDX) -->
-        <div class="page" id="page-tab-cvm">
+        <div id="ent-pane-cvm" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-user-shield fa-fw" style="color:var(--accent-lt)"></i> Gizli VM (Confidential VM)</h2>
             <div class="spacer"></div>
@@ -5809,7 +5844,7 @@
         </div>
 
         <!-- Disk Encryption -->
-        <div class="page" id="page-tab-disk-enc">
+        <div id="ent-pane-disk-enc" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-lock fa-fw" style="color:var(--accent-lt)"></i> Disk Şifreleme (LUKS2)</h2>
             <div class="spacer"></div>
@@ -5841,7 +5876,7 @@
         </div>
 
         <!-- Compliance -->
-        <div class="page" id="page-tab-compliance">
+        <div id="ent-pane-compliance" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-clipboard-check fa-fw" style="color:var(--accent-lt)"></i> Uyumluluk Tarayıcı</h2>
             <div class="spacer"></div>
@@ -5871,7 +5906,7 @@
         </div>
 
         <!-- DLP -->
-        <div class="page" id="page-tab-dlp">
+        <div id="ent-pane-dlp" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-shield-virus fa-fw" style="color:var(--accent-lt)"></i> DLP — Veri Sızıntı Önleme</h2>
             <div class="spacer"></div>
@@ -5913,7 +5948,7 @@
         </div>
 
         <!-- Forensics -->
-        <div class="page" id="page-tab-forensics">
+        <div id="ent-pane-forensics" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-magnifying-glass fa-fw" style="color:var(--accent-lt)"></i> Adli Analiz</h2>
             <div class="spacer"></div>
@@ -5957,7 +5992,7 @@
         </div>
 
         <!-- MFA Policy -->
-        <div class="page" id="page-tab-mfa-policy">
+        <div id="ent-pane-mfa-policy" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-id-badge fa-fw" style="color:var(--accent-lt)"></i> 2FA Politikası (Rol Bazlı)</h2>
             <div class="spacer"></div>
@@ -5978,7 +6013,7 @@
         </div>
 
         <!-- SSO -->
-        <div class="page" id="page-tab-sso">
+        <div id="ent-pane-sso" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-id-card fa-fw" style="color:var(--accent-lt)"></i> SSO — SAML 2.0 + OpenID Connect</h2>
             <div class="spacer"></div>
@@ -6029,7 +6064,7 @@
 
         <!-- ══════════ v2.5.6 MULTI-TENANCY PAGES ══════════ -->
 
-        <div class="page" id="page-tab-tenants">
+        <div id="ent-pane-tenants" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-building-user fa-fw" style="color:var(--accent-lt)"></i> Tenants (Kiracılar)</h2>
             <div class="spacer"></div>
@@ -6050,7 +6085,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-chargeback">
+        <div id="ent-pane-chargeback" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-coins fa-fw" style="color:var(--accent-lt)"></i> Chargeback / Showback</h2>
             <div class="spacer"></div>
@@ -6087,7 +6122,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-svc-cat">
+        <div id="ent-pane-svc-cat" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-store fa-fw" style="color:var(--accent-lt)"></i> Servis Kataloğu</h2>
             <div class="spacer"></div>
@@ -6107,7 +6142,7 @@
           </div>
         </div>
 
-        <div class="page" id="page-tab-rate-limit">
+        <div id="ent-pane-rate-limit" style="display:none">
           <div class="section-header">
             <h2><i class="fa-solid fa-gauge fa-fw" style="color:var(--accent-lt)"></i> Tenant API Rate Limit</h2>
             <div class="spacer"></div>
@@ -6132,6 +6167,8 @@
             </table></div>
           </div>
         </div>
+
+        </div><!-- /page-tab-enterprise -->
 
         <!-- ══════════ /v2.5.6 ══════════ -->
     </div><!-- /content-area -->
@@ -10213,40 +10250,10 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
     </div>
-    <!-- Enterprise group (same style as Yönetim items) -->
-    <div style="padding:10px 12px 2px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);display:flex;align-items:center;gap:6px;cursor:pointer;border-top:1px solid var(--border);margin-top:6px" onclick="toggleEntGrid(this)" title="${t('Enterprise')||'Kurumsal'}">
-      <i class="fa-solid fa-building fa-fw" style="font-size:9px;opacity:.7"></i>
-      <span data-i18n="Enterprise">${t('Enterprise')||'Kurumsal'}</span>
-      <span style="flex:1"></span>
-      <i class="fa-solid fa-chevron-down ent-grid-chev" style="font-size:8px;opacity:.6;transition:transform .2s"></i>
-    </div>
-    <div class="ent-grid" id="ent-grid-wrap">
-      <div class="ctx-item" data-page="tab-drs"        onclick="navigate('tab-drs');closeMobileNav()"        title="DRS — Cluster otomatik yeniden dengeleme"><i class="fa-solid fa-arrows-rotate fa-fw"></i>DRS Küme</div>
-      <div class="ctx-item" data-page="tab-affinity"   onclick="navigate('tab-affinity');closeMobileNav()"   title="Affinity / Anti-Affinity kuralları"><i class="fa-solid fa-link fa-fw"></i>Yakınlık Kuralları</div>
-      <div class="ctx-item" data-page="tab-maint"      onclick="navigate('tab-maint');closeMobileNav()"      title="Bakım modu + VM otomatik tahliye"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i>Bakım Modu</div>
-      <div class="ctx-item" data-page="tab-evc"        onclick="navigate('tab-evc');closeMobileNav()"        title="EVC — CPU baseline maskeleme"><i class="fa-solid fa-shield-halved fa-fw"></i>EVC CPU</div>
-      <div class="ctx-item" data-page="tab-nioc"       onclick="navigate('tab-nioc');closeMobileNav()"       title="Ağ QoS — VM başı bant garantisi"><i class="fa-solid fa-gauge-high fa-fw"></i>Ağ QoS</div>
-      <div class="ctx-item" data-page="tab-dr"         onclick="navigate('tab-dr');closeMobileNav()"         title="Felaket Kurtarma planları"><i class="fa-solid fa-cloud-bolt fa-fw"></i>Felaket Kurtarma</div>
-      <div class="ctx-item" data-page="tab-lifecycle"  onclick="navigate('tab-lifecycle');closeMobileNav()"  title="Yaşam Döngüsü — rolling host upgrade"><i class="fa-solid fa-recycle fa-fw"></i>Yaşam Döngüsü</div>
-      <div class="ctx-item" data-page="tab-stor-adv"   onclick="navigate('tab-stor-adv');closeMobileNav()"   title="ZFS, kademe, SPBM, iSCSI"><i class="fa-solid fa-hard-drive fa-fw"></i>Depolama+</div>
-      <div class="ctx-item" data-page="tab-net-adv"    onclick="navigate('tab-net-adv');closeMobileNav()"    title="VXLAN, IPv6 dual-stack"><i class="fa-solid fa-network-wired fa-fw"></i>Ağ+</div>
-      <div class="ctx-item" data-page="tab-siem"       onclick="navigate('tab-siem');closeMobileNav()"       title="SIEM dışa aktarım (Splunk/Elastic)"><i class="fa-solid fa-lock fa-fw"></i>SIEM Aktarım</div>
-      <div class="ctx-item" data-page="tab-sessrec"    onclick="navigate('tab-sessrec');closeMobileNav()"    title="SSH/VNC oturum kaydı + replay"><i class="fa-solid fa-video fa-fw"></i>Oturum Kaydı</div>
-      <div class="ctx-item" data-page="tab-numa"       onclick="navigate('tab-numa');closeMobileNav()"       title="NUMA pinning + HugePages"><i class="fa-solid fa-microchip fa-fw"></i>NUMA</div>
-      <div class="ctx-item" data-page="tab-bkup-enc"   onclick="navigate('tab-bkup-enc');closeMobileNav()"   title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key fa-fw"></i>Yedek Şifreleme</div>
-      <div class="ctx-item" data-page="tab-rightsize"  onclick="navigate('tab-rightsize');closeMobileNav()"  title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short fa-fw"></i>Boyutlandırma</div>
-      <div class="ctx-item" data-page="tab-alertcorr"  onclick="navigate('tab-alertcorr');closeMobileNav()"  title="Uyarı korelasyon — gürültü azalt"><i class="fa-solid fa-bell fa-fw"></i>Uyarı Korelasyon</div>
-      <div class="ctx-item" data-page="tab-cvm"        onclick="navigate('tab-cvm');closeMobileNav()"        title="Confidential VM (AMD SEV / Intel TDX)"><i class="fa-solid fa-user-shield fa-fw"></i>Gizli VM (SEV/TDX)</div>
-      <div class="ctx-item" data-page="tab-disk-enc"   onclick="navigate('tab-disk-enc');closeMobileNav()"   title="VM disk şifreleme (LUKS2 + AES)"><i class="fa-solid fa-lock fa-fw"></i>Disk Şifreleme</div>
-      <div class="ctx-item" data-page="tab-compliance" onclick="navigate('tab-compliance');closeMobileNav()" title="CIS / NIST / PCI-DSS / HIPAA / ISO27001 tarama"><i class="fa-solid fa-clipboard-check fa-fw"></i>Uyumluluk</div>
-      <div class="ctx-item" data-page="tab-dlp"        onclick="navigate('tab-dlp');closeMobileNav()"        title="Veri sızıntı önleme (regex DLP)"><i class="fa-solid fa-shield-virus fa-fw"></i>DLP</div>
-      <div class="ctx-item" data-page="tab-forensics"  onclick="navigate('tab-forensics');closeMobileNav()"  title="Adli analiz — memory dump + pcap"><i class="fa-solid fa-magnifying-glass fa-fw"></i>Adli Analiz</div>
-      <div class="ctx-item" data-page="tab-mfa-policy" onclick="navigate('tab-mfa-policy');closeMobileNav()" title="Rol bazlı 2FA zorunluluğu"><i class="fa-solid fa-id-badge fa-fw"></i>2FA Politikası</div>
-      <div class="ctx-item" data-page="tab-sso"        onclick="navigate('tab-sso');closeMobileNav()"        title="SAML 2.0 + OpenID Connect SSO"><i class="fa-solid fa-id-card fa-fw"></i>SSO (SAML/OIDC)</div>
-      <div class="ctx-item" data-page="tab-tenants"    onclick="navigate('tab-tenants');closeMobileNav()"    title="Tenant izolasyon + kotalar"><i class="fa-solid fa-building-user fa-fw"></i>Tenants (Kiracılar)</div>
-      <div class="ctx-item" data-page="tab-chargeback" onclick="navigate('tab-chargeback');closeMobileNav()" title="Tenant başı maliyet raporu"><i class="fa-solid fa-coins fa-fw"></i>Chargeback</div>
-      <div class="ctx-item" data-page="tab-svc-cat"    onclick="navigate('tab-svc-cat');closeMobileNav()"    title="VM şablon mağazası"><i class="fa-solid fa-store fa-fw"></i>Servis Kataloğu</div>
-      <div class="ctx-item" data-page="tab-rate-limit" onclick="navigate('tab-rate-limit');closeMobileNav()" title="Tenant API rate limit"><i class="fa-solid fa-gauge fa-fw"></i>API Rate Limit</div>
+    <!-- Enterprise (v2.5.6+: single nav item, sub-tabs inside page) -->
+    <div class="ctx-item" data-page="tab-enterprise" onclick="navigate('tab-enterprise');closeMobileNav()"
+         title="Enterprise özellikleri — DRS, Affinity, Bakım, EVC, DR, SIEM, Tenants, Chargeback ve daha fazlası" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px">
+      <i class="fa-solid fa-building fa-fw" style="color:var(--accent-lt)"></i>Enterprise
     </div>
 
     <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
@@ -16218,34 +16225,8 @@ async function loadTabData(tabId) {
     case 'tab-syslog':        activateSyslogTab('journald'); break;
     case 'tab-content-library': navigate('storage'); switchStorageTab('content-lib'); loadContentLibrary(); break;
     case 'tab-datastore':     loadDatastore(); break;
-    // v2.5.3 Enterprise
-    case 'tab-drs':           loadDrsPage(); break;
-    case 'tab-affinity':      loadAffinityPage(); break;
-    case 'tab-maint':         loadMaintPage(); break;
-    case 'tab-evc':           loadEvcPage(); break;
-    case 'tab-nioc':          loadNiocPage(); break;
-    case 'tab-dr':            loadDrPage(); break;
-    case 'tab-lifecycle':     loadLifecyclePage(); break;
-    case 'tab-stor-adv':      loadStorAdvPage(); break;
-    case 'tab-net-adv':       loadNetAdvPage(); break;
-    case 'tab-siem':          loadSiemPage(); break;
-    case 'tab-sessrec':       loadSessRecPage(); break;
-    case 'tab-numa':          loadNumaPage(); break;
-    case 'tab-bkup-enc':      /* form-only */ break;
-    case 'tab-rightsize':     loadRightsizePage(); break;
-    case 'tab-alertcorr':     loadAlertCorrPage(); break;
-    // v2.5.5 Security & Compliance
-    case 'tab-cvm':           loadCvmPage(); break;
-    case 'tab-disk-enc':      loadDiskEncPage(); break;
-    case 'tab-compliance':    loadCompliancePage(); break;
-    case 'tab-dlp':           loadDlpPage(); break;
-    case 'tab-forensics':     loadForensicsPage(); break;
-    case 'tab-mfa-policy':    loadMfaPage(); break;
-    case 'tab-sso':           loadSsoPage(); break;
-    case 'tab-tenants':       loadTenantsPage(); break;
-    case 'tab-chargeback':    loadChargebackPage(); break;
-    case 'tab-svc-cat':       loadServiceCatalog(); break;
-    case 'tab-rate-limit':    loadRateLimitPage(); break;
+    // v2.5.6+ Enterprise (unified sub-tab page)
+    case 'tab-enterprise':    entSubTab('drs'); break;
   }
 }
 
@@ -20388,11 +20369,63 @@ async function deleteRbacPerm(key, username) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   Enterprise Sub-Tab System (v2.5.6+)
+══════════════════════════════════════════════════════════════════════════════ */
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit'];
+const ENT_LOADERS = {
+  drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
+  affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
+  maint: () => { try { loadMaintPage(); } catch(e) { console.warn(e); } },
+  evc: () => { try { loadEvcPage(); } catch(e) { console.warn(e); } },
+  nioc: () => { try { loadNiocPage(); } catch(e) { console.warn(e); } },
+  dr: () => { try { loadDrPage(); } catch(e) { console.warn(e); } },
+  lifecycle: () => { try { loadLifecyclePage(); } catch(e) { console.warn(e); } },
+  'stor-adv': () => { try { loadStorAdvPage(); } catch(e) { console.warn(e); } },
+  'net-adv': () => { try { loadNetAdvPage(); } catch(e) { console.warn(e); } },
+  siem: () => { try { loadSiemPage(); } catch(e) { console.warn(e); } },
+  sessrec: () => { try { loadSessRecPage(); } catch(e) { console.warn(e); } },
+  numa: () => { try { loadNumaPage(); } catch(e) { console.warn(e); } },
+  'bkup-enc': () => { /* form-only */ },
+  rightsize: () => { try { loadRightsizePage(); } catch(e) { console.warn(e); } },
+  alertcorr: () => { try { loadAlertCorrPage(); } catch(e) { console.warn(e); } },
+  cvm: () => { try { loadCvmPage(); } catch(e) { console.warn(e); } },
+  'disk-enc': () => { try { loadDiskEncPage(); } catch(e) { console.warn(e); } },
+  compliance: () => { try { loadCompliancePage(); } catch(e) { console.warn(e); } },
+  dlp: () => { try { loadDlpPage(); } catch(e) { console.warn(e); } },
+  forensics: () => { try { loadForensicsPage(); } catch(e) { console.warn(e); } },
+  'mfa-policy': () => { try { loadMfaPage(); } catch(e) { console.warn(e); } },
+  sso: () => { try { loadSsoPage(); } catch(e) { console.warn(e); } },
+  tenants: () => { try { loadTenantsPage(); } catch(e) { console.warn(e); } },
+  chargeback: () => { try { loadChargebackPage(); } catch(e) { console.warn(e); } },
+  'svc-cat': () => { try { loadServiceCatalog(); } catch(e) { console.warn(e); } },
+  'rate-limit': () => { try { loadRateLimitPage(); } catch(e) { console.warn(e); } }
+};
+
+function entSubTab(tab) {
+  ENT_SUB_TABS.forEach(t => {
+    const p = document.getElementById('ent-pane-' + t);
+    if (p) p.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#ent-subtabs .sub-tab').forEach(b => b.classList.remove('active'));
+  const i = ENT_SUB_TABS.indexOf(tab);
+  const bs = document.querySelectorAll('#ent-subtabs .sub-tab');
+  if (bs[i]) bs[i].classList.add('active');
+  const fn = ENT_LOADERS[tab];
+  if (fn) fn();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    Navigate loader extension (containers, ha, cf-tunnels)
 ══════════════════════════════════════════════════════════════════════════════ */
 (function _extendLoaders() {
   const _origNavigate = navigate;
+  const _ENTOLD = new Set(ENT_SUB_TABS.map(t => 'tab-' + t));
   window.navigate = function(page) {
+    if (_ENTOLD.has(page)) {
+      _origNavigate('tab-enterprise');
+      setTimeout(() => entSubTab(page.replace('tab-', '')), 50);
+      return;
+    }
     _origNavigate(page);
     if (page === 'containers') loadContainers();
     else if (page === 'ha') loadHaPage();
