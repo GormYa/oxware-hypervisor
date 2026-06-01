@@ -236,7 +236,8 @@
     .page.active{display:block}
 
     /* ── Taskbar ── ESXi event log style */
-    #taskbar{height:var(--taskbar-h);background:#162030;border-top:1px solid #243040;flex-shrink:0;display:flex;flex-direction:column;margin-top:auto}
+    #taskbar{position:fixed;left:0;right:0;bottom:0;width:100vw;height:var(--taskbar-h);background:#162030;border-top:1px solid #243040;display:flex;flex-direction:column;z-index:150}
+    #content-area{padding-bottom:var(--taskbar-h)}
     .tb-tabs{display:flex;border-bottom:1px solid #243040;flex-shrink:0;background:#111e2c}
     .tb-tab{padding:5px 14px;font-size:10.5px;font-weight:600;color:#526a84;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s;letter-spacing:.2px}
     .tb-tab.active{color:#4fb8f0;border-bottom-color:#1a82cc}
