@@ -5386,6 +5386,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadDrsPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Cluster'daki birden fazla host arasında VM'leri otomatik dengeler. CPU/RAM kullanımı eşitsiz olduğunda VM'leri yoğun host'tan boş host'a taşır. Tek-host kurulumda çalışmaz.
+            </div>
+          </div>
           <div class="card" id="drs-policy-card" style="margin-bottom:12px"><div class="card-title">Politika</div><div id="drs-policy-body" class="text-muted">Yükleniyor...</div></div>
           <div class="card" style="margin-bottom:12px"><div class="card-title">Cluster Analizi</div><div id="drs-analyze-body" class="text-muted">Yükleniyor...</div></div>
           <div class="card"><div class="card-title">Önerilen Taşımalar</div><div id="drs-suggest-body" class="text-muted">Yükleniyor...</div></div>
@@ -5397,6 +5402,11 @@
             <div class="spacer"></div>
             <button class="btn-primary" onclick="affinityCreatePrompt()" style="font-size:12px">+ Kural Ekle</button>
             <button class="btn" onclick="loadAffinityPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Belirli VM'lerin aynı host'ta (affinity) veya farklı host'larda (anti-affinity) çalışmasını zorlar. Örnek: 2 DB replikası asla aynı host'ta olmasın.
+            </div>
           </div>
           <div class="card">
             <div class="table-wrap">
@@ -5413,6 +5423,11 @@
             <h2><i class="fa-solid fa-screwdriver-wrench fa-fw" style="color:var(--accent-lt)"></i> Maintenance Mode</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadMaintPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Host'u bakıma alır — üzerindeki tüm çalışan VM'leri otomatik olarak diğer host'lara taşır. Sıfır kesinti host upgrade için.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px"><div class="card-title">Durum</div><div id="maint-status-body" class="text-muted">Yükleniyor...</div></div>
           <div class="card">
@@ -5433,6 +5448,11 @@
             <h2><i class="fa-solid fa-shield-halved fa-fw" style="color:var(--accent-lt)"></i> EVC Baseline</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadEvcPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Cluster içindeki eski/yeni nesil CPU'lar arası live migration yapılabilmesi için CPU özelliklerini maskeler. Intel Westmere → Skylake gibi geçişlerde gerekli.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Cluster Baseline</div>
@@ -5458,6 +5478,11 @@
             <h2><i class="fa-solid fa-gauge-high fa-fw" style="color:var(--accent-lt)"></i> NIOC Network QoS</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadNiocPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM başına ağ bant garantisi verir (10Mbps gibi). DDoS bir VM diğer VM'lerin trafiğini etkilemesin diye.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Profiller</div>
@@ -5491,6 +5516,11 @@
             <button class="btn-primary" onclick="drCreatePrompt()" style="font-size:12px">+ DR Planı</button>
             <button class="btn" onclick="loadDrPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Otomatik runbook'lar — felaket anında VM'leri sırayla başlatma planı. RPO/RTO hedeflerini takip eder. Cross-site replication entegrasyonu.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:12px"><div class="card-title">RPO / RTO Durumu</div><div id="dr-rpo-body" class="text-muted">Yükleniyor...</div></div>
           <div class="card">
             <div class="card-title">DR Planları</div>
@@ -5506,6 +5536,11 @@
             <h2><i class="fa-solid fa-recycle fa-fw" style="color:var(--accent-lt)"></i> Lifecycle Manager</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadLifecyclePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Cluster host'larını sırayla (rolling) yeniden başlatmadan günceller. Patch/upgrade için downtime-free süreç. Config drift tespiti.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Sistem Güncellemeleri</div>
@@ -5534,6 +5569,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadStorAdvPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> ZFS dedup, storage tier (gold/silver/bronze), SPBM policy-based placement, iSCSI initiator/target. Enterprise storage yönetimi.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:8px">
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               <button class="btn" onclick="storAdvTab('zfs')" id="sa-tab-zfs">ZFS / Btrfs</button>
@@ -5551,6 +5591,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadNetAdvPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VXLAN overlay (multi-tenant izolasyon), IPv6 dual-stack tam destek, DDoS mitigation. NSX-T tarzı SDN.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:8px">
             <div style="display:flex;gap:6px;flex-wrap:wrap">
               <button class="btn" onclick="netAdvTab('vxlan')" id="na-tab-vxlan">VXLAN</button>
@@ -5565,6 +5610,11 @@
             <h2><i class="fa-solid fa-lock fa-fw" style="color:var(--accent-lt)"></i> SIEM Export</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadSiemPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Tüm event'leri Splunk, Elastic, Wazuh gibi SIEM araçlarına CEF veya syslog formatında akıtır. Güvenlik operasyon merkezi entegrasyonu.
+            </div>
           </div>
           <div class="card">
             <div class="card-title">Yapılandırma</div>
@@ -5596,6 +5646,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadSessRecPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> SSH ve VNC konsol oturumlarını kayıt eder. Sonradan replay edilebilir — kim ne yaptı tam görünür. Audit ve forensics için kritik.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:12px"><div class="card-title">İstatistikler</div><div id="sessrec-stats" class="text-muted">Yükleniyor...</div></div>
           <div class="card">
             <div class="card-title">Kayıtlar</div>
@@ -5612,6 +5667,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadNumaPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM'leri belirli fiziksel NUMA node'una sabitler. Memory access latency düşer, DB / HPC workload'larda %30+ performans artışı.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:12px"><div class="card-title">NUMA Topolojisi</div><div id="numa-body" class="text-muted">Yükleniyor...</div></div>
           <div class="card">
             <div class="card-title">HugePages</div>
@@ -5626,6 +5686,11 @@
         <div class="page" id="page-tab-bkup-enc">
           <div class="section-header">
             <h2><i class="fa-solid fa-key fa-fw" style="color:var(--accent-lt)"></i> Backup Encryption</h2>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Yedek tar.gz'leri AES-256 + passphrase ile şifreler. Hırsızlık veya kayıp durumunda verilere ulaşılamaz.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Yedek Şifrele</div>
@@ -5647,6 +5712,11 @@
             <h2><i class="fa-solid fa-arrow-down-wide-short fa-fw" style="color:var(--accent-lt)"></i> Right-Sizing</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadRightsizePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM'lerin gerçek CPU/RAM kullanımını analiz eder. Aşırı kaynak verilen VM'ler için 'düşür' önerisi sunar — maliyet azalır.
+            </div>
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Öneriler</div>
@@ -5678,6 +5748,11 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadAlertCorrPage()" style="font-size:12px">↻ Yenile</button>
           </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Onlarca alert'i tek root cause altında gruplar. Örnek: 'CPU yüksek' + 'Disk yavaş' + 'Yanıt süresi yüksek' → 1 incident. Gürültü azalır, müdahale hızlanır.
+            </div>
+          </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Korelasyon Kuralları</div>
             <div class="table-wrap"><table>
@@ -5697,7 +5772,260 @@
 
         <!-- ══════════ /v2.5.3 ENTERPRISE PAGES ══════════ -->
 
-      </div><!-- /content -->
+        <!-- ══════════ v2.5.5 SECURITY & COMPLIANCE PAGES ══════════ -->
+
+        <!-- Confidential VM (SEV/TDX) -->
+        <div class="page" id="page-tab-cvm">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-user-shield fa-fw" style="color:var(--accent-lt)"></i> Gizli VM (Confidential VM)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadCvmPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM RAM'ini CPU seviyesinde şifreler (AMD SEV / Intel TDX). Hypervisor bile VM hafızasını okuyamaz. Hassas iş yükleri için.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Host Desteği (CPU / Kernel)</div>
+            <div id="cvm-support" style="font-size:12px"><div class="text-muted">Yükleniyor...</div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Korumalı VM'ler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM ID</th><th>Mod</th><th>Durum</th><th>İşlem</th></tr></thead>
+              <tbody id="cvm-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <div><label style="font-size:11px;display:block">VM ID</label><input id="cvm-vm-id" class="form-control" style="width:200px"></div>
+              <div><label style="font-size:11px;display:block">Mod</label>
+                <select id="cvm-mode" class="form-control" style="width:140px">
+                  <option value="sev">SEV</option><option value="sev-es">SEV-ES</option>
+                  <option value="sev-snp">SEV-SNP</option><option value="tdx">Intel TDX</option>
+                </select></div>
+              <button class="btn-primary" onclick="cvmEnable()" style="font-size:12px">Etkinleştir</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Disk Encryption -->
+        <div class="page" id="page-tab-disk-enc">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-lock fa-fw" style="color:var(--accent-lt)"></i> Disk Şifreleme (LUKS2)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadDiskEncPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM disk dosyalarını LUKS2 + AES-XTS-256 ile şifreler. Disk fiziksel olarak çalınsa bile veriler okunamaz.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div style="font-size:12px;color:#f59e0b;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);padding:10px;border-radius:6px">
+              ⚠ <b>Yedek alın!</b> Bu işlem disk dosyasını LUKS2 + AES-XTS-256 ile dönüştürür. Anahtar <code>/etc/oxware/disk_keys/&lt;vm_id&gt;.key</code> yazılır.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Şifrelenmiş Diskler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM</th><th>Disk Yolu</th><th>Algoritma</th><th>Tarih</th><th>İşlem</th></tr></thead>
+              <tbody id="diskenc-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <div><label style="font-size:11px;display:block">VM ID</label><input id="de-vm-id" class="form-control" style="width:160px"></div>
+              <div><label style="font-size:11px;display:block">Disk Yolu</label><input id="de-disk-path" class="form-control" placeholder="/var/lib/libvirt/images/x.qcow2" style="width:280px"></div>
+              <div><label style="font-size:11px;display:block">Passphrase (opsiyonel)</label><input id="de-pp" type="password" class="form-control" style="width:160px"></div>
+              <button class="btn-primary" onclick="diskEncRun()" style="font-size:12px">Şifrele</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compliance -->
+        <div class="page" id="page-tab-compliance">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-clipboard-check fa-fw" style="color:var(--accent-lt)"></i> Uyumluluk Tarayıcı</h2>
+            <div class="spacer"></div>
+            <select id="cmp-fw" class="form-control" style="font-size:12px;width:140px">
+              <option value="">Tüm Framework</option>
+              <option value="CIS">CIS Ubuntu 24.04</option>
+              <option value="NIST">NIST 800-53</option>
+              <option value="PCI-DSS">PCI-DSS v4.0</option>
+              <option value="HIPAA">HIPAA</option>
+              <option value="ISO27001">ISO 27001</option>
+            </select>
+            <button class="btn-primary" onclick="cmpScan()" style="font-size:12px">🔍 Tarama Başlat</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Host yapılandırmasını CIS Ubuntu, NIST 800-53, PCI-DSS, HIPAA, ISO 27001 standartlarına göre otomatik denetler. Pass/Fail raporu + düzeltme önerisi.
+            </div>
+          </div>
+          <div id="cmp-summary" style="display:none;margin-bottom:12px"></div>
+          <div class="card">
+            <div class="card-title">Kontroller</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Framework</th><th>Başlık</th><th>Önem</th><th>Durum</th><th>Düzeltme</th></tr></thead>
+              <tbody id="cmp-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Henüz tarama yok</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- DLP -->
+        <div class="page" id="page-tab-dlp">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-shield-virus fa-fw" style="color:var(--accent-lt)"></i> DLP — Veri Sızıntı Önleme</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadDlpPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM'lerden çıkan trafikte hassas veri (kredi kartı, AWS key, TC kimlik vs.) tespit eder. Alert veya blok eder. Veri sızıntısı önleme.
+            </div>
+          </div>
+          <div id="dlp-stats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Kurallar (Regex Pattern)</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Ad</th><th>Pattern</th><th>Önem</th><th>Aksiyon</th><th>Sil</th></tr></thead>
+              <tbody id="dlp-rules-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <input id="dlp-r-id" placeholder="id" class="form-control" style="width:100px">
+              <input id="dlp-r-name" placeholder="Ad" class="form-control" style="width:150px">
+              <input id="dlp-r-pattern" placeholder="regex" class="form-control" style="width:200px">
+              <select id="dlp-r-sev" class="form-control" style="width:100px">
+                <option value="low">low</option><option value="medium" selected>medium</option>
+                <option value="high">high</option><option value="critical">critical</option>
+              </select>
+              <select id="dlp-r-act" class="form-control" style="width:100px">
+                <option value="alert">alert</option><option value="block">block</option>
+              </select>
+              <button class="btn-primary" onclick="dlpAddRule()" style="font-size:12px">+ Kural</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Son Olaylar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Zaman</th><th>Kural</th><th>VM</th><th>Önem</th><th>Eşleşme</th></tr></thead>
+              <tbody id="dlp-events-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Olay yok</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- Forensics -->
+        <div class="page" id="page-tab-forensics">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-magnifying-glass fa-fw" style="color:var(--accent-lt)"></i> Adli Analiz</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadForensicsPage()" style="font-size:12px">↻ Yenile</button>
+            <button class="btn warning" onclick="forPrune()" style="font-size:12px">30 gün öncesini sil</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Çalışan VM'in RAM'ini tek tıkla dump alır + ağ trafiğini pcap olarak kaydeder. Güvenlik olayı sonrası forensic analiz için.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">İşlem Başlat</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <input id="for-vm-id" placeholder="VM ID" class="form-control" style="width:200px">
+              <select id="for-mem-mode" class="form-control" style="width:140px">
+                <option value="live">Memory: live</option>
+                <option value="crash">Memory: crash</option>
+                <option value="memory-only">Memory: memory-only</option>
+              </select>
+              <button class="btn-primary" onclick="forMemDump()" style="font-size:12px">📥 Memory Dump</button>
+              <input id="for-pcap-dur" type="number" value="60" min="5" max="600" class="form-control" style="width:80px" title="Süre (sn)">
+              <input id="for-pcap-bpf" placeholder="BPF filter (opsiyonel)" class="form-control" style="width:200px">
+              <button class="btn-primary" onclick="forPcapStart()" style="font-size:12px">🎯 Packet Capture</button>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Aktif Capture İşleri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Job ID</th><th>VM</th><th>Interface</th><th>Süre</th><th>İşlem</th></tr></thead>
+              <tbody id="for-jobs-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">İş yok</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Artefakt'lar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM</th><th>Dosya</th><th>Boyut</th><th>Tarih</th><th>İşlem</th></tr></thead>
+              <tbody id="for-art-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- MFA Policy -->
+        <div class="page" id="page-tab-mfa-policy">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-id-badge fa-fw" style="color:var(--accent-lt)"></i> 2FA Politikası (Rol Bazlı)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadMfaPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Hangi rol için 2FA zorunlu (required), opsiyonel (optional) veya devre dışı (disabled) olacak ayarlar. Admin için varsayılan: required.
+            </div>
+          </div>
+          <div class="card">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+              Her rol için 2FA politikası: <b>required</b> (zorunlu, login öncesi enroll), <b>optional</b> (isteğe bağlı), <b>disabled</b> (devre dışı).
+              Varsayılan: admin = required.
+            </div>
+            <div id="mfa-policy-list" style="display:flex;flex-direction:column;gap:8px"><div class="text-muted">Yükleniyor...</div></div>
+          </div>
+        </div>
+
+        <!-- SSO -->
+        <div class="page" id="page-tab-sso">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-id-card fa-fw" style="color:var(--accent-lt)"></i> SSO — SAML 2.0 + OpenID Connect</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadSsoPage()" style="font-size:12px">↻ Yenile</button>
+            <button class="btn-primary" onclick="ssoSave()" style="font-size:12px">💾 Kaydet</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Okta, Azure AD, Google Workspace, Keycloak gibi IdP'lerle tek oturum açma. Kullanıcılar şirket hesabıyla giriş yapar — OXware'de ayrı hesap gerekmez.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">SAML 2.0</div>
+            <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;font-size:12px">
+              <label>Etkin</label>            <select id="sso-saml-enabled" class="form-control"><option value="false">Hayır</option><option value="true">Evet</option></select>
+              <label>Entity ID</label>        <input id="sso-saml-entity" class="form-control">
+              <label>SSO URL (IdP)</label>    <input id="sso-saml-sso" class="form-control">
+              <label>ACS URL (SP)</label>     <input id="sso-saml-acs" class="form-control">
+              <label>x509 Cert (PEM)</label>  <textarea id="sso-saml-cert" class="form-control" rows="3"></textarea>
+              <label>Attr: Email</label>      <input id="sso-saml-email-attr" class="form-control" placeholder="email">
+              <label>Attr: Role</label>       <input id="sso-saml-role-attr" class="form-control" placeholder="role">
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">OpenID Connect</div>
+            <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;font-size:12px">
+              <label>Etkin</label>            <select id="sso-oidc-enabled" class="form-control"><option value="false">Hayır</option><option value="true">Evet</option></select>
+              <label>Issuer URL</label>       <input id="sso-oidc-issuer" class="form-control" placeholder="https://accounts.google.com">
+              <label>Client ID</label>        <input id="sso-oidc-client" class="form-control">
+              <label>Client Secret</label>    <input id="sso-oidc-secret" type="password" class="form-control" placeholder="***">
+              <label>Redirect URI</label>     <input id="sso-oidc-redirect" class="form-control" placeholder="https://panel.example.com/sso/oidc/callback">
+              <label>Scope</label>            <input id="sso-oidc-scope" class="form-control" placeholder="openid email profile">
+              <label>Claim: Email</label>     <input id="sso-oidc-email-claim" class="form-control" placeholder="email">
+              <label>Claim: Role</label>      <input id="sso-oidc-role-claim" class="form-control" placeholder="role">
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Rol Eşleme (IdP → OXware)</div>
+            <div id="sso-role-map" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+              <label>IdP "admin" → OXware</label>    <input id="sso-rm-admin" class="form-control" value="admin">
+              <label>IdP "operator" → OXware</label> <input id="sso-rm-operator" class="form-control" value="operator">
+              <label>IdP "user" → OXware</label>     <input id="sso-rm-user" class="form-control" value="vm-user">
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════ /v2.5.5 ══════════ -->
     </div><!-- /content-area -->
 
   </div><!-- /middle -->
@@ -9800,6 +10128,13 @@ function buildContextNav(type) {
       <div class="ctx-item" data-page="tab-bkup-enc"   onclick="navigate('tab-bkup-enc');closeMobileNav()"   title="Yedek AES-256 şifreleme"><i class="fa-solid fa-key fa-fw"></i>Yedek Şifreleme</div>
       <div class="ctx-item" data-page="tab-rightsize"  onclick="navigate('tab-rightsize');closeMobileNav()"  title="VM kaynak öneri (right-sizing)"><i class="fa-solid fa-arrow-down-wide-short fa-fw"></i>Boyutlandırma</div>
       <div class="ctx-item" data-page="tab-alertcorr"  onclick="navigate('tab-alertcorr');closeMobileNav()"  title="Uyarı korelasyon — gürültü azalt"><i class="fa-solid fa-bell fa-fw"></i>Uyarı Korelasyon</div>
+      <div class="ctx-item" data-page="tab-cvm"        onclick="navigate('tab-cvm');closeMobileNav()"        title="Confidential VM (AMD SEV / Intel TDX)"><i class="fa-solid fa-user-shield fa-fw"></i>Gizli VM (SEV/TDX)</div>
+      <div class="ctx-item" data-page="tab-disk-enc"   onclick="navigate('tab-disk-enc');closeMobileNav()"   title="VM disk şifreleme (LUKS2 + AES)"><i class="fa-solid fa-lock fa-fw"></i>Disk Şifreleme</div>
+      <div class="ctx-item" data-page="tab-compliance" onclick="navigate('tab-compliance');closeMobileNav()" title="CIS / NIST / PCI-DSS / HIPAA / ISO27001 tarama"><i class="fa-solid fa-clipboard-check fa-fw"></i>Uyumluluk</div>
+      <div class="ctx-item" data-page="tab-dlp"        onclick="navigate('tab-dlp');closeMobileNav()"        title="Veri sızıntı önleme (regex DLP)"><i class="fa-solid fa-shield-virus fa-fw"></i>DLP</div>
+      <div class="ctx-item" data-page="tab-forensics"  onclick="navigate('tab-forensics');closeMobileNav()"  title="Adli analiz — memory dump + pcap"><i class="fa-solid fa-magnifying-glass fa-fw"></i>Adli Analiz</div>
+      <div class="ctx-item" data-page="tab-mfa-policy" onclick="navigate('tab-mfa-policy');closeMobileNav()" title="Rol bazlı 2FA zorunluluğu"><i class="fa-solid fa-id-badge fa-fw"></i>2FA Politikası</div>
+      <div class="ctx-item" data-page="tab-sso"        onclick="navigate('tab-sso');closeMobileNav()"        title="SAML 2.0 + OpenID Connect SSO"><i class="fa-solid fa-id-card fa-fw"></i>SSO (SAML/OIDC)</div>
     </div>
 
     <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
@@ -15787,6 +16122,14 @@ async function loadTabData(tabId) {
     case 'tab-bkup-enc':      /* form-only */ break;
     case 'tab-rightsize':     loadRightsizePage(); break;
     case 'tab-alertcorr':     loadAlertCorrPage(); break;
+    // v2.5.5 Security & Compliance
+    case 'tab-cvm':           loadCvmPage(); break;
+    case 'tab-disk-enc':      loadDiskEncPage(); break;
+    case 'tab-compliance':    loadCompliancePage(); break;
+    case 'tab-dlp':           loadDlpPage(); break;
+    case 'tab-forensics':     loadForensicsPage(); break;
+    case 'tab-mfa-policy':    loadMfaPage(); break;
+    case 'tab-sso':           loadSsoPage(); break;
   }
 }
 
@@ -22035,6 +22378,287 @@ async function acResolve(id) {
   const d = await _api('/api/correlation/incidents/' + encodeURIComponent(id) + '/resolve', 'POST');
   if (_entOk(d)) { toast('Çözüldü', 'success'); loadAlertCorrPage(); }
   else _entErr(d, 'Korelasyon');
+}
+
+/* ═══ v2.5.5 SECURITY & COMPLIANCE HANDLERS ═══ */
+
+// CVM
+async function loadCvmPage() {
+  const sup = document.getElementById('cvm-support');
+  const tb  = document.getElementById('cvm-tbody');
+  if (sup) sup.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
+  if (tb)  tb.innerHTML  = '<tr><td colspan="4" class="text-center text-muted">Yükleniyor...</td></tr>';
+  try {
+    const [s, l] = await Promise.all([_api('/api/confidential-vm/support'), _api('/api/confidential-vm/vms')]);
+    sup.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">' +
+      ['sev','sev_es','sev_snp','tdx'].map(k =>
+        `<div style="padding:8px;background:var(--surface2);border-radius:6px"><b>${k.toUpperCase()}</b>: ${s[k]?'<span style="color:#22c55e">✓ Destekleniyor</span>':'<span style="color:#f87171">✗ Yok</span>'}</div>`
+      ).join('') + '</div>';
+    const vms = l.vms || [];
+    tb.innerHTML = vms.length ? vms.map(v=>`<tr><td>${_esc(v.vm_id)}</td><td><span class="badge-muted">${_esc(v.mode)}</span></td><td>${v.enabled?'<span style="color:#22c55e">aktif</span>':'pasif'}</td><td><button class="btn-danger" style="font-size:11px" onclick="cvmDisable('${_esc(v.vm_id)}')">Devre Dışı Bırak</button></td></tr>`).join('') :
+      '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Henüz koruma yok</td></tr>';
+  } catch(e) { sup.innerHTML = '<div style="color:#f87171">Hata: '+e.message+'</div>'; }
+}
+async function cvmEnable() {
+  const id = document.getElementById('cvm-vm-id').value.trim();
+  const mode = document.getElementById('cvm-mode').value;
+  if (!id) { toast('VM ID gerekli','error'); return; }
+  const d = await _api('/api/confidential-vm/vms/'+encodeURIComponent(id),'POST',{mode});
+  if (_entOk(d)) { toast('Etkinleştirildi: '+id,'success'); loadCvmPage(); }
+}
+async function cvmDisable(id) {
+  if (!await showConfirm('VM\'den confidential korumayı kaldırmak istiyor musun?', 'Devre Dışı Bırak')) return;
+  await _api('/api/confidential-vm/vms/'+encodeURIComponent(id),'DELETE');
+  toast('Devre dışı','info'); loadCvmPage();
+}
+
+// Disk Encryption
+async function loadDiskEncPage() {
+  const tb = document.getElementById('diskenc-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Yükleniyor...</td></tr>';
+  const d = await _api('/api/disk-encryption');
+  const list = d.disks || [];
+  tb.innerHTML = list.length ? list.map(x=>`<tr>
+    <td>${_esc(x.vm_id)}</td>
+    <td style="font-family:monospace;font-size:11px">${_esc(x.path||'-')}</td>
+    <td><span class="badge-muted">${_esc(x.algorithm||'-')}</span></td>
+    <td>${x.encrypted_at?new Date(x.encrypted_at*1000).toLocaleString('tr-TR'):'-'}</td>
+    <td><button class="btn" style="font-size:11px" onclick="diskEncRotate('${_esc(x.vm_id)}')">🔑 Anahtar Döndür</button></td>
+  </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Şifreli disk yok</td></tr>';
+}
+async function diskEncRun() {
+  const vm = document.getElementById('de-vm-id').value.trim();
+  const path = document.getElementById('de-disk-path').value.trim();
+  const pp = document.getElementById('de-pp').value;
+  if (!vm || !path) { toast('VM ID + Disk yolu gerekli','error'); return; }
+  if (!await showConfirm('Bu işlem disk dosyasını LUKS2 ile dönüştürür. Yedek aldın mı?','Disk Şifreleme',true)) return;
+  const d = await _api('/api/disk-encryption/'+encodeURIComponent(vm)+'/encrypt','POST',{disk_path:path, passphrase:pp||null});
+  if (_entOk(d) && d.ok) { toast('Şifreleme tamam: '+d.path,'success'); loadDiskEncPage(); }
+  else toast('Hata: '+(d.error||'şifreleme başarısız'),'error',6000);
+}
+async function diskEncRotate(vm) {
+  if (!await showConfirm('Anahtar döndürülecek (eski geçersiz olur).','Anahtar Döndür')) return;
+  const d = await _api('/api/disk-encryption/'+encodeURIComponent(vm)+'/rotate','POST');
+  if (d.ok) { toast('Anahtar döndürüldü','success'); loadDiskEncPage(); }
+  else toast('Hata: '+(d.error||''),'error');
+}
+
+// Compliance
+async function loadCompliancePage() {
+  const d = await _api('/api/compliance/last');
+  if (d && d.results && d.results.length) _renderCmp(d);
+}
+async function cmpScan() {
+  const fw = document.getElementById('cmp-fw').value;
+  document.getElementById('cmp-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-muted">Tarama yapılıyor...</td></tr>';
+  const d = await _api('/api/compliance/scan','POST',{framework:fw||null});
+  if (d && d.results) _renderCmp(d);
+}
+function _renderCmp(d) {
+  const sum = document.getElementById('cmp-summary');
+  const pct = d.compliance_pct || 0;
+  const color = pct>=90?'#22c55e':pct>=70?'#eab308':'#f87171';
+  sum.style.display = 'block';
+  sum.innerHTML = `<div class="card" style="padding:14px">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div><div style="font-size:28px;font-weight:700;color:${color}">${pct}%</div><div style="font-size:11px;color:var(--text-muted)">Uyumluluk</div></div>
+      <div><div style="font-size:18px;color:#22c55e">${d.pass}</div><div style="font-size:11px;color:var(--text-muted)">Geçti</div></div>
+      <div><div style="font-size:18px;color:#f87171">${d.fail}</div><div style="font-size:11px;color:var(--text-muted)">Başarısız</div></div>
+      <div><div style="font-size:18px;color:#eab308">${d.warn}</div><div style="font-size:11px;color:var(--text-muted)">Uyarı</div></div>
+      <div style="flex:1"></div>
+      <div style="font-size:11px;color:var(--text-muted)">Framework: ${_esc(d.framework||'ALL')} | ${d.scanned_at?new Date(d.scanned_at*1000).toLocaleString('tr-TR'):''}</div>
+    </div></div>`;
+  const tb = document.getElementById('cmp-tbody');
+  tb.innerHTML = (d.results||[]).map(r=>{
+    const sc = r.status==='pass'?'#22c55e':r.status==='fail'?'#f87171':'#eab308';
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px">${_esc(r.id)}</td>
+      <td><span class="badge-muted">${_esc(r.framework)}</span></td>
+      <td>${_esc(r.title)}</td>
+      <td><span style="color:${r.severity==='high'?'#f87171':r.severity==='medium'?'#eab308':'#94a3b8'}">${_esc(r.severity)}</span></td>
+      <td><span style="color:${sc};font-weight:600">${_esc(r.status.toUpperCase())}</span></td>
+      <td style="font-size:11px;color:var(--text-muted)">${r.remediation?_esc(r.remediation):''}</td>
+    </tr>`;
+  }).join('');
+}
+
+// DLP
+async function loadDlpPage() {
+  const [r, e, s] = await Promise.all([_api('/api/dlp/rules'), _api('/api/dlp/events?limit=50'), _api('/api/dlp/stats')]);
+  const stEl = document.getElementById('dlp-stats');
+  stEl.innerHTML = `
+    <div class="card" style="flex:1;min-width:140px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700">${s.total_events||0}</div><div style="font-size:11px;color:var(--text-muted)">Toplam Olay</div></div>
+    <div class="card" style="flex:1;min-width:140px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700">${s.rules_count||0}</div><div style="font-size:11px;color:var(--text-muted)">Kural</div></div>
+    <div class="card" style="flex:1;min-width:140px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#f87171">${(s.by_severity||{}).critical||0}</div><div style="font-size:11px;color:var(--text-muted)">Kritik</div></div>
+  `;
+  document.getElementById('dlp-rules-tbody').innerHTML = (r.rules||[]).map(rl=>`<tr>
+    <td style="font-family:monospace;font-size:11px">${_esc(rl.id)}</td>
+    <td>${_esc(rl.name)}</td>
+    <td style="font-family:monospace;font-size:10px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(rl.pattern)}</td>
+    <td><span style="color:${rl.severity==='critical'||rl.severity==='high'?'#f87171':'#eab308'}">${_esc(rl.severity)}</span></td>
+    <td><span class="badge-muted">${_esc(rl.action)}</span></td>
+    <td><button class="btn-danger" style="font-size:11px" onclick="dlpDelRule('${_esc(rl.id)}')">✕</button></td>
+  </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Kural yok</td></tr>';
+
+  document.getElementById('dlp-events-tbody').innerHTML = (e.events||[]).map(ev=>`<tr>
+    <td style="font-size:10px;color:var(--text-muted)">${new Date(ev.ts*1000).toLocaleString('tr-TR')}</td>
+    <td>${_esc(ev.rule_name)}</td>
+    <td style="font-family:monospace;font-size:11px">${_esc(ev.vm_id||'-')}</td>
+    <td><span style="color:${ev.severity==='critical'||ev.severity==='high'?'#f87171':'#eab308'}">${_esc(ev.severity)}</span></td>
+    <td style="font-family:monospace;font-size:10px;color:#f87171">${_esc(ev.matched)}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Olay yok</td></tr>';
+}
+async function dlpAddRule() {
+  const rule = {
+    id: document.getElementById('dlp-r-id').value.trim(),
+    name: document.getElementById('dlp-r-name').value.trim(),
+    pattern: document.getElementById('dlp-r-pattern').value.trim(),
+    severity: document.getElementById('dlp-r-sev').value,
+    action: document.getElementById('dlp-r-act').value,
+  };
+  if (!rule.id || !rule.pattern) { toast('id ve pattern zorunlu','error'); return; }
+  const d = await _api('/api/dlp/rules','POST',rule);
+  if (d.ok) { toast('Kural eklendi','success'); loadDlpPage(); }
+  else toast('Hata: '+(d.error||''),'error');
+}
+async function dlpDelRule(id) {
+  await _api('/api/dlp/rules/'+encodeURIComponent(id),'DELETE');
+  toast('Silindi','info'); loadDlpPage();
+}
+
+// Forensics
+async function loadForensicsPage() {
+  const [j, a] = await Promise.all([_api('/api/forensics/pcap/jobs'), _api('/api/forensics/artifacts')]);
+  document.getElementById('for-jobs-tbody').innerHTML = (j.jobs||[]).map(job=>`<tr>
+    <td style="font-family:monospace;font-size:11px">${_esc(job.id)}</td>
+    <td>${_esc(job.vm_id)}</td>
+    <td>${_esc(job.iface||'-')}</td>
+    <td>${job.duration||'-'}s</td>
+    <td><button class="btn-danger" style="font-size:11px" onclick="forPcapStop('${_esc(job.id)}')">Durdur</button></td>
+  </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Aktif iş yok</td></tr>';
+
+  document.getElementById('for-art-tbody').innerHTML = (a.artifacts||[]).map(x=>{
+    const mb = Math.round((x.size_bytes||0)/1048576);
+    return `<tr>
+      <td>${_esc(x.vm_id)}</td>
+      <td style="font-family:monospace;font-size:11px">${_esc(x.name)}</td>
+      <td>${mb} MB</td>
+      <td style="font-size:11px">${new Date(x.mtime*1000).toLocaleString('tr-TR')}</td>
+      <td><button class="btn-danger" style="font-size:11px" onclick="forArtDel('${_esc(x.vm_id)}','${_esc(x.name)}')">Sil</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Artefakt yok</td></tr>';
+}
+async function forMemDump() {
+  const vm = document.getElementById('for-vm-id').value.trim();
+  const mode = document.getElementById('for-mem-mode').value;
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  if (!await showConfirm('Memory dump alınıyor. Büyük olabilir (RAM kadar).','Memory Dump')) return;
+  toast('Dump alınıyor...','info');
+  const d = await _api('/api/forensics/memdump/'+encodeURIComponent(vm),'POST',{mode});
+  if (d.ok) toast('Dump tamam: '+d.path+' ('+Math.round(d.size_bytes/1048576)+' MB)','success',8000);
+  else toast('Hata: '+(d.error||''),'error');
+  loadForensicsPage();
+}
+async function forPcapStart() {
+  const vm = document.getElementById('for-vm-id').value.trim();
+  const dur = parseInt(document.getElementById('for-pcap-dur').value)||60;
+  const bpf = document.getElementById('for-pcap-bpf').value.trim();
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  const d = await _api('/api/forensics/pcap/'+encodeURIComponent(vm)+'/start','POST',{duration:dur, bpf_filter:bpf});
+  if (d.ok) { toast('Capture başladı: '+d.job_id,'success'); loadForensicsPage(); }
+  else toast('Hata: '+(d.error||''),'error');
+}
+async function forPcapStop(id) {
+  await _api('/api/forensics/pcap/jobs/'+encodeURIComponent(id)+'/stop','POST');
+  toast('Capture durduruldu','info'); loadForensicsPage();
+}
+async function forArtDel(vm, name) {
+  if (!await showConfirm('Bu artefakt silinecek.','Sil',true)) return;
+  await _api('/api/forensics/artifacts/'+encodeURIComponent(vm)+'/'+encodeURIComponent(name),'DELETE');
+  loadForensicsPage();
+}
+async function forPrune() {
+  if (!await showConfirm('30 günden eski tüm forensics artefakt silinecek.','Temizle',true)) return;
+  const d = await _api('/api/forensics/prune','POST',{days:30});
+  toast(`${d.deleted||0} dosya silindi`,'info'); loadForensicsPage();
+}
+
+// MFA Policy
+async function loadMfaPage() {
+  const d = await _api('/api/mfa-policy');
+  const pol = (d && d.policy) || {};
+  const el = document.getElementById('mfa-policy-list');
+  el.innerHTML = Object.entries(pol).map(([role, p])=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border-radius:6px">
+      <div style="flex:1"><b>${_esc(role)}</b></div>
+      <select id="mfa-sel-${_esc(role)}" class="form-control" style="width:160px" onchange="mfaUpdate('${_esc(role)}',this.value)">
+        <option value="required" ${p==='required'?'selected':''}>Zorunlu (required)</option>
+        <option value="optional" ${p==='optional'?'selected':''}>Opsiyonel (optional)</option>
+        <option value="disabled" ${p==='disabled'?'selected':''}>Devre Dışı (disabled)</option>
+      </select>
+    </div>`).join('') || '<div class="text-muted">Politika yok</div>';
+}
+async function mfaUpdate(role, policy) {
+  const d = await _api('/api/mfa-policy','POST',{role, policy});
+  if (d.ok) toast(role+' → '+policy,'success');
+}
+
+// SSO
+async function loadSsoPage() {
+  const d = await _api('/api/sso/config');
+  const c = (d && d.config) || {};
+  const s = c.saml || {}, o = c.oidc || {}, rm = c.role_map || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v==null?'':v; };
+  set('sso-saml-enabled', s.enabled?'true':'false');
+  set('sso-saml-entity', s.entity_id);
+  set('sso-saml-sso', s.sso_url);
+  set('sso-saml-acs', s.acs_url);
+  set('sso-saml-cert', s.x509_cert);
+  set('sso-saml-email-attr', s.attr_email);
+  set('sso-saml-role-attr', s.attr_role);
+  set('sso-oidc-enabled', o.enabled?'true':'false');
+  set('sso-oidc-issuer', o.issuer);
+  set('sso-oidc-client', o.client_id);
+  set('sso-oidc-secret', o.client_secret);
+  set('sso-oidc-redirect', o.redirect_uri);
+  set('sso-oidc-scope', o.scope);
+  set('sso-oidc-email-claim', o.claim_email);
+  set('sso-oidc-role-claim', o.claim_role);
+  set('sso-rm-admin', rm.admin);
+  set('sso-rm-operator', rm.operator);
+  set('sso-rm-user', rm.user);
+}
+async function ssoSave() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const body = {
+    saml: {
+      enabled: get('sso-saml-enabled')==='true',
+      entity_id: get('sso-saml-entity'),
+      sso_url: get('sso-saml-sso'),
+      acs_url: get('sso-saml-acs'),
+      x509_cert: get('sso-saml-cert'),
+      attr_email: get('sso-saml-email-attr'),
+      attr_role: get('sso-saml-role-attr'),
+    },
+    oidc: {
+      enabled: get('sso-oidc-enabled')==='true',
+      issuer: get('sso-oidc-issuer'),
+      client_id: get('sso-oidc-client'),
+      client_secret: get('sso-oidc-secret'),
+      redirect_uri: get('sso-oidc-redirect'),
+      scope: get('sso-oidc-scope'),
+      claim_email: get('sso-oidc-email-claim'),
+      claim_role: get('sso-oidc-role-claim'),
+    },
+    role_map: {
+      admin: get('sso-rm-admin'),
+      operator: get('sso-rm-operator'),
+      user: get('sso-rm-user'),
+    },
+  };
+  const d = await _api('/api/sso/config','POST',body);
+  if (d.ok) toast('SSO konfigürasyonu kaydedildi','success');
+  else toast('Hata: '+(d.error||''),'error');
 }
 
 
