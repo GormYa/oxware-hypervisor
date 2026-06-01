@@ -288,6 +288,11 @@ update_system() {
 
 install_packages() {
     step "Paket Kurulumu"
+
+    # Pre-create dirs for packages with home_dir warnings (swtpm, etc.)
+    mkdir -p /var/lib/swtpm 2>/dev/null || true
+    chown root:root /var/lib/swtpm 2>/dev/null || true
+
     PKGS=(
         qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients libvirt-dev
         python3 python3-pip python3-venv python3-dev python3-libvirt
@@ -300,11 +305,19 @@ install_packages() {
         ufw fail2ban certbot python3-certbot
         nftables wireguard
         openvswitch-switch openvswitch-common
+        swtpm swtpm-tools
     )
     for pkg in "${PKGS[@]}"; do
         dpkg -l "$pkg" &>/dev/null || apt-get install -y -qq "$pkg" 2>/dev/null \
             || warn "Atlandı: $pkg"
     done
+
+    # Post-install: ensure swtpm user has proper home (skip warning)
+    if id swtpm &>/dev/null; then
+        usermod -d /var/lib/swtpm swtpm 2>/dev/null || true
+        chown swtpm:swtpm /var/lib/swtpm 2>/dev/null || true
+    fi
+
     log "Paketler kuruldu"
 }
 
@@ -833,10 +846,26 @@ configure_hostname() {
 }
 
 # ── Host Linux Bridge (oxbr0) ────────────────────────────────
-# VMs bridge üzerinden fiziksel ağa çıkar. Host da VM'lere ulaşabilir.
-# ip link komutları yerine netplan kullanır → bağlantı kesilmez.
+# OPT-IN — varsayılan olarak KAPALI. Bridge kurulumu netplan apply sırasında
+# SSH bağlantısını koparabilir. Production sunucularda büyük risk.
+#
+# Aktifleştirmek için:
+#   OXWARE_SETUP_BRIDGE=1 bash install.sh
+# veya kurulumdan sonra manuel:
+#   sudo /opt/oxware/scripts/setup-bridge.sh
 setup_host_bridge() {
-    step "Host Bridge (oxbr0) Kurulumu"
+    # Default: SKIP — kullanıcı opt-in etmedikçe bridge kurulmaz
+    if [ "${OXWARE_SETUP_BRIDGE:-0}" != "1" ]; then
+        info "Host bridge kurulumu atlandı (varsayılan: SSH kesilmesin diye)"
+        info "Manuel kurmak için: OXWARE_SETUP_BRIDGE=1 bash install.sh"
+        info "Veya kurulumdan sonra: /opt/oxware/scripts/setup-bridge.sh"
+        return 0
+    fi
+
+    step "Host Bridge (oxbr0) Kurulumu — OPT-IN (SSH kesilebilir!)"
+    warn "⚠ Bu işlem netplan apply yapar. SSH bağlantın 10sn için düşebilir."
+    warn "⚠ Bridge kurulumu başarısız olursa sunucu UNREACHABLE olabilir."
+    sleep 5
 
     # Already fully configured?
     if ip link show oxbr0 &>/dev/null && ip link show master oxbr0 &>/dev/null 2>/dev/null; then
@@ -872,6 +901,9 @@ setup_host_bridge() {
 
     log "Bridge: $PIFACE ($PIP) → oxbr0, gw: $PGW"
 
+    # Backup original netplan dir before changes
+    cp -r /etc/netplan "/etc/netplan.bak.$(date +%s)" 2>/dev/null || true
+
     # Write netplan bridge config
     local NP="/etc/netplan/60-oxware-bridge.yaml"
     cat > "$NP" << NETPLANCFG
@@ -897,7 +929,6 @@ NETPLANCFG
     chmod 600 "$NP"
 
     # Strip all IP/route/gateway config from PIFACE in other netplan files.
-    # Iface becomes a bridge slave — no addresses, no routes, no gateway.
     for f in /etc/netplan/*.yaml; do
         [ "$f" = "$NP" ] && continue
         grep -q "$PIFACE" "$f" 2>/dev/null || continue
@@ -913,20 +944,19 @@ with open(fpath, 'w') as fp:
     yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
 print(f"Cleaned {iface} config in {fpath}")
 PYCLEAN
-        chmod 600 "$f"  # netplan: "too open" uyarısını önle
+        chmod 600 "$f"
     done
 
-    netplan apply
-    sleep 3
-
-    if ip link show oxbr0 &>/dev/null; then
+    # netplan try → 120s rollback timer if SSH dies, original config restored
+    log "netplan try kullanılıyor (120s rollback timer aktif)..."
+    if timeout 30 netplan try --timeout 120 < /dev/null; then
         log "oxbr0 bridge aktif ✓ ($PIP üzerinde, $PIFACE bağlı)"
+        _register_oxbridge_libvirt
     else
-        warn "oxbr0 oluşturulamadı — netplan apply kontrol edin"
+        warn "netplan try iptal edildi veya başarısız — eski config geri yüklendi"
+        warn "Bridge kurulamadı. Sunucu önceki haline döndü, SSH güvende."
         return 1
     fi
-
-    _register_oxbridge_libvirt
 }
 
 _register_oxbridge_libvirt() {
