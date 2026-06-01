@@ -23,6 +23,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.6 (2026-06):** 🏢 **Multi-tenancy release** — Hard tenant isolation with per-tenant quotas (vCPUs, RAM, disk, VM count, IPs), self-service portal for end-users (limited VM ops with ownership verification), on-demand chargeback / showback billing engine (€/USD/TRY pricing for vCPU-hour, RAM-hour, disk-month, IP-month, snapshot-month), service catalog with 6 built-in templates (Ubuntu 24.04, Debian 12, Windows Server 2022, WordPress, GitLab CE, Docker Host), resource pool reservations (min vCPU + RAM guarantees), token-bucket API rate limiting per tenant (default 100 rpm / 200 burst). All admin endpoints `@require_role("admin")`. Total: 86 capabilities. No periodic background jobs — chargeback computes on request.
+>
 > **v2.5.5 (2026-06):** 🛡️ **Security & Compliance release** — AMD SEV / Intel TDX confidential VMs (memory encryption), live disk encryption with LUKS2 + AES-XTS-256, automated CIS / NIST 800-53 / PCI-DSS / HIPAA / ISO 27001 compliance scanner, hypervisor-level DLP engine (regex patterns: PII, credit cards, AWS keys, PEM, JWT, TC kimlik), forensics tooling (memory dump via `virsh dump`, packet capture per VM tap), MFA-per-role enforcement (admin = required by default), SAML 2.0 + OpenID Connect SSO with role mapping (Okta / Azure AD / Google Workspace ready). All v2.5.5 endpoints admin-only. Feature registry now tracks **81 capabilities**.
 >
 > **v2.5.4 (2026-06):** 🔐 **Security & Hardware release** — Virtual TPM 2.0 (Windows 11 / BitLocker), UEFI Secure Boot enforcement, HashiCorp Vault secret-manager integration, tamper-evident hash-chained audit log, automatic HugePages tuning for DB workloads, SR-IOV VF management, NVIDIA vGPU (GRID + MIG) detection & assignment, Continuous Data Protection (CDP, second-level RPO), DR boot order orchestration with dependency graph, Geo-DNS automatic failover (Cloudflare / Route53). Central feature registry tracking **74 enterprise capabilities** across 10 categories with per-feature enable/disable & audit log. All Enterprise endpoints `@require_role("admin", "administrator")` — strict RBAC.
@@ -237,6 +239,22 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.6
+
+The **Multi-tenancy release** adds 5 backend modules + 28 endpoints to turn OXware into a true multi-tenant platform:
+
+- 🏢 **Tenant Manager** — Hard isolation: per-tenant quotas (vCPU / RAM / disk / VM count / IPs), user assignments, VM ownership tracking. Network namespace config-only (no `ip netns` calls — host load avoided).
+- 🛒 **Self-Service Portal** — End-users see only their own VMs; can request create / start / stop / reboot / snapshot / console. Quota check happens before delegating to `vm_manager.create_vm()`. VNC console tokens (10 min TTL). Audit log at `/var/lib/oxware/self_service_requests.jsonl`.
+- 💰 **Chargeback Engine** — On-demand cost calculation (NO periodic jobs). Configurable pricing (€/USD/TRY) for vCPU-hour, RAM-hour, disk-month, IP-month, snapshot-month. Per-tenant invoices stored at `/var/lib/oxware/invoices/<tenant>/<YYYY-MM>.json`.
+- 📦 **Service Catalog** — 6 built-in templates + custom additions. Ubuntu 24.04, Debian 12, Windows Server 2022, WordPress, GitLab CE, Docker Host. One-click deploy from catalog.
+- ⏱️ **Tenant Rate Limit** — Token-bucket algorithm per tenant (in-memory). Default 100 rpm + 200 burst. Configurable per-tenant.
+
+Plus: **Resource Pool Reservations** — `set_reservations(pool_id, vcpu_min, ram_mb_min)` for guaranteed minimum allocations.
+
+**Feature registry**: 81 → 86 capabilities. v2.5.6 entries flipped `planned` → `beta`/`stable`. All admin endpoints `@require_role("admin", "administrator")` except `/api/self-service/*` which is auth-only (user scoped to own tenant).
 
 ---
 

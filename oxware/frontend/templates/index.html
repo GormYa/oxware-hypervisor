@@ -1239,7 +1239,7 @@
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Version</span>
-                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.5</span>
+                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.6</span>
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Kernel</span>
@@ -6026,6 +6026,114 @@
         </div>
 
         <!-- ══════════ /v2.5.5 ══════════ -->
+
+        <!-- ══════════ v2.5.6 MULTI-TENANCY PAGES ══════════ -->
+
+        <div class="page" id="page-tab-tenants">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-building-user fa-fw" style="color:var(--accent-lt)"></i> Tenants (Kiracılar)</h2>
+            <div class="spacer"></div>
+            <button class="btn-primary" onclick="tenantCreatePrompt()" style="font-size:12px">+ Tenant Oluştur</button>
+            <button class="btn" onclick="loadTenantsPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Tenant izolasyonu — bir OXware kurulumunda birden fazla müşteri/departman için ayrı kotalar, kullanıcılar ve VM'ler. Her tenant kendi vCPU/RAM/disk/VM sayısı limitleri ile çalışır. Veriler birbirinden izole.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Tenant Listesi</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>vCPU Kota</th><th>RAM (MB)</th><th>Disk (GB)</th><th>VM Max</th><th>Kullanıcılar</th><th>İşlem</th></tr></thead>
+              <tbody id="tenants-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-chargeback">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-coins fa-fw" style="color:var(--accent-lt)"></i> Chargeback / Showback</h2>
+            <div class="spacer"></div>
+            <select id="cb-period" class="form-control" style="font-size:12px;width:120px">
+              <option value="daily">Günlük</option>
+              <option value="monthly" selected>Aylık</option>
+              <option value="yearly">Yıllık</option>
+            </select>
+            <button class="btn" onclick="loadChargebackPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Her tenant'a tahsis edilen kaynakların maliyetini hesaplar. vCPU saati, RAM saati, disk ay'ı, IP ay'ı bazında. Müşteriye fatura kesmek veya departman maliyet dağılımı için.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Fiyatlandırma</div>
+            <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;font-size:12px">
+              <label>Para Birimi</label>     <select id="cb-currency" class="form-control"><option>USD</option><option>EUR</option><option>TRY</option></select>
+              <label>vCPU / saat</label>     <input id="cb-vcpu" type="number" step="0.001" class="form-control" placeholder="0.01">
+              <label>RAM GB / saat</label>   <input id="cb-ram" type="number" step="0.001" class="form-control" placeholder="0.005">
+              <label>Disk GB / ay</label>    <input id="cb-disk" type="number" step="0.001" class="form-control" placeholder="0.10">
+              <label>IP / ay</label>          <input id="cb-ip" type="number" step="0.001" class="form-control" placeholder="2.00">
+              <label>Snapshot GB / ay</label><input id="cb-snap" type="number" step="0.001" class="form-control" placeholder="0.05">
+            </div>
+            <button class="btn-primary" onclick="cbSavePricing()" style="font-size:12px;margin-top:10px">💾 Kaydet</button>
+          </div>
+          <div class="card">
+            <div class="card-title">Tenant Maliyetleri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Tenant</th><th>vCPU $</th><th>RAM $</th><th>Disk $</th><th>IP $</th><th>Toplam</th></tr></thead>
+              <tbody id="cb-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-svc-cat">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-store fa-fw" style="color:var(--accent-lt)"></i> Servis Kataloğu</h2>
+            <div class="spacer"></div>
+            <button class="btn-primary" onclick="svcCatAddPrompt()" style="font-size:12px">+ Şablon Ekle</button>
+            <button class="btn" onclick="loadServiceCatalog()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Kullanıcıların tek tıkla deploy edebileceği hazır VM şablonları. Ubuntu 24.04, Debian 12, Windows Server, WordPress, GitLab, Docker Host... Self-service portal ile entegre.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Kataloğ İçeriği</div>
+            <div id="svc-cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:8px">
+              <div class="text-muted">Yükleniyor...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-tab-rate-limit">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-gauge fa-fw" style="color:var(--accent-lt)"></i> Tenant API Rate Limit</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadRateLimitPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Tenant başına dakikada izin verilen API isteği sayısı (token bucket). Bir tenant API'yi spam'larsa diğer tenant'lar etkilenmesin. Default: 100 rpm + 200 burst.
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Limit Yapılandırma</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <input id="rl-tenant" placeholder="Tenant ID" class="form-control" style="width:200px">
+              <input id="rl-rpm" type="number" placeholder="100" class="form-control" style="width:120px">
+              <input id="rl-burst" type="number" placeholder="200" class="form-control" style="width:120px">
+              <button class="btn-primary" onclick="rlSet()" style="font-size:12px">💾 Limit Ayarla</button>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Tenant</th><th>RPM</th><th>Burst</th><th>Şu anki Token</th><th>Son saat istek</th></tr></thead>
+              <tbody id="rl-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Tenant seç (üstteki forma yaz)</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- ══════════ /v2.5.6 ══════════ -->
     </div><!-- /content-area -->
 
   </div><!-- /middle -->
@@ -10135,6 +10243,10 @@ function buildContextNav(type) {
       <div class="ctx-item" data-page="tab-forensics"  onclick="navigate('tab-forensics');closeMobileNav()"  title="Adli analiz — memory dump + pcap"><i class="fa-solid fa-magnifying-glass fa-fw"></i>Adli Analiz</div>
       <div class="ctx-item" data-page="tab-mfa-policy" onclick="navigate('tab-mfa-policy');closeMobileNav()" title="Rol bazlı 2FA zorunluluğu"><i class="fa-solid fa-id-badge fa-fw"></i>2FA Politikası</div>
       <div class="ctx-item" data-page="tab-sso"        onclick="navigate('tab-sso');closeMobileNav()"        title="SAML 2.0 + OpenID Connect SSO"><i class="fa-solid fa-id-card fa-fw"></i>SSO (SAML/OIDC)</div>
+      <div class="ctx-item" data-page="tab-tenants"    onclick="navigate('tab-tenants');closeMobileNav()"    title="Tenant izolasyon + kotalar"><i class="fa-solid fa-building-user fa-fw"></i>Tenants (Kiracılar)</div>
+      <div class="ctx-item" data-page="tab-chargeback" onclick="navigate('tab-chargeback');closeMobileNav()" title="Tenant başı maliyet raporu"><i class="fa-solid fa-coins fa-fw"></i>Chargeback</div>
+      <div class="ctx-item" data-page="tab-svc-cat"    onclick="navigate('tab-svc-cat');closeMobileNav()"    title="VM şablon mağazası"><i class="fa-solid fa-store fa-fw"></i>Servis Kataloğu</div>
+      <div class="ctx-item" data-page="tab-rate-limit" onclick="navigate('tab-rate-limit');closeMobileNav()" title="Tenant API rate limit"><i class="fa-solid fa-gauge fa-fw"></i>API Rate Limit</div>
     </div>
 
     <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
@@ -10942,11 +11054,11 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.5"}-generic#${infoData.host?.distro || 'Linux'}`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.6"}-generic#${infoData.host?.distro || 'Linux'}`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available ✓" : "Not Available ✗";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
-    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.5"}`;
+    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.6"}`;
 
     // Center panel: VM counts
     const _vmRun  = vmSumData?.running ?? '—';
@@ -16130,6 +16242,10 @@ async function loadTabData(tabId) {
     case 'tab-forensics':     loadForensicsPage(); break;
     case 'tab-mfa-policy':    loadMfaPage(); break;
     case 'tab-sso':           loadSsoPage(); break;
+    case 'tab-tenants':       loadTenantsPage(); break;
+    case 'tab-chargeback':    loadChargebackPage(); break;
+    case 'tab-svc-cat':       loadServiceCatalog(); break;
+    case 'tab-rate-limit':    loadRateLimitPage(); break;
   }
 }
 
@@ -22659,6 +22775,173 @@ async function ssoSave() {
   const d = await _api('/api/sso/config','POST',body);
   if (d.ok) toast('SSO konfigürasyonu kaydedildi','success');
   else toast('Hata: '+(d.error||''),'error');
+}
+
+/* ═══ v2.5.6 MULTI-TENANCY HANDLERS ═══ */
+async function loadTenantsPage() {
+  const tb = document.getElementById('tenants-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Yükleniyor...</td></tr>';
+  try {
+    const d = await _api('/api/tenants');
+    const list = (d && d.tenants) || d || [];
+    const arr = Array.isArray(list) ? list : (list.tenants || []);
+    tb.innerHTML = arr.length ? arr.map(t => {
+      const q = t.quota || {};
+      return `<tr>
+        <td><b>${_esc(t.name||t.id||'-')}</b><br><span style="font-size:10px;color:var(--text-muted)">${_esc(t.id||'')}</span></td>
+        <td>${q.vcpus||'∞'}</td>
+        <td>${q.ram_mb||'∞'}</td>
+        <td>${q.disk_gb||'∞'}</td>
+        <td>${q.vms_max||'∞'}</td>
+        <td>${(t.users||[]).length}</td>
+        <td>
+          <button class="btn" style="font-size:11px" onclick="tenantViewUsage('${_esc(t.id)}')">Kullanım</button>
+          <button class="btn-danger" style="font-size:11px" onclick="tenantDelete('${_esc(t.id)}')">Sil</button>
+        </td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:14px">Tenant yok — yeni oluşturun</td></tr>';
+  } catch(e) { tb.innerHTML = '<tr><td colspan="7" style="color:#f87171;padding:14px">Hata: '+e.message+'</td></tr>'; }
+}
+async function tenantCreatePrompt() {
+  const name = prompt('Tenant adı:');
+  if (!name) return;
+  const vcpus = parseInt(prompt('vCPU kotası (boş bırak = sınırsız):','10')) || null;
+  const ram = parseInt(prompt('RAM MB kotası:','16384')) || null;
+  const disk = parseInt(prompt('Disk GB kotası:','500')) || null;
+  const vmsMax = parseInt(prompt('Maksimum VM:','20')) || null;
+  const quota = {};
+  if (vcpus) quota.vcpus = vcpus;
+  if (ram) quota.ram_mb = ram;
+  if (disk) quota.disk_gb = disk;
+  if (vmsMax) quota.vms_max = vmsMax;
+  const d = await _api('/api/tenants','POST',{name, quota});
+  if (d && (d.id || d.ok)) { toast('Tenant oluşturuldu','success'); loadTenantsPage(); }
+  else toast('Hata: '+(d?.error||''),'error');
+}
+async function tenantDelete(id) {
+  if (!await showConfirm('Tenant silinecek. VM\'ler kalır ama atamalar kaldırılır.','Tenant Sil',true)) return;
+  await _api('/api/tenants/'+encodeURIComponent(id)+'?force=true','DELETE');
+  loadTenantsPage();
+}
+async function tenantViewUsage(id) {
+  const d = await _api('/api/tenants/'+encodeURIComponent(id)+'/usage');
+  alert('Kullanım:\n' + JSON.stringify(d, null, 2));
+}
+
+async function loadChargebackPage() {
+  const period = document.getElementById('cb-period').value;
+  // Load pricing first
+  try {
+    const p = await _api('/api/chargeback/pricing');
+    const cfg = p.pricing || p || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+    set('cb-currency', cfg.currency || 'USD');
+    set('cb-vcpu', cfg.vcpu_per_hour);
+    set('cb-ram', cfg.ram_gb_per_hour);
+    set('cb-disk', cfg.disk_gb_per_month);
+    set('cb-ip', cfg.ip_per_month);
+    set('cb-snap', cfg.snapshot_gb_per_month);
+  } catch(_) {}
+  // Load all tenant costs
+  const tb = document.getElementById('cb-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Yükleniyor...</td></tr>';
+  try {
+    const d = await _api('/api/chargeback/all?period='+encodeURIComponent(period));
+    const items = d.tenants || d.items || [];
+    tb.innerHTML = items.length ? items.map(t => `<tr>
+      <td><b>${_esc(t.tenant_name||t.tenant||'-')}</b></td>
+      <td>${(t.breakdown||{}).vcpu_cost?.toFixed(2) || '0.00'}</td>
+      <td>${(t.breakdown||{}).ram_cost?.toFixed(2) || '0.00'}</td>
+      <td>${(t.breakdown||{}).disk_cost?.toFixed(2) || '0.00'}</td>
+      <td>${(t.breakdown||{}).ip_cost?.toFixed(2) || '0.00'}</td>
+      <td style="font-weight:700">${(t.total||0).toFixed(2)} ${_esc(t.currency||'USD')}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Tenant yok</td></tr>';
+  } catch(e) { tb.innerHTML = '<tr><td colspan="6" style="color:#f87171;padding:14px">Hata: '+e.message+'</td></tr>'; }
+}
+async function cbSavePricing() {
+  const body = {
+    currency: document.getElementById('cb-currency').value,
+    vcpu_per_hour: parseFloat(document.getElementById('cb-vcpu').value)||0,
+    ram_gb_per_hour: parseFloat(document.getElementById('cb-ram').value)||0,
+    disk_gb_per_month: parseFloat(document.getElementById('cb-disk').value)||0,
+    ip_per_month: parseFloat(document.getElementById('cb-ip').value)||0,
+    snapshot_gb_per_month: parseFloat(document.getElementById('cb-snap').value)||0,
+  };
+  const d = await _api('/api/chargeback/pricing','POST',body);
+  if (d.ok) toast('Fiyatlandırma kaydedildi','success');
+  else toast('Hata: '+(d?.error||''),'error');
+}
+
+async function loadServiceCatalog() {
+  const grid = document.getElementById('svc-cat-grid');
+  grid.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
+  try {
+    const d = await _api('/api/service-catalog');
+    const items = d.items || d.catalog || [];
+    grid.innerHTML = items.length ? items.map(it => `
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">${_esc(it.icon||'📦')}</div>
+        <div style="font-weight:700;font-size:13px">${_esc(it.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin:6px 0;min-height:30px">${_esc(it.description||'')}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${it.default_vcpus||1} vCPU · ${it.default_ram_mb||1024} MB · ${it.default_disk_gb||10} GB</div>
+        ${it.price_per_month ? `<div style="font-size:11px;color:#22c55e;margin-top:4px">$${it.price_per_month}/ay</div>`:''}
+        <button class="btn-primary" style="font-size:11px;margin-top:8px;width:100%" onclick="svcCatDeploy('${_esc(it.id)}','${_esc(it.name)}')">🚀 Deploy</button>
+        ${it.built_in?'':`<button class="btn-danger" style="font-size:10px;margin-top:4px;width:100%" onclick="svcCatDelete('${_esc(it.id)}')">Sil</button>`}
+      </div>
+    `).join('') : '<div class="text-muted" style="padding:14px">Şablon yok</div>';
+  } catch(e) { grid.innerHTML = '<div style="color:#f87171">Hata: '+e.message+'</div>'; }
+}
+async function svcCatDeploy(id, name) {
+  const vmName = prompt('Yeni VM adı:', name+'-1');
+  if (!vmName) return;
+  const d = await _api('/api/service-catalog/'+encodeURIComponent(id)+'/deploy','POST',{vm_name:vmName});
+  if (d.ok) { toast('Deploy başlatıldı: '+vmName,'success'); }
+  else toast('Hata: '+(d?.error||''),'error');
+}
+async function svcCatDelete(id) {
+  if (!await showConfirm('Şablon silinecek (built-in silinmez).','Sil',true)) return;
+  await _api('/api/service-catalog/'+encodeURIComponent(id),'DELETE');
+  loadServiceCatalog();
+}
+async function svcCatAddPrompt() {
+  const name = prompt('Şablon adı:'); if (!name) return;
+  const desc = prompt('Açıklama:') || '';
+  const vcpus = parseInt(prompt('Varsayılan vCPU:','2'))||2;
+  const ram = parseInt(prompt('Varsayılan RAM MB:','2048'))||2048;
+  const disk = parseInt(prompt('Varsayılan Disk GB:','20'))||20;
+  const d = await _api('/api/service-catalog','POST',{
+    id: name.toLowerCase().replace(/\s+/g,'-'),
+    name, description:desc,
+    default_vcpus:vcpus, default_ram_mb:ram, default_disk_gb:disk,
+    category: 'custom', icon: '📦'
+  });
+  if (d.ok || d.id) { toast('Şablon eklendi','success'); loadServiceCatalog(); }
+  else toast('Hata: '+(d?.error||''),'error');
+}
+
+async function loadRateLimitPage() {
+  // Show empty state initially
+  const tb = document.getElementById('rl-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Tenant ID gir, "Limit Ayarla" tıkla veya Tenants sayfasından gel</td></tr>';
+}
+async function rlSet() {
+  const tenant = document.getElementById('rl-tenant').value.trim();
+  const rpm = parseInt(document.getElementById('rl-rpm').value)||100;
+  const burst = parseInt(document.getElementById('rl-burst').value)||200;
+  if (!tenant) { toast('Tenant ID gerekli','error'); return; }
+  const d = await _api('/api/tenant-rate-limit/'+encodeURIComponent(tenant),'POST',{rpm,burst});
+  if (d.ok) {
+    toast('Limit ayarlandı','success');
+    // Show usage
+    const u = await _api('/api/tenant-rate-limit/'+encodeURIComponent(tenant)+'/usage');
+    document.getElementById('rl-tbody').innerHTML = `<tr>
+      <td><b>${_esc(tenant)}</b></td>
+      <td>${rpm}</td>
+      <td>${burst}</td>
+      <td>${u?.current_tokens||burst}</td>
+      <td>${u?.total_requests_last_hour||0}</td>
+    </tr>`;
+  } else toast('Hata: '+(d?.error||''),'error');
 }
 
 

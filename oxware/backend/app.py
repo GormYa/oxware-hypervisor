@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.5
+OXware Hypervisor Management API v2.5.6
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -747,12 +747,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.5-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.5-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.5-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.5-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.5-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.5-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.6-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4288,7 +4288,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.5",
+        oxware_version="2.5.6",
     )
 
 @app.route("/api/system/stats")
@@ -9424,7 +9424,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.5</span>
+  <span id="ver-badge">v2.5.6</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -11043,7 +11043,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.5", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.6", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -16450,7 +16450,7 @@ def api_pool_set_reservations(pool_id):
 
 
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.5 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.6 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
