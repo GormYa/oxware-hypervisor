@@ -106,3 +106,42 @@ def get_vm_pool(vm_id):
             if vm_id in p["vm_ids"]:
                 return p
     return None
+
+
+# ── v2.5.6 — Reservations (minimum guaranteed resources per pool) ─────────────
+def set_reservations(pool_id, vcpu_min=0, ram_mb_min=0):
+    """
+    Pool için minimum garantili kaynak rezervasyonu ayarla.
+    Placement / scheduler bu değerleri dikkate alarak VM yerleştirir.
+
+    Returns: güncellenmiş pool dict (None — pool yoksa).
+    """
+    try:
+        vcpu_min   = max(0, int(vcpu_min or 0))
+        ram_mb_min = max(0, int(ram_mb_min or 0))
+    except Exception:
+        return None
+    with _lock:
+        pools = _load()
+        for p in pools:
+            if p["id"] == pool_id:
+                p["vcpu_reservation"]   = vcpu_min
+                p["ram_mb_reservation"] = ram_mb_min
+                p["reservation_updated"] = datetime.now(timezone.utc).isoformat()
+                _save(pools)
+                return p
+    return None
+
+
+def get_reservations(pool_id):
+    """Pool rezervasyonlarını döner — yoksa sıfır."""
+    with _lock:
+        for p in _load():
+            if p["id"] == pool_id:
+                return {
+                    "pool_id":            pool_id,
+                    "vcpu_reservation":   int(p.get("vcpu_reservation", 0) or 0),
+                    "ram_mb_reservation": int(p.get("ram_mb_reservation", 0) or 0),
+                    "updated":            p.get("reservation_updated"),
+                }
+    return None

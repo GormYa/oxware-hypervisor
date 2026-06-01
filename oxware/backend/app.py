@@ -169,6 +169,13 @@ forensics        = _safe_import("forensics_engine")
 mfa_policy       = _safe_import("mfa_enforcement")
 sso_manager      = _safe_import("sso_manager")
 
+# ── v2.5.6 Multi-tenancy modules ─────────────────────────────────────────────
+tenant_mgr       = _safe_import("tenant_manager")
+self_service     = _safe_import("self_service_portal")
+chargeback       = _safe_import("chargeback_engine")
+svc_catalog      = _safe_import("service_catalog")
+tenant_rl        = _safe_import("tenant_rate_limit")
+
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
 
@@ -16073,6 +16080,373 @@ def api_features_summary():
 def api_features_audit():
     if not feature_reg: return ok(events=[])
     return ok(events=feature_reg.get_audit_log(int(request.args.get("limit", 100))))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v2.5.6 — Multi-tenancy endpoints
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Tenant Manager ──────────────────────────────────────────────────────────
+@app.route("/api/tenants")
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_list():
+    if not tenant_mgr: return ok(tenants=[])
+    try:
+        return ok(tenants=tenant_mgr.list_tenants())
+    except Exception as e:
+        log.warning("tenants_list fail: %s", e)
+        return ok(tenants=[], error=str(e))
+
+@app.route("/api/tenants", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_create():
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        name = (d.get("name") or "").strip()
+        if not name:
+            return err("name zorunlu", 400)
+        t = tenant_mgr.create_tenant(name, d.get("quota") or {})
+        return ok(tenant=t)
+    except Exception as e:
+        log.warning("tenants_create fail: %s", e)
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>")
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_get(tid):
+    if not tenant_mgr: return ok(tenant=None)
+    try:
+        t = tenant_mgr.get_tenant(tid)
+        if not t: return err("tenant bulunamadı", 404)
+        return ok(tenant=t)
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/tenants/<tid>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_delete(tid):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        force = (request.args.get("force", "false").lower() == "true")
+        return ok(**tenant_mgr.delete_tenant(tid, force=force))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/tenants/<tid>/quota", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_update_quota(tid):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**tenant_mgr.update_quota(tid, d.get("quota") or d))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>/usage")
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_usage(tid):
+    if not tenant_mgr: return ok(usage={})
+    try:
+        return ok(usage=tenant_mgr.get_tenant_usage(tid))
+    except Exception as e:
+        return ok(usage={}, error=str(e))
+
+@app.route("/api/tenants/<tid>/quota-check", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_quota_check(tid):
+    if not tenant_mgr: return ok(allowed=True)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**tenant_mgr.check_quota(tid, d))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>/users/<username>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_assign_user(tid, username):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        return ok(**tenant_mgr.assign_user_to_tenant(username, tid))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>/users/<username>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_unassign_user(tid, username):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        return ok(**tenant_mgr.unassign_user(username))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>/vms/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_assign_vm(tid, vm_id):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        return ok(**tenant_mgr.assign_vm_to_tenant(vm_id, tid))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenants/<tid>/vms/<vm_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_tenants_unassign_vm(tid, vm_id):
+    if not tenant_mgr: return err("modül yok", 503)
+    try:
+        return ok(**tenant_mgr.unassign_vm(vm_id))
+    except Exception as e:
+        return err(str(e), 400)
+
+
+# ── Self-Service Portal (auth-only — kullanıcı kendi tenant'ında işlem yapar) ─
+def _current_user() -> str:
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        return get_jwt_identity() or ""
+    except Exception:
+        return ""
+
+@app.route("/api/self-service/vms")
+@require_auth
+def api_ss_list_vms():
+    if not self_service: return ok(vms=[])
+    try:
+        return ok(vms=self_service.list_user_vms(_current_user()))
+    except Exception as e:
+        return ok(vms=[], error=str(e))
+
+@app.route("/api/self-service/vms", methods=["POST"])
+@require_auth
+def api_ss_create_vm():
+    if not self_service: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**self_service.request_vm_create(
+            username=_current_user(),
+            name=str(d.get("name", "")).strip(),
+            vcpus=int(d.get("vcpus", 1) or 1),
+            ram_mb=int(d.get("ram_mb", d.get("memory_mb", 1024)) or 1024),
+            disk_gb=int(d.get("disk_gb", 20) or 20),
+            template_id=d.get("template_id"),
+            iso_path=d.get("iso_path"),
+        ))
+    except Exception as e:
+        log.warning("self-service create fail: %s", e)
+        return err(str(e), 400)
+
+@app.route("/api/self-service/vms/<vm_id>/<action>", methods=["POST"])
+@require_auth
+def api_ss_vm_action(vm_id, action):
+    if not self_service: return err("modül yok", 503)
+    try:
+        return ok(**self_service.request_vm_action(_current_user(), vm_id, action))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/self-service/quota")
+@require_auth
+def api_ss_quota():
+    if not self_service: return ok(quota={})
+    try:
+        return ok(**self_service.get_user_quota(_current_user()))
+    except Exception as e:
+        return ok(quota={}, error=str(e))
+
+@app.route("/api/self-service/console/<vm_id>", methods=["POST"])
+@require_auth
+def api_ss_console(vm_id):
+    if not self_service: return err("modül yok", 503)
+    try:
+        return ok(**self_service.request_console(_current_user(), vm_id))
+    except Exception as e:
+        return err(str(e), 400)
+
+
+# ── Chargeback / Billing ──────────────────────────────────────────────────────
+@app.route("/api/chargeback/pricing")
+@require_auth
+@require_role("admin", "administrator")
+def api_charge_get_pricing():
+    if not chargeback: return ok(pricing={})
+    try:
+        return ok(pricing=chargeback.get_pricing())
+    except Exception as e:
+        return ok(pricing={}, error=str(e))
+
+@app.route("/api/chargeback/pricing", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_charge_set_pricing():
+    if not chargeback: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**chargeback.set_pricing(d))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/chargeback/tenants/<tid>")
+@require_auth
+@require_role("admin", "administrator")
+def api_charge_tenant_cost(tid):
+    if not chargeback: return ok(total=0)
+    try:
+        period = request.args.get("period", "monthly")
+        return ok(**chargeback.calculate_tenant_cost(tid, period))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/chargeback/invoice", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_charge_invoice():
+    if not chargeback: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        tid   = d.get("tenant") or d.get("tenant_id")
+        if not tid:
+            return err("tenant zorunlu", 400)
+        return ok(invoice=chargeback.generate_invoice(tid, int(d.get("year", 0)), int(d.get("month", 0))))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/chargeback/all")
+@require_auth
+@require_role("admin", "administrator")
+def api_charge_all_tenants():
+    if not chargeback: return ok(billing=[])
+    try:
+        period = request.args.get("period", "monthly")
+        return ok(billing=chargeback.get_all_tenants_billing(period))
+    except Exception as e:
+        return ok(billing=[], error=str(e))
+
+
+# ── Service Catalog ───────────────────────────────────────────────────────────
+@app.route("/api/service-catalog")
+@require_auth
+def api_catalog_list():
+    if not svc_catalog: return ok(catalog=[])
+    try:
+        tid = None
+        # kullanıcının tenant'ına göre filtre — admin değilse
+        if tenant_mgr:
+            try:
+                tid = tenant_mgr.get_user_tenant(_current_user())
+            except Exception:
+                pass
+        return ok(catalog=svc_catalog.list_catalog(tid))
+    except Exception as e:
+        return ok(catalog=[], error=str(e))
+
+@app.route("/api/service-catalog", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_catalog_add():
+    if not svc_catalog: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**svc_catalog.add_catalog_item(d))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/service-catalog/<cid>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_catalog_delete(cid):
+    if not svc_catalog: return err("modül yok", 503)
+    try:
+        return ok(**svc_catalog.delete_catalog_item(cid))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/service-catalog/<cid>/deploy", methods=["POST"])
+@require_auth
+def api_catalog_deploy(cid):
+    if not svc_catalog: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        vm_name = (d.get("vm_name") or d.get("name") or "").strip()
+        return ok(**svc_catalog.deploy_from_catalog(_current_user(), cid, vm_name))
+    except Exception as e:
+        return err(str(e), 400)
+
+
+# ── Tenant Rate Limiting ──────────────────────────────────────────────────────
+@app.route("/api/tenant-rate-limit/<tid>")
+@require_auth
+@require_role("admin", "administrator")
+def api_rl_get(tid):
+    if not tenant_rl: return ok(limit={})
+    try:
+        return ok(limit=tenant_rl.get_limit(tid))
+    except Exception as e:
+        return ok(limit={}, error=str(e))
+
+@app.route("/api/tenant-rate-limit/<tid>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_rl_set(tid):
+    if not tenant_rl: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**tenant_rl.set_limit(tid,
+                                        rpm=int(d.get("rpm", 100) or 100),
+                                        burst=int(d.get("burst", 200) or 200)))
+    except Exception as e:
+        return err(str(e), 400)
+
+@app.route("/api/tenant-rate-limit/<tid>/usage")
+@require_auth
+@require_role("admin", "administrator")
+def api_rl_usage(tid):
+    if not tenant_rl: return ok(usage={})
+    try:
+        return ok(usage=tenant_rl.get_usage(tid))
+    except Exception as e:
+        return ok(usage={}, error=str(e))
+
+
+# ── Pool Reservations (resource_pool_manager v2.5.6 ek) ──────────────────────
+@app.route("/api/pools/<pool_id>/reservations")
+@require_auth
+@require_role("admin", "administrator")
+def api_pool_get_reservations(pool_id):
+    if not pool_mgr or not hasattr(pool_mgr, "get_reservations"):
+        return ok(reservations=None)
+    try:
+        return ok(reservations=pool_mgr.get_reservations(pool_id))
+    except Exception as e:
+        return ok(reservations=None, error=str(e))
+
+@app.route("/api/pools/<pool_id>/reservations", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_pool_set_reservations(pool_id):
+    if not pool_mgr or not hasattr(pool_mgr, "set_reservations"):
+        return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        res = pool_mgr.set_reservations(pool_id,
+                                        vcpu_min=int(d.get("vcpu_min", d.get("vcpu", 0)) or 0),
+                                        ram_mb_min=int(d.get("ram_mb_min", d.get("ram_mb", 0)) or 0))
+        if not res:
+            return err("pool bulunamadı", 404)
+        return ok(pool=res)
+    except Exception as e:
+        return err(str(e), 400)
 
 
 if __name__ == "__main__":
