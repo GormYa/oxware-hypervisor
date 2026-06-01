@@ -314,6 +314,9 @@ echo "" > /etc/motd 2>/dev/null || true
 log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
 
 # ── 10c. Host Bridge (oxbr0) ──────────────────────────────────
+# SAFETY: Bridge creation is OPT-IN. Default: skip (SSH must stay alive).
+# Set OXWARE_REPAIR_BRIDGE=1 to re-create bridge.
+# Or use /opt/oxware/scripts/setup-bridge.sh (safer — netplan try 120s rollback).
 step "Host Bridge (oxbr0) Kontrolü"
 PIFACE=$(ip route show default 2>/dev/null \
     | awk '/^default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
@@ -321,13 +324,16 @@ PIFACE=$(ip route show default 2>/dev/null \
 
 if ip link show oxbr0 &>/dev/null; then
     log "oxbr0 mevcut"
-    ip link set ens160 master oxbr0 2>/dev/null || true
-else
+    ip link set "$PIFACE" master oxbr0 2>/dev/null || true
+elif [ "${OXWARE_REPAIR_BRIDGE:-0}" = "1" ]; then
+    warn "⚠ Bridge yeniden kurulacak — SSH 120sn için düşebilir, netplan try kullanılıyor"
+    sleep 3
     PIP=$(ip addr show "$PIFACE" 2>/dev/null | awk '/inet /{print $2; exit}')
     PGW=$(ip route show default 2>/dev/null \
         | awk '/^default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
 
     if [ -n "$PIP" ] && [ -n "$PGW" ]; then
+        cp -r /etc/netplan "/etc/netplan.bak.$(date +%s)" 2>/dev/null || true
         NP="/etc/netplan/60-oxware-bridge.yaml"
         cat > "$NP" << NETPLANCFG
 network:
@@ -364,12 +370,59 @@ if iface in eth:
 with open(fpath, 'w') as fp:
     yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
 PYCLEAN
+            chmod 600 "$f"
         done
-        netplan apply && sleep 3
-        ip link show oxbr0 &>/dev/null && log "oxbr0 oluşturuldu ✓" || warn "oxbr0 oluşturulamadı"
+        # netplan try with 120s rollback — SSH safety
+        timeout 30 netplan try --timeout 120 < /dev/null && \
+            log "oxbr0 oluşturuldu ✓" || warn "oxbr0 başarısız, eski config geri yüklendi"
     else
         warn "IP/gateway tespit edilemedi, bridge atlandı"
     fi
+else
+    info "oxbr0 yok — bridge kurulumu atlandı (SSH güvenliği)"
+    info "Yeniden kurmak için: sudo OXWARE_REPAIR_BRIDGE=1 bash repair.sh"
+    info "Veya safer: sudo /opt/oxware/scripts/setup-bridge.sh"
+fi
+
+# ── 10d. Network Restore (kırık bridge'i geri al) ─────────────
+# Eğer kullanıcı 'sudo bash repair.sh --restore-network' çalıştırırsa
+# tüm OXware bridge config'leri silinir ve eski netplan geri yüklenir.
+if [ "${OXWARE_RESTORE_NETWORK:-0}" = "1" ] || [ "${1:-}" = "--restore-network" ]; then
+    warn "═══════════════════════════════════════════════════════"
+    warn "🛟 NETWORK RESTORE MODU — kırık bridge config silinecek"
+    warn "═══════════════════════════════════════════════════════"
+
+    # OXware bridge config'i sil
+    if [ -f /etc/netplan/60-oxware-bridge.yaml ]; then
+        rm -f /etc/netplan/60-oxware-bridge.yaml
+        log "OXware bridge config silindi"
+    fi
+
+    # En son backup'ı bul ve restore et
+    LATEST_BAK=$(ls -t /etc/netplan.bak.* 2>/dev/null | head -1)
+    if [ -n "$LATEST_BAK" ] && [ -d "$LATEST_BAK" ]; then
+        log "En son backup bulundu: $LATEST_BAK"
+        cp -r "$LATEST_BAK"/*.yaml /etc/netplan/ 2>/dev/null && \
+            log "Eski netplan config geri yüklendi" || \
+            warn "Backup geri yüklenemedi"
+    else
+        warn "Backup bulunamadı, manuel düzeltme gerek olabilir"
+        warn "Tüm netplan dosyalarını listele: ls /etc/netplan/"
+    fi
+
+    # Bridge interface'i kaldır
+    if ip link show oxbr0 &>/dev/null; then
+        ip link set oxbr0 down 2>/dev/null || true
+        ip link delete oxbr0 2>/dev/null || true
+        log "oxbr0 bridge kaldırıldı"
+    fi
+
+    # netplan try ile uygula (SSH güvenliği)
+    log "netplan try ile geri yükleniyor (120s rollback timer)..."
+    timeout 30 netplan try --timeout 120 < /dev/null || netplan apply
+
+    log "Network restore tamamlandı. Bağlantınızı kontrol edin."
+    exit 0
 fi
 
 # libvirt oxbridge
