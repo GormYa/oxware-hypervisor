@@ -1235,7 +1235,7 @@
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Version</span>
-                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.9</span>
+                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.10</span>
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Kernel</span>
@@ -11039,11 +11039,11 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.9"}-generic#${infoData.host?.distro || 'Linux'}`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.10"}-generic#${infoData.host?.distro || 'Linux'}`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available ✓" : "Not Available ✗";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
-    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.9"}`;
+    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.10"}`;
 
     // Center panel: VM counts
     const _vmRun  = vmSumData?.running ?? '—';

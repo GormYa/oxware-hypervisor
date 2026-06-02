@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.9
+OXware Hypervisor Management API v2.5.10
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -194,6 +194,13 @@ microseg         = _safe_import("microsegmentation")
 bfd_mgr          = _safe_import("bfd_manager")
 service_chain    = _safe_import("service_chain")
 service_mesh     = _safe_import("service_mesh")
+
+# ── v2.5.10 Cloud/K8s modules ────────────────────────────────────────────────
+pulumi_provider  = _safe_import("pulumi_provider")
+k8s_csi          = _safe_import("k8s_csi")
+k8s_operator     = _safe_import("k8s_operator")
+kubevirt_int     = _safe_import("kubevirt_integration")
+gitops_sync      = _safe_import("gitops_sync")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -9443,7 +9450,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.9</span>
+  <span id="ver-badge">v2.5.10</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -17251,8 +17258,271 @@ def api_mesh_mtls():
         return ok(mtls=False, mesh="none", error=str(e))
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.10 — Cloud/K8s Endpoints (admin-only)
+# pulumi_provider / k8s_csi / k8s_operator / kubevirt_int / gitops_sync
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Pulumi Provider ───────────────────────────────────────────────────────────
+
+@app.route("/api/pulumi/generate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_pulumi_generate():
+    if not pulumi_provider: return ok(code=None, language=None, count=0)
+    try:
+        d        = request.get_json(silent=True) or {}
+        vms      = d.get("vms")
+        language = d.get("language", "typescript")
+        if language not in ("typescript", "python"):
+            return err("language must be 'typescript' or 'python'", 400)
+        return ok(**pulumi_provider.generate_pulumi_program(vms=vms, language=language))
+    except Exception as e:
+        log.warning("api_pulumi_generate fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/pulumi/state")
+@require_auth
+@require_role("admin", "administrator")
+def api_pulumi_state():
+    if not pulumi_provider: return ok(state=None)
+    try:
+        return ok(state=pulumi_provider.export_state())
+    except Exception as e:
+        log.warning("api_pulumi_state fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/pulumi/schema")
+@require_auth
+@require_role("admin", "administrator")
+def api_pulumi_schema():
+    if not pulumi_provider: return ok(schema=None)
+    try:
+        return ok(schema=pulumi_provider.get_provider_schema())
+    except Exception as e:
+        log.warning("api_pulumi_schema fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Kubernetes CSI ────────────────────────────────────────────────────────────
+
+@app.route("/api/k8s-csi/manifests")
+@require_auth
+@require_role("admin", "administrator")
+def api_csi_manifests():
+    if not k8s_csi: return ok(daemonset_yaml=None, storageclass_yaml=None)
+    try:
+        return ok(**k8s_csi.generate_csi_manifests())
+    except Exception as e:
+        log.warning("api_csi_manifests fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/k8s-csi/volumes", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_csi_volumes():
+    if not k8s_csi: return ok(volumes=[])
+    try:
+        if request.method == "POST":
+            d    = request.get_json(silent=True) or {}
+            name = d.get("name")
+            if not name:
+                return err("name is required", 400)
+            size_gb       = int(d.get("size_gb", 10))
+            storage_class = d.get("storage_class", "oxware-standard")
+            return ok(**k8s_csi.create_volume_claim(name=name, size_gb=size_gb, storage_class=storage_class))
+        return ok(volumes=k8s_csi.list_volumes())
+    except Exception as e:
+        log.warning("api_csi_volumes fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/k8s-csi/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_csi_status():
+    if not k8s_csi: return ok(healthy=False, registered=False)
+    try:
+        return ok(**k8s_csi.get_csi_status())
+    except Exception as e:
+        log.warning("api_csi_status fail: %s", e)
+        return ok(healthy=False, registered=False, error=str(e))
+
+
+# ── Kubernetes Operator ───────────────────────────────────────────────────────
+
+@app.route("/api/k8s-operator/crd")
+@require_auth
+@require_role("admin", "administrator")
+def api_k8sop_crd():
+    if not k8s_operator: return ok(crd_yaml=None)
+    try:
+        return ok(crd_yaml=k8s_operator.generate_crd())
+    except Exception as e:
+        log.warning("api_k8sop_crd fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/k8s-operator/manifests")
+@require_auth
+@require_role("admin", "administrator")
+def api_k8sop_manifests():
+    if not k8s_operator: return ok(deployment_yaml=None, rbac_yaml=None)
+    try:
+        return ok(**k8s_operator.generate_operator_manifests())
+    except Exception as e:
+        log.warning("api_k8sop_manifests fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/k8s-operator/managed")
+@require_auth
+@require_role("admin", "administrator")
+def api_k8sop_managed():
+    if not k8s_operator: return ok(vms=[])
+    try:
+        return ok(vms=k8s_operator.list_managed_vms())
+    except Exception as e:
+        log.warning("api_k8sop_managed fail: %s", e)
+        return ok(vms=[], error=str(e))
+
+
+@app.route("/api/k8s-operator/reconcile")
+@require_auth
+@require_role("admin", "administrator")
+def api_k8sop_reconcile():
+    if not k8s_operator: return ok(operator_running=False)
+    try:
+        return ok(**k8s_operator.reconcile_status())
+    except Exception as e:
+        log.warning("api_k8sop_reconcile fail: %s", e)
+        return ok(operator_running=False, error=str(e))
+
+
+# ── KubeVirt Integration ──────────────────────────────────────────────────────
+
+@app.route("/api/kubevirt/detect")
+@require_auth
+@require_role("admin", "administrator")
+def api_kubevirt_detect():
+    if not kubevirt_int: return ok(detected=False)
+    try:
+        return ok(**kubevirt_int.detect_kubevirt())
+    except Exception as e:
+        log.warning("api_kubevirt_detect fail: %s", e)
+        return ok(detected=False, error=str(e))
+
+
+@app.route("/api/kubevirt/import", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_kubevirt_import():
+    if not kubevirt_int: return ok(ok=False, error="module unavailable")
+    try:
+        d         = request.get_json(silent=True) or {}
+        vmi_name  = d.get("vmi_name")
+        namespace = d.get("namespace", "default")
+        if not vmi_name:
+            return err("vmi_name is required", 400)
+        return ok(**kubevirt_int.import_from_kubevirt(vmi_name=vmi_name, namespace=namespace))
+    except Exception as e:
+        log.warning("api_kubevirt_import fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/kubevirt/export/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_kubevirt_export(vm_id):
+    if not kubevirt_int: return ok(ok=False, yaml=None, error="module unavailable")
+    try:
+        return ok(**kubevirt_int.export_to_kubevirt(vm_id=vm_id))
+    except Exception as e:
+        log.warning("api_kubevirt_export fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/kubevirt/vms")
+@require_auth
+@require_role("admin", "administrator")
+def api_kubevirt_vms():
+    if not kubevirt_int: return ok(vms=[])
+    try:
+        return ok(vms=kubevirt_int.list_kubevirt_vms())
+    except Exception as e:
+        log.warning("api_kubevirt_vms fail: %s", e)
+        return ok(vms=[], error=str(e))
+
+
+# ── GitOps Sync ───────────────────────────────────────────────────────────────
+
+@app.route("/api/gitops/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_gitops_config():
+    if not gitops_sync: return ok(configured=False)
+    try:
+        if request.method == "POST":
+            d        = request.get_json(silent=True) or {}
+            repo_url = d.get("repo_url")
+            if not repo_url:
+                return err("repo_url is required", 400)
+            branch   = d.get("branch", "main")
+            path     = d.get("path", ".")
+            provider = d.get("provider", "argocd")
+            ssh_key  = d.get("ssh_key")
+            return ok(**gitops_sync.configure_gitops(
+                repo_url=repo_url, branch=branch,
+                path=path, provider=provider, ssh_key=ssh_key
+            ))
+        return ok(**gitops_sync.get_config())
+    except Exception as e:
+        log.warning("api_gitops_config fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/gitops/sync", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_gitops_sync():
+    if not gitops_sync: return ok(ok=False, error="module unavailable")
+    try:
+        return ok(**gitops_sync.sync_now())
+    except Exception as e:
+        log.warning("api_gitops_sync fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/gitops/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_gitops_status():
+    if not gitops_sync: return ok(configured=False, sync_status="unknown")
+    try:
+        return ok(**gitops_sync.get_sync_status())
+    except Exception as e:
+        log.warning("api_gitops_status fail: %s", e)
+        return ok(configured=False, sync_status="error", error=str(e))
+
+
+@app.route("/api/gitops/manifest")
+@require_auth
+@require_role("admin", "administrator")
+def api_gitops_manifest():
+    if not gitops_sync: return ok(manifest_yaml=None, provider=None)
+    try:
+        return ok(**gitops_sync.generate_app_manifest())
+    except Exception as e:
+        log.warning("api_gitops_manifest fail: %s", e)
+        return err(str(e), 500)
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.9 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.10 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
