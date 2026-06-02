@@ -10,6 +10,9 @@ proxmox alternative, free hypervisor, web-based VM manager, esxi alternative,
 self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 -->
 
+<img width="1536" height="1024" alt="oxware2" src="https://github.com/user-attachments/assets/733a1cde-8e61-409f-862f-07ced788aeea" />
+
+
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
