@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.7
+OXware Hypervisor Management API v2.5.8
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -181,6 +181,13 @@ app_consistent   = _safe_import("app_consistent_snapshot")
 backup_321       = _safe_import("backup_321")
 backup_verify    = _safe_import("backup_verify")
 cross_replication = _safe_import("cross_replication")
+
+# ── v2.5.8 Observability modules ─────────────────────────────────────────────
+otel_tracing     = _safe_import("otel_tracing")
+grafana_embed    = _safe_import("grafana_embed")
+topology_viz     = _safe_import("topology_viz")
+ml_forecaster    = _safe_import("ml_forecaster")
+drift_capacity   = _safe_import("drift_capacity")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -753,12 +760,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.7-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.7-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.7-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.7-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.7-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.8-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4294,7 +4301,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.7",
+        oxware_version="2.5.8",
     )
 
 @app.route("/api/system/stats")
@@ -9430,7 +9437,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.7</span>
+  <span id="ver-badge">v2.5.8</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -11049,7 +11056,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.7", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.8", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -16706,8 +16713,287 @@ def api_ba_replication_list():
         return ok(replications=[], error=str(e))
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.8 — Observability Endpoints (admin-only)
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# topology_viz uses /api/topo-viz/* to avoid clash with existing /api/topology
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── OTel Tracing ──────────────────────────────────────────────────────────────
+
+@app.route("/api/otel/traces")
+@require_auth
+@require_role("admin", "administrator")
+def api_otel_traces():
+    if not otel_tracing: return ok(traces=[])
+    try:
+        limit = int(request.args.get("limit", 100))
+        return ok(traces=otel_tracing.get_traces(limit=limit))
+    except Exception as e:
+        log.warning("api_otel_traces fail: %s", e)
+        return ok(traces=[], error=str(e))
+
+
+@app.route("/api/otel/traces/<tid>")
+@require_auth
+@require_role("admin", "administrator")
+def api_otel_trace(tid):
+    if not otel_tracing: return ok(trace_id=tid, spans=[])
+    try:
+        return ok(**otel_tracing.get_trace(tid))
+    except Exception as e:
+        log.warning("api_otel_trace fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/otel/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_otel_config():
+    if not otel_tracing: return ok(enabled=False, otlp_endpoint="")
+    try:
+        if request.method == "POST":
+            d = request.get_json(silent=True) or {}
+            cfg = otel_tracing.configure(
+                otlp_endpoint=str(d.get("otlp_endpoint", "")),
+                enabled=bool(d.get("enabled", True)),
+            )
+            return ok(**cfg)
+        return ok(**otel_tracing.get_config())
+    except Exception as e:
+        log.warning("api_otel_config fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/otel/export")
+@require_auth
+@require_role("admin", "administrator")
+def api_otel_export():
+    if not otel_tracing: return ok(resourceSpans=[], spanCount=0)
+    try:
+        return ok(**otel_tracing.export_otlp())
+    except Exception as e:
+        log.warning("api_otel_export fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Grafana Embed ─────────────────────────────────────────────────────────────
+
+@app.route("/api/grafana/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_grafana_config():
+    if not grafana_embed: return ok(grafana_url="", api_key="***", org_id=1, dashboards=[])
+    try:
+        if request.method == "POST":
+            d = request.get_json(silent=True) or {}
+            cfg = grafana_embed.set_config(
+                grafana_url=str(d.get("grafana_url", "")),
+                api_key=str(d.get("api_key", "")),
+                org_id=int(d.get("org_id", 1)),
+                dashboards=d.get("dashboards"),
+            )
+            return ok(**cfg)
+        return ok(**grafana_embed.get_config())
+    except Exception as e:
+        log.warning("api_grafana_config fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/grafana/dashboards")
+@require_auth
+@require_role("admin", "administrator")
+def api_grafana_dashboards():
+    if not grafana_embed: return ok(dashboards=[])
+    try:
+        return ok(dashboards=grafana_embed.list_dashboards())
+    except Exception as e:
+        log.warning("api_grafana_dashboards fail: %s", e)
+        return ok(dashboards=[], error=str(e))
+
+
+@app.route("/api/grafana/embed-url")
+@require_auth
+@require_role("admin", "administrator")
+def api_grafana_embed_url():
+    if not grafana_embed: return ok(url="")
+    try:
+        uid      = request.args.get("uid", "")
+        panel_id = request.args.get("panel_id")
+        from_    = request.args.get("from", "now-1h")
+        to_      = request.args.get("to", "now")
+        if panel_id is not None:
+            panel_id = int(panel_id)
+        url = grafana_embed.get_embed_url(uid, panel_id=panel_id, from_=from_, to_=to_)
+        return ok(url=url)
+    except Exception as e:
+        log.warning("api_grafana_embed_url fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/grafana/test")
+@require_auth
+@require_role("admin", "administrator")
+def api_grafana_test():
+    if not grafana_embed: return ok(ok=False, status="module_unavailable")
+    try:
+        result = grafana_embed.test_connection()
+        return ok(**result)
+    except Exception as e:
+        log.warning("api_grafana_test fail: %s", e)
+        return ok(ok=False, status=str(e)[:120], latency_ms=0)
+
+
+# ── Topology Viz (/api/topo-viz/* — avoids clash with existing /api/topology) ─
+
+@app.route("/api/topo-viz/graph")
+@require_auth
+@require_role("admin", "administrator")
+def api_topo_graph():
+    if not topology_viz: return ok(nodes=[], edges=[])
+    try:
+        return ok(**topology_viz.get_topology())
+    except Exception as e:
+        log.warning("api_topo_graph fail: %s", e)
+        return ok(nodes=[], edges=[], error=str(e))
+
+
+@app.route("/api/topo-viz/lldp")
+@require_auth
+@require_role("admin", "administrator")
+def api_topo_lldp():
+    if not topology_viz: return ok(neighbors=[])
+    try:
+        return ok(neighbors=topology_viz.get_lldp_neighbors())
+    except Exception as e:
+        log.warning("api_topo_lldp fail: %s", e)
+        return ok(neighbors=[], error=str(e))
+
+
+@app.route("/api/topo-viz/flows")
+@require_auth
+@require_role("admin", "administrator")
+def api_topo_flows():
+    if not topology_viz: return ok(flows=[])
+    try:
+        return ok(flows=topology_viz.get_flow_matrix())
+    except Exception as e:
+        log.warning("api_topo_flows fail: %s", e)
+        return ok(flows=[], error=str(e))
+
+
+# ── ML Forecaster ─────────────────────────────────────────────────────────────
+
+@app.route("/api/forecast/resource")
+@require_auth
+@require_role("admin", "administrator")
+def api_fc_resource():
+    if not ml_forecaster: return ok(metric=None, predicted=None, trend="unknown")
+    try:
+        metric  = request.args.get("metric", "cpu")
+        horizon = int(request.args.get("horizon", 30))
+        return ok(**ml_forecaster.forecast_resource(metric=metric, horizon_days=horizon))
+    except Exception as e:
+        log.warning("api_fc_resource fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/forecast/heatmap")
+@require_auth
+@require_role("admin", "administrator")
+def api_fc_heatmap():
+    if not ml_forecaster: return ok(matrix=[], hours=[], days=[])
+    try:
+        metric = request.args.get("metric", "cpu")
+        period = request.args.get("period", "24h")
+        return ok(**ml_forecaster.get_heatmap(metric=metric, period=period))
+    except Exception as e:
+        log.warning("api_fc_heatmap fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/forecast/capacity")
+@require_auth
+@require_role("admin", "administrator")
+def api_fc_capacity():
+    if not ml_forecaster: return ok(disk={}, ram={})
+    try:
+        return ok(**ml_forecaster.capacity_forecast())
+    except Exception as e:
+        log.warning("api_fc_capacity fail: %s", e)
+        return ok(disk={}, ram={}, error=str(e))
+
+
+# ── Config Drift ──────────────────────────────────────────────────────────────
+
+@app.route("/api/drift/baselines", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_drift_baselines():
+    if not drift_capacity: return ok(baselines=[])
+    try:
+        if request.method == "POST":
+            d    = request.get_json(silent=True) or {}
+            name = str(d.get("name", "")).strip()
+            if not name:
+                return err("baseline name required", 400)
+            result = drift_capacity.capture_baseline(name)
+            return ok(**result)
+        return ok(baselines=drift_capacity.list_baselines())
+    except Exception as e:
+        log.warning("api_drift_baselines fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/drift/check/<name>")
+@require_auth
+@require_role("admin", "administrator")
+def api_drift_check(name):
+    if not drift_capacity: return ok(drifted_keys=[], added=[], removed=[])
+    try:
+        return ok(**drift_capacity.check_drift(name))
+    except KeyError as e:
+        return err(str(e), 404)
+    except Exception as e:
+        log.warning("api_drift_check fail name=%s: %s", name, e)
+        return err(str(e), 500)
+
+
+# ── Capacity Planning ─────────────────────────────────────────────────────────
+
+@app.route("/api/capacity/whatif", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cap_whatif():
+    if not drift_capacity: return ok(fits=None)
+    try:
+        d = request.get_json(silent=True) or {}
+        result = drift_capacity.whatif_add_vms(
+            count=int(d.get("count", 1)),
+            vcpus=int(d.get("vcpus", 2)),
+            ram_mb=int(d.get("ram_mb", 2048)),
+            disk_gb=float(d.get("disk_gb", 20)),
+        )
+        return ok(**result)
+    except Exception as e:
+        log.warning("api_cap_whatif fail: %s", e)
+        return err(str(e), 400)
+
+
+@app.route("/api/capacity/summary")
+@require_auth
+@require_role("admin", "administrator")
+def api_cap_summary():
+    if not drift_capacity: return ok(cpu={}, ram={}, disk={})
+    try:
+        return ok(**drift_capacity.capacity_summary())
+    except Exception as e:
+        log.warning("api_cap_summary fail: %s", e)
+        return ok(cpu={}, ram={}, disk={}, error=str(e))
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.7 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.8 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")

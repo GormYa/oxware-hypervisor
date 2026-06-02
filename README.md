@@ -13,7 +13,7 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.7-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.5.8-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -23,6 +23,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.8 (2026-06):** 📊 **Observability release** — Distributed tracing (OpenTelemetry-compatible spans + OTLP export), Grafana panel embedding (kiosk iframe), topology + flow viz (LLDP/ARP graph + conntrack flow matrix), ML forecasting (stdlib linear-regression resource + capacity prediction + pressure heatmaps), config-drift detection + capacity planning + what-if VM placement. 5 modules, 18 admin-only endpoints, zero external deps. 96 capabilities.
+>
 > **v2.5.7 (2026-06):** 💾 **Backup Advanced release** — App-consistent snapshots (QEMU guest-agent fsfreeze, DB-safe quiesce + pre/post hooks), 3-2-1 backup automation (3 copies / 2 media / 1 offsite, S3/rsync/MinIO), backup verification (mount-test + boot-test with ephemeral VM), cross-site replication (sync/async, rsync/qemu-img, RPO tracking + DR promote). 4 modules, 18 admin-only endpoints, zero idle load. 90 capabilities tracked.
 >
 > **v2.5.6 (2026-06):** 🏢 **Multi-tenancy release** — Hard tenant isolation with per-tenant quotas (vCPUs, RAM, disk, VM count, IPs), self-service portal for end-users (limited VM ops with ownership verification), on-demand chargeback / showback billing engine (€/USD/TRY pricing for vCPU-hour, RAM-hour, disk-month, IP-month, snapshot-month), service catalog with 6 built-in templates (Ubuntu 24.04, Debian 12, Windows Server 2022, WordPress, GitLab CE, Docker Host), resource pool reservations (min vCPU + RAM guarantees), token-bucket API rate limiting per tenant (default 100 rpm / 200 burst). All admin endpoints `@require_role("admin")`. Total: 86 capabilities. No periodic background jobs — chargeback computes on request.
@@ -244,6 +246,20 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.8
+
+The **Observability release** adds 5 modules + 18 endpoints for full-stack visibility:
+
+- 🔭 **Distributed Tracing** — OpenTelemetry-compatible span recording (in-memory ring buffer), request timing, OTLP-JSON export for any collector
+- 📈 **Grafana Embed** — kiosk-mode panel iframes, dashboard config, health-check
+- 🕸️ **Topology + Flow Viz** — node/network/VM graph from ARP + virsh, LLDP neighbors, VM-to-VM conntrack flow matrix
+- 🔮 **ML Forecasting** — pure-stdlib linear regression (no numpy): resource trend prediction, capacity "X days until full", pressure heatmaps (hour×day)
+- 🧭 **Config Drift + Capacity + What-If** — host config baselines & drift diff, capacity summary (total/reserved/free), what-if "add N VMs" overcommit simulation
+
+All endpoints admin-only, zero external deps, zero idle load. Topology endpoints under `/api/topo-viz/*` (no clash with existing `/api/topology`). 96 capabilities tracked.
 
 ---
 
