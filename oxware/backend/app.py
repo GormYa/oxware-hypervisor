@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.10
+OXware Hypervisor Management API v2.5.11
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -201,6 +201,12 @@ k8s_csi          = _safe_import("k8s_csi")
 k8s_operator     = _safe_import("k8s_operator")
 kubevirt_int     = _safe_import("kubevirt_integration")
 gitops_sync      = _safe_import("gitops_sync")
+
+# ── v2.5.11 Modern Workloads modules ─────────────────────────────────────────
+firecracker_mgr  = _safe_import("firecracker_mgr")
+kata_runtime     = _safe_import("kata_runtime")
+wasm_runtime     = _safe_import("wasm_runtime")
+edge_mode        = _safe_import("edge_mode")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -9450,7 +9456,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.10</span>
+  <span id="ver-badge">v2.5.11</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -17521,8 +17527,225 @@ def api_gitops_manifest():
         return err(str(e), 500)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.11 — Modern Workloads Endpoints (admin-only)
+# firecracker_mgr / kata_runtime / wasm_runtime / edge_mode
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Firecracker microVM ───────────────────────────────────────────────────────
+
+@app.route("/api/firecracker/detect")
+@require_auth
+@require_role("admin", "administrator")
+def api_fcvm_detect():
+    if not firecracker_mgr: return ok(available=False, error="module unavailable")
+    try:
+        return ok(**firecracker_mgr.detect_firecracker())
+    except Exception as e:
+        log.warning("api_fcvm_detect fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/firecracker/vms", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fcvm_vms():
+    if not firecracker_mgr: return ok(vms=[])
+    try:
+        if request.method == "GET":
+            return ok(vms=firecracker_mgr.list_microvms())
+        d         = request.get_json(silent=True) or {}
+        name      = d.get("name", "oxvm")
+        vcpus     = int(d.get("vcpus", 1))
+        mem_mb    = int(d.get("mem_mb", 512))
+        kernel    = d.get("kernel_path", "/opt/oxware/vmlinux")
+        rootfs    = d.get("rootfs_path", "/opt/oxware/rootfs.ext4")
+        return ok(**firecracker_mgr.create_microvm(name, vcpus, mem_mb, kernel, rootfs))
+    except Exception as e:
+        log.warning("api_fcvm_vms fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/firecracker/vms/<vm_id>", methods=["GET", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fcvm_vm(vm_id):
+    if not firecracker_mgr: return ok(vm=None)
+    try:
+        if request.method == "DELETE":
+            return ok(**firecracker_mgr.stop_microvm(vm_id))
+        vm = firecracker_mgr.get_microvm(vm_id)
+        if vm is None:
+            return err("vm not found", 404)
+        return ok(vm=vm)
+    except Exception as e:
+        log.warning("api_fcvm_vm fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Kata Containers ───────────────────────────────────────────────────────────
+
+@app.route("/api/kata/detect")
+@require_auth
+@require_role("admin", "administrator")
+def api_kata_detect():
+    if not kata_runtime: return ok(available=False, error="module unavailable")
+    try:
+        return ok(**kata_runtime.detect_kata())
+    except Exception as e:
+        log.warning("api_kata_detect fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/kata/containers")
+@require_auth
+@require_role("admin", "administrator")
+def api_kata_containers():
+    if not kata_runtime: return ok(containers=[])
+    try:
+        return ok(containers=kata_runtime.list_kata_containers())
+    except Exception as e:
+        log.warning("api_kata_containers fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/kata/runtime-class")
+@require_auth
+@require_role("admin", "administrator")
+def api_kata_runtime_class():
+    if not kata_runtime: return ok(runtime_class_yaml=None)
+    try:
+        return ok(**kata_runtime.generate_runtime_class())
+    except Exception as e:
+        log.warning("api_kata_runtime_class fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/kata/config")
+@require_auth
+@require_role("admin", "administrator")
+def api_kata_config():
+    if not kata_runtime: return ok(config_path=None, error="module unavailable")
+    try:
+        return ok(**kata_runtime.get_kata_config())
+    except Exception as e:
+        log.warning("api_kata_config fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── WASM Runtime ──────────────────────────────────────────────────────────────
+
+@app.route("/api/wasm/detect")
+@require_auth
+@require_role("admin", "administrator")
+def api_wasm_detect():
+    if not wasm_runtime: return ok(available=False, error="module unavailable")
+    try:
+        return ok(**wasm_runtime.detect_wasm())
+    except Exception as e:
+        log.warning("api_wasm_detect fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/wasm/modules", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_wasm_modules():
+    if not wasm_runtime: return ok(modules=[])
+    try:
+        if request.method == "GET":
+            return ok(modules=wasm_runtime.list_wasm_modules())
+        d           = request.get_json(silent=True) or {}
+        name        = d.get("name", "")
+        path        = d.get("path", "")
+        description = d.get("description", "")
+        if not name or not path:
+            return err("name and path required", 400)
+        return ok(**wasm_runtime.register_module(name, path, description))
+    except Exception as e:
+        log.warning("api_wasm_modules fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/wasm/run", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_wasm_run():
+    if not wasm_runtime: return ok(success=False, error="module unavailable")
+    try:
+        d         = request.get_json(silent=True) or {}
+        wasm_path = d.get("wasm_path", "")
+        args      = d.get("args", [])
+        env       = d.get("env", {})
+        timeout   = int(d.get("timeout", 30))
+        if not wasm_path:
+            return err("wasm_path required", 400)
+        return ok(**wasm_runtime.run_wasm_module(wasm_path, args, env, timeout))
+    except Exception as e:
+        log.warning("api_wasm_run fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Edge Deployment ───────────────────────────────────────────────────────────
+
+@app.route("/api/edge/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_edge_status():
+    if not edge_mode: return ok(enabled=False, error="module unavailable")
+    try:
+        return ok(**edge_mode.get_edge_status())
+    except Exception as e:
+        log.warning("api_edge_status fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/edge/config", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_edge_config():
+    if not edge_mode: return ok(configured=False)
+    try:
+        if request.method == "GET":
+            return ok(**edge_mode.get_edge_status())
+        d                   = request.get_json(silent=True) or {}
+        central_url         = d.get("central_url")
+        node_id             = d.get("node_id")
+        heartbeat_interval  = int(d.get("heartbeat_interval", 60))
+        low_resource        = bool(d.get("low_resource", False))
+        return ok(**edge_mode.configure_edge(central_url, node_id, heartbeat_interval, low_resource))
+    except Exception as e:
+        log.warning("api_edge_config fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/edge/heartbeat", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_edge_heartbeat():
+    if not edge_mode: return ok(sent=False, error="module unavailable")
+    try:
+        return ok(**edge_mode.send_heartbeat())
+    except Exception as e:
+        log.warning("api_edge_heartbeat fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/edge/profile")
+@require_auth
+@require_role("admin", "administrator")
+def api_edge_profile():
+    if not edge_mode: return ok(low_resource_mode=False, recommended_disabled=[])
+    try:
+        return ok(**edge_mode.get_resource_profile())
+    except Exception as e:
+        log.warning("api_edge_profile fail: %s", e)
+        return err(str(e), 500)
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.10 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.11 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")

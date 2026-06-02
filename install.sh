@@ -65,7 +65,7 @@ advance_progress() {
     printf "\n" >&2
 }
 
-OXWARE_VERSION="2.5.10"
+OXWARE_VERSION="2.5.11"
 REPO_URL="https://github.com/ShinnAsukha/oxware-hypervisor.git"
 
 # ── Dizin Yapısı (sunucuyla tam uyumlu) ──────────────────────

@@ -16,7 +16,7 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.10-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.5.11-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -26,6 +26,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.11 (2026-06):** 🚀 **Modern Workloads release** — microVM via Firecracker (125ms boot, machine-config gen, KVM-backed), Kata Containers (runtime detection, RuntimeClass YAML, container listing), WASM runtime (wasmtime/wasmedge/wasmer detect + module registry + sandboxed run), Edge deployment mode (low-resource profile, central heartbeat, trimmed services). 4 modules, 14 routes, stdlib only. 109 capabilities tracked.
+>
 > **v2.5.10 (2026-06):** ☸️ **Cloud / Kubernetes release** — Pulumi IaC (TypeScript/Python program generation + state export + provider schema), Kubernetes CSI driver (`csi.oxware.io` manifests + dynamic PV provisioning), Kubernetes Operator (OxwareVM CRD `oxware.io/v1alpha1` + reconcile + RBAC), KubeVirt integration (VMI↔VM import/export, VirtualMachine YAML), GitOps sync (ArgoCD/Flux, git pull + apply diff, drift detection). 5 modules, 19 admin-only endpoints, stdlib only. 105 capabilities tracked.
 >
 > **v2.5.9 (2026-06):** 🔐 **Network Advanced 2 release** — Microsegmentation (per-VM L7 firewall via nftables, zero-trust default-deny), BFD (Bidirectional Forwarding Detection, FRR/vtysh + ICMP fallback), service chaining (traffic steering IDS→WAF→VM via iptables MARK + policy routing), service mesh integration (Istio/Linkerd detection, service registry, Envoy sidecar config gen, mTLS status). 4 modules, 16 admin-only endpoints, stdlib only. 100 capabilities tracked.
@@ -253,6 +255,19 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.11
+
+The **Modern Workloads release** adds 4 modules + 14 routes for next-gen compute:
+
+- 🔥 **Firecracker microVM** — 125ms-boot lightweight VMs (AWS Lambda-style), machine-config generation, KVM-backed
+- 📦 **Kata Containers** — runtime detection, Kubernetes RuntimeClass YAML, container/pod listing
+- 🕸️ **WASM Runtime** — wasmtime/wasmedge/wasmer detection, module registry, sandboxed execution with timeout
+- 🌐 **Edge Mode** — low-resource deployment profile, central-management heartbeat (manual, no loop), service trimming
+
+All endpoints admin-only, stdlib only, zero idle load. 109 capabilities tracked.
 
 ---
 
