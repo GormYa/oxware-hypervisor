@@ -35,6 +35,9 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 ---
 
+<img width="1919" height="914" alt="image" src="https://github.com/user-attachments/assets/60cd4c41-2e5b-411f-ab2b-ff6166177569" />
+
+
 ## Table of Contents
 
 - [Features](#features)
