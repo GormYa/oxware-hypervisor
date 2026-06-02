@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.6
+OXware Hypervisor Management API v2.5.7
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -175,6 +175,12 @@ self_service     = _safe_import("self_service_portal")
 chargeback       = _safe_import("chargeback_engine")
 svc_catalog      = _safe_import("service_catalog")
 tenant_rl        = _safe_import("tenant_rate_limit")
+
+# ── v2.5.7 Backup Advanced modules ───────────────────────────────────────────
+app_consistent   = _safe_import("app_consistent_snapshot")
+backup_321       = _safe_import("backup_321")
+backup_verify    = _safe_import("backup_verify")
+cross_replication = _safe_import("cross_replication")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -747,12 +753,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.6-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.6-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.6-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.6-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.6-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.6-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.7-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.7-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4288,7 +4294,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.6",
+        oxware_version="2.5.7",
     )
 
 @app.route("/api/system/stats")
@@ -9424,7 +9430,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.6</span>
+  <span id="ver-badge">v2.5.7</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -11043,7 +11049,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.6", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.7", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -16449,8 +16455,259 @@ def api_pool_set_reservations(pool_id):
         return err(str(e), 400)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.7 — Backup Advanced Endpoints (admin-only)
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── App-Consistent Snapshots ─────────────────────────────────────────────────
+
+@app.route("/api/backup-adv/consistent/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_consistent_create(vm_id):
+    if not app_consistent: return ok(ok=False, error="modül yok")
+    try:
+        d    = request.get_json(silent=True) or {}
+        name = (d.get("name") or f"snap-{vm_id}").strip()
+        freeze = bool(d.get("freeze_fs", True))
+        return ok(**app_consistent.create_consistent_snapshot(vm_id, name, freeze_fs=freeze))
+    except Exception as e:
+        log.warning("ba_consistent_create fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/backup-adv/consistent/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_consistent_list(vm_id):
+    if not app_consistent: return ok(snapshots=[])
+    try:
+        return ok(snapshots=app_consistent.list_consistent_snapshots(vm_id))
+    except Exception as e:
+        log.warning("ba_consistent_list fail vm=%s: %s", vm_id, e)
+        return ok(snapshots=[], error=str(e))
+
+
+@app.route("/api/backup-adv/quiesce/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_quiesce_support(vm_id):
+    if not app_consistent: return ok(agent=False, fsfreeze=False)
+    try:
+        return ok(**app_consistent.get_quiesce_support(vm_id))
+    except Exception as e:
+        log.warning("ba_quiesce_support fail vm=%s: %s", vm_id, e)
+        return ok(agent=False, fsfreeze=False, error=str(e))
+
+
+@app.route("/api/backup-adv/hooks/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_hooks_list(vm_id):
+    if not app_consistent: return ok(hooks=[])
+    try:
+        return ok(hooks=app_consistent.list_app_hooks(vm_id))
+    except Exception as e:
+        log.warning("ba_hooks_list fail vm=%s: %s", vm_id, e)
+        return ok(hooks=[], error=str(e))
+
+
+@app.route("/api/backup-adv/hooks/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_hooks_register(vm_id):
+    if not app_consistent: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        app_name = (d.get("app") or "").strip()
+        if not app_name:
+            return err("app zorunlu", 400)
+        return ok(**app_consistent.register_app_hook(
+            vm_id, app_name,
+            d.get("pre_cmd", ""), d.get("post_cmd", "")
+        ))
+    except Exception as e:
+        log.warning("ba_hooks_register fail vm=%s: %s", vm_id, e)
+        return err(str(e), 400)
+
+
+# ── 3-2-1 Backup ─────────────────────────────────────────────────────────────
+
+@app.route("/api/backup-adv/321/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_321_get(vm_id):
+    if not backup_321: return ok(policy=None)
+    try:
+        return ok(policy=backup_321.get_321_policy(vm_id))
+    except Exception as e:
+        log.warning("ba_321_get fail vm=%s: %s", vm_id, e)
+        return ok(policy=None, error=str(e))
+
+
+@app.route("/api/backup-adv/321/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_321_set(vm_id):
+    if not backup_321: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**backup_321.set_321_policy(vm_id, d))
+    except Exception as e:
+        log.warning("ba_321_set fail vm=%s: %s", vm_id, e)
+        return err(str(e), 400)
+
+
+@app.route("/api/backup-adv/321/<vm_id>/run", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_321_run(vm_id):
+    if not backup_321: return err("modül yok", 503)
+    try:
+        return ok(**backup_321.run_321_backup(vm_id))
+    except Exception as e:
+        log.warning("ba_321_run fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/backup-adv/321/<vm_id>/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_321_status(vm_id):
+    if not backup_321: return ok(policy_set=False, compliant=False)
+    try:
+        return ok(**backup_321.get_321_status(vm_id))
+    except Exception as e:
+        log.warning("ba_321_status fail vm=%s: %s", vm_id, e)
+        return ok(policy_set=False, compliant=False, error=str(e))
+
+
+@app.route("/api/backup-adv/321")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_321_list():
+    if not backup_321: return ok(policies=[])
+    try:
+        return ok(policies=backup_321.list_321_policies())
+    except Exception as e:
+        log.warning("ba_321_list fail: %s", e)
+        return ok(policies=[], error=str(e))
+
+
+# ── Backup Verification ───────────────────────────────────────────────────────
+
+@app.route("/api/backup-adv/verify", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_verify():
+    if not backup_verify: return err("modül yok", 503)
+    try:
+        d    = request.get_json(silent=True) or {}
+        path = (d.get("backup_path") or "").strip()
+        mode = (d.get("mode") or "mount").strip()
+        if not path:
+            return err("backup_path zorunlu", 400)
+        return ok(**backup_verify.verify_backup(path, mode=mode))
+    except Exception as e:
+        log.warning("ba_verify fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/backup-adv/verify/history")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_verify_history():
+    if not backup_verify: return ok(verifications=[])
+    try:
+        limit = int(request.args.get("limit", 50) or 50)
+        return ok(verifications=backup_verify.list_verifications(limit=limit))
+    except Exception as e:
+        log.warning("ba_verify_history fail: %s", e)
+        return ok(verifications=[], error=str(e))
+
+
+# ── Cross-Site Replication ────────────────────────────────────────────────────
+
+@app.route("/api/backup-adv/replication/<vm_id>")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_get(vm_id):
+    if not cross_replication: return ok(replication=None)
+    try:
+        return ok(replication=cross_replication.get_replication(vm_id))
+    except Exception as e:
+        log.warning("ba_replication_get fail vm=%s: %s", vm_id, e)
+        return ok(replication=None, error=str(e))
+
+
+@app.route("/api/backup-adv/replication/<vm_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_configure(vm_id):
+    if not cross_replication: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**cross_replication.configure_replication(vm_id, d))
+    except Exception as e:
+        log.warning("ba_replication_configure fail vm=%s: %s", vm_id, e)
+        return err(str(e), 400)
+
+
+@app.route("/api/backup-adv/replication/<vm_id>/run", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_run(vm_id):
+    if not cross_replication: return err("modül yok", 503)
+    try:
+        d     = request.get_json(silent=True) or {}
+        async_ = bool(d.get("async", False))
+        if async_:
+            return ok(**cross_replication.run_replication_async(vm_id))
+        return ok(**cross_replication.run_replication(vm_id))
+    except Exception as e:
+        log.warning("ba_replication_run fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/backup-adv/replication/<vm_id>/status")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_status(vm_id):
+    if not cross_replication: return ok(configured=False)
+    try:
+        return ok(**cross_replication.get_replication_status(vm_id))
+    except Exception as e:
+        log.warning("ba_replication_status fail vm=%s: %s", vm_id, e)
+        return ok(configured=False, error=str(e))
+
+
+@app.route("/api/backup-adv/replication/<vm_id>/promote", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_promote(vm_id):
+    if not cross_replication: return err("modül yok", 503)
+    try:
+        return ok(**cross_replication.promote_replica(vm_id))
+    except Exception as e:
+        log.warning("ba_replication_promote fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/backup-adv/replication")
+@require_auth
+@require_role("admin", "administrator")
+def api_ba_replication_list():
+    if not cross_replication: return ok(replications=[])
+    try:
+        return ok(replications=cross_replication.list_replications())
+    except Exception as e:
+        log.warning("ba_replication_list fail: %s", e)
+        return ok(replications=[], error=str(e))
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.6 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.7 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")

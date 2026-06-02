@@ -23,6 +23,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.7 (2026-06):** 💾 **Backup Advanced release** — App-consistent snapshots (QEMU guest-agent fsfreeze, DB-safe quiesce + pre/post hooks), 3-2-1 backup automation (3 copies / 2 media / 1 offsite, S3/rsync/MinIO), backup verification (mount-test + boot-test with ephemeral VM), cross-site replication (sync/async, rsync/qemu-img, RPO tracking + DR promote). 4 modules, 18 admin-only endpoints, zero idle load. 90 capabilities tracked.
+>
 > **v2.5.6 (2026-06):** 🏢 **Multi-tenancy release** — Hard tenant isolation with per-tenant quotas (vCPUs, RAM, disk, VM count, IPs), self-service portal for end-users (limited VM ops with ownership verification), on-demand chargeback / showback billing engine (€/USD/TRY pricing for vCPU-hour, RAM-hour, disk-month, IP-month, snapshot-month), service catalog with 6 built-in templates (Ubuntu 24.04, Debian 12, Windows Server 2022, WordPress, GitLab CE, Docker Host), resource pool reservations (min vCPU + RAM guarantees), token-bucket API rate limiting per tenant (default 100 rpm / 200 burst). All admin endpoints `@require_role("admin")`. Total: 86 capabilities. No periodic background jobs — chargeback computes on request.
 >
 > **v2.5.5 (2026-06):** 🛡️ **Security & Compliance release** — AMD SEV / Intel TDX confidential VMs (memory encryption), live disk encryption with LUKS2 + AES-XTS-256, automated CIS / NIST 800-53 / PCI-DSS / HIPAA / ISO 27001 compliance scanner, hypervisor-level DLP engine (regex patterns: PII, credit cards, AWS keys, PEM, JWT, TC kimlik), forensics tooling (memory dump via `virsh dump`, packet capture per VM tap), MFA-per-role enforcement (admin = required by default), SAML 2.0 + OpenID Connect SSO with role mapping (Okta / Azure AD / Google Workspace ready). All v2.5.5 endpoints admin-only. Feature registry now tracks **81 capabilities**.
@@ -242,6 +244,19 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.7
+
+The **Backup Advanced release** adds 4 backend modules + 18 endpoints for enterprise-grade data protection:
+
+- 📸 **App-Consistent Snapshots** — QEMU guest-agent `fsfreeze` quiesce for database-safe snapshots. Pre/post app hooks (MySQL FLUSH TABLES etc.). Falls back to crash-consistent + warning when no agent.
+- 🗂️ **3-2-1 Backup Automation** — 3 copies, 2 media types, 1 offsite. Local snapshot → secondary path → offsite (S3/rsync/MinIO). Compliance status report (`get_321_status`).
+- ✅ **Backup Verification** — mount-test (qemu-nbd + FS readability) and boot-test (ephemeral isolated VM, 60s timeout, guest-agent ping). Proves backups actually restore.
+- 🔄 **Cross-Site Replication** — sync/async disk replication to a remote host (rsync / qemu-img + ssh, incremental). RPO/lag tracking + `promote_replica` for DR failover.
+
+All endpoints admin-only (`@require_role`). No periodic auto-start jobs — all operations request-triggered (zero idle load). Feature registry: 86 → 90 capabilities.
 
 ---
 
