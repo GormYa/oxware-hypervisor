@@ -13,7 +13,7 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.8-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.5.9-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -23,6 +23,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.9 (2026-06):** 🔐 **Network Advanced 2 release** — Microsegmentation (per-VM L7 firewall via nftables, zero-trust default-deny), BFD (Bidirectional Forwarding Detection, FRR/vtysh + ICMP fallback), service chaining (traffic steering IDS→WAF→VM via iptables MARK + policy routing), service mesh integration (Istio/Linkerd detection, service registry, Envoy sidecar config gen, mTLS status). 4 modules, 16 admin-only endpoints, stdlib only. 100 capabilities tracked.
+>
 > **v2.5.8 (2026-06):** 📊 **Observability release** — Distributed tracing (OpenTelemetry-compatible spans + OTLP export), Grafana panel embedding (kiosk iframe), topology + flow viz (LLDP/ARP graph + conntrack flow matrix), ML forecasting (stdlib linear-regression resource + capacity prediction + pressure heatmaps), config-drift detection + capacity planning + what-if VM placement. 5 modules, 18 admin-only endpoints, zero external deps. 96 capabilities.
 >
 > **v2.5.7 (2026-06):** 💾 **Backup Advanced release** — App-consistent snapshots (QEMU guest-agent fsfreeze, DB-safe quiesce + pre/post hooks), 3-2-1 backup automation (3 copies / 2 media / 1 offsite, S3/rsync/MinIO), backup verification (mount-test + boot-test with ephemeral VM), cross-site replication (sync/async, rsync/qemu-img, RPO tracking + DR promote). 4 modules, 18 admin-only endpoints, zero idle load. 90 capabilities tracked.
@@ -246,6 +248,19 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.9
+
+The **Network Advanced 2 release** adds 4 modules + 16 endpoints for datacenter-grade network security:
+
+- 🧱 **Microsegmentation** — per-VM L7 firewall (nftables chains on VM tap), zero-trust default-deny, persistent across reboots
+- 📡 **BFD** — sub-second link failure detection (FRR/vtysh native or ICMP fallback), session monitoring
+- ⛓️ **Service Chaining** — steer traffic through IDS→WAF→LB→VM via iptables MARK + policy-based routing, per-hop packet stats
+- 🕸️ **Service Mesh** — Istio/Linkerd auto-detect, service registry, Envoy/Istio sidecar config generation, mTLS status
+
+All endpoints admin-only, stdlib + subprocess only, zero idle load. 100 capabilities tracked.
 
 ---
 

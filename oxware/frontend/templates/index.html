@@ -1095,11 +1095,6 @@
         <svg viewBox="0 0 16 16"><path d="M8 16A8 8 0 118 0a8 8 0 010 16zM8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/><path d="M5.255 5.786a.237.237 0 00.241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 00.25.246h.811a.25.25 0 00.25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/></svg>
         <span data-i18n="Help">Help</span>
       </a>
-      <!-- Notifications Bell -->
-      <button class="tb-action" id="notif-btn" onclick="toggleNotifPanel()" title="Bildirimler" style="position:relative">
-        <i class="fa-solid fa-bell"></i>
-        <span class="notif-badge" id="notif-badge" style="display:none;position:absolute;top:6px;right:4px;background:#e74c3c;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.2">0</span>
-      </button>
       <!-- PWA Install Button (hidden until prompt available) -->
       <button id="pwa-install-btn" class="tb-action" onclick="pwaInstall()" style="display:none" title="Uygulamayı Yükle">
         <i class="fa-solid fa-download"></i>
@@ -1240,7 +1235,7 @@
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Version</span>
-                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.8</span>
+                  <span class="esxi-meta-val" id="ns-oxware-ver">2.5.9</span>
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Kernel</span>
@@ -11044,11 +11039,11 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.8"}-generic#${infoData.host?.distro || 'Linux'}`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.5.9"}-generic#${infoData.host?.distro || 'Linux'}`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available ✓" : "Not Available ✗";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
-    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.8"}`;
+    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.5.9"}`;
 
     // Center panel: VM counts
     const _vmRun  = vmSumData?.running ?? '—';
@@ -23056,7 +23051,6 @@ function _cmdAllItems() {
   items.push({icon:'➕',title:'Yeni VM Oluştur',cat:'İşlem',action:()=>{ if(typeof openCreateVMModal==='function') openCreateVMModal(); }});
   items.push({icon:'🤖',title:'AI ile VM Oluştur',cat:'İşlem',action:()=>{ if(typeof openAiVmModal==='function') openAiVmModal(); }});
   items.push({icon:'🌙',title:'Tema Değiştir',cat:'İşlem',action:()=>{ if(typeof toggleTheme==='function') toggleTheme(); }});
-  items.push({icon:'🔔',title:'Bildirimler Paneli',cat:'İşlem',action:()=>toggleNotifPanel()});
   items.push({icon:'🎉',title:'Onboarding Wizard\'ı Tekrar Göster',cat:'İşlem',action:()=>{ localStorage.removeItem('oxware_onboarded'); showOnboarding(); }});
   items.push({icon:'↻',title:'Sayfayı Yenile',cat:'İşlem',action:()=>location.reload()});
   // VM actions from cache
@@ -23216,7 +23210,7 @@ async function notifMarkAllRead() {
   loadNotifications();
 }
 // Periodic refresh
-setInterval(() => { if (document.visibilityState === 'hidden') return; try { loadNotifications(); } catch(_) {} }, 30000);
+// notifications panel removed (v2.5.9) — interval disabled
 setTimeout(() => { try { loadNotifications(); } catch(_) {} }, 4000);
 
 /* ───── 4. Bulk Actions — extend existing batchVmAction with snapshot ───── */

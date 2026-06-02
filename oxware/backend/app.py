@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.8
+OXware Hypervisor Management API v2.5.9
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -188,6 +188,12 @@ grafana_embed    = _safe_import("grafana_embed")
 topology_viz     = _safe_import("topology_viz")
 ml_forecaster    = _safe_import("ml_forecaster")
 drift_capacity   = _safe_import("drift_capacity")
+
+# ── v2.5.9 Network Advanced 2 modules ────────────────────────────────────────
+microseg         = _safe_import("microsegmentation")
+bfd_mgr          = _safe_import("bfd_manager")
+service_chain    = _safe_import("service_chain")
+service_mesh     = _safe_import("service_mesh")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -9437,7 +9443,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.8</span>
+  <span id="ver-badge">v2.5.9</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -16992,8 +16998,261 @@ def api_cap_summary():
         return ok(cpu={}, ram={}, disk={}, error=str(e))
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.9 — Network Advanced 2 Endpoints (admin-only)
+# microseg / bfd / service_chain / service_mesh
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Microsegmentation ─────────────────────────────────────────────────────────
+
+@app.route("/api/microseg")
+@require_auth
+@require_role("admin", "administrator")
+def api_microseg_list():
+    if not microseg: return ok(policies=[])
+    try:
+        return ok(policies=microseg.list_policies())
+    except Exception as e:
+        log.warning("api_microseg_list fail: %s", e)
+        return ok(policies=[], error=str(e))
+
+
+@app.route("/api/microseg/<vm_id>", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_microseg_vm(vm_id):
+    if not microseg: return ok(policy=None)
+    try:
+        if request.method == "POST":
+            d     = request.get_json(silent=True) or {}
+            rules = d.get("rules", [])
+            if not isinstance(rules, list):
+                return err("rules must be a list", 400)
+            return ok(**microseg.set_vm_policy(vm_id, rules))
+        policy = microseg.get_vm_policy(vm_id)
+        if policy is None:
+            return err("No policy for vm_id", 404)
+        return ok(policy=policy)
+    except Exception as e:
+        log.warning("api_microseg_vm fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/microseg/<vm_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_microseg_delete(vm_id):
+    if not microseg: return ok(ok=False, error="module unavailable")
+    try:
+        return ok(**microseg.delete_vm_policy(vm_id))
+    except Exception as e:
+        log.warning("api_microseg_delete fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/microseg/<vm_id>/zero-trust", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_microseg_zero_trust(vm_id):
+    if not microseg: return ok(ok=False, error="module unavailable")
+    try:
+        return ok(**microseg.apply_zero_trust(vm_id))
+    except Exception as e:
+        log.warning("api_microseg_zero_trust fail vm=%s: %s", vm_id, e)
+        return err(str(e), 500)
+
+
+# ── BFD Manager ───────────────────────────────────────────────────────────────
+
+@app.route("/api/bfd", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bfd_sessions():
+    if not bfd_mgr: return ok(sessions=[])
+    try:
+        if request.method == "POST":
+            d           = request.get_json(silent=True) or {}
+            peer_ip     = str(d.get("peer_ip", "")).strip()
+            interval_ms = int(d.get("interval_ms", 300))
+            multiplier  = int(d.get("multiplier", 3))
+            if not peer_ip:
+                return err("peer_ip required", 400)
+            return ok(**bfd_mgr.configure_bfd(peer_ip, interval_ms, multiplier))
+        return ok(sessions=bfd_mgr.get_bfd_sessions())
+    except Exception as e:
+        log.warning("api_bfd fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/bfd/sessions")
+@require_auth
+@require_role("admin", "administrator")
+def api_bfd_sessions_list():
+    if not bfd_mgr: return ok(sessions=[])
+    try:
+        return ok(sessions=bfd_mgr.get_bfd_sessions())
+    except Exception as e:
+        log.warning("api_bfd_sessions_list fail: %s", e)
+        return ok(sessions=[], error=str(e))
+
+
+@app.route("/api/bfd/<path:peer>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bfd_remove(peer):
+    if not bfd_mgr: return ok(ok=False, error="module unavailable")
+    try:
+        return ok(**bfd_mgr.remove_bfd(peer))
+    except Exception as e:
+        log.warning("api_bfd_remove fail peer=%s: %s", peer, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/bfd/check/<path:peer>")
+@require_auth
+@require_role("admin", "administrator")
+def api_bfd_check(peer):
+    if not bfd_mgr: return ok(reachable=False, rtt_ms=None)
+    try:
+        return ok(**bfd_mgr.check_peer(peer))
+    except Exception as e:
+        log.warning("api_bfd_check fail peer=%s: %s", peer, e)
+        return ok(reachable=False, rtt_ms=None, error=str(e))
+
+
+# ── Service Chain ─────────────────────────────────────────────────────────────
+
+@app.route("/api/service-chain", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_svcchain_list_or_create():
+    if not service_chain: return ok(chains=[])
+    try:
+        if request.method == "POST":
+            d       = request.get_json(silent=True) or {}
+            name    = str(d.get("name", "")).strip()
+            hops    = d.get("hops", [])
+            ingress = str(d.get("ingress", "")).strip()
+            egress  = str(d.get("egress", "")).strip()
+            if not name or not ingress or not egress:
+                return err("name, ingress, egress required", 400)
+            if not isinstance(hops, list):
+                return err("hops must be a list", 400)
+            return ok(**service_chain.create_chain(name, hops, ingress, egress))
+        return ok(chains=service_chain.list_chains())
+    except Exception as e:
+        log.warning("api_svcchain fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/service-chain/<name>", methods=["GET", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_svcchain_detail(name):
+    if not service_chain: return ok(chain=None)
+    try:
+        if request.method == "DELETE":
+            return ok(**service_chain.delete_chain(name))
+        chain = service_chain.get_chain(name)
+        if chain is None:
+            return err("Chain not found", 404)
+        return ok(chain=chain)
+    except Exception as e:
+        log.warning("api_svcchain_detail fail name=%s: %s", name, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/service-chain/<name>/stats")
+@require_auth
+@require_role("admin", "administrator")
+def api_svcchain_stats(name):
+    if not service_chain: return ok(ok=False, hops=[])
+    try:
+        return ok(**service_chain.get_chain_stats(name))
+    except Exception as e:
+        log.warning("api_svcchain_stats fail name=%s: %s", name, e)
+        return ok(ok=False, hops=[], error=str(e))
+
+
+# ── Service Mesh ──────────────────────────────────────────────────────────────
+
+@app.route("/api/mesh/detect")
+@require_auth
+@require_role("admin", "administrator")
+def api_mesh_detect():
+    if not service_mesh: return ok(available=False, istio={}, linkerd={})
+    try:
+        return ok(**service_mesh.detect_mesh())
+    except Exception as e:
+        log.warning("api_mesh_detect fail: %s", e)
+        return ok(available=False, error=str(e))
+
+
+@app.route("/api/mesh/services", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_mesh_services():
+    if not service_mesh: return ok(services=[])
+    try:
+        if request.method == "POST":
+            d        = request.get_json(silent=True) or {}
+            name     = str(d.get("name", "")).strip()
+            vm_id    = str(d.get("vm_id", "")).strip()
+            port     = int(d.get("port", 80))
+            protocol = str(d.get("protocol", "tcp")).strip()
+            if not name or not vm_id:
+                return err("name and vm_id required", 400)
+            return ok(**service_mesh.register_service(name, vm_id, port, protocol))
+        return ok(services=service_mesh.list_services())
+    except Exception as e:
+        log.warning("api_mesh_services fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/mesh/services/<name>", methods=["GET", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_mesh_service_detail(name):
+    if not service_mesh: return ok(service=None)
+    try:
+        if request.method == "DELETE":
+            return ok(**service_mesh.delete_service(name))
+        svc = service_mesh.get_service(name)
+        if svc is None:
+            return err("Service not found", 404)
+        return ok(service=svc)
+    except Exception as e:
+        log.warning("api_mesh_service_detail fail name=%s: %s", name, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/mesh/services/<name>/sidecar")
+@require_auth
+@require_role("admin", "administrator")
+def api_mesh_sidecar(name):
+    if not service_mesh: return ok(ok=False, yaml="")
+    try:
+        return ok(**service_mesh.generate_sidecar_config(name))
+    except Exception as e:
+        log.warning("api_mesh_sidecar fail name=%s: %s", name, e)
+        return err(str(e), 500)
+
+
+@app.route("/api/mesh/mtls")
+@require_auth
+@require_role("admin", "administrator")
+def api_mesh_mtls():
+    if not service_mesh: return ok(mtls=False, mesh="none")
+    try:
+        return ok(**service_mesh.get_mtls_status())
+    except Exception as e:
+        log.warning("api_mesh_mtls fail: %s", e)
+        return ok(mtls=False, mesh="none", error=str(e))
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.8 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.9 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
