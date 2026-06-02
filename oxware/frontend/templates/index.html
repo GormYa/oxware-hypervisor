@@ -23149,6 +23149,9 @@ function toggleNotifPanel() {
   }
 }
 async function loadNotifications() {
+  // v2.5.9: notifications panel removed — no-op (stops audit/notifications endpoint polling loop)
+  return;
+  /* eslint-disable */
   const list = document.getElementById('notif-list');
   if (!list) return;
   list.innerHTML = '<div class="empty-state" style="padding:14px;text-align:center;color:var(--text-muted);font-size:12px">Yükleniyor...</div>';
@@ -23209,9 +23212,7 @@ async function notifMarkAllRead() {
   try { await _api('/api/notifications/mark-all-read','POST'); } catch(_) {}
   loadNotifications();
 }
-// Periodic refresh
-// notifications panel removed (v2.5.9) — interval disabled
-setTimeout(() => { try { loadNotifications(); } catch(_) {} }, 4000);
+// notifications panel removed (v2.5.9) — startup call + interval fully disabled (no endpoint polling)
 
 /* ───── 4. Bulk Actions — extend existing batchVmAction with snapshot ───── */
 // Existing system (vm-batch-bar / batchVmAction / _selectedVMs) already provides bulk UI.
