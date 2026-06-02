@@ -16,7 +16,7 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.11-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.5.12-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
@@ -26,6 +26,8 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 
 > Built for bare-metal servers, cloud VPS, and on-prem homelab. One command installs everything.
 
+> **v2.5.12 (2026-06):** 🧩 **IaC + Clients release** — Workflow engine (multi-step automation: vm_action/snapshot/webhook/delay/notify with on_success/on_fail routing), Policy-as-Code (OPA/Rego eval + built-in fallback), CloudEvents v1.0 (standard event envelope + sink forwarding + 30 event types), desktop client support (long-lived API tokens + Electron config + downloads), workload mobility (export VM to AWS AMI / Azure VHD / GCP raw). 5 modules, 21 admin-only endpoints, stdlib only. 114 capabilities tracked — full roadmap backend complete.
+>
 > **v2.5.11 (2026-06):** 🚀 **Modern Workloads release** — microVM via Firecracker (125ms boot, machine-config gen, KVM-backed), Kata Containers (runtime detection, RuntimeClass YAML, container listing), WASM runtime (wasmtime/wasmedge/wasmer detect + module registry + sandboxed run), Edge deployment mode (low-resource profile, central heartbeat, trimmed services). 4 modules, 14 routes, stdlib only. 109 capabilities tracked.
 >
 > **v2.5.10 (2026-06):** ☸️ **Cloud / Kubernetes release** — Pulumi IaC (TypeScript/Python program generation + state export + provider schema), Kubernetes CSI driver (`csi.oxware.io` manifests + dynamic PV provisioning), Kubernetes Operator (OxwareVM CRD `oxware.io/v1alpha1` + reconcile + RBAC), KubeVirt integration (VMI↔VM import/export, VirtualMachine YAML), GitOps sync (ArgoCD/Flux, git pull + apply diff, drift detection). 5 modules, 19 admin-only endpoints, stdlib only. 105 capabilities tracked.
@@ -255,6 +257,22 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 - **Automation engine** — multi-step workflow orchestration
 - **Live VNC thumbnails** — real-time VM previews in the list
 - **Terraform provider** — `resource "oxware_vm"` Infrastructure-as-Code
+
+---
+
+## ✨ What's New in v2.5.12
+
+The **IaC + Clients release** completes the roadmap with 5 modules + 21 endpoints:
+
+- 🔧 **Workflow Engine** — multi-step automation (vm_action / snapshot / webhook / delay / notify / log), on-success/on-fail branching, run history
+- 📜 **Policy-as-Code** — OPA/Rego policy eval (`opa eval` or fail-closed built-in), policy test
+- 📡 **CloudEvents** — v1.0 envelope, sink forwarding, 30 OXware event types (vm.created, backup.completed, …)
+- 🖥️ **Desktop Client** — long-lived API tokens (`oxdt_`), Electron config + download links
+- ☁️ **Workload Mobility** — export VM → AWS AMI / Azure VHD / GCP raw (qemu-img + manifest + steps)
+
+All endpoints admin-only, stdlib only, zero idle load. **114 capabilities — full enterprise roadmap backend complete.**
+
+Also fixed: stale version literals in `/api/system/info` + OpenAPI spec (now 2.5.12).
 
 ---
 

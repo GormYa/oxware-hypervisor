@@ -107,11 +107,11 @@ FEATURE_MANIFEST = [
     {"id": "kata",           "name": "Kata Containers",        "category": "modern",       "module": "kata_runtime",        "status": "beta",   "version": "2.5.11"},
     {"id": "wasm",           "name": "WASM Runtime",           "category": "modern",       "module": "wasm_runtime",        "status": "beta",   "version": "2.5.11"},
     {"id": "edge",           "name": "Edge Deployment",        "category": "modern",       "module": "edge_mode",           "status": "beta",   "version": "2.5.11"},
-    {"id": "workflow_engine","name": "Workflow Engine",        "category": "automation",   "module": "workflow_engine",     "status": "planned","version": "2.5.12"},
-    {"id": "opa",            "name": "Policy as Code (OPA)",   "category": "automation",   "module": "opa_engine",          "status": "planned","version": "2.5.12"},
-    {"id": "cloudevents",    "name": "CloudEvents",            "category": "automation",   "module": "cloudevents",         "status": "planned","version": "2.5.12"},
-    {"id": "electron",       "name": "Desktop Client",         "category": "modern",       "module": "electron_client",     "status": "planned","version": "2.5.12"},
-    {"id": "workload_mob",   "name": "Workload Mobility (Cloud)","category": "modern",     "module": "cloud_export",        "status": "planned","version": "2.5.12"},
+    {"id": "workflow_engine","name": "Workflow Engine",        "category": "automation",   "module": "workflow_engine",     "status": "beta",   "version": "2.5.12"},
+    {"id": "opa",            "name": "Policy as Code (OPA)",   "category": "automation",   "module": "opa_policy",          "status": "beta",   "version": "2.5.12"},
+    {"id": "cloudevents",    "name": "CloudEvents",            "category": "automation",   "module": "cloudevents",         "status": "beta",   "version": "2.5.12"},
+    {"id": "electron",       "name": "Desktop Client",         "category": "modern",       "module": "electron_client",     "status": "beta",   "version": "2.5.12"},
+    {"id": "workload_mob",   "name": "Workload Mobility (Cloud)","category": "modern",     "module": "cloud_export",        "status": "beta",   "version": "2.5.12"},
 ]
 
 

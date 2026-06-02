@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.11
+OXware Hypervisor Management API v2.5.12
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -207,6 +207,13 @@ firecracker_mgr  = _safe_import("firecracker_mgr")
 kata_runtime     = _safe_import("kata_runtime")
 wasm_runtime     = _safe_import("wasm_runtime")
 edge_mode        = _safe_import("edge_mode")
+
+# ── v2.5.12 IaC + Clients modules ────────────────────────────────────────────
+workflow_engine  = _safe_import("workflow_engine")
+opa_policy       = _safe_import("opa_policy")
+cloudevents_mod  = _safe_import("cloudevents")
+electron_client  = _safe_import("electron_client")
+cloud_export     = _safe_import("cloud_export")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -779,12 +786,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.8-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.8-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.8-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.8-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.8-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.8-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/root/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.5.12-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4320,7 +4327,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.8",
+        oxware_version="2.5.12",
     )
 
 @app.route("/api/system/stats")
@@ -9456,7 +9463,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.11</span>
+  <span id="ver-badge">v2.5.12</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -9690,7 +9697,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.5.3",
+            "version": "2.5.12",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -11075,7 +11082,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.8", connected=True)
+    return ok(status="ok", panel=panel, version="2.5.12", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -17744,8 +17751,367 @@ def api_edge_profile():
         return err(str(e), 500)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# v2.5.12 — IaC + Clients Endpoints (admin-only)
+# workflow_engine / opa_policy / cloudevents / electron_client / cloud_export
+# All wrapped in try/except with safe defaults — modül yoksa boş döner.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Workflow Engine ───────────────────────────────────────────────────────────
+
+@app.route("/api/workflow", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_wf_list_create():
+    if not workflow_engine: return ok(workflows=[])
+    try:
+        if request.method == "GET":
+            return ok(workflows=workflow_engine.list_workflows())
+        d = request.get_json(silent=True) or {}
+        name        = d.get("name", "")
+        steps       = d.get("steps", [])
+        description = d.get("description", "")
+        enabled     = bool(d.get("enabled", True))
+        if not name:
+            return err("name required", 400)
+        if not isinstance(steps, list):
+            return err("steps must be a list", 400)
+        return ok(workflow=workflow_engine.create_workflow(name, steps, description, enabled))
+    except ValueError as ve:
+        return err(str(ve), 400)
+    except Exception as e:
+        log.warning("api_wf_list_create fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/workflow/<wf_id>", methods=["GET", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_wf_get_delete(wf_id):
+    if not workflow_engine: return ok(workflow=None)
+    try:
+        if request.method == "DELETE":
+            return ok(**workflow_engine.delete_workflow(wf_id))
+        wf = workflow_engine.get_workflow(wf_id)
+        if wf is None:
+            return err("workflow not found", 404)
+        return ok(workflow=wf)
+    except Exception as e:
+        log.warning("api_wf_get_delete fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/workflow/<wf_id>/run", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_wf_run(wf_id):
+    if not workflow_engine: return ok(ok=False, error="module unavailable")
+    try:
+        d       = request.get_json(silent=True) or {}
+        dry_run = bool(d.get("dry_run", False))
+        return ok(**workflow_engine.run_workflow(wf_id, dry_run=dry_run))
+    except Exception as e:
+        log.warning("api_wf_run fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/workflow/<wf_id>/history")
+@require_auth
+@require_role("admin", "administrator")
+def api_wf_history(wf_id):
+    if not workflow_engine: return ok(history=[])
+    try:
+        limit = int(request.args.get("limit", 50))
+        return ok(history=workflow_engine.get_run_history(wf_id, limit=limit))
+    except Exception as e:
+        log.warning("api_wf_history fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── OPA Policy Engine ─────────────────────────────────────────────────────────
+
+@app.route("/api/opa/policies", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_opa_policies():
+    if not opa_policy: return ok(policies=[])
+    try:
+        if request.method == "GET":
+            return ok(policies=opa_policy.list_policies())
+        d           = request.get_json(silent=True) or {}
+        name        = d.get("name", "")
+        rego_source = d.get("rego_source", "")
+        description = d.get("description", "")
+        if not name:
+            return err("name required", 400)
+        if not rego_source:
+            return err("rego_source required", 400)
+        return ok(policy=opa_policy.set_policy(name, rego_source, description))
+    except ValueError as ve:
+        return err(str(ve), 400)
+    except Exception as e:
+        log.warning("api_opa_policies fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/opa/policies/<name>", methods=["GET", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_opa_policy(name):
+    if not opa_policy: return ok(policy=None)
+    try:
+        if request.method == "DELETE":
+            return ok(**opa_policy.delete_policy(name))
+        policy = opa_policy.get_policy(name)
+        if policy is None:
+            return err("policy not found", 404)
+        return ok(policy=policy)
+    except Exception as e:
+        log.warning("api_opa_policy fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/opa/evaluate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_opa_evaluate():
+    if not opa_policy: return ok(allowed=False, error="module unavailable")
+    try:
+        d           = request.get_json(silent=True) or {}
+        policy_name = d.get("policy_name", d.get("policy", ""))
+        input_json  = d.get("input", {})
+        if not policy_name:
+            return err("policy_name required", 400)
+        return ok(**opa_policy.evaluate(policy_name, input_json))
+    except Exception as e:
+        log.warning("api_opa_evaluate fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/opa/test", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_opa_test():
+    if not opa_policy: return ok(allowed=False, test=True, error="module unavailable")
+    try:
+        d           = request.get_json(silent=True) or {}
+        policy_name = d.get("policy_name", d.get("policy", ""))
+        test_input  = d.get("input", {})
+        if not policy_name:
+            return err("policy_name required", 400)
+        return ok(**opa_policy.test_policy(policy_name, test_input))
+    except Exception as e:
+        log.warning("api_opa_test fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── CloudEvents ───────────────────────────────────────────────────────────────
+
+@app.route("/api/cloudevents/emit", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ce_emit():
+    if not cloudevents_mod: return ok(emitted=False, error="module unavailable")
+    try:
+        d          = request.get_json(silent=True) or {}
+        event_type = d.get("type", "")
+        source     = d.get("source", "oxware/api")
+        data       = d.get("data", {})
+        subject    = d.get("subject")
+        if not event_type:
+            return err("type required", 400)
+        event = cloudevents_mod.emit_event(event_type, source, data, subject)
+        return ok(emitted=True, event=event)
+    except Exception as e:
+        log.warning("api_ce_emit fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloudevents")
+@require_auth
+@require_role("admin", "administrator")
+def api_ce_list():
+    if not cloudevents_mod: return ok(events=[])
+    try:
+        limit = int(request.args.get("limit", 100))
+        return ok(events=cloudevents_mod.list_events(limit=limit))
+    except Exception as e:
+        log.warning("api_ce_list fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloudevents/sink", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ce_sink():
+    if not cloudevents_mod: return ok(sink=None)
+    try:
+        if request.method == "GET":
+            return ok(sink=cloudevents_mod.get_sink())
+        d   = request.get_json(silent=True) or {}
+        url = d.get("url", "")
+        fmt = d.get("format", "structured")
+        if not url:
+            return err("url required", 400)
+        return ok(sink=cloudevents_mod.configure_sink(url, fmt))
+    except ValueError as ve:
+        return err(str(ve), 400)
+    except Exception as e:
+        log.warning("api_ce_sink fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloudevents/types")
+@require_auth
+@require_role("admin", "administrator")
+def api_ce_types():
+    if not cloudevents_mod: return ok(types=[])
+    try:
+        return ok(types=cloudevents_mod.get_event_types())
+    except Exception as e:
+        log.warning("api_ce_types fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Desktop / Electron Client ─────────────────────────────────────────────────
+
+@app.route("/api/desktop/config")
+@require_auth
+@require_role("admin", "administrator")
+def api_desktop_config():
+    if not electron_client: return ok(config=None, error="module unavailable")
+    try:
+        server_url = request.args.get("server_url") or \
+                     f"{'https' if config.SSL_ENABLED else 'http'}://{config.HOST}:{config.PORT}"
+        return ok(config=electron_client.generate_client_config(server_url))
+    except Exception as e:
+        log.warning("api_desktop_config fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/desktop/clients", methods=["GET", "POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_desktop_clients():
+    if not electron_client: return ok(clients=[])
+    try:
+        if request.method == "GET":
+            return ok(clients=electron_client.list_clients())
+        d           = request.get_json(silent=True) or {}
+        name        = d.get("name", "")
+        platform    = d.get("platform", "other")
+        description = d.get("description", "")
+        if not name:
+            return err("name required", 400)
+        return ok(client=electron_client.register_client(name, platform, description))
+    except ValueError as ve:
+        return err(str(ve), 400)
+    except Exception as e:
+        log.warning("api_desktop_clients fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/desktop/clients/<client_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_desktop_client_revoke(client_id):
+    if not electron_client: return ok(ok=False, error="module unavailable")
+    try:
+        return ok(**electron_client.revoke_client(client_id))
+    except Exception as e:
+        log.warning("api_desktop_client_revoke fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/desktop/downloads")
+@require_auth
+@require_role("admin", "administrator")
+def api_desktop_downloads():
+    if not electron_client: return ok(downloads=None)
+    try:
+        return ok(downloads=electron_client.get_download_links())
+    except Exception as e:
+        log.warning("api_desktop_downloads fail: %s", e)
+        return err(str(e), 500)
+
+
+# ── Cloud Export ──────────────────────────────────────────────────────────────
+
+@app.route("/api/cloud-export/aws", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cexport_aws():
+    if not cloud_export: return ok(ok=False, error="module unavailable")
+    try:
+        d      = request.get_json(silent=True) or {}
+        vm_id  = d.get("vm_id", "")
+        region = d.get("region", "us-east-1")
+        if not vm_id:
+            return err("vm_id required", 400)
+        return ok(**cloud_export.export_to_aws(vm_id, region=region))
+    except Exception as e:
+        log.warning("api_cexport_aws fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloud-export/azure", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cexport_azure():
+    if not cloud_export: return ok(ok=False, error="module unavailable")
+    try:
+        d     = request.get_json(silent=True) or {}
+        vm_id = d.get("vm_id", "")
+        if not vm_id:
+            return err("vm_id required", 400)
+        return ok(**cloud_export.export_to_azure(vm_id))
+    except Exception as e:
+        log.warning("api_cexport_azure fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloud-export/gcp", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cexport_gcp():
+    if not cloud_export: return ok(ok=False, error="module unavailable")
+    try:
+        d     = request.get_json(silent=True) or {}
+        vm_id = d.get("vm_id", "")
+        if not vm_id:
+            return err("vm_id required", 400)
+        return ok(**cloud_export.export_to_gcp(vm_id))
+    except Exception as e:
+        log.warning("api_cexport_gcp fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloud-export")
+@require_auth
+@require_role("admin", "administrator")
+def api_cexport_list():
+    if not cloud_export: return ok(exports=[])
+    try:
+        return ok(exports=cloud_export.list_exports())
+    except Exception as e:
+        log.warning("api_cexport_list fail: %s", e)
+        return err(str(e), 500)
+
+
+@app.route("/api/cloud-export/targets")
+@require_auth
+@require_role("admin", "administrator")
+def api_cexport_targets():
+    if not cloud_export: return ok(targets={})
+    try:
+        return ok(targets=cloud_export.get_supported_targets())
+    except Exception as e:
+        log.warning("api_cexport_targets fail: %s", e)
+        return err(str(e), 500)
+
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.11 başlatılıyor")
+    log.info("OXware Hypervisor v2.5.12 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
