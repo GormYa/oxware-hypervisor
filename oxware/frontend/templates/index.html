@@ -5389,6 +5389,11 @@
             <button class="sub-tab" onclick="entCat('security')">🔒 Güvenlik</button>
             <button class="sub-tab" onclick="entCat('dr')">🌪 Felaket Kurtarma</button>
             <button class="sub-tab" onclick="entCat('tenancy')">🏢 Multi-Tenancy</button>
+            <button class="sub-tab" onclick="entCat('observability')">📊 Gözlemlenebilirlik</button>
+            <button class="sub-tab" onclick="entCat('cloud')">☸️ Cloud/K8s</button>
+            <button class="sub-tab" onclick="entCat('modern')">🚀 Modern</button>
+            <button class="sub-tab" onclick="entCat('automation')">🤖 Otomasyon</button>
+            <button class="sub-tab" onclick="entCat('clients')">🖥️ İstemciler</button>
           </div>
           <!-- Feature sub-tab bar (populated by entCat()) -->
           <div class="sub-tabs" id="ent-feat-tabs" style="margin-bottom:14px;overflow-x:auto;white-space:nowrap"></div>
@@ -6143,6 +6148,681 @@
               <thead><tr><th>Tenant</th><th>RPM</th><th>Burst</th><th>Şu anki Token</th><th>Son saat istek</th></tr></thead>
               <tbody id="rl-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Tenant seç (üstteki forma yaz)</td></tr></tbody>
             </table></div>
+          </div>
+        </div>
+
+
+        <!-- ═══ OBSERVABILITY ═══ -->
+        <!-- otel -->
+        <div id="ent-pane-otel" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-chart-line fa-fw" style="color:var(--accent-lt)"></i> Tracing (OpenTelemetry)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadOtelPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Dağıtık izleme — API isteklerinin span'lerini OpenTelemetry uyumlu kaydeder, OTLP export.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Konfigürasyon</div>
+            <div id="otel-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Son Trace'ler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Trace ID</th><th>Servis</th><th>Operasyon</th><th>Süre (ms)</th><th>Durum</th><th>Zaman</th></tr></thead>
+              <tbody id="otel-traces-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- grafana -->
+        <div id="ent-pane-grafana" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-chart-bar fa-fw" style="color:var(--accent-lt)"></i> Grafana</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadGrafanaPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Grafana panellerini OXware içine kiosk modda göm.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Konfigürasyon</div>
+            <div id="grafana-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Dashboard'lar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>UID</th><th>Başlık</th><th>URL</th><th>Etiketler</th></tr></thead>
+              <tbody id="grafana-dash-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- topoviz -->
+        <div id="ent-pane-topoviz" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-diagram-project fa-fw" style="color:var(--accent-lt)"></i> Topoloji</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadTopovizPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Ağ topolojisi — node/VM/ağ grafiği, LLDP komşuları, VM-VM trafik matrisi.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Graf Özeti</div>
+            <div id="topo-graph-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">LLDP Komşuları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Yerel Port</th><th>Komşu</th><th>Komşu Port</th><th>Sistem</th></tr></thead>
+              <tbody id="topo-lldp-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">VM-VM Trafik Akışları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Kaynak VM</th><th>Hedef VM</th><th>Protokol</th><th>Bytes</th></tr></thead>
+              <tbody id="topo-flows-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- forecast -->
+        <div id="ent-pane-forecast" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-magnifying-glass-chart fa-fw" style="color:var(--accent-lt)"></i> Tahmin/ML</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadForecastPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> ML tahmin — CPU/RAM/disk trend tahmini, 'X gün sonra dolacak', ısı haritaları.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">CPU Tahmini (30 gün)</div>
+            <div id="forecast-cpu-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Kapasite Özeti</div>
+            <div id="forecast-cap-body" class="text-muted">Yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- driftcap -->
+        <div id="ent-pane-driftcap" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-sliders fa-fw" style="color:var(--accent-lt)"></i> Drift/Kapasite</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadDriftcapPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Config drift tespiti + kapasite planlama + 'N VM eklesem ne olur' simülasyonu.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Drift Baseline'ları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM</th><th>Metrik</th><th>Baseline</th><th>Güncel</th><th>Sapma</th></tr></thead>
+              <tbody id="drift-baselines-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Kapasite Özeti</div>
+            <div id="driftcap-cap-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">What-If Simülasyonu</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <input id="wi-count" type="number" placeholder="VM sayısı" class="form-control" style="width:120px">
+              <input id="wi-vcpus" type="number" placeholder="vCPU/VM" class="form-control" style="width:100px">
+              <input id="wi-ram" type="number" placeholder="RAM MB/VM" class="form-control" style="width:120px">
+              <input id="wi-disk" type="number" placeholder="Disk GB/VM" class="form-control" style="width:120px">
+              <button class="btn-primary" onclick="driftWhatIf()" style="font-size:12px">▶ Simüle Et</button>
+            </div>
+            <div id="wi-result"></div>
+          </div>
+        </div>
+
+        <!-- ═══ STORAGE: backupadv ═══ -->
+        <div id="ent-pane-backupadv" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-hard-drive fa-fw" style="color:var(--accent-lt)"></i> Backup+</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadBackupAdvPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Gelişmiş yedek — app-tutarlı snapshot, 3-2-1 kuralı, mount+boot doğrulama, cross-site replikasyon.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Yedek Durumu</div>
+            <div id="backupadv-status-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Doğrulama</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <input id="bkadv-path" placeholder="backup_path" class="form-control" style="width:260px">
+              <select id="bkadv-mode" class="form-control" style="width:120px">
+                <option value="mount">mount</option>
+                <option value="boot">boot</option>
+              </select>
+              <button class="btn-primary" onclick="backupAdvVerify()" style="font-size:12px">✔ Doğrula</button>
+            </div>
+            <div id="bkadv-verify-result"></div>
+          </div>
+        </div>
+
+        <!-- ═══ NETWORK: microseg ═══ -->
+        <div id="ent-pane-microseg" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-shield-halved fa-fw" style="color:var(--accent-lt)"></i> Mikrosegmentasyon</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadMicrosegPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Mikrosegmentasyon — VM başına L7 firewall, zero-trust default-deny.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">VM Politikaları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>VM ID</th><th>Ad</th><th>Zero-Trust</th><th>Kural Sayısı</th><th>Aksiyon</th></tr></thead>
+              <tbody id="microseg-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- bfd -->
+        <div id="ent-pane-bfd" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-network-wired fa-fw" style="color:var(--accent-lt)"></i> BFD</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadBfdPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> BFD — saniye-altı link arıza tespiti.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">BFD Oturumları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Peer IP</th><th>Durum</th><th>Interval (ms)</th><th>TX</th><th>RX</th></tr></thead>
+              <tbody id="bfd-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Yeni Oturum Ekle</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <input id="bfd-peer" placeholder="Peer IP" class="form-control" style="width:180px">
+              <input id="bfd-interval" type="number" placeholder="Interval ms" class="form-control" style="width:130px">
+              <button class="btn-primary" onclick="bfdAdd()" style="font-size:12px">+ Ekle</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- svcchain -->
+        <div id="ent-pane-svcchain" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-link fa-fw" style="color:var(--accent-lt)"></i> Servis Zinciri</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadSvcChainPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Servis zinciri — trafiği IDS→WAF→VM sırasıyla yönlendir.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Zincirler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Hop'lar</th><th>Durum</th></tr></thead>
+              <tbody id="svcchain-tbody"><tr><td colspan="3" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Yeni Zincir</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <input id="sc-name" placeholder="Zincir Adı" class="form-control" style="width:180px">
+              <input id="sc-hops" placeholder="hop1,hop2,hop3" class="form-control" style="width:260px">
+              <button class="btn-primary" onclick="svcChainAdd()" style="font-size:12px">+ Oluştur</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- mesh -->
+        <div id="ent-pane-mesh" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-circle-nodes fa-fw" style="color:var(--accent-lt)"></i> Service Mesh</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadMeshPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Service Mesh — Istio/Linkerd entegrasyonu, mTLS.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Tespit</div>
+            <div id="mesh-detect-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Servisler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Namespace</th><th>mTLS</th><th>Proxy</th></tr></thead>
+              <tbody id="mesh-svc-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">mTLS Durumu</div>
+            <div id="mesh-mtls-body" class="text-muted">Yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- ═══ CLOUD/K8S ═══ -->
+        <!-- pulumi -->
+        <div id="ent-pane-pulumi" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-code fa-fw" style="color:var(--accent-lt)"></i> Pulumi IaC</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadPulumiPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Pulumi IaC — mevcut altyapıdan TypeScript/Python program üret.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Schema</div>
+            <div id="pulumi-schema-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Program Üret</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <select id="pulumi-lang" class="form-control" style="width:160px">
+                <option value="typescript">TypeScript</option>
+                <option value="python">Python</option>
+                <option value="go">Go</option>
+              </select>
+              <button class="btn-primary" onclick="pulumiGenerate()" style="font-size:12px">⚡ Üret</button>
+            </div>
+            <pre id="pulumi-gen-result" style="background:var(--bg2);padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;display:none"></pre>
+          </div>
+        </div>
+
+        <!-- k8scsi -->
+        <div id="ent-pane-k8scsi" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-database fa-fw" style="color:var(--accent-lt)"></i> K8s CSI</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadK8sCsiPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Kubernetes CSI sürücüsü — OXware disklerini K8s PV olarak kullan.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">CSI Durumu</div>
+            <div id="k8scsi-status-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Manifest'ler</div>
+            <div id="k8scsi-manifests-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Volume'lar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Kapasite</th><th>Erişim Modu</th><th>Durum</th></tr></thead>
+              <tbody id="k8scsi-vol-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- k8sop -->
+        <div id="ent-pane-k8sop" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-gear fa-fw" style="color:var(--accent-lt)"></i> K8s Operator</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadK8sOpPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Kubernetes Operator — OxwareVM CRD ile VM yönet.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">CRD Tanımı</div>
+            <div id="k8sop-crd-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Yönetilen VM'ler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Namespace</th><th>Durum</th><th>vCPU</th><th>RAM</th></tr></thead>
+              <tbody id="k8sop-managed-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Reconcile Döngüsü</div>
+            <div id="k8sop-reconcile-body" class="text-muted">Yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- kubevirt -->
+        <div id="ent-pane-kubevirt" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-brands fa-docker fa-fw" style="color:var(--accent-lt)"></i> KubeVirt</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadKubevirtPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> KubeVirt — VM'leri Kubernetes pod'larıyla köprüle.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">KubeVirt Tespiti</div>
+            <div id="kubevirt-detect-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">KubeVirt VM'leri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Namespace</th><th>Faz</th><th>Node</th><th>IP</th></tr></thead>
+              <tbody id="kubevirt-vms-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- gitops -->
+        <div id="ent-pane-gitops" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-brands fa-git-alt fa-fw" style="color:var(--accent-lt)"></i> GitOps</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadGitopsPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> GitOps — VM tanımları git'te, ArgoCD/Flux ile otomatik senkron.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Konfigürasyon</div>
+            <div id="gitops-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Senkronizasyon Durumu</div>
+            <div id="gitops-status-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Manuel Senkron</div>
+            <button class="btn-primary" onclick="gitopsSync()" style="font-size:12px">🔄 Şimdi Senkron Et</button>
+            <div id="gitops-sync-result" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <!-- ═══ MODERN WORKLOADS ═══ -->
+        <!-- firecracker -->
+        <div id="ent-pane-firecracker" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-fire fa-fw" style="color:var(--accent-lt)"></i> microVM (Firecracker)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadFirecrackerPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> microVM — Firecracker ile 125ms boot, hafif VM.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Tespit</div>
+            <div id="fc-detect-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Firecracker VM'leri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Durum</th><th>vCPU</th><th>RAM MB</th><th>Boot Süresi</th></tr></thead>
+              <tbody id="fc-vms-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- kata -->
+        <div id="ent-pane-kata" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-shield fa-fw" style="color:var(--accent-lt)"></i> Kata Containers</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadKataPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Kata Containers — container güvenliği + VM izolasyonu.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Tespit</div>
+            <div id="kata-detect-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Kata Container'ları</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>İmaj</th><th>Durum</th><th>VM Kernel</th><th>Bellek MB</th></tr></thead>
+              <tbody id="kata-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- wasm -->
+        <div id="ent-pane-wasm" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-microchip fa-fw" style="color:var(--accent-lt)"></i> WASM Runtime</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadWasmPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> WASM runtime — wasmtime/wasmedge ile hafif iş yükleri.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Tespit</div>
+            <div id="wasm-detect-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Modüller</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Boyut</th><th>Runtime</th><th>Durum</th></tr></thead>
+              <tbody id="wasm-modules-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Modül Çalıştır</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <input id="wasm-path" placeholder="wasm_path" class="form-control" style="width:280px">
+              <button class="btn-primary" onclick="wasmRun()" style="font-size:12px">▶ Çalıştır</button>
+            </div>
+            <pre id="wasm-run-result" style="background:var(--bg2);padding:10px;border-radius:6px;font-size:11px;margin-top:10px;display:none"></pre>
+          </div>
+        </div>
+
+        <!-- edge -->
+        <div id="ent-pane-edge" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-tower-broadcast fa-fw" style="color:var(--accent-lt)"></i> Edge Mod</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadEdgePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Edge mod — düşük kaynak profili, merkezi yönetim heartbeat.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Durum</div>
+            <div id="edge-status-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Profil</div>
+            <div id="edge-profile-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Konfigürasyon</div>
+            <div id="edge-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- ═══ AUTOMATION ═══ -->
+        <!-- workflow -->
+        <div id="ent-pane-workflow" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-arrows-split-up-and-left fa-fw" style="color:var(--accent-lt)"></i> Workflow Motoru</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadWorkflowPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Workflow motoru — çok adımlı otomasyon (vm aksiyonu/snapshot/webhook).
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Workflow'lar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Ad</th><th>Adım Sayısı</th><th>Durum</th><th>Çalıştır</th></tr></thead>
+              <tbody id="workflow-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- opa -->
+        <div id="ent-pane-opa" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-scale-balanced fa-fw" style="color:var(--accent-lt)"></i> Policy (OPA)</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadOpaPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Policy-as-Code — OPA/Rego ile politika değerlendirme.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Politikalar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Paket</th><th>Kural Sayısı</th><th>Durum</th></tr></thead>
+              <tbody id="opa-policies-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Politika Değerlendir</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <input id="opa-policy-name" placeholder="policy_name" class="form-control" style="width:200px">
+              <textarea id="opa-input-json" placeholder='{"key":"value"}' class="form-control" style="width:280px;height:60px;resize:vertical"></textarea>
+              <button class="btn-primary" onclick="opaEvaluate()" style="font-size:12px">▶ Değerlendir</button>
+            </div>
+            <pre id="opa-eval-result" style="background:var(--bg2);padding:10px;border-radius:6px;font-size:11px;display:none"></pre>
+          </div>
+        </div>
+
+        <!-- cloudevents -->
+        <div id="ent-pane-cloudevents" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-bell fa-fw" style="color:var(--accent-lt)"></i> CloudEvents</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadCloudeventsPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> CloudEvents v1.0 — standart olay formatı + sink yönlendirme.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Son Olaylar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Tür</th><th>Kaynak</th><th>Zaman</th><th>Veri</th></tr></thead>
+              <tbody id="ce-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Olay Tipleri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Tip</th><th>Açıklama</th><th>Sink</th></tr></thead>
+              <tbody id="ce-types-tbody"><tr><td colspan="3" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- ═══ CLIENTS ═══ -->
+        <!-- desktop -->
+        <div id="ent-pane-desktop" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-desktop fa-fw" style="color:var(--accent-lt)"></i> Desktop Client</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadDesktopPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Masaüstü istemci — uzun ömürlü API token + Electron config.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Konfigürasyon</div>
+            <div id="desktop-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Bağlı İstemciler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Kullanıcı</th><th>Platform</th><th>Versiyon</th><th>Son Görülme</th><th>Durum</th></tr></thead>
+              <tbody id="desktop-clients-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">İndirmeler</div>
+            <div id="desktop-downloads-body" class="text-muted">Yükleniyor...</div>
+          </div>
+        </div>
+
+        <!-- cloudexport -->
+        <div id="ent-pane-cloudexport" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-cloud-arrow-up fa-fw" style="color:var(--accent-lt)"></i> Cloud Export</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadCloudExportPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> Workload mobility — VM'i AWS AMI / Azure VHD / GCP'ye export et.
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Export Yapılandırması</div>
+            <div id="cloudexp-config-body" class="text-muted">Yükleniyor...</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Hedefler</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Ad</th><th>Provider</th><th>Bölge</th><th>Durum</th></tr></thead>
+              <tbody id="cloudexp-targets-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">AWS'ye Export</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+              <input id="cexp-vm-id" placeholder="VM ID" class="form-control" style="width:180px">
+              <input id="cexp-region" placeholder="us-east-1" class="form-control" style="width:150px">
+              <button class="btn-primary" onclick="cloudExportAws()" style="font-size:12px">🚀 AWS Export</button>
+            </div>
+            <div id="cexp-result"></div>
           </div>
         </div>
 
@@ -20349,7 +21029,7 @@ async function deleteRbacPerm(key, username) {
 /* ══════════════════════════════════════════════════════════════════════════════
    Enterprise Sub-Tab System (v2.5.6+)
 ══════════════════════════════════════════════════════════════════════════════ */
-const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit'];
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport'];
 const ENT_LOADERS = {
   drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
   affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
@@ -20376,7 +21056,31 @@ const ENT_LOADERS = {
   tenants: () => { try { loadTenantsPage(); } catch(e) { console.warn(e); } },
   chargeback: () => { try { loadChargebackPage(); } catch(e) { console.warn(e); } },
   'svc-cat': () => { try { loadServiceCatalog(); } catch(e) { console.warn(e); } },
-  'rate-limit': () => { try { loadRateLimitPage(); } catch(e) { console.warn(e); } }
+  'rate-limit': () => { try { loadRateLimitPage(); } catch(e) { console.warn(e); } },
+  otel: () => { try { loadOtelPage(); } catch(e) { console.warn(e); } },
+  grafana: () => { try { loadGrafanaPage(); } catch(e) { console.warn(e); } },
+  topoviz: () => { try { loadTopovizPage(); } catch(e) { console.warn(e); } },
+  forecast: () => { try { loadForecastPage(); } catch(e) { console.warn(e); } },
+  driftcap: () => { try { loadDriftcapPage(); } catch(e) { console.warn(e); } },
+  backupadv: () => { try { loadBackupAdvPage(); } catch(e) { console.warn(e); } },
+  microseg: () => { try { loadMicrosegPage(); } catch(e) { console.warn(e); } },
+  bfd: () => { try { loadBfdPage(); } catch(e) { console.warn(e); } },
+  svcchain: () => { try { loadSvcChainPage(); } catch(e) { console.warn(e); } },
+  mesh: () => { try { loadMeshPage(); } catch(e) { console.warn(e); } },
+  pulumi: () => { try { loadPulumiPage(); } catch(e) { console.warn(e); } },
+  k8scsi: () => { try { loadK8sCsiPage(); } catch(e) { console.warn(e); } },
+  k8sop: () => { try { loadK8sOpPage(); } catch(e) { console.warn(e); } },
+  kubevirt: () => { try { loadKubevirtPage(); } catch(e) { console.warn(e); } },
+  gitops: () => { try { loadGitopsPage(); } catch(e) { console.warn(e); } },
+  firecracker: () => { try { loadFirecrackerPage(); } catch(e) { console.warn(e); } },
+  kata: () => { try { loadKataPage(); } catch(e) { console.warn(e); } },
+  wasm: () => { try { loadWasmPage(); } catch(e) { console.warn(e); } },
+  edge: () => { try { loadEdgePage(); } catch(e) { console.warn(e); } },
+  workflow: () => { try { loadWorkflowPage(); } catch(e) { console.warn(e); } },
+  opa: () => { try { loadOpaPage(); } catch(e) { console.warn(e); } },
+  cloudevents: () => { try { loadCloudeventsPage(); } catch(e) { console.warn(e); } },
+  desktop: () => { try { loadDesktopPage(); } catch(e) { console.warn(e); } },
+  cloudexport: () => { try { loadCloudExportPage(); } catch(e) { console.warn(e); } }
 };
 
 function entSubTab(tab) {
@@ -20393,11 +21097,16 @@ function entSubTab(tab) {
 
 const ENT_CATEGORIES = {
   compute:['drs','affinity','evc','numa','rightsize','maint'],
-  storage:['stor-adv','bkup-enc','disk-enc'],
-  network:['nioc','net-adv'],
+  storage:['stor-adv','bkup-enc','disk-enc','backupadv'],
+  network:['nioc','net-adv','microseg','bfd','svcchain','mesh'],
   security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','alertcorr'],
   dr:['dr','lifecycle'],
-  tenancy:['tenants','chargeback','svc-cat','rate-limit']
+  tenancy:['tenants','chargeback','svc-cat','rate-limit'],
+  observability:['otel','grafana','topoviz','forecast','driftcap'],
+  cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops'],
+  modern:['firecracker','kata','wasm','edge'],
+  automation:['workflow','opa','cloudevents'],
+  clients:['desktop','cloudexport']
 };
 let _entCurrentCat = 'compute';
 function entCat(cat) {
@@ -20410,7 +21119,7 @@ function entCat(cat) {
   if (bs[ci]) bs[ci].classList.add('active');
   // Build feature sub-tab bar for this category
   const feats = ENT_CATEGORIES[cat] || [];
-  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit'};
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export'};
   const bar = document.getElementById('ent-feat-tabs');
   bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
   // Hide all panes, show first feature of this category
@@ -22984,6 +23693,406 @@ async function rlSet() {
   } else toast('Hata: '+(d?.error||''),'error');
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   v2.5.7+ Enterprise Feature Loaders
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ─── Observability ─── */
+async function loadOtelPage() {
+  const cfgEl = document.getElementById('otel-config-body');
+  const tb = document.getElementById('otel-traces-tbody');
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [cfg, traces] = await Promise.all([_api('/api/otel/config'), _api('/api/otel/traces')]);
+  if (!cfg || !traces) { toast('OTel verisi alınamadı','error'); return; }
+  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  const arr = Array.isArray(traces) ? traces : (traces.traces || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(t => `<tr><td style="font-family:monospace;font-size:11px">${_esc(t.trace_id||t.id||'-')}</td><td>${_esc(t.service||'-')}</td><td>${_esc(t.operation||t.name||'-')}</td><td>${t.duration_ms||'-'}</td><td>${_esc(t.status||'-')}</td><td>${_esc(t.time||t.timestamp||'-')}</td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Trace yok</td></tr>';
+}
+
+async function loadGrafanaPage() {
+  const cfgEl = document.getElementById('grafana-config-body');
+  const tb = document.getElementById('grafana-dash-tbody');
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [cfg, dashes] = await Promise.all([_api('/api/grafana/config'), _api('/api/grafana/dashboards')]);
+  if (!cfg) { toast('Grafana config alınamadı','error'); return; }
+  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  const arr = Array.isArray(dashes) ? dashes : (dashes?.dashboards || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(d => `<tr><td style="font-family:monospace;font-size:11px">${_esc(d.uid||'-')}</td><td>${_esc(d.title||'-')}</td><td><a href="${_esc(d.url||'#')}" target="_blank" style="color:var(--accent-lt)">${_esc(d.url||'-')}</a></td><td>${_esc((d.tags||[]).join(', ')||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Dashboard yok</td></tr>';
+}
+
+async function loadTopovizPage() {
+  const graphEl = document.getElementById('topo-graph-body');
+  const lldpTb = document.getElementById('topo-lldp-tbody');
+  const flowsTb = document.getElementById('topo-flows-tbody');
+  if (graphEl) graphEl.innerHTML = 'Yükleniyor...';
+  const [graph, lldp, flows] = await Promise.all([_api('/api/topo-viz/graph'), _api('/api/topo-viz/lldp'), _api('/api/topo-viz/flows')]);
+  if (!graph) { toast('Topoloji verisi alınamadı','error'); return; }
+  if (graphEl) graphEl.innerHTML = `<span style="color:var(--text-muted);font-size:12px">Node: ${graph.nodes?.length||0} &nbsp;|&nbsp; Edge: ${graph.edges?.length||0}</span>`;
+  const lldpArr = Array.isArray(lldp) ? lldp : (lldp?.neighbors || []);
+  if (lldpTb) lldpTb.innerHTML = lldpArr.length ? lldpArr.map(n => `<tr><td>${_esc(n.local_port||'-')}</td><td>${_esc(n.neighbor||n.chassis_id||'-')}</td><td>${_esc(n.neighbor_port||'-')}</td><td>${_esc(n.system_name||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">LLDP verisi yok</td></tr>';
+  const flowsArr = Array.isArray(flows) ? flows : (flows?.flows || []);
+  if (flowsTb) flowsTb.innerHTML = flowsArr.length ? flowsArr.map(f => `<tr><td>${_esc(f.src_vm||'-')}</td><td>${_esc(f.dst_vm||'-')}</td><td>${_esc(f.protocol||'-')}</td><td>${f.bytes||0}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Akış verisi yok</td></tr>';
+}
+
+async function loadForecastPage() {
+  const cpuEl = document.getElementById('forecast-cpu-body');
+  const capEl = document.getElementById('forecast-cap-body');
+  if (cpuEl) cpuEl.innerHTML = 'Yükleniyor...';
+  if (capEl) capEl.innerHTML = 'Yükleniyor...';
+  const [cpu, cap] = await Promise.all([_api('/api/forecast/resource?metric=cpu&horizon=30'), _api('/api/forecast/capacity')]);
+  if (!cpu) { toast('Tahmin verisi alınamadı','error'); return; }
+  if (cpuEl) cpuEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cpu,null,2))}</pre>`;
+  if (capEl) capEl.innerHTML = cap ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cap,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+}
+
+async function loadDriftcapPage() {
+  const tb = document.getElementById('drift-baselines-tbody');
+  const capEl = document.getElementById('driftcap-cap-body');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  if (capEl) capEl.innerHTML = 'Yükleniyor...';
+  const [baselines, cap] = await Promise.all([_api('/api/drift/baselines'), _api('/api/capacity/summary')]);
+  if (!baselines) { toast('Drift verisi alınamadı','error'); return; }
+  const arr = Array.isArray(baselines) ? baselines : (baselines.baselines || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(b => `<tr><td>${_esc(b.vm||b.vm_id||'-')}</td><td>${_esc(b.metric||'-')}</td><td>${b.baseline??'-'}</td><td>${b.current??'-'}</td><td>${b.deviation??'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Baseline yok</td></tr>';
+  if (capEl) capEl.innerHTML = cap ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cap,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+}
+async function driftWhatIf() {
+  const count = parseInt(document.getElementById('wi-count').value)||1;
+  const vcpus = parseInt(document.getElementById('wi-vcpus').value)||2;
+  const ram_mb = parseInt(document.getElementById('wi-ram').value)||2048;
+  const disk_gb = parseInt(document.getElementById('wi-disk').value)||20;
+  const res = document.getElementById('wi-result');
+  if (res) res.innerHTML = '<span class="text-muted">Hesaplanıyor...</span>';
+  const d = await _api('/api/capacity/whatif','POST',{count,vcpus,ram_mb,disk_gb});
+  if (!d) { toast('What-if hesaplanamadı','error'); return; }
+  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
+
+/* ─── Storage: Backup+ ─── */
+async function loadBackupAdvPage() {
+  const el = document.getElementById('backupadv-status-body');
+  if (el) el.innerHTML = 'Yükleniyor...';
+  const d = await _api('/api/backup-adv/321');
+  if (!d) { toast('Backup+ verisi alınamadı','error'); return; }
+  if (el) el.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
+async function backupAdvVerify() {
+  const backup_path = document.getElementById('bkadv-path').value.trim();
+  const mode = document.getElementById('bkadv-mode').value;
+  const res = document.getElementById('bkadv-verify-result');
+  if (!backup_path) { toast('backup_path gerekli','error'); return; }
+  if (res) res.innerHTML = '<span class="text-muted">Doğrulanıyor...</span>';
+  const d = await _api('/api/backup-adv/verify','POST',{backup_path,mode});
+  if (!d) { toast('Doğrulama başarısız','error'); return; }
+  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
+
+/* ─── Network: Microseg ─── */
+async function loadMicrosegPage() {
+  const tb = document.getElementById('microseg-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/microseg');
+  if (!d) { toast('Mikroseg verisi alınamadı','error'); return; }
+  const arr = Array.isArray(d) ? d : (d.vms || d.policies || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td style="font-family:monospace;font-size:11px">${_esc(v.vm_id||v.id||'-')}</td><td>${_esc(v.name||'-')}</td><td>${v.zero_trust?'<span style="color:#3fb950">✔ Aktif</span>':'<span style="color:var(--text-muted)">—</span>'}</td><td>${v.rules||0}</td><td><button class="btn" style="font-size:11px" onclick="microsegZeroTrust('${_esc(v.vm_id||v.id||'')}')">Zero-Trust</button></td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">VM politikası yok</td></tr>';
+}
+async function microsegZeroTrust(vm_id) {
+  if (!vm_id) return;
+  const d = await _api(`/api/microseg/${encodeURIComponent(vm_id)}/zero-trust`,'POST');
+  if (d) { toast('Zero-trust uygulandı','success'); loadMicrosegPage(); }
+  else toast('Hata','error');
+}
+
+/* ─── Network: BFD ─── */
+async function loadBfdPage() {
+  const tb = document.getElementById('bfd-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/bfd/sessions');
+  if (!d) { toast('BFD verisi alınamadı','error'); return; }
+  const arr = Array.isArray(d) ? d : (d.sessions || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(s => `<tr><td>${_esc(s.peer_ip||'-')}</td><td>${_esc(s.state||s.status||'-')}</td><td>${s.interval_ms||'-'}</td><td>${s.tx||'-'}</td><td>${s.rx||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">BFD oturumu yok</td></tr>';
+}
+async function bfdAdd() {
+  const peer_ip = document.getElementById('bfd-peer').value.trim();
+  const interval_ms = parseInt(document.getElementById('bfd-interval').value)||300;
+  if (!peer_ip) { toast('Peer IP gerekli','error'); return; }
+  const d = await _api('/api/bfd','POST',{peer_ip,interval_ms});
+  if (d) { toast('BFD oturumu eklendi','success'); loadBfdPage(); }
+  else toast('Hata','error');
+}
+
+/* ─── Network: Service Chain ─── */
+async function loadSvcChainPage() {
+  const tb = document.getElementById('svcchain-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="3" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/service-chain');
+  if (!d) { toast('Servis zinciri verisi alınamadı','error'); return; }
+  const arr = Array.isArray(d) ? d : (d.chains || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(c => `<tr><td>${_esc(c.name||'-')}</td><td>${_esc((c.hops||[]).join(' → ')||'-')}</td><td>${_esc(c.status||c.state||'-')}</td></tr>`).join('') : '<tr><td colspan="3" class="text-center text-muted" style="padding:14px">Zincir yok</td></tr>';
+}
+async function svcChainAdd() {
+  const name = document.getElementById('sc-name').value.trim();
+  const hopsRaw = document.getElementById('sc-hops').value.trim();
+  if (!name || !hopsRaw) { toast('Ad ve hop\'lar gerekli','error'); return; }
+  const hops = hopsRaw.split(',').map(h => h.trim()).filter(Boolean);
+  const d = await _api('/api/service-chain','POST',{name,hops});
+  if (d) { toast('Zincir oluşturuldu','success'); loadSvcChainPage(); }
+  else toast('Hata','error');
+}
+
+/* ─── Network: Service Mesh ─── */
+async function loadMeshPage() {
+  const detectEl = document.getElementById('mesh-detect-body');
+  const tb = document.getElementById('mesh-svc-tbody');
+  const mtlsEl = document.getElementById('mesh-mtls-body');
+  if (detectEl) detectEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [detect, svcs, mtls] = await Promise.all([_api('/api/mesh/detect'), _api('/api/mesh/services'), _api('/api/mesh/mtls')]);
+  if (!detect) { toast('Mesh verisi alınamadı','error'); return; }
+  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  const arr = Array.isArray(svcs) ? svcs : (svcs?.services || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(s => `<tr><td>${_esc(s.name||'-')}</td><td>${_esc(s.namespace||'-')}</td><td>${s.mtls?'<span style="color:#3fb950">✔</span>':'<span style="color:var(--text-muted)">—</span>'}</td><td>${_esc(s.proxy||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Servis yok</td></tr>';
+  if (mtlsEl) mtlsEl.innerHTML = mtls ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(mtls,null,2))}</pre>` : '<span class="text-muted">mTLS verisi yok</span>';
+}
+
+/* ─── Cloud/K8s: Pulumi ─── */
+async function loadPulumiPage() {
+  const el = document.getElementById('pulumi-schema-body');
+  if (el) el.innerHTML = 'Yükleniyor...';
+  const d = await _api('/api/pulumi/schema');
+  if (!d) { toast('Pulumi schema alınamadı','error'); return; }
+  if (el) el.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
+async function pulumiGenerate() {
+  const language = document.getElementById('pulumi-lang').value;
+  const res = document.getElementById('pulumi-gen-result');
+  if (res) { res.style.display='block'; res.textContent='Üretiliyor...'; }
+  const d = await _api('/api/pulumi/generate','POST',{language});
+  if (!d) { toast('Pulumi üretim hatası','error'); return; }
+  if (res) res.textContent = d.code || d.program || JSON.stringify(d,null,2);
+}
+
+/* ─── Cloud/K8s: K8s CSI ─── */
+async function loadK8sCsiPage() {
+  const statusEl = document.getElementById('k8scsi-status-body');
+  const manifestEl = document.getElementById('k8scsi-manifests-body');
+  const tb = document.getElementById('k8scsi-vol-tbody');
+  if (statusEl) statusEl.innerHTML = 'Yükleniyor...';
+  if (manifestEl) manifestEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [status, manifests, vols] = await Promise.all([_api('/api/k8s-csi/status'), _api('/api/k8s-csi/manifests'), _api('/api/k8s-csi/volumes')]);
+  if (!status) { toast('K8s CSI verisi alınamadı','error'); return; }
+  if (statusEl) statusEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>`;
+  if (manifestEl) manifestEl.innerHTML = manifests ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(typeof manifests==='string'?manifests:JSON.stringify(manifests,null,2))}</pre>` : '<span class="text-muted">Manifest yok</span>';
+  const arr = Array.isArray(vols) ? vols : (vols?.volumes || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.capacity||'-')}</td><td>${_esc(v.access_mode||v.accessMode||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Volume yok</td></tr>';
+}
+
+/* ─── Cloud/K8s: K8s Operator ─── */
+async function loadK8sOpPage() {
+  const crdEl = document.getElementById('k8sop-crd-body');
+  const tb = document.getElementById('k8sop-managed-tbody');
+  const recEl = document.getElementById('k8sop-reconcile-body');
+  if (crdEl) crdEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [crd, managed, rec] = await Promise.all([_api('/api/k8s-operator/crd'), _api('/api/k8s-operator/managed'), _api('/api/k8s-operator/reconcile')]);
+  if (!crd) { toast('K8s Operator verisi alınamadı','error'); return; }
+  if (crdEl) crdEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(crd,null,2))}</pre>`;
+  const arr = Array.isArray(managed) ? managed : (managed?.vms || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.namespace||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td><td>${v.vcpus||'-'}</td><td>${v.ram_mb||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yönetilen VM yok</td></tr>';
+  if (recEl) recEl.innerHTML = rec ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(rec,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+}
+
+/* ─── Cloud/K8s: KubeVirt ─── */
+async function loadKubevirtPage() {
+  const detectEl = document.getElementById('kubevirt-detect-body');
+  const tb = document.getElementById('kubevirt-vms-tbody');
+  if (detectEl) detectEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [detect, vms] = await Promise.all([_api('/api/kubevirt/detect'), _api('/api/kubevirt/vms')]);
+  if (!detect) { toast('KubeVirt verisi alınamadı','error'); return; }
+  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  const arr = Array.isArray(vms) ? vms : (vms?.vms || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.namespace||'-')}</td><td>${_esc(v.phase||v.status||'-')}</td><td>${_esc(v.node||'-')}</td><td>${_esc(v.ip||'-')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">KubeVirt VM yok</td></tr>';
+}
+
+/* ─── Cloud/K8s: GitOps ─── */
+async function loadGitopsPage() {
+  const cfgEl = document.getElementById('gitops-config-body');
+  const statusEl = document.getElementById('gitops-status-body');
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  if (statusEl) statusEl.innerHTML = 'Yükleniyor...';
+  const [cfg, status] = await Promise.all([_api('/api/gitops/config'), _api('/api/gitops/status')]);
+  if (!cfg) { toast('GitOps verisi alınamadı','error'); return; }
+  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  if (statusEl) statusEl.innerHTML = status ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>` : '<span class="text-muted">Durum yok</span>';
+}
+async function gitopsSync() {
+  const res = document.getElementById('gitops-sync-result');
+  if (res) res.innerHTML = '<span class="text-muted">Senkronize ediliyor...</span>';
+  const d = await _api('/api/gitops/sync','POST');
+  if (!d) { toast('Senkronizasyon hatası','error'); return; }
+  toast('GitOps senkronizasyonu başlatıldı','success');
+  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
+
+/* ─── Modern Workloads: Firecracker ─── */
+async function loadFirecrackerPage() {
+  const detectEl = document.getElementById('fc-detect-body');
+  const tb = document.getElementById('fc-vms-tbody');
+  if (detectEl) detectEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [detect, vms] = await Promise.all([_api('/api/firecracker/detect'), _api('/api/firecracker/vms')]);
+  if (!detect) { toast('Firecracker verisi alınamadı','error'); return; }
+  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  const arr = Array.isArray(vms) ? vms : (vms?.vms || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td style="font-family:monospace;font-size:11px">${_esc(v.id||'-')}</td><td>${_esc(v.status||v.state||'-')}</td><td>${v.vcpus||'-'}</td><td>${v.ram_mb||'-'}</td><td>${v.boot_time_ms||'-'} ms</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">microVM yok</td></tr>';
+}
+
+/* ─── Modern Workloads: Kata ─── */
+async function loadKataPage() {
+  const detectEl = document.getElementById('kata-detect-body');
+  const tb = document.getElementById('kata-tbody');
+  if (detectEl) detectEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [detect, containers] = await Promise.all([_api('/api/kata/detect'), _api('/api/kata/containers')]);
+  if (!detect) { toast('Kata verisi alınamadı','error'); return; }
+  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  const arr = Array.isArray(containers) ? containers : (containers?.containers || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(c => `<tr><td style="font-family:monospace;font-size:11px">${_esc(c.id||'-')}</td><td>${_esc(c.image||'-')}</td><td>${_esc(c.status||c.state||'-')}</td><td>${_esc(c.vm_kernel||'-')}</td><td>${c.memory_mb||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Kata container yok</td></tr>';
+}
+
+/* ─── Modern Workloads: WASM ─── */
+async function loadWasmPage() {
+  const detectEl = document.getElementById('wasm-detect-body');
+  const tb = document.getElementById('wasm-modules-tbody');
+  if (detectEl) detectEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [detect, mods] = await Promise.all([_api('/api/wasm/detect'), _api('/api/wasm/modules')]);
+  if (!detect) { toast('WASM verisi alınamadı','error'); return; }
+  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  const arr = Array.isArray(mods) ? mods : (mods?.modules || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(m => `<tr><td>${_esc(m.name||'-')}</td><td>${_esc(m.size||'-')}</td><td>${_esc(m.runtime||'-')}</td><td>${_esc(m.status||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">WASM modülü yok</td></tr>';
+}
+async function wasmRun() {
+  const wasm_path = document.getElementById('wasm-path').value.trim();
+  const res = document.getElementById('wasm-run-result');
+  if (!wasm_path) { toast('wasm_path gerekli','error'); return; }
+  if (res) { res.style.display='block'; res.textContent='Çalıştırılıyor...'; }
+  const d = await _api('/api/wasm/run','POST',{wasm_path});
+  if (!d) { toast('WASM çalıştırma hatası','error'); return; }
+  if (res) res.textContent = d.output || d.result || JSON.stringify(d,null,2);
+}
+
+/* ─── Modern Workloads: Edge ─── */
+async function loadEdgePage() {
+  const statusEl = document.getElementById('edge-status-body');
+  const profileEl = document.getElementById('edge-profile-body');
+  const cfgEl = document.getElementById('edge-config-body');
+  if (statusEl) statusEl.innerHTML = 'Yükleniyor...';
+  if (profileEl) profileEl.innerHTML = 'Yükleniyor...';
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  const [status, profile, cfg] = await Promise.all([_api('/api/edge/status'), _api('/api/edge/profile'), _api('/api/edge/config')]);
+  if (!status) { toast('Edge verisi alınamadı','error'); return; }
+  if (statusEl) statusEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>`;
+  if (profileEl) profileEl.innerHTML = profile ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(profile,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+  if (cfgEl) cfgEl.innerHTML = cfg ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+}
+
+/* ─── Automation: Workflow ─── */
+async function loadWorkflowPage() {
+  const tb = document.getElementById('workflow-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/workflow');
+  if (!d) { toast('Workflow verisi alınamadı','error'); return; }
+  const arr = Array.isArray(d) ? d : (d.workflows || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(w => `<tr><td style="font-family:monospace;font-size:11px">${_esc(w.id||'-')}</td><td>${_esc(w.name||'-')}</td><td>${(w.steps||w.actions||[]).length}</td><td>${_esc(w.status||'-')}</td><td><button class="btn-primary" style="font-size:11px" onclick="workflowRun('${_esc(w.id||'')}')">▶ Çalıştır</button></td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Workflow yok</td></tr>';
+}
+async function workflowRun(id) {
+  if (!id) return;
+  const d = await _api(`/api/workflow/${encodeURIComponent(id)}/run`,'POST');
+  if (d) { toast('Workflow başlatıldı','success'); loadWorkflowPage(); }
+  else toast('Workflow başlatılamadı','error');
+}
+
+/* ─── Automation: OPA ─── */
+async function loadOpaPage() {
+  const tb = document.getElementById('opa-policies-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/opa/policies');
+  if (!d) { toast('OPA verisi alınamadı','error'); return; }
+  const arr = Array.isArray(d) ? d : (d.policies || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(p => `<tr><td>${_esc(p.name||'-')}</td><td>${_esc(p.package||p.pkg||'-')}</td><td>${p.rules||0}</td><td>${_esc(p.status||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Politika yok</td></tr>';
+}
+async function opaEvaluate() {
+  const policy_name = document.getElementById('opa-policy-name').value.trim();
+  const inputRaw = document.getElementById('opa-input-json').value.trim();
+  const res = document.getElementById('opa-eval-result');
+  if (!policy_name) { toast('Policy name gerekli','error'); return; }
+  let input = {};
+  try { input = inputRaw ? JSON.parse(inputRaw) : {}; } catch(e) { toast('Geçersiz JSON input','error'); return; }
+  if (res) { res.style.display='block'; res.textContent='Değerlendiriliyor...'; }
+  const d = await _api('/api/opa/evaluate','POST',{policy_name,input});
+  if (!d) { toast('OPA değerlendirme hatası','error'); return; }
+  if (res) res.textContent = JSON.stringify(d,null,2);
+}
+
+/* ─── Automation: CloudEvents ─── */
+async function loadCloudeventsPage() {
+  const tb = document.getElementById('ce-tbody');
+  const typesTb = document.getElementById('ce-types-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  if (typesTb) typesTb.innerHTML = '<tr><td colspan="3" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [events, types] = await Promise.all([_api('/api/cloudevents'), _api('/api/cloudevents/types')]);
+  if (!events) { toast('CloudEvents verisi alınamadı','error'); return; }
+  const arr = Array.isArray(events) ? events : (events.events || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(e => `<tr><td style="font-family:monospace;font-size:11px">${_esc(e.id||'-')}</td><td>${_esc(e.type||'-')}</td><td>${_esc(e.source||'-')}</td><td>${_esc(e.time||'-')}</td><td style="font-size:11px">${_esc(JSON.stringify(e.data||{}))}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Olay yok</td></tr>';
+  const typesArr = Array.isArray(types) ? types : (types?.types || []);
+  if (typesTb) typesTb.innerHTML = typesArr.length ? typesArr.map(t => `<tr><td>${_esc(t.type||t.name||'-')}</td><td>${_esc(t.description||'-')}</td><td>${_esc(t.sink||'-')}</td></tr>`).join('') : '<tr><td colspan="3" class="text-center text-muted" style="padding:14px">Tip yok</td></tr>';
+}
+
+/* ─── Clients: Desktop ─── */
+async function loadDesktopPage() {
+  const cfgEl = document.getElementById('desktop-config-body');
+  const tb = document.getElementById('desktop-clients-tbody');
+  const dlEl = document.getElementById('desktop-downloads-body');
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  if (dlEl) dlEl.innerHTML = 'Yükleniyor...';
+  const [cfg, clients, downloads] = await Promise.all([_api('/api/desktop/config'), _api('/api/desktop/clients'), _api('/api/desktop/downloads')]);
+  if (!cfg) { toast('Desktop config alınamadı','error'); return; }
+  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  const arr = Array.isArray(clients) ? clients : (clients?.clients || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(c => `<tr><td>${_esc(c.user||'-')}</td><td>${_esc(c.platform||'-')}</td><td>${_esc(c.version||'-')}</td><td>${_esc(c.last_seen||'-')}</td><td>${_esc(c.status||'-')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Bağlı istemci yok</td></tr>';
+  if (dlEl) dlEl.innerHTML = downloads ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(downloads,null,2))}</pre>` : '<span class="text-muted">İndirme linki yok</span>';
+}
+
+/* ─── Clients: Cloud Export ─── */
+async function loadCloudExportPage() {
+  const cfgEl = document.getElementById('cloudexp-config-body');
+  const tb = document.getElementById('cloudexp-targets-tbody');
+  if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
+  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const [cfg, targets] = await Promise.all([_api('/api/cloud-export'), _api('/api/cloud-export/targets')]);
+  if (!cfg) { toast('Cloud export verisi alınamadı','error'); return; }
+  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  const arr = Array.isArray(targets) ? targets : (targets?.targets || []);
+  if (tb) tb.innerHTML = arr.length ? arr.map(t => `<tr><td>${_esc(t.name||'-')}</td><td>${_esc(t.provider||'-')}</td><td>${_esc(t.region||'-')}</td><td>${_esc(t.status||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Hedef yok</td></tr>';
+}
+async function cloudExportAws() {
+  const vm_id = document.getElementById('cexp-vm-id').value.trim();
+  const region = document.getElementById('cexp-region').value.trim();
+  const res = document.getElementById('cexp-result');
+  if (!vm_id || !region) { toast('VM ID ve bölge gerekli','error'); return; }
+  if (res) res.innerHTML = '<span class="text-muted">Export başlatılıyor...</span>';
+  const d = await _api('/api/cloud-export/aws','POST',{vm_id,region});
+  if (!d) { toast('AWS export başlatılamadı','error'); return; }
+  toast('AWS export başlatıldı','success');
+  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+}
 
 /* ══════════════════════════════════════════════════════════════════
    UX PACK: PWA, Command Palette, Notifications, Onboarding Wizard
