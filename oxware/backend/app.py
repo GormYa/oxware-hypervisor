@@ -9707,7 +9707,86 @@ def api_openapi_spec():
             }
         },
         "security": [{"bearerAuth": []}],
-        "paths": {
+        "paths": _autogen_openapi_paths(),
+    }
+    return jsonify(spec)
+
+
+# OpenAPI paths auto-generated from Flask url_map — never goes stale, lists ALL /api/* routes
+_OPENAPI_TAG_MAP = [
+    ("/api/backup-adv", "Backup Advanced"), ("/api/backup", "Backup"),
+    ("/api/vms", "VMs"), ("/api/storage-adv", "Storage Advanced"), ("/api/storage", "Storage"),
+    ("/api/network-adv", "Network Advanced"), ("/api/networks", "Networking"),
+    ("/api/drs", "Enterprise"), ("/api/affinity", "Enterprise"), ("/api/evc", "Enterprise"),
+    ("/api/nioc", "Network Advanced"), ("/api/maintenance", "Lifecycle"), ("/api/lifecycle", "Lifecycle"),
+    ("/api/dr/", "DR"), ("/api/boot-order", "DR"), ("/api/geo-dns", "DR"),
+    ("/api/otel", "Observability"), ("/api/grafana", "Observability"), ("/api/topo-viz", "Observability"),
+    ("/api/topology", "Observability"), ("/api/forecast", "Observability"), ("/api/drift", "Observability"),
+    ("/api/capacity", "Observability"),
+    ("/api/microseg", "Network Advanced 2"), ("/api/bfd", "Network Advanced 2"),
+    ("/api/service-chain", "Network Advanced 2"), ("/api/mesh", "Network Advanced 2"),
+    ("/api/pulumi", "Cloud/K8s"), ("/api/k8s-csi", "Cloud/K8s"), ("/api/k8s-operator", "Cloud/K8s"),
+    ("/api/kubevirt", "Cloud/K8s"), ("/api/gitops", "Cloud/K8s"),
+    ("/api/firecracker", "Modern Workloads"), ("/api/kata", "Modern Workloads"),
+    ("/api/wasm", "Modern Workloads"), ("/api/edge", "Modern Workloads"),
+    ("/api/workflow", "Automation"), ("/api/opa", "Automation"), ("/api/cloudevents", "Automation"),
+    ("/api/automation", "Automation"), ("/api/webhooks", "Automation"),
+    ("/api/desktop", "Clients"), ("/api/cloud-export", "Clients"),
+    ("/api/vtpm", "Security"), ("/api/secureboot", "Security"), ("/api/vault", "Security"),
+    ("/api/audit-chain", "Security"), ("/api/confidential", "Security"), ("/api/disk-encryption", "Security"),
+    ("/api/compliance", "Security"), ("/api/dlp", "Security"), ("/api/forensics", "Security"),
+    ("/api/mfa", "Security"), ("/api/sso", "Security"), ("/api/siem", "Security"),
+    ("/api/sessions", "Security"), ("/api/security", "Security"),
+    ("/api/tenants", "Multi-Tenancy"), ("/api/self-service", "Multi-Tenancy"),
+    ("/api/chargeback", "Multi-Tenancy"), ("/api/service-catalog", "Multi-Tenancy"),
+    ("/api/tenant-rate-limit", "Multi-Tenancy"),
+    ("/api/hugepages", "Compute"), ("/api/sriov", "Network"), ("/api/vgpu", "Compute"),
+    ("/api/numa", "Compute"), ("/api/cdp", "Storage"), ("/api/right-sizing", "Observability"),
+    ("/api/alerts", "Observability"), ("/api/predict", "Observability"), ("/api/session", "Security"),
+    ("/api/users", "Management"), ("/api/features", "Management"), ("/api/metrics", "Monitoring"),
+    ("/api/vm-schedules", "Scheduling"), ("/api/settings", "Settings"), ("/api/auth", "Auth"),
+    ("/api/", "General"),
+]
+
+def _autogen_openapi_paths():
+    import re as _re_oa
+    paths = {}
+    def _tag(p):
+        for pre, tag in _OPENAPI_TAG_MAP:
+            if p.startswith(pre):
+                return tag
+        return "General"
+    try:
+        for rule in app.url_map.iter_rules():
+            p = str(rule.rule)
+            if not p.startswith("/api/"):
+                continue
+            if p in ("/api/openapi.json", "/api/docs"):
+                continue
+            op_path = _re_oa.sub(r"<(?:[^:>]+:)?([^>]+)>", r"{\1}", p)
+            methods = sorted(m for m in (rule.methods or set())
+                             if m in ("GET", "POST", "PUT", "DELETE", "PATCH"))
+            if not methods:
+                continue
+            params = [{"name": v, "in": "path", "required": True, "schema": {"type": "string"}}
+                      for v in _re_oa.findall(r"\{([^}]+)\}", op_path)]
+            item = paths.setdefault(op_path, {})
+            for m in methods:
+                summary = rule.endpoint.replace("api_", "").replace("_", " ").strip().title()
+                op = {"summary": summary or op_path, "tags": [_tag(p)],
+                      "responses": {"200": {"description": "OK"}}}
+                if params:
+                    op["parameters"] = params
+                item[m.lower()] = op
+    except Exception as _oa_e:
+        log.warning("openapi autogen hata: %s", _oa_e)
+    return paths
+
+
+def _api_openapi_spec_DEAD_legacy():
+    # Eski hardcoded spec — kullanılmıyor (auto-gen aktif). Referans için tutuldu.
+    return {
+        "_legacy_paths": {
             "/vms": {
                 "get": {"summary": "VM listesi", "tags": ["VMs"], "responses": {"200": {"description": "VM listesi"}}},
                 "post": {"summary": "VM oluştur", "tags": ["VMs"], "responses": {"201": {"description": "Oluşturuldu"}}}
