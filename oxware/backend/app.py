@@ -11160,9 +11160,10 @@ def api_hotplug_memory(vm_name):
 #  STORAGE MIGRATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.route("/api/storage/pools", methods=["GET"])
+@app.route("/api/storage/pools/migration", methods=["GET"])
 @require_auth
-def api_storage_pools():
+def api_storage_pools_migration():
+    """Storage migration module pool list (distinct from /api/storage/pools)."""
     if not stor_mig: return ok({"pools": []})
     return ok({"pools": stor_mig.list_storage_pools()})
 
@@ -18455,19 +18456,20 @@ def api_storage_drs_migrate():
     except Exception as e:
         return err(str(e), 500)
 
-# ── Console Recording ─────────────────────────────────────────────────────────
-@app.route("/api/recordings", methods=["GET"])
+# ── Console Recording (VNC→WebM) — /api/console-recordings/* ─────────────────
+# NOTE: /api/recordings/* is used by session_recorder (SSH/VNC session replay)
+@app.route("/api/console-recordings", methods=["GET"])
 @require_auth
 @require_role("admin", "administrator", "operator")
-def api_recordings_list():
+def api_console_recordings_list():
     if not console_recorder_mgr: return ok(recordings=[])
     vm_id = request.args.get("vm_id")
     return ok(recordings=console_recorder_mgr.list_recordings(vm_id))
 
-@app.route("/api/recordings/start", methods=["POST"])
+@app.route("/api/console-recordings/start", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
-def api_recording_start():
+def api_console_recording_start():
     if not console_recorder_mgr: return err("modül yok", 503)
     d = request.get_json() or {}
     try:
@@ -18478,20 +18480,20 @@ def api_recording_start():
     except Exception as e:
         return err(str(e), 500)
 
-@app.route("/api/recordings/<recording_id>/stop", methods=["POST"])
+@app.route("/api/console-recordings/<recording_id>/stop", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
-def api_recording_stop(recording_id):
+def api_console_recording_stop(recording_id):
     if not console_recorder_mgr: return err("modül yok", 503)
     try:
         return ok(**console_recorder_mgr.stop_recording(recording_id))
     except Exception as e:
         return err(str(e), 500)
 
-@app.route("/api/recordings/<recording_id>", methods=["DELETE"])
+@app.route("/api/console-recordings/<recording_id>", methods=["DELETE"])
 @require_auth
 @require_role("admin", "administrator")
-def api_recording_delete(recording_id):
+def api_console_recording_delete(recording_id):
     if not console_recorder_mgr: return err("modül yok", 503)
     try:
         return ok(**console_recorder_mgr.delete_recording(recording_id))
