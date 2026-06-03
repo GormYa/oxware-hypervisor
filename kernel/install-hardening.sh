@@ -108,11 +108,49 @@ info "Applied via systemd SystemCallFilter= in drop-in"
 # ── 3. systemd drop-in (cgroups + capabilities + seccomp) ─────────────────
 info "--- [3/5] systemd Hardening Drop-in ---"
 DROPIN_DIR="/etc/systemd/system/oxware.service.d"
+DROPIN_FILE="$DROPIN_DIR/hardening.conf"
+DROPIN_BACKUP="$DROPIN_DIR/hardening.conf.bak"
+
 run "mkdir -p '$DROPIN_DIR'"
-safe_cp "$SCRIPT_DIR/systemd/oxware-hardening.conf" "$DROPIN_DIR/hardening.conf"
+
+# Backup existing drop-in for rollback
+[[ -f "$DROPIN_FILE" ]] && run "cp '$DROPIN_FILE' '$DROPIN_BACKUP'"
+
+safe_cp "$SCRIPT_DIR/systemd/oxware-hardening.conf" "$DROPIN_FILE"
 run "systemctl daemon-reload"
-info "systemd drop-in installed: $DROPIN_DIR/hardening.conf"
-info "Effective after: sudo systemctl restart oxware"
+info "systemd drop-in installed: $DROPIN_FILE"
+
+# ── Auto-test: restart service and verify it stays up ─────────────────────
+if [[ $DRY_RUN -eq 0 ]]; then
+  info "Testing oxware.service with new hardening..."
+  systemctl restart oxware 2>&1 | tee -a "$LOG" || true
+  sleep 4
+
+  if systemctl is-active --quiet oxware; then
+    info "oxware.service started successfully with hardening ✓"
+  else
+    error "oxware.service FAILED to start with hardening!"
+    error "$(journalctl -u oxware -n 10 --no-pager 2>/dev/null || true)"
+    warn "Rolling back hardening drop-in..."
+    if [[ -f "$DROPIN_BACKUP" ]]; then
+      cp "$DROPIN_BACKUP" "$DROPIN_FILE"
+      info "Restored previous drop-in from backup"
+    else
+      rm -f "$DROPIN_FILE"
+      info "Removed drop-in (no backup existed)"
+    fi
+    run "systemctl daemon-reload"
+    run "systemctl restart oxware"
+    sleep 3
+    if systemctl is-active --quiet oxware; then
+      info "Service restored successfully after rollback ✓"
+    else
+      error "Service still failing after rollback — manual intervention needed"
+      error "Run: journalctl -u oxware -n 30"
+    fi
+    # Don't abort entire script — continue with other steps
+  fi
+fi
 
 # ── 4. eBPF/XDP network filter ────────────────────────────────────────────
 info "--- [4/5] eBPF/XDP Network Filter ---"
