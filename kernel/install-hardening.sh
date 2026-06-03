@@ -122,33 +122,48 @@ info "systemd drop-in installed: $DROPIN_FILE"
 
 # ── Auto-test: restart service and verify it stays up ─────────────────────
 if [[ $DRY_RUN -eq 0 ]]; then
-  info "Testing oxware.service with new hardening..."
+  info "Testing oxware.service with new hardening (wait 8s)..."
   systemctl restart oxware 2>&1 | tee -a "$LOG" || true
-  sleep 4
+  sleep 8   # give ExecStartPre time to complete
 
   if systemctl is-active --quiet oxware; then
     info "oxware.service started successfully with hardening ✓"
   else
-    error "oxware.service FAILED to start with hardening!"
-    error "$(journalctl -u oxware -n 10 --no-pager 2>/dev/null || true)"
+    # Capture exact failure reason
+    FAIL_CODE=$(systemctl show oxware --property=Result --value 2>/dev/null)
+    FAIL_LOG=$(journalctl -u oxware -n 15 --no-pager 2>/dev/null || true)
+    error "oxware.service FAILED (Result: $FAIL_CODE)"
+    error "$FAIL_LOG"
+
+    # Specific diagnosis
+    if echo "$FAIL_LOG" | grep -qE "NAMESPACE|226"; then
+      error "Cause: 226/NAMESPACE — mount namespacing failed"
+    elif echo "$FAIL_LOG" | grep -qE "status=1/FAILURE|ExecStartPre.*failed|control process exited"; then
+      error "Cause: ExecStartPre command failed (likely ProtectSystem blocking /etc write)"
+    elif echo "$FAIL_LOG" | grep -qE "Permission denied"; then
+      error "Cause: Permission denied — filesystem protection too strict"
+    fi
+
     warn "Rolling back hardening drop-in..."
     if [[ -f "$DROPIN_BACKUP" ]]; then
       cp "$DROPIN_BACKUP" "$DROPIN_FILE"
       info "Restored previous drop-in from backup"
     else
       rm -f "$DROPIN_FILE"
-      info "Removed drop-in (no backup existed)"
+      info "Drop-in removed (was first install — no backup)"
     fi
-    run "systemctl daemon-reload"
-    run "systemctl restart oxware"
-    sleep 3
+    systemctl daemon-reload
+    systemctl restart oxware
+    sleep 5
     if systemctl is-active --quiet oxware; then
-      info "Service restored successfully after rollback ✓"
+      info "Service restored after rollback ✓"
+      warn "Hardening NOT applied — fix kernel/systemd/oxware-hardening.conf and re-run"
     else
-      error "Service still failing after rollback — manual intervention needed"
-      error "Run: journalctl -u oxware -n 30"
+      error "Service STILL failing after rollback!"
+      error "Run: sudo bash repair.sh"
+      error "Or:  sudo bash repair.sh --remove-hardening"
     fi
-    # Don't abort entire script — continue with other steps
+    # Don't abort — continue with AppArmor, eBPF steps
   fi
 fi
 
