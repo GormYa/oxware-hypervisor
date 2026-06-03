@@ -5394,6 +5394,7 @@
             <button class="sub-tab" onclick="entCat('modern')">🚀 Modern</button>
             <button class="sub-tab" onclick="entCat('automation')">🤖 Otomasyon</button>
             <button class="sub-tab" onclick="entCat('clients')">🖥️ İstemciler</button>
+            <button class="sub-tab" onclick="entCat('docs')">📖 API Docs</button>
           </div>
           <!-- Feature sub-tab bar (populated by entCat()) -->
           <div class="sub-tabs" id="ent-feat-tabs" style="margin-bottom:14px;overflow-x:auto;white-space:nowrap"></div>
@@ -6824,6 +6825,20 @@
             </div>
             <div id="cexp-result"></div>
           </div>
+        </div>
+
+        <div id="ent-pane-apidocs" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-book fa-fw" style="color:var(--accent-lt)"></i> API Reference</h2>
+            <div class="spacer"></div>
+            <a href="/api/docs" target="_blank" class="btn" style="font-size:12px">🔗 Swagger UI ↗</a>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:var(--accent-lt)">ℹ Not:</b> Tüm ~190 endpoint otomatik listelenmiştir. Canlı Swagger/OpenAPI explorer için <a href="/api/docs" target="_blank" style="color:var(--accent-lt)">/api/docs</a> kullanın.
+            </div>
+          </div>
+          <div id="apidocs-body"></div>
         </div>
 
         </div><!-- /page-tab-enterprise -->
@@ -21029,7 +21044,7 @@ async function deleteRbacPerm(key, username) {
 /* ══════════════════════════════════════════════════════════════════════════════
    Enterprise Sub-Tab System (v2.5.6+)
 ══════════════════════════════════════════════════════════════════════════════ */
-const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport'];
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport','apidocs'];
 const ENT_LOADERS = {
   drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
   affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
@@ -21080,7 +21095,8 @@ const ENT_LOADERS = {
   opa: () => { try { loadOpaPage(); } catch(e) { console.warn(e); } },
   cloudevents: () => { try { loadCloudeventsPage(); } catch(e) { console.warn(e); } },
   desktop: () => { try { loadDesktopPage(); } catch(e) { console.warn(e); } },
-  cloudexport: () => { try { loadCloudExportPage(); } catch(e) { console.warn(e); } }
+  cloudexport: () => { try { loadCloudExportPage(); } catch(e) { console.warn(e); } },
+  apidocs: () => { try { loadApiDocsPage(); } catch(e) { console.warn(e); } }
 };
 
 function entSubTab(tab) {
@@ -21106,7 +21122,8 @@ const ENT_CATEGORIES = {
   cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops'],
   modern:['firecracker','kata','wasm','edge'],
   automation:['workflow','opa','cloudevents'],
-  clients:['desktop','cloudexport']
+  clients:['desktop','cloudexport'],
+  docs:['apidocs']
 };
 let _entCurrentCat = 'compute';
 function entCat(cat) {
@@ -21119,7 +21136,7 @@ function entCat(cat) {
   if (bs[ci]) bs[ci].classList.add('active');
   // Build feature sub-tab bar for this category
   const feats = ENT_CATEGORIES[cat] || [];
-  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export'};
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export',apidocs:'API Referans'};
   const bar = document.getElementById('ent-feat-tabs');
   bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
   // Hide all panes, show first feature of this category
@@ -24106,6 +24123,42 @@ async function cloudExportAws() {
   if (!d) { toast('AWS export başlatılamadı','error'); return; }
   toast('AWS export başlatıldı','success');
   if (res) res.innerHTML = _entKV(d);
+}
+
+/* ──── API Docs Panel ──── */
+let _apiDocsLoaded = false;
+async function loadApiDocsPage() {
+  if (_apiDocsLoaded) return;
+  const el = document.getElementById('apidocs-body');
+  if (!el) return;
+  el.innerHTML = '<div class="text-muted" style="padding:20px">OpenAPI şeması yükleniyor...</div>';
+  const spec = await _api('/api/openapi');
+  if (!spec || !spec.paths) {
+    el.innerHTML = '<div class="text-muted" style="padding:20px">Şema alınamadı. <a href="/api/docs" target="_blank">Swagger UI ↗</a></div>';
+    return;
+  }
+  /* group by tag */
+  const groups = {};
+  Object.entries(spec.paths).forEach(([path, methods]) => {
+    Object.entries(methods).forEach(([method, op]) => {
+      if (method === 'parameters') return;
+      const tag = (op.tags && op.tags[0]) || 'Genel';
+      if (!groups[tag]) groups[tag] = [];
+      groups[tag].push({ method: method.toUpperCase(), path, summary: op.summary || '' });
+    });
+  });
+  const methodColor = { GET:'#3fb950', POST:'#58a6ff', DELETE:'#f85149', PATCH:'#d29922', PUT:'#d29922' };
+  const html = Object.entries(groups).sort((a,b) => a[0].localeCompare(b[0])).map(([tag, eps]) => `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:8px">${_esc(tag)} <span style="font-size:11px;color:var(--text-muted);font-weight:400">(${eps.length} endpoint)</span></div>
+      ${eps.map(e => `<div style="display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span style="font-size:10px;font-weight:700;color:${methodColor[e.method]||'#888'};min-width:46px;text-align:center;background:rgba(255,255,255,.05);border-radius:3px;padding:1px 4px">${e.method}</span>
+        <code style="color:var(--accent-lt);font-size:11px">${_esc(e.path)}</code>
+        ${e.summary ? `<span style="color:var(--text-muted);font-size:11px">— ${_esc(e.summary)}</span>` : ''}
+      </div>`).join('')}
+    </div>`).join('');
+  el.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Toplam: <b style="color:var(--text)">${Object.values(groups).reduce((s,a)=>s+a.length,0)} endpoint</b></div>` + html;
+  _apiDocsLoaded = true;
 }
 
 /* ══════════════════════════════════════════════════════════════════
