@@ -216,7 +216,7 @@
     .vm-id{font-family:'Consolas',monospace;color:var(--text-dim);font-size:10px;margin-right:2px}
 
     /* ── Context Nav ── ESXi-style sidebar */
-    #nav-panel{width:var(--nav-w);min-width:160px;max-width:400px;background:#162030;border-right:1px solid #243040;overflow-y:auto;flex-shrink:0;padding:3px 0;position:relative;transition:none}
+    #nav-panel{width:var(--nav-w);min-width:160px;max-width:400px;background:#162030;border-right:1px solid #243040;overflow-y:auto;overflow-x:hidden;flex-shrink:0;padding:3px 0;position:relative;transition:none;height:100%;align-self:stretch}
     #nav-resize-handle{position:absolute;right:0;top:0;bottom:0;width:3px;cursor:col-resize;background:transparent;z-index:10;transition:background .15s}
     #nav-resize-handle:hover,#nav-resize-handle.dragging{background:var(--accent)}
 
@@ -9877,6 +9877,47 @@ const PAGE_STRINGS = {
     'Peer Listesi':'Lista de Peers','Peer yok':'Sin peers','Peer Ekle':'Agregar Peer',
     'Zamanlanmış Backup':'Backup Programado',
     'Yeni Havuz':'Nuevo Pool','IP Havuzu':'Pool de IP','Toplam IP':'IPs Totales',
+    /* Enterprise — Backup Advanced */
+    'Uygulama Tutarlı Snapshot':'Snapshot Consistente con App','3-2-1 Yedekleme':'Copia 3-2-1',
+    'Yedek Doğrulama':'Verificación de Backup','Çapraz Site Replikasyon':'Replicación Cross-Site',
+    'Tutarlı Snapshot Al':'Tomar Snapshot Consistente','Yedekleme Başlat':'Iniciar Backup',
+    'Doğrulama Başlat':'Iniciar Verificación','RPO':'RPO','RTO':'RTO',
+    /* Enterprise — Observability */
+    'Dağıtık İzleme':'Trazado Distribuido','Kapasite Tahmini':'Pronóstico de Capacidad',
+    'Topoloji Grafiği':'Gráfico de Topología','Drift Tespiti':'Detección de Deriva',
+    'Ne Olur Analizi':'Análisis What-If','Günler kaldı':'días restantes',
+    /* Enterprise — Network Advanced */
+    'Mikro Segmentasyon':'Microsegmentación','BFD Oturumları':'Sesiones BFD',
+    'Servis Zinciri':'Cadena de Servicio','Servis Mesh':'Malla de Servicios',
+    'Politika Ekle':'Agregar Política','Kural Ekle':'Agregar Regla',
+    /* Enterprise — Security */
+    'vTPM Durumu':'Estado vTPM','Uyumluluk Taraması':'Escaneo de Cumplimiento',
+    'DLP Olayları':'Eventos DLP','Oturum Kayıtları':'Grabaciones de Sesión',
+    'Adli Analiz':'Análisis Forense','2FA Politikası':'Política 2FA',
+    'Şifreli VM':'VM Cifrada','Disk Şifreleme':'Cifrado de Disco',
+    'Uyarı Korelasyonu':'Correlación de Alertas',
+    /* Enterprise — Multi-Tenancy */
+    'Tenant Yönetimi':'Gestión de Tenants','Chargeback Raporu':'Informe Chargeback',
+    'Servis Kataloğu':'Catálogo de Servicios','Rate Limit':'Límite de Tasa',
+    'Kota':'Cuota','Kullanıcı Kotası':'Cuota de Usuario',
+    /* Enterprise — Cloud/K8s */
+    'Pulumi Programı Oluştur':'Generar Programa Pulumi','CSI Manifestleri':'Manifiestos CSI',
+    'CRD Tanımı':'Definición CRD','GitOps Sync':'Sincronización GitOps',
+    /* Enterprise — Modern Workloads */
+    'microVM Oluştur':'Crear microVM','Kata Tespit':'Detectar Kata',
+    'WASM Çalıştır':'Ejecutar WASM','Edge Durumu':'Estado Edge',
+    /* Enterprise — Automation */
+    'Workflow Çalıştır':'Ejecutar Workflow','Politika Değerlendir':'Evaluar Política',
+    'Event Gönder':'Enviar Evento','Cloud Export':'Exportación Cloud',
+    /* General Enterprise */
+    'Admin':'Admin','Yönetici':'Administrador','Operatör':'Operador',
+    'Etkin':'Activo','Pasif':'Inactivo','Bağlı':'Conectado','Bağlı Değil':'Desconectado',
+    'Hata':'Error','Başarılı':'Exitoso','Bekliyor':'Pendiente','Çalışıyor':'En Ejecución',
+    'Tamamlandı':'Completado','Başarısız':'Fallido',
+    'Etkinleştir':'Activar','Devre Dışı Bırak':'Desactivar',
+    'Veriler Yükleniyor':'Cargando datos','Modül yok':'Módulo no disponible',
+    'Endpoint':'Endpoint','UUID':'UUID','Port':'Puerto',
+    'Sunucu':'Servidor','İstemci':'Cliente','Token':'Token','API Anahtarı':'Clave API',
   },
   de: {
     /* Genel */
@@ -10018,6 +10059,41 @@ const PAGE_STRINGS = {
     'Peer Listesi':'Peer-Liste','Peer yok':'Keine Peers','Peer Ekle':'Peer Hinzufügen',
     'Zamanlanmış Backup':'Geplantes Backup',
     'Yeni Havuz':'Neuer Pool','IP Havuzu':'IP-Pool','Toplam IP':'Gesamt IPs',
+    /* Enterprise — Backup Advanced */
+    'Uygulama Tutarlı Snapshot':'App-Konsistenter Snapshot','3-2-1 Yedekleme':'3-2-1 Backup',
+    'Yedek Doğrulama':'Backup-Verifizierung','Çapraz Site Replikasyon':'Cross-Site-Replikation',
+    'Tutarlı Snapshot Al':'Konsistenten Snapshot erstellen','Yedekleme Başlat':'Backup starten',
+    'RPO':'RPO','RTO':'RTO',
+    /* Enterprise — Observability */
+    'Dağıtık İzleme':'Verteiltes Tracing','Kapasite Tahmini':'Kapazitätsprognose',
+    'Topoloji Grafiği':'Topologie-Graph','Drift Tespiti':'Drift-Erkennung',
+    'Ne Olur Analizi':'Was-wäre-wenn-Analyse','Günler kaldı':'Tage verbleibend',
+    /* Enterprise — Network Advanced */
+    'Mikro Segmentasyon':'Mikrosegmentierung','BFD Oturumları':'BFD-Sitzungen',
+    'Servis Zinciri':'Service-Kette','Servis Mesh':'Service-Mesh',
+    /* Enterprise — Security */
+    'vTPM Durumu':'vTPM-Status','Uyumluluk Taraması':'Compliance-Scan',
+    'DLP Olayları':'DLP-Ereignisse','Oturum Kayıtları':'Sitzungsaufzeichnungen',
+    'Adli Analiz':'Forensische Analyse','2FA Politikası':'2FA-Richtlinie',
+    'Şifreli VM':'Verschlüsselte VM','Disk Şifreleme':'Festplattenverschlüsselung',
+    'Uyarı Korelasyonu':'Alert-Korrelation',
+    /* Enterprise — Multi-Tenancy */
+    'Tenant Yönetimi':'Mandanten-Verwaltung','Chargeback Raporu':'Chargeback-Bericht',
+    'Servis Kataloğu':'Dienstkatalog','Rate Limit':'Ratenbegrenzung',
+    /* Enterprise — Cloud/K8s */
+    'Pulumi Programı Oluştur':'Pulumi-Programm erstellen','CSI Manifestleri':'CSI-Manifeste',
+    'CRD Tanımı':'CRD-Definition','GitOps Sync':'GitOps-Synchronisierung',
+    /* Enterprise — Modern Workloads */
+    'microVM Oluştur':'microVM erstellen','WASM Çalıştır':'WASM ausführen','Edge Durumu':'Edge-Status',
+    /* Enterprise — Automation */
+    'Workflow Çalıştır':'Workflow ausführen','Politika Değerlendir':'Richtlinie auswerten',
+    'Event Gönder':'Ereignis senden','Cloud Export':'Cloud-Export',
+    /* General Enterprise */
+    'Etkin':'Aktiv','Pasif':'Inaktiv','Bağlı':'Verbunden','Bağlı Değil':'Nicht verbunden',
+    'Tamamlandı':'Abgeschlossen','Başarısız':'Fehlgeschlagen',
+    'Etkinleştir':'Aktivieren','Devre Dışı Bırak':'Deaktivieren',
+    'Veriler Yükleniyor':'Daten werden geladen','Modül yok':'Modul nicht verfügbar',
+    'Sunucu':'Server','İstemci':'Client','Token':'Token','API Anahtarı':'API-Schlüssel',
   },
   zh: {
     /* Genel */
@@ -10159,6 +10235,40 @@ const PAGE_STRINGS = {
     'Peer Listesi':'对等体列表','Peer yok':'无对等体','Peer Ekle':'添加对等体',
     'Zamanlanmış Backup':'定时备份',
     'Yeni Havuz':'新建池','IP Havuzu':'IP池','Toplam IP':'IP总数',
+    /* Enterprise — Backup Advanced */
+    '尝试一致快照':'应用一致性快照','3-2-1 Yedekleme':'3-2-1备份',
+    'Uygulama Tutarlı Snapshot':'应用一致性快照','Yedek Doğrulama':'备份验证',
+    'Çapraz Site Replikasyon':'跨站点复制','RPO':'RPO','RTO':'RTO',
+    /* Enterprise — Observability */
+    'Dağıtık İzleme':'分布式追踪','Kapasite Tahmini':'容量预测',
+    'Topoloji Grafiği':'拓扑图','Drift Tespiti':'配置漂移检测',
+    'Ne Olur Analizi':'假设分析','Günler kaldı':'天后',
+    /* Enterprise — Network Advanced */
+    'Mikro Segmentasyon':'微分段','BFD Oturumları':'BFD会话',
+    'Servis Zinciri':'服务链','Servis Mesh':'服务网格',
+    /* Enterprise — Security */
+    'vTPM Durumu':'vTPM状态','Uyumluluk Taraması':'合规扫描',
+    'DLP Olayları':'DLP事件','Oturum Kayıtları':'会话录制',
+    'Adli Analiz':'取证分析','2FA Politikası':'双因素策略',
+    'Şifreli VM':'机密虚拟机','Disk Şifreleme':'磁盘加密',
+    'Uyarı Korelasyonu':'告警关联',
+    /* Enterprise — Multi-Tenancy */
+    'Tenant Yönetimi':'租户管理','Chargeback Raporu':'费用回冲报告',
+    'Servis Kataloğu':'服务目录','Rate Limit':'速率限制',
+    /* Enterprise — Cloud/K8s */
+    'Pulumi Programı Oluştur':'生成Pulumi程序','CSI Manifestleri':'CSI清单',
+    'CRD Tanımı':'CRD定义','GitOps Sync':'GitOps同步',
+    /* Enterprise — Modern Workloads */
+    'microVM Oluştur':'创建microVM','WASM Çalıştır':'运行WASM','Edge Durumu':'边缘状态',
+    /* Enterprise — Automation */
+    'Workflow Çalıştır':'运行工作流','Politika Değerlendir':'评估策略',
+    'Event Gönder':'发送事件','Cloud Export':'云导出',
+    /* General Enterprise */
+    'Etkin':'活跃','Pasif':'非活跃','Bağlı':'已连接','Bağlı Değil':'未连接',
+    'Tamamlandı':'已完成','Başarısız':'失败',
+    'Etkinleştir':'启用','Devre Dışı Bırak':'禁用',
+    'Veriler Yükleniyor':'加载数据中','Modül yok':'模块不可用',
+    'Sunucu':'服务器','İstemci':'客户端','Token':'令牌','API Anahtarı':'API密钥',
   },
 };
 
