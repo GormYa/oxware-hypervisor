@@ -8777,9 +8777,9 @@ def _add_security_headers(resp):
         "Permissions-Policy",
         "geolocation=(), microphone=(), camera=(), payment=(), usb=(), bluetooth=()"
     )
-    # Remove server fingerprinting headers
-    resp.headers.discard("Server")
-    resp.headers.discard("X-Powered-By")
+    # Remove server fingerprinting headers (pop is safe — no KeyError if missing)
+    resp.headers.pop("Server", None)
+    resp.headers.pop("X-Powered-By", None)
     return resp
 
 # ── Error handlers ────────────────────────────────────────────────────────────
