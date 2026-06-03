@@ -6416,6 +6416,113 @@ def api_security_unlock(username):
         return ok({"unlocked": True})
     return err(f"Kullanıcı bulunamadı veya kilitli değil: {username}", 404)
 
+# ── Kernel Hardening Status ───────────────────────────────────────────────────
+@app.route("/api/security/kernel-hardening", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_kernel_hardening_status():
+    """Kernel security hardening katmanlarının durumunu döner."""
+    import subprocess as _sp, os as _os
+
+    def _run(cmd):
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=5)
+            return r.returncode == 0, r.stdout.strip()
+        except Exception:
+            return False, ""
+
+    # AppArmor
+    aa_profile = "/etc/apparmor.d/opt.oxware.backend.app"
+    aa_loaded = False
+    aa_mode = "not installed"
+    if _os.path.exists(aa_profile):
+        ok_aa, aa_out = _run(["aa-status", "--json"])
+        if not ok_aa:
+            ok_aa, aa_out = _run(["aa-status"])
+        aa_loaded = _os.path.exists(aa_profile)
+        if ok_aa and "oxware" in aa_out:
+            aa_mode = "enforce" if "enforce" in aa_out else "complain"
+        elif aa_loaded:
+            aa_mode = "profile exists (not loaded)"
+
+    # systemd hardening drop-in
+    dropin = "/etc/systemd/system/oxware.service.d/hardening.conf"
+    dropin_active = _os.path.exists(dropin)
+
+    # seccomp
+    seccomp_file = "/etc/oxware/seccomp.json"
+    seccomp_installed = _os.path.exists(seccomp_file)
+
+    # eBPF/XDP — check if xdp_filter.o compiled
+    xdp_obj = "/opt/oxware/kernel/ebpf/xdp_filter.o"
+    xdp_compiled = _os.path.exists(xdp_obj)
+
+    # XDP attached interfaces
+    xdp_attached = []
+    _, link_out = _run(["ip", "-j", "link", "show"])
+    if link_out:
+        try:
+            import json as _json
+            ifaces = _json.loads(link_out)
+            xdp_attached = [i["ifname"] for i in ifaces if i.get("xdp")]
+        except Exception:
+            pass
+
+    # Kernel modules
+    _, lsmod_out = _run(["lsmod"])
+    audit_loaded = "oxware_audit" in lsmod_out
+    guard_loaded = "oxware_guard" in lsmod_out
+
+    # /dev interfaces
+    audit_dev = _os.path.exists("/dev/oxware_audit")
+    guard_dev = _os.path.exists("/dev/oxware_guard")
+
+    # Overall score (0-5)
+    layers = [aa_mode in ("enforce","complain"), dropin_active,
+              seccomp_installed, xdp_compiled, audit_loaded or guard_loaded]
+    score = sum(1 for x in layers if x)
+
+    return ok(
+        score=score,
+        max_score=5,
+        layers={
+            "apparmor":  {"active": aa_mode not in ("not installed","profile exists (not loaded)"), "mode": aa_mode, "profile": aa_profile if aa_loaded else None},
+            "systemd":   {"active": dropin_active, "path": dropin if dropin_active else None},
+            "seccomp":   {"active": seccomp_installed, "path": seccomp_file if seccomp_installed else None},
+            "ebpf_xdp":  {"active": xdp_compiled, "compiled": xdp_compiled, "attached_interfaces": xdp_attached},
+            "kernel_modules": {
+                "active":       audit_loaded or guard_loaded,
+                "oxware_audit": {"loaded": audit_loaded, "dev": audit_dev},
+                "oxware_guard": {"loaded": guard_loaded, "dev": guard_dev},
+            },
+        }
+    )
+
+@app.route("/api/security/kernel-hardening/install", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_kernel_hardening_install():
+    """Kernel hardening kurulumunu tetikler (install-hardening.sh --no-modules)."""
+    import subprocess as _sp
+    script = "/opt/oxware/kernel/install-hardening.sh"
+    if not __import__("os").path.exists(script):
+        return err("install-hardening.sh bulunamadı: git pull yapın", 404)
+    try:
+        r = _sp.run(
+            ["bash", script, "--no-modules"],
+            capture_output=True, text=True, timeout=120
+        )
+        return ok(
+            returncode=r.returncode,
+            output=r.stdout[-3000:] if r.stdout else "",
+            error=r.stderr[-1000:] if r.stderr else "",
+            success=r.returncode == 0
+        )
+    except _sp.TimeoutExpired:
+        return err("Kurulum zaman aşımı (120s)", 504)
+    except Exception as e:
+        return err(str(e), 500)
+
 # ── Firewall ──────────────────────────────────────────────────────────────────
 @app.route("/api/firewall/status", methods=["GET"])
 @require_auth

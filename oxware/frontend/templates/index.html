@@ -1494,6 +1494,29 @@
           </div>
           </div><!-- /dash-widget#vm-events -->
 
+          <!-- ── Kernel Hardening Status Widget ── -->
+          <div class="dash-widget" data-wid="kernel-hardening">
+            <div class="dash-widget-handle"></div>
+            <div class="dash-widget-label">Kernel Hardening</div>
+            <div class="card" style="margin:0">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                <span style="font-size:16px">🛡️</span>
+                <span style="font-weight:600;font-size:13px">Kernel Hardening</span>
+                <span id="kh-score-badge" style="margin-left:auto;font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text-muted)">—/5</span>
+                <button class="btn" style="font-size:11px;padding:2px 8px" onclick="loadKernelHardening()" title="Yenile">↻</button>
+              </div>
+              <div id="kh-layers" style="display:flex;flex-direction:column;gap:6px">
+                <div class="text-muted" style="font-size:12px;padding:8px 0">Yükleniyor...</div>
+              </div>
+              <div id="kh-install-row" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+                <button class="btn-primary" style="font-size:11px;width:100%" onclick="kernelHardeningInstall()">
+                  ⚡ Hardening Kur (--no-modules)
+                </button>
+                <div id="kh-install-out" style="font-size:10px;color:var(--text-muted);margin-top:6px;max-height:80px;overflow-y:auto;white-space:pre-wrap"></div>
+              </div>
+            </div>
+          </div><!-- /dash-widget#kernel-hardening -->
+
           </div><!-- /dashboard-container -->
         </div>
 
@@ -12053,9 +12076,79 @@ async function loadDashboardExtras(vmSumData) {
         }).join('');
       }
     }
+    // Kernel hardening — load async, non-blocking
+    loadKernelHardening().catch(() => {});
   } catch(e) {
     console.warn('Dashboard extras error:', e);
   }
+}
+
+/* ══════════════════ Kernel Hardening Widget ══════════════════ */
+let _khLoaded = false;
+async function loadKernelHardening() {
+  const el = document.getElementById('kh-layers');
+  const badge = document.getElementById('kh-score-badge');
+  const installRow = document.getElementById('kh-install-row');
+  if (!el) return;
+
+  const data = await _api('/api/security/kernel-hardening');
+  if (!data) {
+    el.innerHTML = '<div class="text-muted" style="font-size:12px">Veri alınamadı (admin gerekli)</div>';
+    return;
+  }
+
+  const { score, max_score, layers } = data;
+  _khLoaded = true;
+
+  // Score badge color
+  const pct = (score / max_score) * 100;
+  const col = pct >= 80 ? '#3fb950' : pct >= 40 ? '#d29922' : '#f85149';
+  if (badge) {
+    badge.textContent = `${score}/${max_score}`;
+    badge.style.background = `${col}22`;
+    badge.style.color = col;
+  }
+
+  const row = (icon, label, active, detail='') => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="font-size:14px">${icon}</span>
+      <span style="flex:1;color:var(--text)">${label}</span>
+      ${detail ? `<span style="font-size:10px;color:var(--text-muted)">${_esc(detail)}</span>` : ''}
+      <span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;background:${active ? '#3fb95022':'#f8514922'};color:${active ? '#3fb950':'#f85149'}">${active ? 'AKTİF' : 'KAPALI'}</span>
+    </div>`;
+
+  const aa = layers.apparmor;
+  const sd = layers.systemd;
+  const sc = layers.seccomp;
+  const xdp = layers.ebpf_xdp;
+  const km = layers.kernel_modules;
+
+  el.innerHTML = [
+    row('🔒', 'AppArmor Profili',   aa.active,  aa.mode || ''),
+    row('⚙️', 'systemd Hardening', sd.active,  sd.active ? 'ProtectSystem + cgroups + caps' : ''),
+    row('🔐', 'seccomp Filter',     sc.active,  sc.active ? 'syscall whitelist' : ''),
+    row('🌐', 'eBPF/XDP Filter',    xdp.active, xdp.attached_interfaces?.length ? `${xdp.attached_interfaces.length} iface` : (xdp.compiled ? 'compiled' : '')),
+    row('🧩', 'Kernel Modules',     km.active,
+      [km.oxware_audit.loaded ? 'audit' : '', km.oxware_guard.loaded ? 'guard' : ''].filter(Boolean).join('+') || ''),
+  ].join('');
+
+  // Show install button if any layer inactive
+  if (installRow) installRow.style.display = score < max_score ? '' : 'none';
+}
+
+async function kernelHardeningInstall() {
+  const out = document.getElementById('kh-install-out');
+  const btn = document.querySelector('#kh-install-row .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Kuruluyor...'; }
+  if (out) out.textContent = 'install-hardening.sh çalışıyor...';
+
+  const data = await _api('/api/security/kernel-hardening/install', 'POST');
+  if (btn) { btn.disabled = false; btn.textContent = '⚡ Hardening Kur (--no-modules)'; }
+  if (!data) { if (out) out.textContent = 'Hata: API yanıt vermedi'; return; }
+
+  if (out) out.textContent = (data.output || '') + (data.error ? '\nERR: '+data.error : '');
+  toast(data.success ? 'Hardening kurulumu tamamlandı' : 'Kurulum hatalı — çıktıya bakın', data.success ? 'success' : 'error');
+  setTimeout(() => { _khLoaded = false; loadKernelHardening(); }, 2000);
 }
 
 /* ══════════════════ VM Detail ══════════════════ */
