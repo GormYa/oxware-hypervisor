@@ -224,7 +224,7 @@ STATIC_DIR   = os.path.join(os.path.dirname(__file__), "..", "frontend", "static
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path="/static")
 app.config["JWT_SECRET_KEY"]           = config.SECRET_KEY
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=12)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)   # OXW-SEC-002: 12h → 1h (shorter blast radius)
 app.config["JWT_TOKEN_LOCATION"]       = ["headers", "cookies"]
 app.config["MAX_CONTENT_LENGTH"]       = 64 * 1024 * 1024 * 1024
 # CVE-2023-25577 / Werkzeug multipart resource exhaustion mitigation
@@ -3332,6 +3332,7 @@ def api_list_isos():
 
 @app.route("/api/storage/isos", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator", "operator")  # OXW-SEC-003: vm-user ISO upload blocked
 def api_upload_iso():
     if "file" not in request.files:
         return err("Dosya gönderilmedi")
@@ -3342,6 +3343,13 @@ def api_upload_iso():
             return err("Sadece .iso dosyaları kabul edilir")
     except ValueError as e:
         return err(str(e))
+    # OXW-SEC-003: disk space guard — en az 1 GB boş alan gerekli
+    try:
+        _st = os.statvfs(config.ISO_DIR) if hasattr(os, "statvfs") else None
+        if _st and (_st.f_bavail * _st.f_frsize) < 1024 * 1024 * 1024:
+            return err("Yetersiz disk alanı (minimum 1 GB gerekli)", 507)
+    except Exception:
+        pass
     dest = os.path.join(config.ISO_DIR, safe_name)
     try:
         os.makedirs(config.ISO_DIR, exist_ok=True)
@@ -4560,6 +4568,16 @@ def api_create_user():
     role = data.get("role", "viewer")
     if not username or not password:
         return err("Kullanıcı adı ve şifre zorunludur")
+    # OXW-SEC-004: password strength enforcement
+    import re as _re_usr
+    if len(password) < 8:
+        return err("Şifre en az 8 karakter olmalıdır")
+    if len(username) < 3 or not _re_usr.match(r"^[a-zA-Z0-9_\-\.]{3,64}$", username):
+        return err("Kullanıcı adı 3-64 karakter, sadece harf/rakam/_-. içerebilir")
+    # Validate role
+    _allowed_roles = {"administrator", "admin", "operator", "viewer", "vm-user"}
+    if role not in _allowed_roles:
+        return err(f"Geçersiz rol. İzin verilenler: {', '.join(sorted(_allowed_roles))}")
     try:
         result = user_manager.add_user(username, password, role)
         ev.info(f"Kullanıcı oluşturuldu: {username} ({role})", category="auth")
@@ -8056,6 +8074,7 @@ def api_test_notification_channel():
 # ── ISO Upload (streaming / chunked) ────────────────────────────────────────────
 @app.route("/api/storage/iso/upload", methods=["POST"])
 @require_auth
+@require_role("admin", "administrator", "operator")  # OXW-SEC-003
 def upload_iso():
     """ISO dosyası yükle — progress bar için chunked upload."""
     import shutil, tempfile, re as _re
@@ -8735,6 +8754,33 @@ def _block_sensitive_paths():
     for prefix in _BLOCKED_PREFIXES:
         if p.startswith(prefix):
             return jsonify({"error": "Not found"}), 404
+
+# ── Global Security Headers ─────────────────────────────────────────────────
+# OXW-2026-SEC-001: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+# Applied to all responses except noVNC (which has per-route overrides)
+@app.after_request
+def _add_security_headers(resp):
+    # Prevent clickjacking — overridden per-route for noVNC/iframe embeds
+    if "X-Frame-Options" not in resp.headers:
+        resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # MIME-type sniffing prevention — whitelist of known-safe mime types for noVNC
+    if resp.content_type and not any(resp.content_type.startswith(x) for x in (
+        "application/javascript", "text/javascript", "application/wasm"
+    )):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    # HSTS — 1 year, include subdomains. Only meaningful over HTTPS (nginx terminates TLS)
+    resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    # Referrer leakage prevention
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Permissions policy — disable unused browser features
+    resp.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), camera=(), payment=(), usb=(), bluetooth=()"
+    )
+    # Remove server fingerprinting headers
+    resp.headers.discard("Server")
+    resp.headers.discard("X-Powered-By")
+    return resp
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.errorhandler(404)

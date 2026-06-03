@@ -97,7 +97,13 @@ def saml_process_acs(saml_response_b64: str, relay_state: str = "") -> dict:
     except Exception:
         return {"ok": False, "error": "invalid base64"}
     try:
-        import xml.etree.ElementTree as ET
+        # OXW-SEC-005: XXE prevention — defusedxml when available, fallback to stdlib
+        # Python's stdlib xml.etree does NOT expand external entities by default (safe for XXE),
+        # but defusedxml provides additional protection (billion laughs, etc.)
+        try:
+            import defusedxml.ElementTree as ET  # type: ignore
+        except ImportError:
+            import xml.etree.ElementTree as ET
         root = ET.fromstring(decoded)
         # Naive extraction — production must verify signature first
         ns = {"saml": "urn:oasis:names:tc:SAML:2.0:assertion"}
