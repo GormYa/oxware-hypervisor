@@ -73,10 +73,13 @@ func New() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"oxware_vm": resourceVM(),
+			"oxware_vm":           resourceVM(),
+			"oxware_network":      resourceNetwork(),
+			"oxware_storage_pool": resourceStoragePool(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"oxware_vms": dataSourceVMs(),
+			"oxware_vms":      dataSourceVMs(),
+			"oxware_networks": dataSourceNetworks(),
 		},
 		ConfigureContextFunc: providerConfigure,
 	}

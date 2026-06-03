@@ -41,3 +41,27 @@ resource "oxware_vm" "web" {
 
 output "web_vm_id"    { value = oxware_vm.web.id }
 output "web_vnc_port" { value = oxware_vm.web.vnc_port }
+
+# Mevcut ağları listele
+data "oxware_networks" "all" {}
+
+output "network_names" {
+  value = [for n in data.oxware_networks.all.networks : n.name]
+}
+
+# Yeni NAT ağı oluştur
+resource "oxware_network" "app" {
+  name         = "app-net"
+  forward_mode = "nat"
+  subnet       = "192.168.50.0/24"
+}
+
+# Depolama havuzu oluştur (dizin tabanlı)
+resource "oxware_storage_pool" "data" {
+  name      = "data-pool"
+  pool_type = "dir"
+  path      = "/var/lib/oxware/pools/data"
+}
+
+output "app_net_uuid" { value = oxware_network.app.uuid }
+output "pool_uuid"    { value = oxware_storage_pool.data.uuid }
