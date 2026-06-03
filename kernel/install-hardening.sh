@@ -5,12 +5,18 @@
 #           eBPF/XDP loader, kernel modules (oxware_audit + oxware_guard)
 # Usage:
 #   sudo bash kernel/install-hardening.sh [--dry-run] [--no-modules] [--complain]
+#   sudo bash kernel/install-hardening.sh --no-systemd   # skip systemd drop-in (safe)
+#
+# WARNING: systemd drop-in (ProtectSystem etc.) may cause service failure on
+# some systems. Use --no-systemd to skip it. If service fails after install,
+# run: sudo bash repair.sh --remove-hardening
 # ============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=0
 NO_MODULES=0
+NO_SYSTEMD=0   # set 1 to skip systemd drop-in (safe on systems where it causes issues)
 APPARMOR_MODE="enforce"  # or "complain"
 LOG=/var/log/oxware/hardening-install.log
 
@@ -19,6 +25,7 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run)    DRY_RUN=1 ;;
     --no-modules) NO_MODULES=1 ;;
+    --no-systemd) NO_SYSTEMD=1 ;;
     --complain)   APPARMOR_MODE="complain" ;;
     --help|-h)
       echo "Usage: sudo bash install-hardening.sh [--dry-run] [--no-modules] [--complain]"
@@ -107,6 +114,10 @@ info "Applied via systemd SystemCallFilter= in drop-in"
 
 # ── 3. systemd drop-in (cgroups + capabilities + seccomp) ─────────────────
 info "--- [3/5] systemd Hardening Drop-in ---"
+if [[ $NO_SYSTEMD -eq 1 ]]; then
+  warn "systemd drop-in atlandı (--no-systemd). Servis dokunulmadı."
+  info "drop-in manuel eklemek: cp '$SCRIPT_DIR/systemd/oxware-hardening.conf' /etc/systemd/system/oxware.service.d/"
+else
 DROPIN_DIR="/etc/systemd/system/oxware.service.d"
 DROPIN_FILE="$DROPIN_DIR/hardening.conf"
 DROPIN_BACKUP="$DROPIN_DIR/hardening.conf.bak"
@@ -165,7 +176,8 @@ if [[ $DRY_RUN -eq 0 ]]; then
     fi
     # Don't abort — continue with AppArmor, eBPF steps
   fi
-fi
+fi  # end DRY_RUN check
+fi  # end NO_SYSTEMD check
 
 # ── 4. eBPF/XDP network filter ────────────────────────────────────────────
 info "--- [4/5] eBPF/XDP Network Filter ---"

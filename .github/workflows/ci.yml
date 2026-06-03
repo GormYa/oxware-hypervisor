@@ -123,29 +123,40 @@ jobs:
           fi
       - name: Check for duplicate route definitions in app.py
         run: |
-          python3 -c "
+          python3 << 'PYEOF'
           import re, sys
-          lines = open('oxware/backend/app.py', encoding='utf-8').readlines()
+          lines = open('oxware/backend/app.py', encoding='utf-8', errors='replace').readlines()
           routes = {}
           dups = []
-          for i, l in enumerate(lines, 1):
-              m = re.search(r'@app\.route\([\"\'](.*?)[\"\']\s*(?:,\s*methods\s*=\s*(\[[^\]]+\]))?', l)
-              if not m:
+          i = 0
+          while i < len(lines):
+              l = lines[i]
+              if '@app.route(' not in l:
+                  i += 1
                   continue
-              path = m.group(1)
-              methods_str = m.group(2) or '[\"GET\"]'
-              methods = re.findall(r'[\"\'](GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[\"\'"]', methods_str)
-              if not methods:
+              # Collect up to 3 lines for multi-line decorators
+              block = ''.join(lines[i:i+3])
+              path_m = re.search(r'@app\.route\(["\']([^"\']+)["\']', block)
+              if not path_m:
+                  i += 1
+                  continue
+              path = path_m.group(1)
+              methods_m = re.search(r'methods\s*=\s*\[([^\]]+)\]', block)
+              if methods_m:
+                  methods = re.findall(r'["\']([A-Z]+)["\']', methods_m.group(1))
+              else:
                   methods = ['GET']
               for method in methods:
-                  key = f'{method} {path}'
+                  key = method + ' ' + path
                   if key in routes:
-                      dups.append(f'DUPLICATE {key}: L{routes[key]} and L{i}')
+                      dups.append('DUPLICATE ' + key + ': L' + str(routes[key]) + ' and L' + str(i+1))
                   else:
-                      routes[key] = i
+                      routes[key] = i + 1
+              i += 1
           if dups:
-              for d in dups: print(d)
+              for d in dups:
+                  print(d)
               sys.exit(1)
           else:
-              print(f'OK: {len(routes)} unique method+path combos, no true duplicates')
-          "
+              print('OK: ' + str(len(routes)) + ' unique method+path combos, no true duplicates')
+          PYEOF
