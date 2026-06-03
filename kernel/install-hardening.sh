@@ -42,6 +42,16 @@ run()   {
   fi
 }
 
+# Safe cp: skip if source == destination
+safe_cp() {
+  local src="$1" dst="$2"
+  if [[ "$(realpath "$src" 2>/dev/null)" == "$(realpath "$dst" 2>/dev/null)" ]]; then
+    info "  (skip copy — source == destination: $dst)"
+    return 0
+  fi
+  run "cp '$src' '$dst'"
+}
+
 # ── Root check ────────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
   error "Root required. Run: sudo bash $0"
@@ -54,37 +64,52 @@ info "Mode: DRY_RUN=$DRY_RUN NO_MODULES=$NO_MODULES APPARMOR=$APPARMOR_MODE"
 
 # ── 1. AppArmor ───────────────────────────────────────────────────────────
 info "--- [1/5] AppArmor Profile ---"
+
+# Ensure apparmor + apparmor-utils are installed
 if ! command -v apparmor_parser &>/dev/null; then
-  warn "apparmor_parser not found. Installing..."
+  info "Installing apparmor..."
   run "apt-get install -y apparmor apparmor-utils apparmor-profiles"
+elif ! command -v aa-enforce &>/dev/null; then
+  info "Installing apparmor-utils (aa-enforce/aa-complain)..."
+  run "apt-get install -y apparmor-utils"
 fi
 
 APPARMOR_PROFILE="/etc/apparmor.d/opt.oxware.backend.app"
-run "cp '$SCRIPT_DIR/apparmor/oxware' '$APPARMOR_PROFILE'"
+safe_cp "$SCRIPT_DIR/apparmor/oxware" "$APPARMOR_PROFILE"
+
+# Load profile first (always needed)
+run "apparmor_parser -r '$APPARMOR_PROFILE' || apparmor_parser -a '$APPARMOR_PROFILE'"
 
 if [[ $APPARMOR_MODE == "complain" ]]; then
-  run "aa-complain '$APPARMOR_PROFILE'"
+  if command -v aa-complain &>/dev/null; then
+    run "aa-complain '$APPARMOR_PROFILE'"
+  else
+    # fallback: write flags=complain into profile and reload
+    run "sed -i 's/flags=(attach_disconnected,mediate_deleted)/flags=(attach_disconnected,mediate_deleted,complain)/' '$APPARMOR_PROFILE'"
+    run "apparmor_parser -r '$APPARMOR_PROFILE'"
+  fi
   info "AppArmor installed in COMPLAIN mode (logging only, no blocking)"
   info "Monitor: sudo journalctl -f | grep apparmor"
 else
-  run "apparmor_parser -r '$APPARMOR_PROFILE'"
-  run "aa-enforce '$APPARMOR_PROFILE'"
-  info "AppArmor profile installed and enforced: $APPARMOR_PROFILE"
+  if command -v aa-enforce &>/dev/null; then
+    run "aa-enforce '$APPARMOR_PROFILE'"
+  fi
+  info "AppArmor profile loaded + enforced: $APPARMOR_PROFILE"
 fi
 
 # ── 2. seccomp filter ─────────────────────────────────────────────────────
 info "--- [2/5] seccomp Filter ---"
 SECCOMP_DEST="/etc/oxware/seccomp.json"
-run "cp '$SCRIPT_DIR/seccomp/oxware-seccomp.json' '$SECCOMP_DEST'"
+safe_cp "$SCRIPT_DIR/seccomp/oxware-seccomp.json" "$SECCOMP_DEST"
 run "chmod 640 '$SECCOMP_DEST'"
 info "seccomp profile installed: $SECCOMP_DEST"
-info "Used via systemd SystemCallFilter= in drop-in (no app changes needed)"
+info "Applied via systemd SystemCallFilter= in drop-in"
 
 # ── 3. systemd drop-in (cgroups + capabilities + seccomp) ─────────────────
 info "--- [3/5] systemd Hardening Drop-in ---"
 DROPIN_DIR="/etc/systemd/system/oxware.service.d"
 run "mkdir -p '$DROPIN_DIR'"
-run "cp '$SCRIPT_DIR/systemd/oxware-hardening.conf' '$DROPIN_DIR/hardening.conf'"
+safe_cp "$SCRIPT_DIR/systemd/oxware-hardening.conf" "$DROPIN_DIR/hardening.conf"
 run "systemctl daemon-reload"
 info "systemd drop-in installed: $DROPIN_DIR/hardening.conf"
 info "Effective after: sudo systemctl restart oxware"
@@ -93,28 +118,39 @@ info "Effective after: sudo systemctl restart oxware"
 info "--- [4/5] eBPF/XDP Network Filter ---"
 EBPF_DIR="/opt/oxware/kernel/ebpf"
 run "mkdir -p '$EBPF_DIR'"
-run "cp '$SCRIPT_DIR/ebpf/xdp_filter.c' '$EBPF_DIR/'"
-run "cp '$SCRIPT_DIR/ebpf/xdp_loader.py' '$EBPF_DIR/'"
+safe_cp "$SCRIPT_DIR/ebpf/xdp_filter.c"  "$EBPF_DIR/xdp_filter.c"
+safe_cp "$SCRIPT_DIR/ebpf/xdp_loader.py" "$EBPF_DIR/xdp_loader.py"
 run "chmod +x '$EBPF_DIR/xdp_loader.py'"
 
-# Compile XDP object if clang is available
-if command -v clang &>/dev/null; then
-  info "Compiling XDP filter (clang found)..."
-  run "clang -O2 -g -target bpf -D__TARGET_ARCH_x86 \
-    -I/usr/include/$(uname -m)-linux-gnu \
-    -c '$EBPF_DIR/xdp_filter.c' -o '$EBPF_DIR/xdp_filter.o' 2>&1 || true"
-  if [[ -f "$EBPF_DIR/xdp_filter.o" ]]; then
-    info "XDP filter compiled: $EBPF_DIR/xdp_filter.o"
-    info "To attach to a VM tap: sudo python3 $EBPF_DIR/xdp_loader.py attach-all"
-  fi
-else
-  warn "clang not found — XDP filter not compiled. Install: apt-get install -y clang linux-headers-\$(uname -r)"
+# Install clang + libbpf-dev if needed
+if ! command -v clang &>/dev/null; then
+  info "clang not found — installing..."
+  run "apt-get install -y clang llvm linux-headers-$(uname -r) libbpf-dev"
 fi
 
-# Create systemd service for auto-attach on VM start
-cat > /etc/systemd/system/oxware-xdp.service << 'SVCEOF'
+# Compile XDP object
+if command -v clang &>/dev/null; then
+  info "Compiling XDP filter..."
+  ARCH="$(uname -m)"
+  INCLUDE_DIR="/usr/include/${ARCH}-linux-gnu"
+  [[ -d "$INCLUDE_DIR" ]] || INCLUDE_DIR="/usr/include"
+  if run "clang -O2 -g -target bpf \
+      -D__TARGET_ARCH_x86 \
+      -I'$INCLUDE_DIR' \
+      -c '$EBPF_DIR/xdp_filter.c' \
+      -o '$EBPF_DIR/xdp_filter.o'"; then
+    info "XDP filter compiled: $EBPF_DIR/xdp_filter.o"
+    info "Attach to VM taps: sudo python3 $EBPF_DIR/xdp_loader.py attach-all"
+  else
+    warn "XDP compile failed — check clang/libbpf-dev installation"
+  fi
+fi
+
+# systemd service for auto-attach
+if [[ $DRY_RUN -eq 0 ]]; then
+  cat > /etc/systemd/system/oxware-xdp.service << 'SVCEOF'
 [Unit]
-Description=OXware XDP Network Filter — attach to VM tap interfaces
+Description=OXware XDP Network Filter
 After=oxware.service network-online.target
 Wants=network-online.target
 
@@ -128,53 +164,70 @@ Restart=no
 [Install]
 WantedBy=multi-user.target
 SVCEOF
+fi
 run "systemctl daemon-reload"
-info "oxware-xdp.service installed (enable with: systemctl enable --now oxware-xdp)"
+info "oxware-xdp.service installed"
 
 # ── 5. Kernel Modules ─────────────────────────────────────────────────────
 info "--- [5/5] Kernel Modules ---"
 if [[ $NO_MODULES -eq 1 ]]; then
   warn "Skipping kernel modules (--no-modules passed)"
 else
-  # Check kernel headers
-  KDIR="/lib/modules/$(uname -r)/build"
+  KVER="$(uname -r)"
+  KDIR="/lib/modules/${KVER}/build"
+  EXTRA_DIR="/lib/modules/${KVER}/extra"
+
+  # Ensure kernel headers
   if [[ ! -d "$KDIR" ]]; then
-    warn "Kernel headers not found at $KDIR. Installing..."
-    run "apt-get install -y linux-headers-$(uname -r) build-essential"
+    info "Installing kernel headers..."
+    run "apt-get install -y linux-headers-${KVER} build-essential"
   fi
 
-  # oxware_audit
-  AUDIT_DIR="$SCRIPT_DIR/modules/oxware_audit"
-  if [[ -d "$AUDIT_DIR" ]]; then
-    info "Building oxware_audit.ko..."
-    run "make -C '$AUDIT_DIR' KDIR='$KDIR' 2>&1 || true"
-    if [[ -f "$AUDIT_DIR/oxware_audit.ko" ]]; then
-      run "install -m 644 '$AUDIT_DIR/oxware_audit.ko' '/lib/modules/$(uname -r)/extra/'"
-      run "depmod -a"
-      run "modprobe oxware_audit || true"
-      run "echo 'oxware_audit' >> /etc/modules-load.d/oxware.conf"
-      info "oxware_audit.ko installed and loaded"
-    else
-      warn "oxware_audit.ko build failed (check kernel config — need CONFIG_KPROBES=y)"
-    fi
-  fi
+  # Create extra/ dir if missing
+  run "mkdir -p '$EXTRA_DIR'"
 
-  # oxware_guard
-  GUARD_DIR="$SCRIPT_DIR/modules/oxware_guard"
-  if [[ -d "$GUARD_DIR" ]]; then
-    info "Building oxware_guard.ko..."
-    run "make -C '$GUARD_DIR' KDIR='$KDIR' 2>&1 || true"
-    if [[ -f "$GUARD_DIR/oxware_guard.ko" ]]; then
-      run "install -m 644 '$GUARD_DIR/oxware_guard.ko' '/lib/modules/$(uname -r)/extra/'"
+  _install_module() {
+    local name="$1"
+    local dir="$SCRIPT_DIR/modules/$name"
+    [[ -d "$dir" ]] || { warn "$dir not found, skip"; return; }
+
+    info "Building ${name}.ko..."
+    run "make -C '$dir' KDIR='$KDIR' clean 2>/dev/null || true"
+    run "make -C '$dir' KDIR='$KDIR'"
+
+    if [[ -f "$dir/${name}.ko" ]]; then
+      run "install -m 644 '$dir/${name}.ko' '${EXTRA_DIR}/'"
       run "depmod -a"
-      run "modprobe oxware_guard || true"
-      run "echo 'oxware_guard' >> /etc/modules-load.d/oxware.conf"
-      info "oxware_guard.ko installed and loaded"
+      run "modprobe '$name' || true"
+      # Persist across reboots
+      grep -qx "$name" /etc/modules-load.d/oxware.conf 2>/dev/null || \
+        echo "$name" >> /etc/modules-load.d/oxware.conf
+      if lsmod | grep -q "^${name}"; then
+        info "${name}.ko installed and LOADED ✓"
+      else
+        warn "${name}.ko installed but modprobe failed — check: dmesg | grep oxware"
+      fi
     else
-      warn "oxware_guard.ko build failed (check kernel config)"
+      warn "${name}.ko build failed — check: CONFIG_KPROBES=y in kernel config"
     fi
-  fi
+  }
+
+  _install_module "oxware_audit"
+  _install_module "oxware_guard"
 fi
+
+# ── Final status check ────────────────────────────────────────────────────
+info "--- Status Check ---"
+if command -v aa-status &>/dev/null; then
+  AA_STATUS=$(aa-status 2>/dev/null | grep -E "profiles|enforce|complain" | head -3 || echo "aa-status unavailable")
+  info "AppArmor: $AA_STATUS"
+fi
+
+LOADED_MODS=""
+for m in oxware_audit oxware_guard; do
+  lsmod | grep -q "^$m" && LOADED_MODS="$LOADED_MODS $m" || true
+done
+[[ -n "$LOADED_MODS" ]] && info "Kernel modules loaded:$LOADED_MODS" || info "Kernel modules: not loaded"
 
 # ── Summary ───────────────────────────────────────────────────────────────
 echo ""
@@ -182,21 +235,22 @@ info "════════════════════════�
 info "OXware Kernel Hardening — Installation Complete"
 info "════════════════════════════════════════════════"
 echo ""
-echo "  AppArmor:     /etc/apparmor.d/opt.oxware.backend.app  ($APPARMOR_MODE)"
-echo "  seccomp:      /etc/oxware/seccomp.json"
-echo "  systemd:      /etc/systemd/system/oxware.service.d/hardening.conf"
-echo "  eBPF/XDP:     /opt/oxware/kernel/ebpf/xdp_filter.o"
-echo "  Audit module: /dev/oxware_audit  (if compiled)"
-echo "  Guard module: /dev/oxware_guard  (if compiled)"
+echo "  AppArmor:      /etc/apparmor.d/opt.oxware.backend.app  ($APPARMOR_MODE)"
+echo "  seccomp:       /etc/oxware/seccomp.json"
+echo "  systemd:       /etc/systemd/system/oxware.service.d/hardening.conf"
+echo "  eBPF/XDP:      /opt/oxware/kernel/ebpf/xdp_filter.o"
+echo "  oxware_audit:  $(lsmod | grep -q '^oxware_audit' && echo 'LOADED' || echo 'not loaded')"
+echo "  oxware_guard:  $(lsmod | grep -q '^oxware_guard' && echo 'LOADED' || echo 'not loaded')"
 echo ""
 echo "  Next steps:"
 echo "    1. sudo systemctl restart oxware"
 echo "    2. sudo systemctl enable --now oxware-xdp"
-echo "    3. Check AppArmor: sudo aa-status"
-echo "    4. Check seccomp: sudo journalctl -u oxware | grep seccomp"
-echo "    5. Monitor audit: sudo cat /dev/oxware_audit"
+echo "    3. sudo aa-status"
+echo "    4. sudo journalctl -u oxware --since '1 min ago'"
+echo "    5. sudo cat /dev/oxware_audit   (if module loaded)"
 echo ""
 if [[ $APPARMOR_MODE == "complain" ]]; then
-  warn "AppArmor is in COMPLAIN mode. After testing, switch to enforce:"
-  warn "  sudo aa-enforce /etc/apparmor.d/opt.oxware.backend.app"
+  warn "AppArmor is in COMPLAIN mode. After testing run enforce:"
+  warn "  sudo apparmor_parser -r /etc/apparmor.d/opt.oxware.backend.app"
+  warn "  sudo aa-enforce /etc/apparmor.d/opt.oxware.backend.app  (if aa-utils installed)"
 fi
