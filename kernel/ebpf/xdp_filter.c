@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * xdp_filter.c — OXware XDP Network Security Filter
- * Attach to each VM tap interface (vnet0, vnet1, ...) via ip link set dev vnetX xdp obj xdp_filter.o
+ * Attach to each VM tap interface (vnet0, vnet1, ...) via:
+ *   ip link set dev vnetX xdpgeneric obj xdp_filter.o sec xdp
  * Blocks: ARP spoofing, ICMP floods, raw socket VM-escape attempts.
- * Build: clang -O2 -g -target bpf -c xdp_filter.c -o xdp_filter.o
+ * Build: clang -O2 -target bpf -D__x86_64__ -D__TARGET_ARCH_x86 \
+ *             -I/usr/include/x86_64-linux-gnu -I/usr/include \
+ *             -c xdp_filter.c -o xdp_filter.o
  */
+
+/* Prevent gnu/stubs.h from pulling in 32-bit stubs-32.h on x86_64 */
+#ifndef __x86_64__
+# define __x86_64__
+#endif
+/* Tell glibc stubs.h we're 64-bit only — skip stubs-32.h include */
+#define __GLIBC_HAVE_LONG_LONG 1
+/* BPF programs don't use userspace stubs at all */
+#define __stub___kernel_long_t
+#define __stub___kernel_ulong_t
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>

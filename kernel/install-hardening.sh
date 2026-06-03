@@ -175,27 +175,45 @@ safe_cp "$SCRIPT_DIR/ebpf/xdp_filter.c"  "$EBPF_DIR/xdp_filter.c"
 safe_cp "$SCRIPT_DIR/ebpf/xdp_loader.py" "$EBPF_DIR/xdp_loader.py"
 run "chmod +x '$EBPF_DIR/xdp_loader.py'"
 
-# Install clang + libbpf-dev if needed
+# Install clang + BPF deps (gcc-multilib provides gnu/stubs-32.h needed by clang BPF)
 if ! command -v clang &>/dev/null; then
   info "clang not found — installing..."
-  run "apt-get install -y clang llvm linux-headers-$(uname -r) libbpf-dev"
+  run "apt-get install -y clang llvm linux-headers-$(uname -r) libbpf-dev gcc-multilib"
+else
+  # clang present but stubs-32.h may be missing
+  if ! find /usr/include -name "stubs-32.h" 2>/dev/null | grep -q .; then
+    info "gnu/stubs-32.h missing — installing gcc-multilib..."
+    run "apt-get install -y gcc-multilib libbpf-dev"
+  fi
 fi
 
 # Compile XDP object
 if command -v clang &>/dev/null; then
   info "Compiling XDP filter..."
   ARCH="$(uname -m)"
-  INCLUDE_DIR="/usr/include/${ARCH}-linux-gnu"
-  [[ -d "$INCLUDE_DIR" ]] || INCLUDE_DIR="/usr/include"
-  if run "clang -O2 -g -target bpf \
-      -D__TARGET_ARCH_x86 \
-      -I'$INCLUDE_DIR' \
-      -c '$EBPF_DIR/xdp_filter.c' \
-      -o '$EBPF_DIR/xdp_filter.o'"; then
+  ARCH_INCLUDE="/usr/include/${ARCH}-linux-gnu"
+  [[ -d "$ARCH_INCLUDE" ]] || ARCH_INCLUDE="/usr/include"
+
+  # BPF compile flags: suppress userspace compat warnings, no 32-bit stubs
+  BPF_CFLAGS="-O2 -target bpf -D__TARGET_ARCH_x86 -D__x86_64__"
+  BPF_CFLAGS="$BPF_CFLAGS -I$ARCH_INCLUDE -I/usr/include"
+  BPF_CFLAGS="$BPF_CFLAGS -Wno-unused-value -Wno-pointer-sign -Wno-compare-distinct-pointer-types"
+  # Suppress gnu/stubs-32.h pull-in from stubs.h
+  BPF_CFLAGS="$BPF_CFLAGS -D__GLIBC_HAVE_LONG_LONG=1"
+
+  if clang $BPF_CFLAGS \
+      -c "$EBPF_DIR/xdp_filter.c" \
+      -o "$EBPF_DIR/xdp_filter.o" 2>&1 | tee -a "$LOG"; then
     info "XDP filter compiled: $EBPF_DIR/xdp_filter.o"
     info "Attach to VM taps: sudo python3 $EBPF_DIR/xdp_loader.py attach-all"
   else
-    warn "XDP compile failed — check clang/libbpf-dev installation"
+    warn "XDP compile failed — trying fallback (install gcc-multilib)..."
+    apt-get install -y -qq gcc-multilib 2>/dev/null || true
+    clang $BPF_CFLAGS \
+        -c "$EBPF_DIR/xdp_filter.c" \
+        -o "$EBPF_DIR/xdp_filter.o" 2>&1 | tee -a "$LOG" && \
+      info "XDP filter compiled (fallback) ✓" || \
+      warn "XDP compile still failed — eBPF filter not active (non-fatal)"
   fi
 fi
 
