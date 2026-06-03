@@ -45,7 +45,7 @@ datacenter automation, IaC virtualization, kubernetes hypervisor integration.
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.12-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.6.1-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%20Debian%2012-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
