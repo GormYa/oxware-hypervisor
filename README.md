@@ -1,13 +1,42 @@
 <!-- SEO -->
 <!--
-OXware Hypervisor - Open Source KVM/QEMU Management Panel.
-Free alternative to VMware vSphere ESXi, Proxmox VE, Nutanix AHV.
-Enterprise features: DRS, HA, Live Migration, Snapshots, Backup, IPAM,
-Distributed Virtual Switch, vSAN/Ceph, Site Recovery, NUMA, vGPU support.
+OXware Hypervisor — Open Source Enterprise KVM/QEMU Management Platform.
+Free alternative to VMware vSphere ESXi, Proxmox VE, Nutanix AHV, oVirt, XenServer.
+114 enterprise capabilities across 10 release batches (v2.5.3–v2.5.12).
+Features: DRS auto-balancing, EVC, live migration, HA, NUMA scheduling,
+vTPM 2.0, AMD SEV/Intel TDX confidential VMs, LUKS2 disk encryption,
+UEFI Secure Boot, CIS/NIST/PCI-DSS/HIPAA/ISO27001 compliance scanner,
+DLP engine, forensics, SIEM (Splunk/Elastic/Wazuh), hash-chained audit log,
+session recording, SAML 2.0/OIDC SSO, LDAP/AD, MFA per role,
+multi-tenancy hard isolation, per-tenant quotas, chargeback/showback billing,
+service catalog, token-bucket rate limiting, 3-2-1 backup automation,
+app-consistent snapshots (fsfreeze), backup verification, cross-site replication,
+RPO/RTO SLA tracking, DR runbooks, affinity/anti-affinity rules,
+microsegmentation L7 firewall (nftables), BFD sub-second link detection,
+service chaining (IDS→WAF→VM), service mesh (Istio/Linkerd), NIOC QoS,
+OpenTelemetry tracing, Grafana embed, ML capacity forecasting, topology viz,
+config drift detection, Terraform provider (oxware_vm/network/storage_pool),
+Kubernetes CSI driver (csi.oxware.io), Kubernetes OxwareVM Operator CRD,
+KubeVirt import/export, GitOps (ArgoCD/Flux), Pulumi IaC generation,
+Firecracker microVM (125ms boot), Kata Containers, WASM runtime,
+OPA/Rego policy-as-code, CloudEvents v1.0, workflow automation engine,
+desktop client tokens, workload mobility (AWS AMI/Azure VHD/GCP),
+~190 REST API endpoints, OpenAPI spec auto-generated at /api/docs,
+noVNC console, SPICE, serial console (xterm.js), cloud-init static IP,
+IPAM with subnet calculator, VLAN, VXLAN/SDN, HAProxy, WireGuard,
+nftables firewall, BGP peering, DNS watchdog, DHCP live edit,
+qcow2 storage, MinIO/S3 backup, ZFS/Ceph, SR-IOV, vGPU (NVIDIA GRID/MIG),
+vCPU hot-plug, memory ballooning, CPU pinning, HugePages, KSM,
+cloud-init, ESXi/OVA/VMDK/QCOW2 import, KVM→KVM live migration,
+TOTP 2FA, JWT auth, CSRF protection, IP allowlist, secrets vault,
+AI assistant (natural language VM creation, forecasting, anomaly detection),
+PWA, command palette, keyboard shortcuts, multi-language, mobile responsive.
 Keywords: hypervisor, virtualization, KVM, QEMU, libvirt, VM management,
 data center, virtualization platform, open source vSphere alternative,
 proxmox alternative, free hypervisor, web-based VM manager, esxi alternative,
-self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
+self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web,
+enterprise hypervisor, VMware alternative, Nutanix alternative, oVirt alternative,
+datacenter automation, IaC virtualization, kubernetes hypervisor integration.
 -->
 
 <img width="1536" height="1024" alt="oxware2" src="https://github.com/user-attachments/assets/733a1cde-8e61-409f-862f-07ced788aeea" />
@@ -47,6 +76,25 @@ self-hosted virtualization, KVM web panel, libvirt web UI, virt-manager web.
 > **v2.5.3 (2026-05):** 🏢 **Enterprise release** — DRS auto-balancing, affinity rules, EVC, maintenance-mode VM evacuation, NUMA scheduling, right-sizing & predictive-failure analysis, linked clones, app-consistent snapshots, NIOC bandwidth QoS, SSO (SAML/OIDC), LDAP/AD, hash-chained audit logs, SIEM export, session recording, AES backup encryption, Site Recovery DR runbooks, RPO/RTO SLA tracking, Lifecycle Manager, capacity planning, alert correlation, webhook system, live VNC thumbnails, command palette, onboarding wizard, notifications panel. Full GH-Pages mobile responsive overhaul.
 >
 > **v2.5 (2026-05):** WHMCS & WiseCP billing panel integrations, machine-ID independent credentials + password reset, unified monitoring with performance history, VGA driver default, network stat cards, clean ISO library, ISO installer black-screen fix, optimized 30s polling.
+
+---
+
+## 🏆 Enterprise Capabilities at a Glance
+
+| Category | What's Included |
+|---|---|
+| **Compute** | DRS, EVC, affinity rules, NUMA, HugePages, right-sizing, live migration, maintenance mode |
+| **Storage** | qcow2, ZFS/Ceph, MinIO/S3, 3-2-1 backup, app-consistent snapshots, backup verification, cross-site replication, CDP |
+| **Network** | IPAM, VLAN/VXLAN, nftables, microsegmentation, BFD, service chaining, mesh, NIOC QoS, HAProxy, BGP |
+| **Security** | vTPM 2.0, AMD SEV/TDX, LUKS2, Secure Boot, SAML/OIDC SSO, LDAP/AD, MFA, DLP, forensics, audit chain |
+| **Compliance** | CIS Ubuntu, NIST 800-53, PCI-DSS v4, HIPAA, ISO 27001 — automated scanner with remediation hints |
+| **DR** | RPO/RTO SLA, DR runbooks, cross-site replication, geo-DNS failover, CDP second-level RPO |
+| **Multi-Tenancy** | Hard tenant isolation, quotas, chargeback/showback, service catalog, rate limiting |
+| **Observability** | OpenTelemetry, Grafana embed, ML forecasting, topology viz, drift detection, alert correlation |
+| **Cloud/K8s** | Terraform provider, K8s CSI, K8s Operator, KubeVirt, GitOps, Pulumi, workload mobility (AWS/Azure/GCP) |
+| **Modern** | Firecracker microVM (125ms), Kata Containers, WASM, edge mode |
+| **Automation** | Workflow engine, OPA policy-as-code, CloudEvents v1.0, webhooks, desktop client |
+| **API** | ~190 REST endpoints, OpenAPI spec (auto-generated), JWT auth, interactive explorer at `/api/docs` |
 
 ---
 
@@ -426,44 +474,24 @@ The **Enterprise release** brings 23 datacenter-grade modules to open-source KVM
 
 ---
 
-## 🛣 Coming Soon (Roadmap)
+## 🛣 Roadmap: v2.6+
 
-The next wave of enterprise capabilities currently in design / development:
+v2.5.12 Enterprise is complete — **114 capabilities** shipped across 10 release batches (v2.5.3–v2.5.12). Here's what's coming next:
 
-**Compute & Availability**
-- Fault Tolerance (lockstep, zero-downtime failover)
-- Storage DRS (datastore-level rebalancing)
-- vGPU support (NVIDIA GRID, MIG partitioning)
-- SR-IOV passthrough
-- microVM (Firecracker)
-- Kata Containers
-- KubeVirt integration
+**Availability & Fault Tolerance**
+- Fault Tolerance — lockstep secondary VM, zero-downtime host failover
+- Storage DRS — datastore-level I/O balancing across storage pools
+- Multi-site cluster federation — single control plane for multiple OXware nodes
 
-**Security & Compliance**
-- Microsegmentation (per-VM L7 firewall)
-- vTPM, Secure Boot enforcement
-- AMD SEV / Intel TDX confidential VMs
-- HashiCorp Vault integration
-- Audit log immutability (hash-chain)
-- Multi-tenancy hard isolation + chargeback
+**Clients & Ecosystem**
+- Mobile app (iOS + Android) — VM lifecycle, push alerts, live metrics on the go
+- App Marketplace — community templates, automation plugins, integration registry
+- Plugin SDK — extend panels/API/hooks without forking core
 
-**Provisioning & IaC**
-- Image-based bare-metal provisioning
-- Terraform / Ansible / Pulumi providers
-- Kubernetes CSI driver + Operator
-- GitOps (ArgoCD / Flux)
-- Policy-as-code (OPA / Rego)
-
-**Observability & Planning**
-- Capacity planning + what-if analysis
-- Distributed tracing (OpenTelemetry)
-- Topology + flow visualization
-- Cross-site replication
-
-**Clients**
-- Mobile app (iOS + Android)
-- Desktop client (Electron)
-- PWA support
+**Intelligence & Automation**
+- AI-powered autonomous remediation — anomaly → runbook trigger, no manual step
+- Predictive placement — ML-based VM scheduling across cluster nodes
+- Multi-region support — geo-aware placement, cross-region DR failover
 
 ---
 
