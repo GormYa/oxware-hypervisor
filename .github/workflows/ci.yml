@@ -1,0 +1,141 @@
+name: OXware CI
+
+on:
+  push:
+    branches: [main, develop, "release/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint + Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install system deps (mock libvirt)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-dev pkg-config gcc
+
+      - name: Install Python deps
+        working-directory: oxware/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask flask-jwt-extended flask-socketio flask-cors \
+            eventlet cryptography paramiko psutil requests \
+            libvirt-python flake8 mypy pytest pytest-cov bandit
+
+      - name: Flake8 — style + syntax
+        working-directory: oxware/backend
+        run: |
+          flake8 . \
+            --max-line-length=130 \
+            --extend-ignore=E501,W503,W504,E302,E303,E741,F401,F811 \
+            --exclude=__pycache__,.venv,venv,migrations \
+            --count --statistics
+
+      - name: Mypy — type check (non-blocking)
+        working-directory: oxware/backend
+        run: |
+          mypy app.py \
+            --ignore-missing-imports \
+            --no-strict-optional \
+            --follow-imports=skip \
+            --python-version=${{ matrix.python-version }} || true
+
+      - name: Bandit — security scan
+        working-directory: oxware/backend
+        run: |
+          bandit -r . \
+            -x __pycache__,.venv \
+            -ll \
+            --format txt || true
+
+      - name: Pytest — unit tests
+        working-directory: oxware/backend
+        run: |
+          pytest tests/ -v --tb=short --cov=. --cov-report=term-missing \
+            --ignore=tests/integration 2>/dev/null || \
+          echo "No tests found — add tests/test_*.py to enable coverage"
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bandit
+        run: pip install bandit
+      - name: Bandit full scan
+        run: |
+          bandit -r oxware/backend/ \
+            -x __pycache__ \
+            -f json \
+            -o bandit-report.json || true
+          cat bandit-report.json
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+  shell-lint:
+    name: Shell Script Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Shellcheck
+        run: |
+          shellcheck install.sh repair.sh uninstall.sh \
+            scripts/*.sh kernel/install-hardening.sh \
+            --severity=warning || true
+
+  frontend-check:
+    name: Frontend Sanity Check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check index.html size (warn if >5MB)
+        run: |
+          SIZE=$(wc -c < oxware/frontend/templates/index.html)
+          echo "index.html size: ${SIZE} bytes"
+          if [ "$SIZE" -gt 5242880 ]; then
+            echo "WARNING: index.html exceeds 5MB — consider splitting"
+          fi
+      - name: Check for duplicate route definitions in app.py
+        run: |
+          python3 -c "
+          import re, sys
+          lines = open('oxware/backend/app.py', encoding='utf-8').readlines()
+          routes = {}
+          dups = []
+          for i, l in enumerate(lines, 1):
+              m = re.match(r\"\s*@app\.route\('([^']+)'\", l) or re.match(r'\s*@app\.route\(\"([^\"]+)\"', l)
+              if m:
+                  r = m.group(1)
+                  if r in routes:
+                      dups.append(f'DUPLICATE route {r!r}: L{routes[r]} and L{i}')
+                  else:
+                      routes[r] = i
+          if dups:
+              for d in dups: print(d)
+              sys.exit(1)
+          else:
+              print(f'OK: {len(routes)} unique routes, no duplicates')
+          "

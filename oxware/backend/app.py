@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.5.12
+OXware Hypervisor Management API v2.6.1
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -208,12 +208,22 @@ kata_runtime     = _safe_import("kata_runtime")
 wasm_runtime     = _safe_import("wasm_runtime")
 edge_mode        = _safe_import("edge_mode")
 
-# ── v2.5.12 IaC + Clients modules ────────────────────────────────────────────
+# ── v2.6.1 IaC + Clients modules ────────────────────────────────────────────
 workflow_engine  = _safe_import("workflow_engine")
 opa_policy       = _safe_import("opa_policy")
 cloudevents_mod  = _safe_import("cloudevents")
 electron_client  = _safe_import("electron_client")
 cloud_export     = _safe_import("cloud_export")
+
+# ── v2.6.1 modules ───────────────────────────────────────────────────────────
+fault_tolerance_mgr  = _safe_import("fault_tolerance")
+storage_drs_mgr      = _safe_import("storage_drs")
+console_recorder_mgr = _safe_import("console_recorder")
+recovery_codes_mgr   = _safe_import("recovery_codes")
+plugin_sdk_mgr       = _safe_import("plugin_sdk")
+vm_hot_extend_mgr    = _safe_import("vm_hot_extend")
+bulk_vm_ops_mgr      = _safe_import("bulk_vm_ops")
+net_mode_mgr         = _safe_import("network_mode_manager")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -786,12 +796,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.5.12-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.12-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.12-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.5.12-amd64.iso",
-    "/root/OXware-Hypervisor-2.5.12-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.5.12-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/root/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/root/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.6.1-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4335,7 +4345,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.5.12",
+        oxware_version="2.6.1",
     )
 
 @app.route("/api/system/stats")
@@ -9616,7 +9626,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.5.12</span>
+  <span id="ver-badge">v2.6.1</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -9850,7 +9860,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.5.12",
+            "version": "2.6.1",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -11314,7 +11324,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.5.12", connected=True)
+    return ok(status="ok", panel=panel, version="2.6.1", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -17984,7 +17994,7 @@ def api_edge_profile():
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# v2.5.12 — IaC + Clients Endpoints (admin-only)
+# v2.6.1 — IaC + Clients Endpoints (admin-only)
 # workflow_engine / opa_policy / cloudevents / electron_client / cloud_export
 # All wrapped in try/except with safe defaults — modül yoksa boş döner.
 # ════════════════════════════════════════════════════════════════════════════
@@ -18342,8 +18352,360 @@ def api_cexport_targets():
         return err(str(e), 500)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# v2.6.1 — Enterprise Expansion Endpoints (admin-only)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Fault Tolerance ───────────────────────────────────────────────────────────
+@app.route("/api/ft/pairs", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_list():
+    if not fault_tolerance_mgr: return ok(pairs=[])
+    return ok(pairs=fault_tolerance_mgr.list_ft_pairs())
+
+@app.route("/api/ft/pairs", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_create():
+    if not fault_tolerance_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        result = fault_tolerance_mgr.create_ft_pair(
+            d.get("primary_vm_id", ""),
+            d.get("secondary_pool", "default"),
+            int(d.get("sync_interval_minutes", 15))
+        )
+        return ok(**result), 201
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/ft/<vm_id>/status", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_status(vm_id):
+    if not fault_tolerance_mgr: return ok(status="unprotected")
+    return ok(**fault_tolerance_mgr.get_ft_status(vm_id))
+
+@app.route("/api/ft/<vm_id>/failover", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_failover(vm_id):
+    if not fault_tolerance_mgr: return err("modül yok", 503)
+    try:
+        return ok(**fault_tolerance_mgr.trigger_failover(vm_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/ft/<vm_id>/sync", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_sync(vm_id):
+    if not fault_tolerance_mgr: return err("modül yok", 503)
+    try:
+        return ok(**fault_tolerance_mgr.sync_checkpoint(vm_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/ft/<vm_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_ft_remove(vm_id):
+    if not fault_tolerance_mgr: return err("modül yok", 503)
+    try:
+        return ok(**fault_tolerance_mgr.remove_ft(vm_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+# ── Storage DRS ───────────────────────────────────────────────────────────────
+@app.route("/api/storage-drs/analyze", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_storage_drs_analyze():
+    if not storage_drs_mgr: return ok(pools=[])
+    return ok(**storage_drs_mgr.analyze_pools())
+
+@app.route("/api/storage-drs/recommendations", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_storage_drs_recommendations():
+    if not storage_drs_mgr: return ok(recommendations=[])
+    return ok(recommendations=storage_drs_mgr.get_recommendations())
+
+@app.route("/api/storage-drs/rebalance", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_storage_drs_rebalance():
+    if not storage_drs_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    dry_run = bool(d.get("dry_run", True))
+    try:
+        return ok(**storage_drs_mgr.auto_rebalance(dry_run=dry_run))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/storage-drs/migrate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_storage_drs_migrate():
+    if not storage_drs_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**storage_drs_mgr.migrate_disk(d.get("vm_id",""), d.get("disk_path",""), d.get("target_pool","")))
+    except Exception as e:
+        return err(str(e), 500)
+
+# ── Console Recording ─────────────────────────────────────────────────────────
+@app.route("/api/recordings", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_recordings_list():
+    if not console_recorder_mgr: return ok(recordings=[])
+    vm_id = request.args.get("vm_id")
+    return ok(recordings=console_recorder_mgr.list_recordings(vm_id))
+
+@app.route("/api/recordings/start", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_recording_start():
+    if not console_recorder_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**console_recorder_mgr.start_recording(
+            d.get("vm_id",""), int(d.get("vnc_port", 5900)),
+            int(d.get("duration_seconds", 3600))
+        )), 201
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/recordings/<recording_id>/stop", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_recording_stop(recording_id):
+    if not console_recorder_mgr: return err("modül yok", 503)
+    try:
+        return ok(**console_recorder_mgr.stop_recording(recording_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/recordings/<recording_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_recording_delete(recording_id):
+    if not console_recorder_mgr: return err("modül yok", 503)
+    try:
+        return ok(**console_recorder_mgr.delete_recording(recording_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+# ── 2FA Recovery Codes ────────────────────────────────────────────────────────
+@app.route("/api/recovery-codes/generate", methods=["POST"])
+@require_auth
+def api_recovery_codes_generate():
+    if not recovery_codes_mgr: return err("modül yok", 503)
+    from flask_jwt_extended import get_jwt_identity
+    username = get_jwt_identity()
+    codes = recovery_codes_mgr.generate_codes(username)
+    return ok(codes=codes, warning="Bu kodları güvenli bir yerde saklayın. Tekrar gösterilmeyecek.")
+
+@app.route("/api/recovery-codes/status", methods=["GET"])
+@require_auth
+def api_recovery_codes_status():
+    if not recovery_codes_mgr: return ok(has_codes=False, count=0)
+    from flask_jwt_extended import get_jwt_identity
+    username = get_jwt_identity()
+    return ok(**recovery_codes_mgr.get_status(username))
+
+@app.route("/api/recovery-codes/revoke", methods=["DELETE"])
+@require_auth
+def api_recovery_codes_revoke():
+    if not recovery_codes_mgr: return err("modül yok", 503)
+    from flask_jwt_extended import get_jwt_identity
+    username = get_jwt_identity()
+    return ok(**recovery_codes_mgr.revoke_all(username))
+
+@app.route("/api/auth/recovery", methods=["POST"])
+def api_auth_recovery():
+    """Authenticate with recovery code (no JWT needed)."""
+    if not recovery_codes_mgr: return err("Recovery codes not enabled", 503)
+    d = request.get_json() or {}
+    username = d.get("username", "").strip().lower()
+    code     = d.get("code", "").strip()
+    if not username or not code:
+        return err("username ve code zorunludur")
+    if recovery_codes_mgr.verify_code(username, code):
+        from flask_jwt_extended import create_access_token
+        token = create_access_token(identity=username)
+        ev.info(f"Recovery code kullanıldı: {username}", category="auth")
+        return ok(access_token=token, message="Recovery code geçerli. Yeni şifre belirleyin.")
+    return err("Geçersiz veya kullanılmış recovery code", 401)
+
+# ── Plugin SDK ────────────────────────────────────────────────────────────────
+@app.route("/api/plugins", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugins_list():
+    if not plugin_sdk_mgr: return ok(plugins=[])
+    return ok(plugins=plugin_sdk_mgr.list_plugins())
+
+@app.route("/api/plugins/<plugin_id>/enable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_enable(plugin_id):
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    return ok(**plugin_sdk_mgr.enable_plugin(plugin_id))
+
+@app.route("/api/plugins/<plugin_id>/disable", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_disable(plugin_id):
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    return ok(**plugin_sdk_mgr.disable_plugin(plugin_id))
+
+@app.route("/api/plugins/template", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_template():
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    return ok(template=plugin_sdk_mgr.get_plugin_template())
+
+# ── VM Disk Hot-Extend ────────────────────────────────────────────────────────
+@app.route("/api/vms/<vm_id>/disks", methods=["GET"])
+@require_auth
+def api_vm_disks(vm_id):
+    if not vm_hot_extend_mgr: return ok(disks=[])
+    try:
+        return ok(disks=vm_hot_extend_mgr.get_disk_info(vm_id))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/vms/<vm_id>/disks/extend", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_vm_disk_extend(vm_id):
+    if not vm_hot_extend_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**vm_hot_extend_mgr.extend_disk(
+            vm_id, d.get("disk_target", "vda"), int(d.get("new_size_gb", 0))
+        ))
+    except Exception as e:
+        return err(str(e), 500)
+
+# ── Bulk VM Operations ────────────────────────────────────────────────────────
+@app.route("/api/vms/bulk/start", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_bulk_start():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_start(d.get("vm_ids", [])))
+
+@app.route("/api/vms/bulk/stop", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_bulk_stop():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_stop(d.get("vm_ids", []), bool(d.get("force", False))))
+
+@app.route("/api/vms/bulk/snapshot", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_bulk_snapshot():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_snapshot(d.get("vm_ids", []), d.get("snap_name", "bulk-snap")))
+
+@app.route("/api/vms/bulk/tag", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_bulk_tag():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    action = d.get("action", "add")
+    fn = bulk_vm_ops_mgr.bulk_add_tag if action == "add" else bulk_vm_ops_mgr.bulk_remove_tag
+    return ok(**fn(d.get("vm_ids", []), d.get("tag", "")))
+
+@app.route("/api/vms/bulk/set-vcpus", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bulk_vcpus():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_set_vcpus(d.get("vm_ids", []), int(d.get("vcpus", 1))))
+
+@app.route("/api/vms/bulk/set-memory", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bulk_memory():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_set_memory(d.get("vm_ids", []), int(d.get("memory_mb", 1024))))
+
+@app.route("/api/vms/bulk/delete", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_bulk_delete():
+    if not bulk_vm_ops_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**bulk_vm_ops_mgr.bulk_delete(
+        d.get("vm_ids", []), bool(d.get("delete_disk", False)),
+        d.get("confirm_token", "")
+    ))
+
+@app.route("/api/vms/bulk/status/<job_id>", methods=["GET"])
+@require_auth
+def api_bulk_status(job_id):
+    if not bulk_vm_ops_mgr: return ok(status="unknown")
+    return ok(**bulk_vm_ops_mgr.get_bulk_status(job_id))
+
+# ── Network Mode / IP Fix ─────────────────────────────────────────────────────
+@app.route("/api/vms/<vm_id>/network-mode", methods=["GET"])
+@require_auth
+def api_vm_network_mode(vm_id):
+    """Detect NAT vs Bridge mode + static IP guidance."""
+    if not net_mode_mgr: return ok(mode="UNKNOWN")
+    return ok(**net_mode_mgr.detect_vm_network_mode(vm_id))
+
+@app.route("/api/vms/<vm_id>/network-info", methods=["GET"])
+@require_auth
+def api_vm_network_info(vm_id):
+    """Full network context: mode, gateway, DHCP range, static IP guidance."""
+    if not net_mode_mgr: return ok(mode="UNKNOWN")
+    return ok(**net_mode_mgr.get_network_info(vm_id))
+
+@app.route("/api/vms/<vm_id>/network-info/validate-ip", methods=["POST"])
+@require_auth
+def api_vm_validate_ip(vm_id):
+    """Check if a static IP assignment will work for this VM."""
+    if not net_mode_mgr: return ok(valid=True)
+    d = request.get_json() or {}
+    return ok(**net_mode_mgr.validate_static_ip(vm_id, d.get("ip", "")))
+
+@app.route("/api/vms/<vm_id>/network-info/suggest-fix", methods=["GET"])
+@require_auth
+def api_vm_ip_fix(vm_id):
+    """Human-readable IP setup recommendation for this VM."""
+    if not net_mode_mgr: return ok(steps=[])
+    return ok(**net_mode_mgr.suggest_ip_fix(vm_id))
+
+@app.route("/api/networks/routable", methods=["GET"])
+@require_auth
+def api_routable_networks():
+    """List networks where VMs can get real upstream IPs."""
+    if not net_mode_mgr: return ok(networks=[])
+    return ok(networks=net_mode_mgr.list_routable_networks())
+
+@app.route("/api/networks/bridge-status", methods=["GET"])
+@require_auth
+def api_bridge_status():
+    """Check if oxbr0 bridge is configured."""
+    if not net_mode_mgr: return ok(configured=False)
+    return ok(**net_mode_mgr.get_bridge_setup_status())
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.5.12 başlatılıyor")
+    log.info("OXware Hypervisor v2.6.1 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
