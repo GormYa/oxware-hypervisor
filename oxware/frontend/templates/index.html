@@ -22642,6 +22642,20 @@ function _emptyRow(cols, text) {
     <div class="empty-state"><div class="icon">🏢</div><h3>${_esc(text || 'Henüz veri yok')}</h3></div>
   </td></tr>`;
 }
+function _entKV(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj))
+    return '<div class="text-muted" style="padding:10px">Veri yok</div>';
+  const entries = Object.entries(obj);
+  if (!entries.length) return '<div class="text-muted" style="padding:10px">Veri yok</div>';
+  return entries.map(([k, v]) => {
+    let disp;
+    if (v === null || v === undefined) disp = '<span style="color:var(--text-muted)">—</span>';
+    else if (typeof v === 'boolean') disp = v ? '<span style="color:#22c55e">✓ Evet</span>' : '<span style="color:#f87171">✗ Hayır</span>';
+    else if (typeof v === 'object') disp = '<code style="font-size:10px">' + _esc(JSON.stringify(v)).slice(0, 80) + '</code>';
+    else disp = _esc(String(v));
+    return `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--text-muted)">${_esc(k)}</span><span style="text-align:right;word-break:break-all">${disp}</span></div>`;
+  }).join('');
+}
 
 /* ───────── DRS Cluster ───────── */
 async function loadDrsPage() {
@@ -22751,7 +22765,7 @@ async function maintEnter() {
   out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
   const d = await _api('/api/maintenance/enter', 'POST', { reason, dry_run: dry });
   if (_entOk(d)) {
-    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    out.innerHTML = _entKV(d);
     toast(dry ? 'Dry-run tamamlandı' : 'Bakım moduna alındı', 'success');
     loadMaintPage();
   } else _entErr(d, 'Maintenance');
@@ -22762,7 +22776,7 @@ async function maintExit() {
   out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
   const d = await _api('/api/maintenance/exit', 'POST', { auto_start: autoStart });
   if (_entOk(d)) {
-    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    out.innerHTML = _entKV(d);
     toast('Bakımdan çıkıldı', 'success');
     loadMaintPage();
   } else _entErr(d, 'Maintenance');
@@ -22804,7 +22818,7 @@ async function evcApplyToVm() {
   out.innerHTML = '<div class="text-muted">İşleniyor...</div>';
   const d = await _api('/api/evc/apply/' + encodeURIComponent(vm), 'POST', { baseline });
   if (_entOk(d)) {
-    out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+    out.innerHTML = _entKV(d);
     toast('VM\'ye uygulandı', 'success');
   } else _entErr(d, 'EVC');
 }
@@ -22833,7 +22847,7 @@ async function niocApplyProfile() {
   if (!vm) { toast('VM ID gerekli', 'error'); return; }
   const out = document.getElementById('nioc-action-body');
   const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm), 'POST', { profile });
-  out.innerHTML = _entOk(d) ? `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>` : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
+  out.innerHTML = _entOk(d) ? _entKV(d) : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
   if (_entOk(d)) toast('Profil uygulandı', 'success');
 }
 async function niocSetBw() {
@@ -22846,7 +22860,7 @@ async function niocSetBw() {
   };
   const out = document.getElementById('nioc-action-body');
   const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm), 'POST', body);
-  out.innerHTML = _entOk(d) ? `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>` : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
+  out.innerHTML = _entOk(d) ? _entKV(d) : `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`;
   if (_entOk(d)) toast('Limitler uygulandı', 'success');
 }
 async function niocGetVm() {
@@ -22854,7 +22868,7 @@ async function niocGetVm() {
   if (!vm) { toast('VM ID gerekli', 'error'); return; }
   const d = await _api('/api/nioc/vm/' + encodeURIComponent(vm));
   const out = document.getElementById('nioc-action-body');
-  out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+  out.innerHTML = _entKV(d);
 }
 
 /* ───────── Disaster Recovery ───────── */
@@ -22958,7 +22972,7 @@ async function lifecycleDrift(name) {
   out.innerHTML = '<div class="text-muted">Drift hesaplanıyor...</div>';
   const d = await _api('/api/lifecycle/drift/' + encodeURIComponent(name));
   if (!_entOk(d)) { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; return; }
-  out.innerHTML = `<div style="margin-top:6px"><b>Drift: ${_esc(name)}</b></div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px;max-height:280px;overflow:auto">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+  out.innerHTML = `<div style="margin-top:6px;font-weight:600;padding:6px 10px">Drift: ${_esc(name)}</div>` + _entKV(d);
 }
 
 /* ───────── Storage Advanced ───────── */
@@ -22977,7 +22991,7 @@ async function loadStorAdvPage() {
         (pools.length ? `<div class="table-wrap"><table><thead><tr><th>Ad</th><th>Boyut</th><th>Kullanılan</th><th>Sağlık</th><th>Dedup</th></tr></thead><tbody>` +
         pools.map(p => `<tr><td><b>${_esc(p.name)}</b></td><td>${_esc(p.size || '-')}</td><td>${_esc(p.used || p.alloc || '-')}</td><td>${_esc(p.health || '-')}</td><td>${_esc(p.dedup || '-')}</td></tr>`).join('') +
         `</tbody></table></div>` : '<div class="text-muted">ZFS pool yok</div>') +
-        `<div class="card-title" style="margin-top:14px">Btrfs Dedup</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d.btrfs || {}, null, 2))}</pre>`;
+        `<div class="card-title" style="margin-top:14px">Btrfs Dedup</div>` + _entKV(d.btrfs || {});
     } else if (_saActive === 'tiers') {
       const d = await _api('/api/storage-adv/tiers');
       if (!_entOk(d)) { body.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; return; }
@@ -23007,7 +23021,7 @@ async function loadStorAdvPage() {
         (ses.length ? `<div class="table-wrap"><table><thead><tr><th>Target</th><th>Portal</th><th>State</th></tr></thead><tbody>` +
         ses.map(s => `<tr><td>${_esc(s.target || s.iqn || '-')}</td><td>${_esc(s.portal || '-')}</td><td>${_esc(s.state || '-')}</td></tr>`).join('') +
         `</tbody></table></div>` : '<div class="text-muted">Aktif session yok</div>') +
-        `<div class="card-title" style="margin-top:14px">Target Status</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d.target_status || {}, null, 2))}</pre>`;
+        `<div class="card-title" style="margin-top:14px">Target Status</div>` + _entKV(d.target_status || {});
     }
   } catch (e) { body.innerHTML = '<div style="color:#f85149">Hata: ' + _esc(e.message) + '</div>'; }
 }
@@ -23044,7 +23058,7 @@ async function loadNetAdvPage() {
       `</tbody></table></div>` : '<div class="text-muted">VXLAN yok</div>');
   } else if (_naActive === 'ipv6') {
     const d = await _api('/api/network-adv/ipv6');
-    body.innerHTML = `<div class="card-title">IPv6 Durumu</div><pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d || {}, null, 2))}</pre>`;
+    body.innerHTML = `<div class="card-title">IPv6 Durumu</div>` + _entKV(d || {});
   }
 }
 async function naCreateVxlan() {
@@ -23092,7 +23106,7 @@ async function siemTest() {
   const out = document.getElementById('siem-action-body');
   out.innerHTML = '<div class="text-muted">Test ediliyor...</div>';
   const d = await _api('/api/siem/test', 'POST');
-  out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`;
+  out.innerHTML = _entKV(d);
   if (_entOk(d)) toast('SIEM bağlantısı başarılı', 'success'); else toast('SIEM testi başarısız', 'error');
 }
 
@@ -23143,7 +23157,7 @@ async function loadNumaPage() {
       const nodes = nd.nodes || [];
       n.innerHTML = nodes.length ? `<div class="table-wrap"><table><thead><tr><th>Node</th><th>CPU'lar</th><th>Bellek</th><th>Kullanılabilir</th></tr></thead><tbody>` +
         nodes.map(no => `<tr><td><b>${_esc(no.node ?? no.id)}</b></td><td>${_esc(Array.isArray(no.cpus) ? no.cpus.join(', ') : (no.cpus || '-'))}</td><td>${_esc(no.mem_total_mb != null ? no.mem_total_mb+' MB' : (no.memory || '-'))}</td><td>${_esc(no.mem_free_mb != null ? no.mem_free_mb+' MB' : '-')}</td></tr>`).join('') +
-        `</tbody></table></div>` : `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(nd, null, 2))}</pre>`;
+        `</tbody></table></div>` : _entKV(nd);
     }
   } else { n.innerHTML = '<div class="text-muted">Yüklenemedi</div>'; }
   if (_entOk(hd)) {
@@ -23169,7 +23183,7 @@ async function beEncrypt() {
   const out = document.getElementById('be-action-body');
   out.innerHTML = '<div class="text-muted">Şifreleniyor...</div>';
   const d = await _api('/api/backup/encrypt', 'POST', { src, dst, passphrase: pass });
-  if (_entOk(d)) { out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`; toast('Şifrelendi', 'success'); }
+  if (_entOk(d)) { out.innerHTML = _entKV(d); toast('Şifrelendi', 'success'); }
   else { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; }
 }
 async function beDecrypt() {
@@ -23180,7 +23194,7 @@ async function beDecrypt() {
   const out = document.getElementById('be-action-body');
   out.innerHTML = '<div class="text-muted">Çözülüyor...</div>';
   const d = await _api('/api/backup/decrypt', 'POST', { src, dst, passphrase: pass });
-  if (_entOk(d)) { out.innerHTML = `<pre style="background:var(--surface2);padding:8px;border-radius:6px;font-size:11px">${_esc(JSON.stringify(d, null, 2))}</pre>`; toast('Çözüldü', 'success'); }
+  if (_entOk(d)) { out.innerHTML = _entKV(d); toast('Çözüldü', 'success'); }
   else { out.innerHTML = `<div style="color:#f85149">Hata: ${_esc(d?.error || '')}</div>`; }
 }
 
@@ -23208,7 +23222,7 @@ async function rsAnalyzeVm() {
   const out = document.getElementById('rs-vm-out');
   out.textContent = 'Yükleniyor...';
   const d = await _api('/api/advisor/vm/' + encodeURIComponent(vm) + '?period=' + period);
-  out.textContent = JSON.stringify(d, null, 2);
+  out.innerHTML = _entKV(d);
 }
 
 /* ───────── Alert Correlation ───────── */
@@ -23706,7 +23720,7 @@ async function loadOtelPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [cfg, traces] = await Promise.all([_api('/api/otel/config'), _api('/api/otel/traces')]);
   if (!cfg || !traces) { toast('OTel verisi alınamadı','error'); return; }
-  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  if (cfgEl) cfgEl.innerHTML = _entKV(cfg);
   const arr = Array.isArray(traces) ? traces : (traces.traces || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(t => `<tr><td style="font-family:monospace;font-size:11px">${_esc(t.trace_id||t.id||'-')}</td><td>${_esc(t.service||'-')}</td><td>${_esc(t.operation||t.name||'-')}</td><td>${t.duration_ms||'-'}</td><td>${_esc(t.status||'-')}</td><td>${_esc(t.time||t.timestamp||'-')}</td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Trace yok</td></tr>';
 }
@@ -23718,7 +23732,7 @@ async function loadGrafanaPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [cfg, dashes] = await Promise.all([_api('/api/grafana/config'), _api('/api/grafana/dashboards')]);
   if (!cfg) { toast('Grafana config alınamadı','error'); return; }
-  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  if (cfgEl) cfgEl.innerHTML = _entKV(cfg);
   const arr = Array.isArray(dashes) ? dashes : (dashes?.dashboards || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(d => `<tr><td style="font-family:monospace;font-size:11px">${_esc(d.uid||'-')}</td><td>${_esc(d.title||'-')}</td><td><a href="${_esc(d.url||'#')}" target="_blank" style="color:var(--accent-lt)">${_esc(d.url||'-')}</a></td><td>${_esc((d.tags||[]).join(', ')||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Dashboard yok</td></tr>';
 }
@@ -23744,8 +23758,8 @@ async function loadForecastPage() {
   if (capEl) capEl.innerHTML = 'Yükleniyor...';
   const [cpu, cap] = await Promise.all([_api('/api/forecast/resource?metric=cpu&horizon=30'), _api('/api/forecast/capacity')]);
   if (!cpu) { toast('Tahmin verisi alınamadı','error'); return; }
-  if (cpuEl) cpuEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cpu,null,2))}</pre>`;
-  if (capEl) capEl.innerHTML = cap ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cap,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+  if (cpuEl) cpuEl.innerHTML = _entKV(cpu);
+  if (capEl) capEl.innerHTML = cap ? _entKV(cap) : '<span class="text-muted">Veri yok</span>';
 }
 
 async function loadDriftcapPage() {
@@ -23757,7 +23771,7 @@ async function loadDriftcapPage() {
   if (!baselines) { toast('Drift verisi alınamadı','error'); return; }
   const arr = Array.isArray(baselines) ? baselines : (baselines.baselines || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(b => `<tr><td>${_esc(b.vm||b.vm_id||'-')}</td><td>${_esc(b.metric||'-')}</td><td>${b.baseline??'-'}</td><td>${b.current??'-'}</td><td>${b.deviation??'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Baseline yok</td></tr>';
-  if (capEl) capEl.innerHTML = cap ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cap,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+  if (capEl) capEl.innerHTML = cap ? _entKV(cap) : '<span class="text-muted">Veri yok</span>';
 }
 async function driftWhatIf() {
   const count = parseInt(document.getElementById('wi-count').value)||1;
@@ -23768,7 +23782,7 @@ async function driftWhatIf() {
   if (res) res.innerHTML = '<span class="text-muted">Hesaplanıyor...</span>';
   const d = await _api('/api/capacity/whatif','POST',{count,vcpus,ram_mb,disk_gb});
   if (!d) { toast('What-if hesaplanamadı','error'); return; }
-  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (res) res.innerHTML = _entKV(d);
 }
 
 /* ─── Storage: Backup+ ─── */
@@ -23777,7 +23791,7 @@ async function loadBackupAdvPage() {
   if (el) el.innerHTML = 'Yükleniyor...';
   const d = await _api('/api/backup-adv/321');
   if (!d) { toast('Backup+ verisi alınamadı','error'); return; }
-  if (el) el.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (el) el.innerHTML = _entKV(d);
 }
 async function backupAdvVerify() {
   const backup_path = document.getElementById('bkadv-path').value.trim();
@@ -23787,7 +23801,7 @@ async function backupAdvVerify() {
   if (res) res.innerHTML = '<span class="text-muted">Doğrulanıyor...</span>';
   const d = await _api('/api/backup-adv/verify','POST',{backup_path,mode});
   if (!d) { toast('Doğrulama başarısız','error'); return; }
-  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (res) res.innerHTML = _entKV(d);
 }
 
 /* ─── Network: Microseg ─── */
@@ -23852,10 +23866,10 @@ async function loadMeshPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [detect, svcs, mtls] = await Promise.all([_api('/api/mesh/detect'), _api('/api/mesh/services'), _api('/api/mesh/mtls')]);
   if (!detect) { toast('Mesh verisi alınamadı','error'); return; }
-  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  if (detectEl) detectEl.innerHTML = _entKV(detect);
   const arr = Array.isArray(svcs) ? svcs : (svcs?.services || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(s => `<tr><td>${_esc(s.name||'-')}</td><td>${_esc(s.namespace||'-')}</td><td>${s.mtls?'<span style="color:#3fb950">✔</span>':'<span style="color:var(--text-muted)">—</span>'}</td><td>${_esc(s.proxy||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Servis yok</td></tr>';
-  if (mtlsEl) mtlsEl.innerHTML = mtls ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(mtls,null,2))}</pre>` : '<span class="text-muted">mTLS verisi yok</span>';
+  if (mtlsEl) mtlsEl.innerHTML = mtls ? _entKV(mtls) : '<span class="text-muted">mTLS verisi yok</span>';
 }
 
 /* ─── Cloud/K8s: Pulumi ─── */
@@ -23864,7 +23878,7 @@ async function loadPulumiPage() {
   if (el) el.innerHTML = 'Yükleniyor...';
   const d = await _api('/api/pulumi/schema');
   if (!d) { toast('Pulumi schema alınamadı','error'); return; }
-  if (el) el.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (el) { const _pj=JSON.stringify(d,null,2); el.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_pj)});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">📋 Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_pj)}</pre>`; }
 }
 async function pulumiGenerate() {
   const language = document.getElementById('pulumi-lang').value;
@@ -23885,8 +23899,8 @@ async function loadK8sCsiPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [status, manifests, vols] = await Promise.all([_api('/api/k8s-csi/status'), _api('/api/k8s-csi/manifests'), _api('/api/k8s-csi/volumes')]);
   if (!status) { toast('K8s CSI verisi alınamadı','error'); return; }
-  if (statusEl) statusEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>`;
-  if (manifestEl) manifestEl.innerHTML = manifests ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(typeof manifests==='string'?manifests:JSON.stringify(manifests,null,2))}</pre>` : '<span class="text-muted">Manifest yok</span>';
+  if (statusEl) statusEl.innerHTML = _entKV(status);
+  if (manifestEl) { const _mt = manifests ? (typeof manifests==='string'?manifests:JSON.stringify(manifests,null,2)) : null; manifestEl.innerHTML = _mt ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_mt||'')});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">📋 Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_mt)}</pre>` : '<span class="text-muted">Manifest yok</span>'; }
   const arr = Array.isArray(vols) ? vols : (vols?.volumes || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.capacity||'-')}</td><td>${_esc(v.access_mode||v.accessMode||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Volume yok</td></tr>';
 }
@@ -23900,10 +23914,10 @@ async function loadK8sOpPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [crd, managed, rec] = await Promise.all([_api('/api/k8s-operator/crd'), _api('/api/k8s-operator/managed'), _api('/api/k8s-operator/reconcile')]);
   if (!crd) { toast('K8s Operator verisi alınamadı','error'); return; }
-  if (crdEl) crdEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(crd,null,2))}</pre>`;
+  if (crdEl) { const _cj=JSON.stringify(crd,null,2); crdEl.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_cj)});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">📋 Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_cj)}</pre>`; }
   const arr = Array.isArray(managed) ? managed : (managed?.vms || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.namespace||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td><td>${v.vcpus||'-'}</td><td>${v.ram_mb||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yönetilen VM yok</td></tr>';
-  if (recEl) recEl.innerHTML = rec ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(rec,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+  if (recEl) recEl.innerHTML = rec ? _entKV(rec) : '<span class="text-muted">Veri yok</span>';
 }
 
 /* ─── Cloud/K8s: KubeVirt ─── */
@@ -23914,7 +23928,7 @@ async function loadKubevirtPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [detect, vms] = await Promise.all([_api('/api/kubevirt/detect'), _api('/api/kubevirt/vms')]);
   if (!detect) { toast('KubeVirt verisi alınamadı','error'); return; }
-  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  if (detectEl) detectEl.innerHTML = _entKV(detect);
   const arr = Array.isArray(vms) ? vms : (vms?.vms || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.namespace||'-')}</td><td>${_esc(v.phase||v.status||'-')}</td><td>${_esc(v.node||'-')}</td><td>${_esc(v.ip||'-')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">KubeVirt VM yok</td></tr>';
 }
@@ -23927,8 +23941,8 @@ async function loadGitopsPage() {
   if (statusEl) statusEl.innerHTML = 'Yükleniyor...';
   const [cfg, status] = await Promise.all([_api('/api/gitops/config'), _api('/api/gitops/status')]);
   if (!cfg) { toast('GitOps verisi alınamadı','error'); return; }
-  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
-  if (statusEl) statusEl.innerHTML = status ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>` : '<span class="text-muted">Durum yok</span>';
+  if (cfgEl) cfgEl.innerHTML = _entKV(cfg);
+  if (statusEl) statusEl.innerHTML = status ? _entKV(status) : '<span class="text-muted">Durum yok</span>';
 }
 async function gitopsSync() {
   const res = document.getElementById('gitops-sync-result');
@@ -23936,7 +23950,7 @@ async function gitopsSync() {
   const d = await _api('/api/gitops/sync','POST');
   if (!d) { toast('Senkronizasyon hatası','error'); return; }
   toast('GitOps senkronizasyonu başlatıldı','success');
-  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (res) res.innerHTML = _entKV(d);
 }
 
 /* ─── Modern Workloads: Firecracker ─── */
@@ -23947,7 +23961,7 @@ async function loadFirecrackerPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [detect, vms] = await Promise.all([_api('/api/firecracker/detect'), _api('/api/firecracker/vms')]);
   if (!detect) { toast('Firecracker verisi alınamadı','error'); return; }
-  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  if (detectEl) detectEl.innerHTML = _entKV(detect);
   const arr = Array.isArray(vms) ? vms : (vms?.vms || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td style="font-family:monospace;font-size:11px">${_esc(v.id||'-')}</td><td>${_esc(v.status||v.state||'-')}</td><td>${v.vcpus||'-'}</td><td>${v.ram_mb||'-'}</td><td>${v.boot_time_ms||'-'} ms</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">microVM yok</td></tr>';
 }
@@ -23960,7 +23974,7 @@ async function loadKataPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [detect, containers] = await Promise.all([_api('/api/kata/detect'), _api('/api/kata/containers')]);
   if (!detect) { toast('Kata verisi alınamadı','error'); return; }
-  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  if (detectEl) detectEl.innerHTML = _entKV(detect);
   const arr = Array.isArray(containers) ? containers : (containers?.containers || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(c => `<tr><td style="font-family:monospace;font-size:11px">${_esc(c.id||'-')}</td><td>${_esc(c.image||'-')}</td><td>${_esc(c.status||c.state||'-')}</td><td>${_esc(c.vm_kernel||'-')}</td><td>${c.memory_mb||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Kata container yok</td></tr>';
 }
@@ -23973,7 +23987,7 @@ async function loadWasmPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [detect, mods] = await Promise.all([_api('/api/wasm/detect'), _api('/api/wasm/modules')]);
   if (!detect) { toast('WASM verisi alınamadı','error'); return; }
-  if (detectEl) detectEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(detect,null,2))}</pre>`;
+  if (detectEl) detectEl.innerHTML = _entKV(detect);
   const arr = Array.isArray(mods) ? mods : (mods?.modules || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(m => `<tr><td>${_esc(m.name||'-')}</td><td>${_esc(m.size||'-')}</td><td>${_esc(m.runtime||'-')}</td><td>${_esc(m.status||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">WASM modülü yok</td></tr>';
 }
@@ -23997,9 +24011,9 @@ async function loadEdgePage() {
   if (cfgEl) cfgEl.innerHTML = 'Yükleniyor...';
   const [status, profile, cfg] = await Promise.all([_api('/api/edge/status'), _api('/api/edge/profile'), _api('/api/edge/config')]);
   if (!status) { toast('Edge verisi alınamadı','error'); return; }
-  if (statusEl) statusEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(status,null,2))}</pre>`;
-  if (profileEl) profileEl.innerHTML = profile ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(profile,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
-  if (cfgEl) cfgEl.innerHTML = cfg ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>` : '<span class="text-muted">Veri yok</span>';
+  if (statusEl) statusEl.innerHTML = _entKV(status);
+  if (profileEl) profileEl.innerHTML = profile ? _entKV(profile) : '<span class="text-muted">Veri yok</span>';
+  if (cfgEl) cfgEl.innerHTML = cfg ? _entKV(cfg) : '<span class="text-muted">Veri yok</span>';
 }
 
 /* ─── Automation: Workflow ─── */
@@ -24037,7 +24051,7 @@ async function opaEvaluate() {
   if (res) { res.style.display='block'; res.textContent='Değerlendiriliyor...'; }
   const d = await _api('/api/opa/evaluate','POST',{policy_name,input});
   if (!d) { toast('OPA değerlendirme hatası','error'); return; }
-  if (res) res.textContent = JSON.stringify(d,null,2);
+  if (res) res.innerHTML = _entKV(d);
 }
 
 /* ─── Automation: CloudEvents ─── */
@@ -24064,10 +24078,10 @@ async function loadDesktopPage() {
   if (dlEl) dlEl.innerHTML = 'Yükleniyor...';
   const [cfg, clients, downloads] = await Promise.all([_api('/api/desktop/config'), _api('/api/desktop/clients'), _api('/api/desktop/downloads')]);
   if (!cfg) { toast('Desktop config alınamadı','error'); return; }
-  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  if (cfgEl) cfgEl.innerHTML = _entKV(cfg);
   const arr = Array.isArray(clients) ? clients : (clients?.clients || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(c => `<tr><td>${_esc(c.user||'-')}</td><td>${_esc(c.platform||'-')}</td><td>${_esc(c.version||'-')}</td><td>${_esc(c.last_seen||'-')}</td><td>${_esc(c.status||'-')}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Bağlı istemci yok</td></tr>';
-  if (dlEl) dlEl.innerHTML = downloads ? `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(downloads,null,2))}</pre>` : '<span class="text-muted">İndirme linki yok</span>';
+  if (dlEl) dlEl.innerHTML = downloads ? _entKV(downloads) : '<span class="text-muted">İndirme linki yok</span>';
 }
 
 /* ─── Clients: Cloud Export ─── */
@@ -24078,7 +24092,7 @@ async function loadCloudExportPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [cfg, targets] = await Promise.all([_api('/api/cloud-export'), _api('/api/cloud-export/targets')]);
   if (!cfg) { toast('Cloud export verisi alınamadı','error'); return; }
-  if (cfgEl) cfgEl.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(cfg,null,2))}</pre>`;
+  if (cfgEl) cfgEl.innerHTML = _entKV(cfg);
   const arr = Array.isArray(targets) ? targets : (targets?.targets || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(t => `<tr><td>${_esc(t.name||'-')}</td><td>${_esc(t.provider||'-')}</td><td>${_esc(t.region||'-')}</td><td>${_esc(t.status||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Hedef yok</td></tr>';
 }
@@ -24091,7 +24105,7 @@ async function cloudExportAws() {
   const d = await _api('/api/cloud-export/aws','POST',{vm_id,region});
   if (!d) { toast('AWS export başlatılamadı','error'); return; }
   toast('AWS export başlatıldı','success');
-  if (res) res.innerHTML = `<pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto">${_esc(JSON.stringify(d,null,2))}</pre>`;
+  if (res) res.innerHTML = _entKV(d);
 }
 
 /* ══════════════════════════════════════════════════════════════════
