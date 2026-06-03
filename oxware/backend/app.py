@@ -18574,7 +18574,7 @@ def api_plugin_template():
 # ── VM Disk Hot-Extend ────────────────────────────────────────────────────────
 @app.route("/api/vms/<vm_id>/disks", methods=["GET"])
 @require_auth
-def api_vm_disks(vm_id):
+def api_vm_hot_disks(vm_id):
     if not vm_hot_extend_mgr: return ok(disks=[])
     try:
         return ok(disks=vm_hot_extend_mgr.get_disk_info(vm_id))
@@ -18614,7 +18614,7 @@ def api_bulk_stop():
 @app.route("/api/vms/bulk/snapshot", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator", "operator")
-def api_bulk_snapshot():
+def api_bulk_ops_snapshot():
     if not bulk_vm_ops_mgr: return err("modül yok", 503)
     d = request.get_json() or {}
     return ok(**bulk_vm_ops_mgr.bulk_snapshot(d.get("vm_ids", []), d.get("snap_name", "bulk-snap")))

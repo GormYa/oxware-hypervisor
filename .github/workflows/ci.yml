@@ -159,4 +159,20 @@ jobs:
               sys.exit(1)
           else:
               print('OK: ' + str(len(routes)) + ' unique method+path combos, no true duplicates')
+          # Also check for duplicate endpoint function names (Flask AssertionError killer)
+          funcs = {}; fn_dups = []; in_route2 = False
+          for i, l in enumerate(lines, 1):
+              if '@app.route(' in l: in_route2 = True
+              if in_route2:
+                  fm = re.match(r'\s*def (\w+)', l)
+                  if fm:
+                      name = fm.group(1)
+                      if name in funcs: fn_dups.append('DUPLICATE FUNC ' + name + ': L' + str(funcs[name]) + ' vs L' + str(i))
+                      else: funcs[name] = i
+                      in_route2 = False
+          if fn_dups:
+              for d in fn_dups: print(d)
+              sys.exit(1)
+          else:
+              print('OK: ' + str(len(funcs)) + ' unique endpoint function names')
           PYEOF
