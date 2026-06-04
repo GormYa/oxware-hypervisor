@@ -20,6 +20,9 @@ Yapılandırma: /etc/oxware/ai_agents.conf
 import os
 import json
 import time
+import base64
+import hashlib
+import tempfile
 import threading
 import requests
 from datetime import datetime
@@ -30,11 +33,97 @@ import event_logger
 import notifications
 import system_monitor
 
-AI_CONFIG_FILE  = os.environ.get("OXWARE_AI_CONFIG", os.environ.get("ADAOS_AI_CONFIG", "/etc/oxware/ai_agents.conf"))
+# ── OXW-2026-SEC-002 fix: AI_CONFIG_FILE path traversal guard ──────────────────
+# Ortam değişkeninden gelen path normalize edilir ve sadece izin verilen
+# dizinler altında kalması zorunlu kılınır. Aksi halde varsayılana düşülür.
+_AI_CONFIG_DEFAULT  = "/etc/oxware/ai_agents.conf"
+_AI_ALLOWED_ROOTS   = ("/etc/oxware", "/etc/adaos", "/var/lib/oxware", "/var/lib/adaos")
+
+def _resolve_ai_config_path() -> str:
+    raw = os.environ.get("OXWARE_AI_CONFIG", os.environ.get("ADAOS_AI_CONFIG", _AI_CONFIG_DEFAULT))
+    try:
+        norm = os.path.realpath(os.path.abspath(raw))
+    except Exception:
+        return _AI_CONFIG_DEFAULT
+    # Sadece izin verilen kök dizinler altında olmalı + .conf/.json uzantısı
+    if not any(norm == root or norm.startswith(root + os.sep) for root in _AI_ALLOWED_ROOTS):
+        try:
+            event_logger.warn(f"AI config path izinli dizin dışında, reddedildi: {raw}", category="security")
+        except Exception:
+            pass
+        return _AI_CONFIG_DEFAULT
+    if not norm.endswith((".conf", ".json")):
+        return _AI_CONFIG_DEFAULT
+    return norm
+
+AI_CONFIG_FILE  = _resolve_ai_config_path()
 AGENT_LOG_FILE  = os.path.join(config.LOG_DIR, "ai_agent.jsonl")
 _agents: dict   = {}
 _threads: dict  = {}
+_stop_events: dict = {}            # agent_id → threading.Event (OXW-2026-SEC-003)
 _running: bool  = False
+_lock           = threading.RLock()  # _agents/_threads/_stop_events + config IO koruması
+
+# ── OXW-2026-SEC-001 fix: API anahtarı şifrelemesi (at-rest) ───────────────────
+# api_key değerleri diske "enc:" öneki ile Fernet şifreli yazılır.
+# Anahtar /etc/oxware/.ai_key (0600) dosyasında tutulur, yoksa üretilir.
+# Düz metin (eski) değerler okunabilir → otomatik migrate edilir.
+_AI_KEY_FILE = "/etc/oxware/.ai_key"
+_ENC_PREFIX  = "enc:"
+
+try:
+    from cryptography.fernet import Fernet as _Fernet
+    _CRYPTO_OK = True
+except Exception:
+    _CRYPTO_OK = False
+
+def _get_fernet():
+    if not _CRYPTO_OK:
+        return None
+    try:
+        if os.path.exists(_AI_KEY_FILE):
+            with open(_AI_KEY_FILE, "rb") as f:
+                key = f.read().strip()
+        else:
+            # SECRET_KEY'den deterministik anahtar türet (yedek), ya da rastgele üret
+            seed = getattr(config, "SECRET_KEY", "") or ""
+            if seed:
+                key = base64.urlsafe_b64encode(hashlib.sha256(seed.encode()).digest())
+            else:
+                key = _Fernet.generate_key()
+            os.makedirs(os.path.dirname(_AI_KEY_FILE), exist_ok=True)
+            with open(_AI_KEY_FILE, "wb") as f:
+                f.write(key)
+            os.chmod(_AI_KEY_FILE, 0o600)
+        return _Fernet(key)
+    except Exception as e:
+        try:
+            event_logger.warn(f"AI key Fernet init hatası: {e}", category="security")
+        except Exception:
+            pass
+        return None
+
+def _encrypt_key(plaintext: str) -> str:
+    if not plaintext or plaintext.startswith(_ENC_PREFIX):
+        return plaintext
+    f = _get_fernet()
+    if not f:
+        return plaintext  # crypto yoksa düz metin (geriye dönük uyum, 0600 dosya)
+    try:
+        return _ENC_PREFIX + f.encrypt(plaintext.encode()).decode()
+    except Exception:
+        return plaintext
+
+def _decrypt_key(value: str) -> str:
+    if not value or not value.startswith(_ENC_PREFIX):
+        return value  # düz metin (eski) → olduğu gibi döndür
+    f = _get_fernet()
+    if not f:
+        return ""
+    try:
+        return f.decrypt(value[len(_ENC_PREFIX):].encode()).decode()
+    except Exception:
+        return ""
 
 # ── Provider şablonları ───────────────────────────────────────────────────────
 
@@ -73,20 +162,46 @@ PROVIDERS = {
 # ── Yapılandırma ──────────────────────────────────────────────────────────────
 
 def _load_ai_config() -> dict:
-    if not os.path.exists(AI_CONFIG_FILE):
-        return {"agents": {}, "global": {}}
-    try:
-        with open(AI_CONFIG_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {"agents": {}, "global": {}}
+    """Config oku — api_key alanları çözülür (decrypt). Thread-safe."""
+    with _lock:
+        if not os.path.exists(AI_CONFIG_FILE):
+            return {"agents": {}, "global": {}}
+        try:
+            with open(AI_CONFIG_FILE) as f:
+                data = json.load(f)
+        except Exception:
+            return {"agents": {}, "global": {}}
+    # api_key alanlarını çöz (in-memory plaintext)
+    for agent in data.get("agents", {}).values():
+        if "api_key" in agent:
+            agent["api_key"] = _decrypt_key(agent.get("api_key", ""))
+    return data
 
 
 def _save_ai_config(data: dict):
-    os.makedirs(os.path.dirname(AI_CONFIG_FILE), exist_ok=True)
-    with open(AI_CONFIG_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-    os.chmod(AI_CONFIG_FILE, 0o600)
+    """Config yaz — api_key şifrelenir, atomik (tmp + os.replace). Thread-safe."""
+    # Şifreleme için kopya üzerinde çalış (in-memory plaintext'i bozma)
+    import copy as _copy
+    out = _copy.deepcopy(data)
+    for agent in out.get("agents", {}).values():
+        if "api_key" in agent:
+            agent["api_key"] = _encrypt_key(agent.get("api_key", ""))
+    with _lock:
+        os.makedirs(os.path.dirname(AI_CONFIG_FILE), exist_ok=True)
+        # OXW-2026-SEC-003: atomik yazma — tmp dosyaya yaz, sonra os.replace
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(AI_CONFIG_FILE), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(out, f, indent=2)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, AI_CONFIG_FILE)  # atomik
+        except Exception:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
+            raise
 
 
 def list_agents() -> list:
@@ -137,8 +252,10 @@ def add_agent(
         "enabled":  enabled,
         "created":  time.time(),
     }
-    cfg["agents"][agent_id] = agent
-    _save_ai_config(cfg)
+    # OXW-2026-SEC-003: read-modify-write tek lock altında (lost-update önler)
+    with _lock:
+        cfg["agents"][agent_id] = agent
+        _save_ai_config(cfg)
 
     if enabled:
         start_agent(agent_id)
@@ -148,20 +265,23 @@ def add_agent(
 
 def delete_agent(agent_id: str):
     stop_agent(agent_id)
-    cfg = _load_ai_config()
-    cfg["agents"].pop(agent_id, None)
-    _save_ai_config(cfg)
+    with _lock:
+        cfg = _load_ai_config()
+        cfg["agents"].pop(agent_id, None)
+        _save_ai_config(cfg)
 
 
 def update_agent(agent_id: str, updates: dict) -> dict:
-    cfg = _load_ai_config()
-    if agent_id not in cfg["agents"]:
-        raise KeyError(f"Agent bulunamadı: {agent_id}")
-    cfg["agents"][agent_id].update(updates)
-    _save_ai_config(cfg)
-    # Yeniden başlat
+    with _lock:
+        cfg = _load_ai_config()
+        if agent_id not in cfg["agents"]:
+            raise KeyError(f"Agent bulunamadı: {agent_id}")
+        cfg["agents"][agent_id].update(updates)
+        _save_ai_config(cfg)
+        _enabled = cfg["agents"][agent_id].get("enabled", True)
+    # Yeniden başlat (lock dışında — start/stop kendi lock'unu alır)
     stop_agent(agent_id)
-    if cfg["agents"][agent_id].get("enabled", True):
+    if _enabled:
         start_agent(agent_id)
     return cfg["agents"][agent_id]
 
@@ -344,9 +464,9 @@ def _agent_monitor_cycle(agent_id: str, agent: dict):
     return results
 
 
-def _agent_thread(agent_id: str):
-    """Agent thread döngüsü."""
-    while _running:
+def _agent_thread(agent_id: str, stop_event: threading.Event):
+    """Agent thread döngüsü — threading.Event ile temiz durdurma (OXW-2026-SEC-003)."""
+    while not stop_event.is_set():
         cfg = _load_ai_config()
         agent = cfg["agents"].get(agent_id)
         if not agent or not agent.get("enabled", True):
@@ -361,25 +481,33 @@ def _agent_thread(agent_id: str):
             )
 
         interval = agent.get("interval_minutes", 5) * 60
-        # interval süre boyunca _running kontrolü yaparak bekle
-        end = time.time() + interval
-        while _running and time.time() < end:
-            time.sleep(5)
+        # Event.wait ile bekle — stop_event set olunca anında uyanır (sleep yerine)
+        if stop_event.wait(timeout=interval):
+            break
 
 
 def start_agent(agent_id: str):
     global _running
-    _running = True
-    if agent_id in _threads and _threads[agent_id].is_alive():
-        return  # Zaten çalışıyor
-    t = threading.Thread(target=_agent_thread, args=(agent_id,), daemon=True, name=f"ai-agent-{agent_id}")
-    t.start()
-    _threads[agent_id] = t
+    with _lock:
+        _running = True
+        existing = _threads.get(agent_id)
+        if existing and existing.is_alive():
+            return  # Zaten çalışıyor
+        ev = threading.Event()
+        _stop_events[agent_id] = ev
+        t = threading.Thread(target=_agent_thread, args=(agent_id, ev), daemon=True, name=f"ai-agent-{agent_id}")
+        t.start()
+        _threads[agent_id] = t
     event_logger.info(f"AI Agent başlatıldı: {agent_id}", category="ai")
 
 
 def stop_agent(agent_id: str):
-    # Thread kendiliğinden durur (_running False veya agent disabled olduğunda)
+    """Agent thread'ini Event ile temiz durdur."""
+    with _lock:
+        ev = _stop_events.pop(agent_id, None)
+        if ev:
+            ev.set()
+        _threads.pop(agent_id, None)
     event_logger.info(f"AI Agent durduruldu: {agent_id}", category="ai")
 
 
@@ -395,7 +523,12 @@ def start_all_agents():
 
 def stop_all_agents():
     global _running
-    _running = False
+    with _lock:
+        _running = False
+        for ev in _stop_events.values():
+            ev.set()
+        _stop_events.clear()
+        _threads.clear()
 
 
 def get_agent_logs(agent_id: str = None, limit: int = 50) -> list:

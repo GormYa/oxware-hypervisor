@@ -121,10 +121,15 @@
 </div>
 
 <script>
-const _vmId  = "{{ vm_id }}";
-const _token = (new URLSearchParams(location.search)).get("token")
+const _vmId  = {{ vm_id | tojson }};  /* OXW-2026-SEC-006: tojson = XSS-safe JS literal */
+/* OXW-2026-SEC-008: tek-kullanımlık vnc_token tercih edilir, yoksa JWT'ye düşer */
+const _qs        = new URLSearchParams(location.search);
+const _vncToken  = _qs.get("vnc_token") || "";
+const _token     = _vncToken
+             || _qs.get("token")
              || localStorage.getItem("oxware_token")
              || localStorage.getItem("adaos_token");
+const _wsParam   = _vncToken ? "vnc_token" : "token";
 
 if (!_token) {
   document.getElementById("load-msg").textContent = "Oturum token bulunamadı.";
@@ -227,7 +232,7 @@ function hideLoading() {
 
     // Same port as Flask → same cert already accepted by browser → no TLS issue
     const wsProto = (location.protocol === "https:") ? "wss" : "ws";
-    const wsUrl   = `${wsProto}://${location.host}/ws/vnc/${_vmId}?token=${encodeURIComponent(_token)}`;
+    const wsUrl   = `${wsProto}://${location.host}/ws/vnc/${_vmId}?${_wsParam}=${encodeURIComponent(_token)}`;  /* OXW-2026-SEC-008 */
 
     setLoad("VNC bağlanıyor…", wsUrl);
     setStatus("Bağlanıyor…");
@@ -243,7 +248,7 @@ function hideLoading() {
     // postMessage → parent modal can update its own status badge
     // NOTE: spread extra only when defined — spreading undefined throws TypeError (caught silently)
     function _pmStatus(text, ok, extra) {
-      try { window.parent.postMessage(Object.assign({ type: 'vncStatus', text, ok }, extra || {}), '*'); } catch(_) {}
+      try { window.parent.postMessage(Object.assign({ type: 'vncStatus', text, ok }, extra || {}), location.origin); } catch(_) {}  /* OXW-2026-SEC-007 */
     }
 
     _rfb.addEventListener("connect", () => {
@@ -380,7 +385,7 @@ function setupPointerLock(canvas) {
       _vY = r.height / 2;
     }
     // Notify parent modal to update its lock button
-    try { window.parent.postMessage({ type: 'vncLockChange', locked }, '*'); } catch(_) {}
+    try { window.parent.postMessage({ type: 'vncLockChange', locked }, location.origin); } catch(_) {}  /* OXW-2026-SEC-007 */
   });
 }
 
@@ -477,6 +482,7 @@ document.addEventListener("keydown", (e) => {
 
 // postMessage bridge — parent (in-page modal) can call functions via messages
 window.addEventListener("message", (e) => {
+  if (e.origin !== location.origin) return;  /* OXW-2026-SEC-007: origin doğrula */
   if (!e.data || typeof e.data !== "object") return;
   switch (e.data.type) {
     case "vncCtrlAltDel":   sendCtrlAltDel();    break;

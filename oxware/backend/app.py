@@ -869,6 +869,10 @@ def setup_page():
 
 @app.route("/console/<vm_id>")
 def console_page(vm_id):
+    # OXW-2026-SEC-006: vm_id sanitize (defense-in-depth; tojson zaten escape eder)
+    import re as _re_vid
+    if not _re_vid.match(r"^[a-zA-Z0-9_.\-]{1,128}$", vm_id or ""):
+        return "Invalid VM identifier", 400
     return render_template("console.html", vm_id=vm_id)
 
 # OXW-2026-008 fix: VNC bağlantısı için tek kullanımlık kısa ömürlü token üret.
@@ -898,6 +902,10 @@ def api_vnc_token(vm_id):
 @app.route("/vnc_console/<vm_id>")
 def vnc_console_page(vm_id):
     """Dedicated VNC console page — SocketIO TCP proxy, no websockify needed."""
+    # OXW-2026-SEC-006: vm_id sanitize
+    import re as _re_vid
+    if not _re_vid.match(r"^[a-zA-Z0-9_.\-]{1,128}$", vm_id or ""):
+        return "Invalid VM identifier", 400
     embed = request.args.get("embed", "0") == "1"
     resp = make_response(render_template("vnc_console.html", vm_id=vm_id, embed=embed))
     # Allow embedding from same origin (needed for in-page modal iframe)
@@ -1141,9 +1149,14 @@ def api_2fa_verify_login():
         return err("2FA süresi doldu. Tekrar giriş yapın.", 401)
     username = pending["username"]
     # TOTP doğrula
+    # OXW-2026-SEC-005: brute-force oracle önleme — login ile aynı genel mesaj.
+    # Geçersiz kod / geçersiz kullanıcı ayrımı yapılmaz.
     if not totp_mgr or not totp_mgr.verify_totp(username, code):
-        ev.warn(f"Geçersiz 2FA kodu: {username} / {request.remote_addr}", category="auth")
-        return err("Geçersiz doğrulama kodu", 401)
+        ev.warn(f"Başarısız 2FA: {username} / {request.remote_addr}", category="auth")
+        if sec_hard:
+            try: sec_hard.record_failed_login(username)
+            except Exception: pass
+        return err("Geçersiz kimlik bilgileri", 401)
     # temp_token zaten atomik pop ile tüketildi (OXW-2026-020)
     # Gerçek JWT ver
     token = create_access_token(identity=username)
@@ -4115,36 +4128,49 @@ def api_get_provision(provision_id):
 def api_list_agents():
     return ok(agents=ai_agent.list_agents())
 
+# OXW-2026-SEC-004: add/delete/update API anahtarı yönetimi → SADECE admin.
+# Operator yalnızca list/query yapabilir, agent ekleyip/silemez/anahtar değiştiremez.
 @app.route("/api/ai/agents", methods=["POST"])
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_add_agent():
     data = request.get_json() or {}
     required = ["agent_id", "name", "provider", "api_key"]
     missing = [f for f in required if f not in data]
     if missing:
         return err(f"Zorunlu alanlar: {', '.join(missing)}")
+    # agent_id sanitize — path/key injection önle
+    import re as _re_ag
+    if not _re_ag.match(r"^[a-zA-Z0-9_\-]{1,64}$", str(data.get("agent_id", ""))):
+        return err("agent_id sadece harf/rakam/_/- içerebilir (1-64)")
     try:
         result = ai_agent.add_agent(**data)
-        ev.info(f"AI Agent eklendi: {data['name']}", category="ai")
+        ev.info(f"AI Agent eklendi: {data['name']} (by {get_jwt_identity()})", category="ai")
+        # API anahtarını yanıtta döndürme (sızıntı önle)
+        result.pop("api_key", None)
         return ok(agent=result), 201
     except Exception as e:
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>", methods=["DELETE"])
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_delete_agent(agent_id):
     try:
         ai_agent.delete_agent(agent_id)
+        ev.info(f"AI Agent silindi: {agent_id} (by {get_jwt_identity()})", category="ai")
         return ok(status="deleted")
     except Exception as e:
         return err(e, 500)
 
 @app.route("/api/ai/agents/<agent_id>", methods=["PUT"])
-@require_role("admin", "administrator", "operator")
+@require_role("admin", "administrator")
 def api_update_agent(agent_id):
     data = request.get_json() or {}
     try:
-        return ok(agent=ai_agent.update_agent(agent_id, data))
+        res = ai_agent.update_agent(agent_id, data)
+        if isinstance(res, dict):
+            res.pop("api_key", None)
+        ev.info(f"AI Agent güncellendi: {agent_id} (by {get_jwt_identity()})", category="ai")
+        return ok(agent=res)
     except Exception as e:
         return err(e, 500)
 

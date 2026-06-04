@@ -8930,6 +8930,23 @@ let cpuChart, ramChart, loadChart;
 // Support both old "adaos_token" and new "oxware_token" keys
 const TOKEN = () => localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
 
+/* OXW-2026-SEC-008: WS URL'sinde raw JWT yerine tek-kullanımlık (60sn) vnc_token.
+   Sunucu logları/referer'da JWT sızmasını önler. Başarısızlıkta JWT'ye düşer. */
+async function _getVncToken(vmId) {
+  try {
+    const r = await fetch(`/api/vms/${vmId}/vnc-token`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + TOKEN(), 'X-CSRF-Token': (localStorage.getItem('ox_csrf')||'') }
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const t = j.token || (j.data && j.data.token) || '';
+      if (t) return { token: t, param: 'vnc_token' };
+    }
+  } catch (_) {}
+  return { token: TOKEN(), param: 'token' };  // fallback
+}
+
 /* ══ JWT decode helper ══ */
 function _getTokenExp() {
   const t = TOKEN();
@@ -14789,8 +14806,8 @@ async function openConsole(vmId) {
   try {
     // VNC portunu etkinleştir
     await api(`/vms/${vmId}/console/start`, { method: "POST" }).catch(() => {});
-    const tok = TOKEN();
-    const url = `/vnc_console/${vmId}?token=${encodeURIComponent(tok)}&embed=1`;
+    const _vt = await _getVncToken(vmId);
+    const url = `/vnc_console/${vmId}?${_vt.param}=${encodeURIComponent(_vt.token)}&embed=1`;
     // VM adını bul (varsa cache'den)
     let vmName = vmId;
     try {
@@ -22784,7 +22801,6 @@ async function openVncModal(vmId, vmName /*, _unused_url */, _isReconnect) {
   // Tear down any previous connection
   _vncModalTeardown();
 
-  const tok    = TOKEN();
   const screen = document.getElementById('vnc-modal-screen');
 
   try {
@@ -22792,8 +22808,9 @@ async function openVncModal(vmId, vmName /*, _unused_url */, _isReconnect) {
     const rfbMod = await import('/novnc/core/rfb.js');
     const RFB    = rfbMod.default;
 
+    const _vt     = await _getVncToken(vmId);  /* OXW-2026-SEC-008 */
     const wsProto = (location.protocol === 'https:') ? 'wss' : 'ws';
-    const wsUrl   = `${wsProto}://${location.host}/ws/vnc/${vmId}?token=${encodeURIComponent(tok)}`;
+    const wsUrl   = `${wsProto}://${location.host}/ws/vnc/${vmId}?${_vt.param}=${encodeURIComponent(_vt.token)}`;
 
     _vncModalSetLoad('VNC bağlanıyor…', wsUrl);
 
@@ -22874,10 +22891,11 @@ function closeVncModal() {
 /* ── vncModalPopout — open standalone window ─────────────────────────────── */
 function vncModalPopout() {
   if (!_vncModalVmId) return;
-  const tok = TOKEN();
-  const url = `/vnc_console/${_vncModalVmId}?token=${encodeURIComponent(tok)}`;
-  window.open(url, 'vnc_' + _vncModalVmId, 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
-  closeVncModal();
+  _getVncToken(_vncModalVmId).then(_vt => {
+    const url = `/vnc_console/${_vncModalVmId}?${_vt.param}=${encodeURIComponent(_vt.token)}`;
+    window.open(url, 'vnc_' + _vncModalVmId, 'width=1200,height=820,resizable=yes,menubar=no,toolbar=no');
+    closeVncModal();
+  });
 }
 
 /* ── Fullscreen & Minimize ───────────────────────────────────────────────── */

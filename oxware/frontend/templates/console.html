@@ -433,7 +433,7 @@
   </div>
 
   <script>
-    const vmId = "{{ vm_id }}";
+    const vmId = {{ vm_id | tojson }};  /* OXW-2026-SEC-006: tojson = XSS-safe JS literal */
 
     // ── Auth: vnc_token (WiseCP/WHMCS) veya JWT (native panel) ──────────────
     const _urlParams = new URLSearchParams(window.location.search);
@@ -544,8 +544,23 @@
           headers: { Authorization: "Bearer " + _jwtToken }
         });
 
+        // OXW-2026-SEC-008: raw JWT'yi WS URL'sine koyma. Tek kullanımlık,
+        // 60sn ömürlü vnc_token al → URL'de o görünür (log/referer sızıntısı zararsız).
+        let _wsToken = "", _wsParam = "token";
+        try {
+          const tr = await fetch("/api/vms/" + vmId + "/vnc-token", {
+            method: "POST", headers: { Authorization: "Bearer " + _jwtToken }
+          });
+          if (tr.ok) {
+            const tj = await tr.json();
+            _wsToken = tj.token || (tj.data && tj.data.token) || "";
+            if (_wsToken) _wsParam = "vnc_token";
+          }
+        } catch (_) {}
+        if (!_wsToken) _wsToken = _jwtToken;  // fallback (eski sunucu) — yine de çalışsın
+
         // Flask WS proxy — same host:port as the page, no websockify needed
-        const wsPath   = "ws/vnc/" + vmId + "?token=" + encodeURIComponent(_jwtToken);
+        const wsPath   = "ws/vnc/" + vmId + "?" + _wsParam + "=" + encodeURIComponent(_wsToken);
         const wsPort   = location.port || (isHttps ? "443" : "80");
         const novncUrl = "/novnc/vnc.html?" +
           "host="     + encodeURIComponent(location.hostname) +
@@ -581,14 +596,14 @@
     function sendCtrlAltDel() {
       try {
         document.getElementById("novnc-iframe").contentWindow
-          .postMessage({ type: "ctrlAltDel" }, "*");
+          .postMessage({ type: "ctrlAltDel" }, location.origin);  /* OXW-2026-SEC-007 */
       } catch (_) {}
     }
 
     function takeScreenshot() {
       try {
         const iframe = document.getElementById("novnc-iframe");
-        iframe.contentWindow.postMessage({ type: "screenshot" }, "*");
+        iframe.contentWindow.postMessage({ type: "screenshot" }, location.origin);  /* OXW-2026-SEC-007 */
       } catch (_) {}
     }
 
@@ -612,6 +627,7 @@
           "    return window.rfb||(window.UI&&window.UI.rfb)||null;",
           "  }",
           "  window.addEventListener('message',function(ev){",
+          "    if(ev.origin!==location.origin)return;",
           "    if(!ev.data||ev.data.type!=='oxware_keys')return;",
           "    var txt=ev.data.text||'';",
           "    var i=0;",
@@ -694,7 +710,7 @@
     function sendTextToVNC(text) {
       // postMessage → injected script in iframe calls rfb.sendKey() with X11 keysyms
       document.getElementById("novnc-iframe").contentWindow
-        .postMessage({ type: "oxware_keys", text: text }, "*");
+        .postMessage({ type: "oxware_keys", text: text }, location.origin);  /* OXW-2026-SEC-007 */
     }
 
     initConsole();
