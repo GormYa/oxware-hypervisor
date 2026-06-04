@@ -147,6 +147,21 @@
     .light-theme [style*="color:#94a3b8"]{color:#57606a!important}
     .light-theme [style*="color:#e2e8f0"]{color:#1f2328!important}
     .light-theme [style*="color:var(--text-muted)"]{color:#57606a!important}
+    /* v2.6 panel hardcoded dark bg safety-net */
+    .light-theme [style*="background:#161b22"],.light-theme [style*="background: #161b22"],
+    .light-theme [style*="background:#162030"],.light-theme [style*="background:#1e2d45"],
+    .light-theme [style*="background:#18222f"]{background:#ffffff!important;color:#1f2328!important}
+    .light-theme .hw-section{background:#ffffff!important;border-color:#d0d7de!important;color:#1f2328!important}
+    .light-theme .hw-section-title{color:#1f2328!important}
+    .light-theme .text-muted{color:#57606a!important}
+    .light-theme .text-center{color:inherit}
+    /* v2.6 colored info-box left-borders stay subtle on light */
+    .light-theme [style*="rgba(63,185,80,.04)"]{background:#f0fff4!important}
+    .light-theme [style*="rgba(210,153,34,.04)"]{background:#fffbf0!important}
+    .light-theme [style*="rgba(167,139,250,.04)"]{background:#faf5ff!important}
+    .light-theme [style*="rgba(88,166,255,.04)"]{background:#f0f7ff!important}
+    /* monospace terminal blocks: keep dark (intentional) but ensure readable */
+    .light-theme [style*="background:#0d1117"]{background:#0d1117!important;color:#79c0ff!important}
     html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5}
     a{color:inherit;text-decoration:none}
     button{font-family:inherit;cursor:pointer}
@@ -2110,6 +2125,40 @@
                 </div>
               </div>
             </div>
+
+            <!-- ══ Ağ Modu / IP Rehberi ══ -->
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-network-wired" style="color:var(--accent-lt)"></i> Ağ Modu &amp; IP Rehberi
+                <button class="btn sm" onclick="loadVdNetworkMode()" style="margin-left:auto;font-size:11px">↻ Yenile</button>
+              </div>
+              <div id="vd-netmode-body" class="text-muted" style="font-size:12px;padding:8px 0">VM seçildiğinde yüklenir...</div>
+              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;flex-wrap:wrap">
+                <div class="form-group" style="margin:0">
+                  <label style="font-size:11px;color:var(--text-muted)">Statik IP doğrula</label>
+                  <input id="vd-validate-ip" class="form-control" placeholder="192.168.1.50" style="width:160px;margin-top:4px">
+                </div>
+                <button class="btn sm" onclick="vdValidateIp()" style="font-size:12px">✓ IP Kontrol Et</button>
+              </div>
+              <div id="vd-ip-validate-result" style="margin-top:8px;font-size:12px"></div>
+            </div>
+
+            <!-- ══ Disk Sıcak Genişletme ══ -->
+            <div class="hw-section" style="margin-top:12px">
+              <div class="hw-section-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-hard-drive" style="color:#d29922"></i> Disk Sıcak Genişletme
+                <button class="btn sm" onclick="loadVdDisks()" style="margin-left:auto;font-size:11px">↻ Yenile</button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+                VM çalışırken disk büyüt. Misafir ajanı varsa dosya sistemi otomatik genişler (growpart + resize2fs/xfs_growfs).
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Hedef</th><th>Yol</th><th>Kapasite</th><th>Tahsis</th><th>İşlem</th></tr></thead>
+                  <tbody id="vd-disks-tbody"><tr><td colspan="5" class="text-center text-muted" style="padding:12px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <!-- ══ İzleme Pane ══ -->
@@ -2366,6 +2415,9 @@
             <button class="btn sm danger" onclick="batchVmAction('stop')">■ Tümünü Durdur</button>
             <button class="btn sm" onclick="batchVmAction('reboot')">↺ Yeniden Başlat</button>
             <button class="btn sm" onclick="vmBulkAction('snapshot')">📸 Snapshot Al</button>
+            <button class="btn sm" onclick="batchVmTag()">🏷 Etiket Ekle</button>
+            <button class="btn sm" onclick="batchVmVcpus()">⚙ vCPU Ayarla</button>
+            <button class="btn sm" onclick="batchVmMemory()">🧠 RAM Ayarla</button>
             <button class="btn sm danger" onclick="batchVmDelete()">✕ Seçilenleri Sil</button>
             <button class="btn sm" onclick="clearVmSelection()">✕ Seçimi Temizle</button>
           </div>
@@ -12654,6 +12706,7 @@ function vdTab(name) {
   if (name === 'fw'      && currentVmId) loadVdFirewall(currentVmId);
   if (name === 'snap'    && currentVmId) _loadVdSnapshots(currentVmId);
   if (name === 'format'  && currentVmId) _loadFmtDiskOptions(currentVmId);
+  if (name === 'hw'      && currentVmId) { loadVdNetworkMode(); loadVdDisks(); }
   // Auto-open serial console preview when console tab is opened
   if (name === 'console' && currentVmId) {
     _selectConsoleType('xterm');
@@ -12661,6 +12714,75 @@ function vdTab(name) {
   }
   // Disconnect serial when leaving console tab
   if (name !== 'console') _vmSerialDisconnect();
+}
+
+/* ──── VM Detail: Network Mode / IP Guidance ──── */
+async function loadVdNetworkMode() {
+  const el = document.getElementById('vd-netmode-body');
+  if (!el || !currentVmId) return;
+  el.innerHTML = 'Yükleniyor...';
+  const d = await _api(`/api/vms/${currentVmId}/network-info`);
+  if (!d) { el.innerHTML = '<span class="text-muted">Ağ bilgisi alınamadı</span>'; return; }
+  const modeColor = {NAT:'#d29922', BRIDGE:'#3fb950', ISOLATED:'#f85149', DIRECT:'#58a6ff'}[d.mode] || '#8b949e';
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:8px;background:${modeColor}22;color:${modeColor}">${_esc(d.mode||'UNKNOWN')}</span>
+      <span style="font-size:11px;color:${d.static_ip_supported?'#3fb950':'#d29922'}">${d.static_ip_supported?'✓ Statik IP destekleniyor':'⚠ Statik IP dışarıdan erişilemez'}</span>
+    </div>
+    <div style="font-size:11px;line-height:1.7;color:var(--text-muted)">
+      ${d.gateway?`<div><b>Ağ Geçidi:</b> <span style="font-family:monospace;color:var(--text)">${_esc(d.gateway)}</span></div>`:''}
+      ${d.subnet?`<div><b>Subnet:</b> <span style="font-family:monospace;color:var(--text)">${_esc(d.subnet)}</span></div>`:''}
+      ${d.dhcp_start?`<div><b>DHCP Aralığı:</b> <span style="font-family:monospace;color:var(--text)">${_esc(d.dhcp_start)} – ${_esc(d.dhcp_end||'')}</span></div>`:''}
+      ${d.bridge_name?`<div><b>Köprü:</b> <span style="font-family:monospace;color:var(--text)">${_esc(d.bridge_name)}</span></div>`:''}
+    </div>
+    <div style="margin-top:8px;padding:10px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:6px;font-size:11px;line-height:1.6;color:var(--text)">
+      <i class="fa-solid fa-circle-info" style="color:var(--accent-lt)"></i> ${_esc(d.guidance||'')}
+    </div>`;
+}
+async function vdValidateIp() {
+  const ip = document.getElementById('vd-validate-ip')?.value.trim();
+  const res = document.getElementById('vd-ip-validate-result');
+  if (!ip || !currentVmId) { toast('IP girin','error'); return; }
+  if (res) res.textContent = 'Kontrol ediliyor...';
+  const d = await _api(`/api/vms/${currentVmId}/network-info/validate-ip`,'POST',{ip});
+  if (!d) { if (res) res.textContent = 'Kontrol başarısız'; return; }
+  if (res) {
+    const ok = d.valid;
+    res.innerHTML = `<div style="padding:8px 10px;border-radius:6px;background:${ok?'rgba(63,185,80,.1)':'rgba(248,81,73,.1)'};border:1px solid ${ok?'rgba(63,185,80,.3)':'rgba(248,81,73,.3)'};color:${ok?'#3fb950':'#f85149'}">
+      ${ok?'✓ Kullanılabilir':'✗ Kullanılamaz'}: ${_esc(d.warning||d.reason||d.note||'')}
+      ${d.gateway?`<br><span style="color:var(--text-muted)">Ağ geçidi: ${_esc(d.gateway)}</span>`:''}
+    </div>`;
+  }
+}
+
+/* ──── VM Detail: Disk Hot-Extend ──── */
+async function loadVdDisks() {
+  const tb = document.getElementById('vd-disks-tbody');
+  if (!tb || !currentVmId) return;
+  tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:12px">Yükleniyor...</td></tr>';
+  const d = await _api(`/api/vms/${currentVmId}/disks`);
+  if (!d) { tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Disk bilgisi alınamadı</td></tr>'; return; }
+  const disks = d.disks || [];
+  tb.innerHTML = disks.length ? disks.map(dk => `<tr>
+    <td><b>${_esc(dk.target||'-')}</b></td>
+    <td style="font-family:monospace;font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(dk.path||'-')}</td>
+    <td>${dk.capacity_gb!=null?dk.capacity_gb+' GB':'-'}</td>
+    <td>${dk.allocation_gb!=null?dk.allocation_gb+' GB':'-'}</td>
+    <td>
+      <input id="ext-${_esc(dk.target)}" type="number" placeholder="yeni GB" style="width:80px;padding:2px 6px;font-size:11px" class="form-control">
+      <button class="btn sm" onclick="vdExtendDisk('${_esc(dk.target)}')" style="font-size:11px">Genişlet</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:12px">Disk yok</td></tr>';
+}
+async function vdExtendDisk(target) {
+  const newSize = parseInt(document.getElementById(`ext-${target}`)?.value);
+  if (!newSize || !currentVmId) { toast('Yeni boyut girin','error'); return; }
+  if (!confirm(`${target} diskini ${newSize} GB'a genişlet. Devam?`)) return;
+  const d = await _api(`/api/vms/${currentVmId}/disks/extend`,'POST',{disk_target:target,new_size_gb:newSize});
+  if (!d) return;
+  if (d.error) { toast(d.error,'error'); return; }
+  toast(`Disk genişletildi: ${d.old_size_gb||'?'} → ${d.new_size_gb||newSize} GB` + (d.guest_resize_attempted?' (FS genişletildi)':' (FS manuel genişletin)'),'success');
+  loadVdDisks();
 }
 
 // ── Live Metrics Polling ──────────────────────────────────────────────────────
@@ -13353,17 +13475,44 @@ async function batchVmAction(action) {
   if (!_selectedVMs.size) return;
   if (!await showConfirm(`${_selectedVMs.size} VM üzerinde "${action}" işlemi uygulanacak.`, 'Toplu İşlem')) return;
   const vm_ids = [..._selectedVMs];
+  // v2.6.1 bulk endpoints: /api/vms/bulk/<action>
+  const ep = {start:'start', stop:'stop', reboot:'stop'}[action];
   try {
-    // Yeni bulk endpoint kullan
-    await api('/vms/bulk', { method: 'POST', body: { vm_ids, action } });
-    toast(`${vm_ids.length} VM → ${action} gönderildi`, 'success');
+    const d = await _api(`/api/vms/bulk/${action === 'reboot' ? 'stop' : action}`, 'POST', {vm_ids});
+    const okN = (d && (d.success?.length ?? d.started?.length ?? vm_ids.length)) || vm_ids.length;
+    toast(`${okN} VM → ${action} tamamlandı`, 'success');
   } catch {
-    // Fallback: tek tek gönder
     await Promise.all(vm_ids.map(id => api(`/vms/${id}/${action}`, {method:'POST'}).catch(e => e)));
     toast(`${vm_ids.length} VM → ${action} gönderildi`, 'success');
   }
   clearVmSelection();
   setTimeout(loadVMs, 800);
+}
+
+/* v2.6.1 — Bulk tag/vcpu/memory */
+async function batchVmTag() {
+  if (!_selectedVMs.size) return;
+  const tag = prompt(`${_selectedVMs.size} VM'e eklenecek etiket:`);
+  if (!tag) return;
+  const d = await _api('/api/vms/bulk/tag','POST',{vm_ids:[..._selectedVMs],tag,action:'add'});
+  if (d) toast(`Etiket eklendi: ${tag}`,'success');
+  clearVmSelection(); setTimeout(loadVMs, 600);
+}
+async function batchVmVcpus() {
+  if (!_selectedVMs.size) return;
+  const n = parseInt(prompt(`${_selectedVMs.size} VM için yeni vCPU sayısı:`));
+  if (!n || n < 1) return;
+  const d = await _api('/api/vms/bulk/set-vcpus','POST',{vm_ids:[..._selectedVMs],vcpus:n});
+  if (d) toast(`vCPU → ${n} uygulandı`,'success');
+  clearVmSelection(); setTimeout(loadVMs, 600);
+}
+async function batchVmMemory() {
+  if (!_selectedVMs.size) return;
+  const mb = parseInt(prompt(`${_selectedVMs.size} VM için yeni RAM (MB):`));
+  if (!mb || mb < 256) return;
+  const d = await _api('/api/vms/bulk/set-memory','POST',{vm_ids:[..._selectedVMs],memory_mb:mb});
+  if (d) toast(`RAM → ${mb}MB uygulandı`,'success');
+  clearVmSelection(); setTimeout(loadVMs, 600);
 }
 
 async function batchVmDelete() {
