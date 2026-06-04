@@ -4364,6 +4364,24 @@
             </div>
           </div>
 
+            <div class="card">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-key" style="color:#d29922"></i> 2FA Kurtarma Kodları
+                <span id="rc-status-badge" style="font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--text-muted);margin-left:auto">—</span>
+              </div>
+              <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+                TOTP cihazını kaybettiğinizde hesabınıza girmenizi sağlayan tek kullanımlık yedek kodlar.
+              </p>
+              <div id="rc-codes-display" style="display:none;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+                <div style="font-size:11px;color:var(--yellow-lt);margin-bottom:6px;font-weight:600">⚠ Bu kodları güvenli bir yere kaydedin — bir daha gösterilmeyecek!</div>
+                <div id="rc-codes-list" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-family:monospace;font-size:13px"></div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-primary" onclick="rcGenerate()" style="font-size:12px">🔑 Kurtarma Kodu Oluştur</button>
+                <button class="btn" onclick="rcRevoke()" style="font-size:12px;color:var(--red-lt);border-color:rgba(248,81,73,.4)">🗑️ Tümünü İptal Et</button>
+              </div>
+            </div>
+
           <div class="card" style="margin-bottom:14px">
             <div class="card-title">Audit Log <button class="btn sm" onclick="exportAuditCsv()" style="margin-left:10px">⬇ CSV İndir</button></div>
             <div class="table-wrap">
@@ -4787,6 +4805,31 @@
               <li>Billing panelinde <strong>Bağlantı Test</strong> butonu ile kontrol edin.</li>
               <li>Ürününüzü bu sunucuya bağlayın; CPU/RAM/Disk seçeneklerini girin.</li>
             </ol>
+          </div>
+        </div>
+
+        <!-- ─────── tab-plugins ─────── -->
+        <div class="page" id="page-tab-plugins">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-puzzle-piece" style="margin-right:8px;color:var(--accent-lt)"></i>Plugin SDK</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadPluginSdkPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:14px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text)">
+              <b style="color:var(--accent-lt)">Plugin SDK</b> — Python eklentileri <code>/opt/oxware/plugins/&lt;name&gt;/plugin.py</code> olarak yükleyin.
+              Flask route, VM olay kancası ve özel panel ekleyebilirsiniz. Fork gerekmez.
+              <a href="#" onclick="downloadPluginTemplate()" style="color:var(--accent-lt);margin-left:8px">📥 Başlangıç şablonunu indir</a>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Yüklü Eklentiler</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>ID</th><th>Ad</th><th>Versiyon</th><th>Yazar</th><th>Açıklama</th><th>Durum</th><th>İşlem</th></tr></thead>
+                <tbody id="plugins-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -6861,6 +6904,116 @@
             </div>
           </div>
           <div id="apidocs-body"></div>
+        </div>
+
+        <!-- ── Fault Tolerance Panel ── -->
+        <div id="ent-pane-faultol" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-shield-halved fa-fw" style="color:#3fb950"></i> Fault Tolerance</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadFaultTolerancePage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #3fb950;background:rgba(63,185,80,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text);line-height:1.6">
+              <b style="color:#3fb950">ℹ Bu Nedir?</b> Checkpoint tabanlı VM koruması. Host çöktüğünde ikincil VM devreye girer, kesinti olmaz.
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="card">
+              <div class="card-title">FT Çifti Oluştur</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div><label style="font-size:11px;color:var(--text-muted)">Birincil VM ID</label><input id="ft-primary-vm" class="form-control" placeholder="vm-uuid" style="margin-top:4px"></div>
+                <div><label style="font-size:11px;color:var(--text-muted)">İkincil Depolama Havuzu</label><input id="ft-pool" class="form-control" placeholder="default" value="default" style="margin-top:4px"></div>
+                <div><label style="font-size:11px;color:var(--text-muted)">Senkronizasyon Aralığı (dakika)</label><input id="ft-interval" class="form-control" type="number" value="15" style="margin-top:4px"></div>
+                <button class="btn-primary" onclick="ftCreatePair()" style="font-size:12px">🛡️ FT Çifti Oluştur</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Hızlı İşlemler</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div><label style="font-size:11px;color:var(--text-muted)">VM ID</label><input id="ft-action-vm" class="form-control" placeholder="vm-uuid" style="margin-top:4px"></div>
+                <button class="btn" onclick="ftSyncCheckpoint()" style="font-size:12px">🔄 Manuel Senkronizasyon</button>
+                <button class="btn" onclick="ftTriggerFailover()" style="font-size:12px;color:var(--red-lt);border-color:var(--red-lt)">⚡ Yük Devretme Tetikle</button>
+                <button class="btn" onclick="ftRemovePair()" style="font-size:12px">🗑️ FT Kaldır</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">FT Çiftleri <button class="btn sm" onclick="loadFaultTolerancePage()" style="font-size:11px;margin-left:8px">↻</button></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Birincil VM</th><th>İkincil VM</th><th>Durum</th><th>Gecikme</th><th>Son Sync</th><th>İşlem</th></tr></thead>
+                <tbody id="ft-pairs-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Storage DRS Panel ── -->
+        <div id="ent-pane-storedrs" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-scale-balanced fa-fw" style="color:#d29922"></i> Storage DRS</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadStorageDrsPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #d29922;background:rgba(210,153,34,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text)"><b style="color:#d29922">ℹ Bu Nedir?</b> Disk I/O yüküne göre VM disklerini depolama havuzları arasında otomatik dengele.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="card" id="sdrs-pools-card">
+              <div class="card-title">Havuz Analizi</div>
+              <div id="sdrs-pools-body" class="text-muted" style="font-size:12px">Yükleniyor...</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Rebalance</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Önce Dry Run ile önerileri gör, sonra uygula.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn" onclick="sdrsDryRun()" style="font-size:12px">🔍 Dry Run (Öneri)</button>
+                <button class="btn-primary" onclick="sdrsRebalance()" style="font-size:12px">⚖️ Rebalance Uygula</button>
+              </div>
+              <div id="sdrs-action-result" style="margin-top:8px;font-size:11px"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Taşıma Önerileri</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>VM</th><th>Disk</th><th>Kaynak Havuz</th><th>Hedef Havuz</th><th>Boyut</th><th>Neden</th></tr></thead>
+                <tbody id="sdrs-recs-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Analiz için Dry Run çalıştırın</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Console Recording Panel ── -->
+        <div id="ent-pane-consolerec" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-video fa-fw" style="color:#a78bfa"></i> Konsol Kaydı</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadConsoleRecPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #a78bfa;background:rgba(167,139,250,.04);padding:14px">
+            <div style="font-size:12px;color:var(--text)"><b style="color:#a78bfa">ℹ Bu Nedir?</b> ffmpeg ile VNC oturumlarını WebM video olarak kaydet. Geçmişe dönük oynatma.</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Kayıt Başlat</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+              <div class="form-group" style="margin:0"><label style="font-size:11px">VM ID</label><input id="crec-vm-id" class="form-control" placeholder="vm-uuid" style="width:180px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">VNC Port</label><input id="crec-vnc-port" class="form-control" type="number" value="5900" style="width:100px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Süre (sn)</label><input id="crec-duration" class="form-control" type="number" value="3600" style="width:100px;margin-top:4px"></div>
+              <button class="btn-primary" onclick="crecStart()" style="font-size:12px">🔴 Kayıt Başlat</button>
+            </div>
+            <div id="crec-start-result" style="margin-top:8px;font-size:11px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Kayıtlar</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Kayıt ID</th><th>VM</th><th>Başlangıç</th><th>Süre</th><th>Boyut</th><th>İşlem</th></tr></thead>
+                <tbody id="crec-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         </div><!-- /page-tab-enterprise -->
@@ -11226,6 +11379,10 @@ function buildContextNav(type) {
     </div>
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
+    </div>
+    <div class="ctx-item" data-page="tab-plugins" onclick="navigate('tab-plugins');closeMobileNav()">
+      <i class="fa-solid fa-puzzle-piece" style="width:15px;text-align:center"></i>
+      <span>Eklentiler</span>
     </div>
     <!-- Enterprise (v2.5.6+: single nav item, sub-tabs inside page) -->
     <div class="ctx-item" data-page="tab-enterprise" onclick="navigate('tab-enterprise');closeMobileNav()"
@@ -16045,10 +16202,16 @@ function switchSettingsTab(tab) {
   if (tab === "ai") loadAIAgents();
 }
 
-async function loadSettings() {
+/* Admin-only panel görünürlüğünü tek yerden uygula — flicker'ı önler */
+function _applyAdminGates() {
   const _role = (localStorage.getItem("oxware_role") || localStorage.getItem("adaos_role") || "").toLowerCase();
+  const isAdmin = (_role === "administrator" || _role === "admin");
   const _sshPanel = document.getElementById("ssh-reset-panel");
-  if (_sshPanel) _sshPanel.style.display = (_role === "administrator" || _role === "admin") ? "block" : "none";
+  if (_sshPanel) _sshPanel.style.display = isAdmin ? "block" : "none";
+}
+
+async function loadSettings() {
+  _applyAdminGates();
 
   try {
     const data = await api("/notifications/config");
@@ -17264,7 +17427,8 @@ async function loadTabData(tabId) {
     case 'tab-proxy':        loadNginxSites(); break;
     case 'tab-monitoring': navigate('monitor'); break;
     case 'tab-ai':           loadAiRecommendations(); loadAnomalies(); loadAIAgents(); break;
-    case 'tab-security':     load2faStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); loadKernelHardening(); break;
+    case 'tab-security':     _applyAdminGates(); load2faStatus(); rcLoadStatus(); loadAuditLog(); loadApiKeys(); loadLdapConfig(); checkLicenseStatus(); loadAutoSnapConfig(); loadSessions(); loadSecurityLockouts(); loadIpAllowlist(); loadVault(); loadKernelHardening(); break;
+    case 'tab-plugins':      loadPluginSdkPage(); break;
     case 'tab-settings':     loadSdnStatus(); loadSslStatus(); _initSmigVmSel(); break;
     case 'tab-integrations': loadWebhooks(); loadS3Config(); loadEmailConfig(); loadVlans(); loadHooks(); break;
     case 'tab-syslog':        activateSyslogTab('journald'); break;
@@ -18846,6 +19010,68 @@ function initResizeHandles() {
       document.documentElement.style.setProperty('--taskbar-h', h + 'px');
     }
   }
+}
+
+/* ──── Recovery Codes ──── */
+async function rcLoadStatus() {
+  const badge = document.getElementById('rc-status-badge');
+  const d = await _api('/api/recovery-codes/status');
+  if (!d || !badge) return;
+  badge.textContent = d.has_codes ? `${d.count} kod mevcut` : 'Kod yok';
+  badge.style.background = d.has_codes ? 'rgba(63,185,80,.15)' : 'rgba(248,81,73,.15)';
+  badge.style.color = d.has_codes ? '#3fb950' : '#f85149';
+}
+async function rcGenerate() {
+  if (document.getElementById('rc-codes-list')?.innerHTML && !confirm('Mevcut kodlar geçersiz kılınacak. Devam?')) return;
+  const d = await _api('/api/recovery-codes/generate','POST');
+  if (!d) return;
+  const disp = document.getElementById('rc-codes-display');
+  const list = document.getElementById('rc-codes-list');
+  if (disp) disp.style.display = '';
+  if (list) list.innerHTML = (d.codes||[]).map(c => `<span style="padding:2px 4px;background:var(--surface);border-radius:3px">${_esc(c)}</span>`).join('');
+  toast('Kurtarma kodları oluşturuldu — Güvenli bir yere kaydedin!','success');
+  rcLoadStatus();
+}
+async function rcRevoke() {
+  if (!confirm('Tüm kurtarma kodları iptal edilecek. Emin misiniz?')) return;
+  const d = await _api('/api/recovery-codes/revoke','DELETE');
+  if (d) { toast('Kurtarma kodları iptal edildi','success'); rcLoadStatus(); }
+  const disp = document.getElementById('rc-codes-display');
+  if (disp) disp.style.display = 'none';
+}
+
+/* ──── Plugin SDK ──── */
+async function loadPluginSdkPage() {
+  const tb = document.getElementById('plugins-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const d = await _api('/api/plugins');
+  if (!d && tb) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Veri alınamadı</td></tr>'; return; }
+  const plugins = (d && d.plugins) || [];
+  if (tb) tb.innerHTML = plugins.length ? plugins.map(p => `<tr>
+    <td style="font-family:monospace;font-size:11px">${_esc(p.id||'-')}</td>
+    <td><b>${_esc(p.name||'-')}</b></td>
+    <td>${_esc(p.version||'-')}</td>
+    <td>${_esc(p.author||'-')}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(p.description||'-')}</td>
+    <td><span style="color:${p.enabled?'#3fb950':'#f85149'};font-weight:600">${p.enabled?'Aktif':'Pasif'}</span></td>
+    <td>
+      <button class="btn sm" onclick="pluginToggle('${_esc(p.id)}',${!p.enabled})">${p.enabled?'Devre Dışı':'Etkinleştir'}</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:18px">Eklenti yok — /opt/oxware/plugins/ dizinine ekleyin</td></tr>';
+}
+async function pluginToggle(id, enable) {
+  const endpoint = enable ? `/api/plugins/${id}/enable` : `/api/plugins/${id}/disable`;
+  const d = await _api(endpoint,'POST');
+  if (d) { toast(enable ? 'Eklenti etkinleştirildi' : 'Eklenti devre dışı bırakıldı', 'success'); loadPluginSdkPage(); }
+}
+async function downloadPluginTemplate() {
+  const d = await _api('/api/plugins/template');
+  if (!d || !d.template) { toast('Şablon alınamadı','error'); return; }
+  const blob = new Blob([d.template], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'plugin.py'; a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ══════════════════ Init ══════════════════ */
@@ -21416,7 +21642,7 @@ async function deleteRbacPerm(key, username) {
 /* ══════════════════════════════════════════════════════════════════════════════
    Enterprise Sub-Tab System (v2.5.6+)
 ══════════════════════════════════════════════════════════════════════════════ */
-const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport','apidocs'];
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport','faultol','storedrs','consolerec','apidocs'];
 const ENT_LOADERS = {
   drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
   affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
@@ -21468,6 +21694,9 @@ const ENT_LOADERS = {
   cloudevents: () => { try { loadCloudeventsPage(); } catch(e) { console.warn(e); } },
   desktop: () => { try { loadDesktopPage(); } catch(e) { console.warn(e); } },
   cloudexport: () => { try { loadCloudExportPage(); } catch(e) { console.warn(e); } },
+  faultol:    () => { try { loadFaultTolerancePage(); } catch(e) { console.warn(e); } },
+  storedrs:   () => { try { loadStorageDrsPage(); } catch(e) { console.warn(e); } },
+  consolerec: () => { try { loadConsoleRecPage(); } catch(e) { console.warn(e); } },
   apidocs: () => { try { loadApiDocsPage(); } catch(e) { console.warn(e); } }
 };
 
@@ -21484,11 +21713,11 @@ function entSubTab(tab) {
 }
 
 const ENT_CATEGORIES = {
-  compute:['drs','affinity','evc','numa','rightsize','maint'],
-  storage:['stor-adv','bkup-enc','disk-enc','backupadv'],
+  compute:['drs','affinity','evc','numa','rightsize','maint','consolerec'],
+  storage:['stor-adv','bkup-enc','disk-enc','backupadv','storedrs'],
   network:['nioc','net-adv','microseg','bfd','svcchain','mesh'],
   security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','alertcorr'],
-  dr:['dr','lifecycle'],
+  dr:['dr','lifecycle','faultol'],
   tenancy:['tenants','chargeback','svc-cat','rate-limit'],
   observability:['otel','grafana','topoviz','forecast','driftcap'],
   cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops'],
@@ -21508,7 +21737,7 @@ function entCat(cat) {
   if (bs[ci]) bs[ci].classList.add('active');
   // Build feature sub-tab bar for this category
   const feats = ENT_CATEGORIES[cat] || [];
-  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export',apidocs:'API Referans'};
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export',faultol:'Fault Tolerance',storedrs:'Storage DRS',consolerec:'Konsol Kaydı',apidocs:'API Referans'};
   const bar = document.getElementById('ent-feat-tabs');
   bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
   // Hide all panes, show first feature of this category
@@ -24495,6 +24724,148 @@ async function cloudExportAws() {
   if (!d) { toast('AWS export başlatılamadı','error'); return; }
   toast('AWS export başlatıldı','success');
   if (res) res.innerHTML = _entKV(d);
+}
+
+/* ──── Fault Tolerance Panel ──── */
+async function loadFaultTolerancePage() {
+  const tb = document.getElementById('ft-pairs-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const data = await _api('/api/ft/pairs');
+  if (!data) { if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Veri alınamadı</td></tr>'; return; }
+  const pairs = data.pairs || [];
+  if (tb) {
+    if (!pairs.length) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">FT çifti yok</td></tr>';
+    else tb.innerHTML = pairs.map(p => `<tr>
+      <td>${_esc(p.primary_vm_id||'-')}</td>
+      <td>${_esc(p.secondary_vm_id||'-')}</td>
+      <td><span style="color:${p.status==='protected'?'#3fb950':p.status==='failover'?'#f85149':'#d29922'}">${_esc(p.status||'-')}</span></td>
+      <td>${p.lag_seconds!=null ? p.lag_seconds+'s' : '-'}</td>
+      <td>${p.last_sync ? new Date(p.last_sync*1000).toLocaleString('tr-TR') : '-'}</td>
+      <td><button class="btn sm" onclick="ftSyncOne('${_esc(p.primary_vm_id)}')">Sync</button></td>
+    </tr>`).join('');
+  }
+}
+async function ftCreatePair() {
+  const vm = document.getElementById('ft-primary-vm')?.value.trim();
+  const pool = document.getElementById('ft-pool')?.value.trim() || 'default';
+  const interval = parseInt(document.getElementById('ft-interval')?.value) || 15;
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  const d = await _api('/api/ft/pairs','POST',{primary_vm_id:vm,secondary_pool:pool,sync_interval_minutes:interval});
+  if (!d) return;
+  toast('FT çifti oluşturuldu','success');
+  loadFaultTolerancePage();
+}
+async function ftSyncCheckpoint() {
+  const vm = document.getElementById('ft-action-vm')?.value.trim();
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  const d = await _api(`/api/ft/${vm}/sync`,'POST');
+  if (d) { toast('Senkronizasyon tamamlandı','success'); loadFaultTolerancePage(); }
+}
+async function ftSyncOne(vmId) {
+  const d = await _api(`/api/ft/${vmId}/sync`,'POST');
+  if (d) { toast('Senkronizasyon OK','success'); loadFaultTolerancePage(); }
+}
+async function ftTriggerFailover() {
+  const vm = document.getElementById('ft-action-vm')?.value.trim();
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  if (!confirm(`${vm} için yük devretme tetiklenecek. Emin misiniz?`)) return;
+  const d = await _api(`/api/ft/${vm}/failover`,'POST');
+  if (d) { toast('Yük devretme tamamlandı','success'); loadFaultTolerancePage(); }
+}
+async function ftRemovePair() {
+  const vm = document.getElementById('ft-action-vm')?.value.trim();
+  if (!vm) { toast('VM ID gerekli','error'); return; }
+  if (!confirm('FT koruması kaldırılacak. Emin misiniz?')) return;
+  const d = await _api(`/api/ft/${vm}`,'DELETE');
+  if (d) { toast('FT kaldırıldı','success'); loadFaultTolerancePage(); }
+}
+
+/* ──── Storage DRS Panel ──── */
+async function loadStorageDrsPage() {
+  const body = document.getElementById('sdrs-pools-body');
+  const tb = document.getElementById('sdrs-recs-tbody');
+  if (body) body.innerHTML = 'Yükleniyor...';
+  const [pools, recs] = await Promise.all([_api('/api/storage-drs/analyze'), _api('/api/storage-drs/recommendations')]);
+  if (pools && body) {
+    const poolList = Object.values(pools.pools || pools || {}).filter(x => typeof x === 'object');
+    body.innerHTML = poolList.length ? poolList.map(p => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span>${_esc(p.name||'-')}</span>
+        <span style="color:${(p.utilization_pct||0)>80?'#f85149':(p.utilization_pct||0)>60?'#d29922':'#3fb950'}">${p.utilization_pct!=null?p.utilization_pct+'%':'-'}</span>
+      </div>`).join('') : '<span class="text-muted">Havuz yok</span>';
+  }
+  if (recs && tb) {
+    const list = recs.recommendations || [];
+    tb.innerHTML = list.length ? list.map(r => `<tr>
+      <td>${_esc(r.vm_name||r.vm_id||'-')}</td>
+      <td>${_esc(r.disk_path||'-')}</td>
+      <td>${_esc(r.source_pool||'-')}</td>
+      <td>${_esc(r.target_pool||'-')}</td>
+      <td>${r.disk_size_gb!=null?r.disk_size_gb+' GB':'-'}</td>
+      <td>${_esc(r.reason||'-')}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Öneri yok — havuzlar dengeli</td></tr>';
+  }
+}
+async function sdrsDryRun() {
+  const res = document.getElementById('sdrs-action-result');
+  if (res) res.textContent = 'Analiz ediliyor...';
+  const d = await _api('/api/storage-drs/rebalance','POST',{dry_run:true});
+  if (!d) return;
+  if (res) res.innerHTML = `<span style="color:#3fb950">Dry Run: ${d.migrated||0} taşıma önerildi, ${d.skipped||0} atlandı</span>`;
+  loadStorageDrsPage();
+}
+async function sdrsRebalance() {
+  if (!confirm('Disk taşıma işlemleri başlatılacak. Devam?')) return;
+  const res = document.getElementById('sdrs-action-result');
+  if (res) res.textContent = 'Rebalance çalışıyor...';
+  const d = await _api('/api/storage-drs/rebalance','POST',{dry_run:false});
+  if (!d) return;
+  toast(d.errors?.length ? 'Rebalance kısmi hata' : 'Rebalance tamamlandı', d.errors?.length ? 'error' : 'success');
+  if (res) res.innerHTML = `<span>Taşınan: ${d.migrated||0}, Atlanan: ${d.skipped||0}, Hata: ${(d.errors||[]).length}</span>`;
+  loadStorageDrsPage();
+}
+
+/* ──── Console Recording Panel ──── */
+async function loadConsoleRecPage() {
+  const tb = document.getElementById('crec-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
+  const data = await _api('/api/console-recordings');
+  if (!data && tb) { tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Veri alınamadı</td></tr>'; return; }
+  const recs = (data && data.recordings) || [];
+  if (tb) tb.innerHTML = recs.length ? recs.map(r => `<tr>
+    <td style="font-family:monospace;font-size:10px">${_esc((r.recording_id||r.id||'').slice(0,12))}...</td>
+    <td>${_esc(r.vm_id||'-')}</td>
+    <td>${r.started_at ? new Date(r.started_at*1000).toLocaleString('tr-TR') : '-'}</td>
+    <td>${r.duration_seconds!=null ? Math.round(r.duration_seconds/60)+'dk' : '—'}</td>
+    <td>${r.file_size_bytes ? Math.round(r.file_size_bytes/1024/1024)+'MB' : '-'}</td>
+    <td>
+      <button class="btn sm" onclick="crecStop('${_esc(r.recording_id||r.id)}')">Durdur</button>
+      <button class="btn sm" style="color:var(--red-lt)" onclick="crecDelete('${_esc(r.recording_id||r.id)}')">Sil</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Kayıt yok</td></tr>';
+}
+async function crecStart() {
+  const vmId = document.getElementById('crec-vm-id')?.value.trim();
+  const port = parseInt(document.getElementById('crec-vnc-port')?.value) || 5900;
+  const dur  = parseInt(document.getElementById('crec-duration')?.value) || 3600;
+  if (!vmId) { toast('VM ID gerekli','error'); return; }
+  const res = document.getElementById('crec-start-result');
+  if (res) res.textContent = 'Başlatılıyor...';
+  const d = await _api('/api/console-recordings/start','POST',{vm_id:vmId,vnc_port:port,duration_seconds:dur});
+  if (!d) return;
+  if (d.error) { toast(d.error,'error'); if (res) res.textContent = d.error; return; }
+  toast('Kayıt başlatıldı','success');
+  if (res) res.innerHTML = `<span style="color:#3fb950">Kayıt başladı: ${_esc(d.recording_id||'')}</span>`;
+  loadConsoleRecPage();
+}
+async function crecStop(id) {
+  const d = await _api(`/api/console-recordings/${id}/stop`,'POST');
+  if (d) { toast('Kayıt durduruldu','success'); loadConsoleRecPage(); }
+}
+async function crecDelete(id) {
+  if (!confirm('Kayıt silinecek. Emin misiniz?')) return;
+  const d = await _api(`/api/console-recordings/${id}`,'DELETE');
+  if (d) { toast('Kayıt silindi','success'); loadConsoleRecPage(); }
 }
 
 /* ──── API Docs Panel ──── */

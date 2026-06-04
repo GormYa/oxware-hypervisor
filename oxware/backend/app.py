@@ -6512,24 +6512,32 @@ def api_kernel_hardening_status():
 @require_auth
 @require_role("admin", "administrator")
 def api_kernel_hardening_install():
-    """Kernel hardening kurulumunu tetikler (install-hardening.sh --no-modules)."""
+    """Kernel hardening kurulumunu tetikler.
+
+    CRITICAL: --no-systemd zorunlu. systemd drop-in adımı `systemctl restart oxware`
+    çalıştırır → Flask sürecini öldürür → HTTP yanıtı asla dönmez → UI 'Kuruluyor...'
+    durumunda asılı kalır. Drop-in'i manuel uygulamak için SSH gerekir.
+    """
     import subprocess as _sp
     script = "/opt/oxware/kernel/install-hardening.sh"
     if not __import__("os").path.exists(script):
         return err("install-hardening.sh bulunamadı: git pull yapın", 404)
     try:
+        # --no-systemd: servisi yeniden başlatmaz (self-kill önler)
+        # --no-modules: kernel modül derlemesi atlanır (uzun sürer)
         r = _sp.run(
-            ["bash", script, "--no-modules"],
-            capture_output=True, text=True, timeout=120
+            ["bash", script, "--no-modules", "--no-systemd"],
+            capture_output=True, text=True, timeout=90
         )
         return ok(
             returncode=r.returncode,
             output=r.stdout[-3000:] if r.stdout else "",
             error=r.stderr[-1000:] if r.stderr else "",
-            success=r.returncode == 0
+            success=r.returncode == 0,
+            note="systemd drop-in atlandı (servisi yeniden başlatmamak için). Manuel uygulamak: SSH → sudo bash kernel/install-hardening.sh"
         )
     except _sp.TimeoutExpired:
-        return err("Kurulum zaman aşımı (120s)", 504)
+        return err("Kurulum zaman aşımı (90s) — clang/apparmor kurulumu uzun sürmüş olabilir, SSH ile manuel deneyin", 504)
     except Exception as e:
         return err(str(e), 500)
 
