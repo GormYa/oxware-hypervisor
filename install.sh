@@ -1305,6 +1305,13 @@ main() {
     advance_progress "Lisans aktivasyonu"
     activate_license
 
+    # OS rebranding (opt-in via OXWARE_REBRAND_OS=1; defaults to off to avoid surprising users)
+    if [ "${OXWARE_REBRAND_OS:-0}" = "1" ] && [ -f "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" ]; then
+        advance_progress "OS rebranding (OXWARE_REBRAND_OS=1)"
+        bash "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" || \
+            warn "OS rebrand başarısız (kritik değil — kurulum devam ediyor)"
+    fi
+
     # Kurulum bildirimi gönder (anonim, sessiz)
     send_install_ping
 

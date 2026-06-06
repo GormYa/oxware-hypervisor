@@ -135,6 +135,10 @@ FEATURE_MANIFEST = [
     {"id": "plugin_sdk",    "name": "Plugin SDK",             "category": "automation",   "module": "plugin_sdk",          "status": "beta",   "version": "2.6.1"},
     {"id": "disk_hot_ext",  "name": "VM Disk Hot-Extend",     "category": "compute",      "module": "vm_hot_extend",       "status": "stable", "version": "2.6.1"},
     {"id": "bulk_vm_ops",   "name": "Bulk VM Operations",     "category": "compute",      "module": "bulk_vm_ops",         "status": "stable", "version": "2.6.1"},
+
+    # ── v2.6.2 — Green Mode + OS branding + web installer ────────────────────────
+    {"id": "green_mode",    "name": "Green Mode (Power AI)",  "category": "automation",   "module": "green_mode",          "status": "beta",   "version": "2.6.2"},
+    {"id": "os_branding",   "name": "OS Rebranding",          "category": "lifecycle",    "module": "_script",             "status": "beta",   "version": "2.6.2"},
 ]
 
 

@@ -224,6 +224,7 @@ plugin_sdk_mgr       = _safe_import("plugin_sdk")
 vm_hot_extend_mgr    = _safe_import("vm_hot_extend")
 bulk_vm_ops_mgr      = _safe_import("bulk_vm_ops")
 net_mode_mgr         = _safe_import("network_mode_manager")
+green_mode_mgr       = _safe_import("green_mode")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -18788,6 +18789,91 @@ def api_bridge_status():
     """Check if oxbr0 bridge is configured."""
     if not net_mode_mgr: return ok(configured=False)
     return ok(**net_mode_mgr.get_bridge_setup_status())
+
+# ── Green Mode / Power Optimization (v2.6.2) ─────────────────────────────────
+@app.route("/api/green-mode/config", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_config():
+    if not green_mode_mgr: return ok({"enabled": False, "available": False})
+    return ok(**green_mode_mgr.get_config())
+
+@app.route("/api/green-mode/config", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_config_set():
+    if not green_mode_mgr: return err("modül yok", 503)
+    return ok(**green_mode_mgr.set_config(request.get_json() or {}))
+
+@app.route("/api/green-mode/score", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_score():
+    if not green_mode_mgr: return ok({"score": 0})
+    return ok(**green_mode_mgr.get_green_score())
+
+@app.route("/api/green-mode/savings", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_savings():
+    if not green_mode_mgr: return ok({"kwh_saved": 0, "cost_saved": 0})
+    return ok(**green_mode_mgr.analyze_savings_potential())
+
+@app.route("/api/green-mode/forecast", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_forecast():
+    if not green_mode_mgr: return ok(forecast=[])
+    hours = int(request.args.get("hours", 24))
+    return ok(forecast=green_mode_mgr.predict_load_window(hours))
+
+@app.route("/api/green-mode/recommendations", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_recommendations():
+    if not green_mode_mgr: return ok(recommendations=[])
+    return ok(**green_mode_mgr.recommend_consolidation())
+
+@app.route("/api/green-mode/enter", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_enter():
+    """Tüketim azaltma penceresine gir — VM'leri konsolide et, idle node'ları askıya al."""
+    if not green_mode_mgr: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    dry_run = bool(d.get("dry_run", True))
+    return ok(**green_mode_mgr.enter_green_window(dry_run=dry_run))
+
+@app.route("/api/green-mode/nodes", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_nodes():
+    if not green_mode_mgr: return ok(nodes=[])
+    return ok(nodes=green_mode_mgr.list_node_states())
+
+@app.route("/api/green-mode/nodes/<node>/wake", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_wake(node):
+    if not green_mode_mgr: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**green_mode_mgr.wake_node(node, method=d.get("method", "wol")))
+
+@app.route("/api/green-mode/nodes/<node>/suspend", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_suspend(node):
+    if not green_mode_mgr: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**green_mode_mgr.suspend_node(node, method=d.get("method", "s3")))
+
+@app.route("/api/green-mode/history", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_green_history():
+    if not green_mode_mgr: return ok(history=[])
+    days = int(request.args.get("days", 7))
+    return ok(history=green_mode_mgr.get_history(days))
 
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.6.1 başlatılıyor")
