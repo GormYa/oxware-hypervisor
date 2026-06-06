@@ -2748,37 +2748,86 @@ def api_vm_port_forwards_add(vm_id):
 @require_auth
 @require_role("admin", "administrator")
 def api_vm_port_forwards_delete(vm_id):
-    """Port yönlendirme kuralını sil."""
+    """Port yönlendirme kuralını sil.
+
+    OXW-2026-PF-001 fix: Frontend bazen host_ip göndermiyor → iptables komutuna
+    `-d ''` geçirilince "host/network '' not found" hatası alıyorduk.
+    Çözüm: host_ip boşsa iptables -S PREROUTING ile mevcut kuralı bul, gerçek
+    -A satırını alıp -A→-D yaparak sil. Eşleşme bulunamazsa zaten silinmiştir.
+    """
     try:
         d = request.get_json(silent=True) or {}
-        proto     = d.get("proto", "tcp").lower()
-        host_ip   = d.get("host_ip", "")
-        host_port = str(d.get("host_port", ""))
-        vm_ip     = d.get("vm_ip", "")
-        vm_port   = str(d.get("vm_port", host_port))
+        proto     = (d.get("proto") or "tcp").lower().strip()
+        host_ip   = (d.get("host_ip") or "").strip()
+        host_port = str(d.get("host_port") or "").strip()
+        vm_ip     = (d.get("vm_ip") or "").strip()
+        vm_port   = str(d.get("vm_port") or host_port).strip()
 
+        # host_ip artık ZORUNLU değil — listeden bulacağız
         if not all([proto, host_port, vm_ip, vm_port]):
-            return err("Tüm alanlar zorunlu", 400)
+            return err("proto/host_port/vm_ip/vm_port zorunlu", 400)
+        if proto not in ("tcp", "udp"):
+            return err("proto sadece tcp veya udp olabilir", 400)
 
-        r = subprocess.run([
-            "iptables", "-t", "nat", "-D", "PREROUTING",
-            "-p", proto, "-d", host_ip, "--dport", host_port,
-            "-j", "DNAT", "--to-destination", f"{vm_ip}:{vm_port}"
-        ], capture_output=True, text=True, timeout=10)
+        # Mevcut PREROUTING kurallarını çıkar, eşleşeni bul
+        ls = subprocess.run(
+            ["iptables", "-t", "nat", "-S", "PREROUTING"],
+            capture_output=True, text=True, timeout=5
+        )
+        if ls.returncode != 0:
+            return err(f"iptables list hatası: {ls.stderr.strip()}", 500)
 
-        subprocess.run([
-            "iptables", "-D", "FORWARD",
-            "-p", proto, "-d", vm_ip, "--dport", vm_port, "-j", "ACCEPT"
-        ], capture_output=True, timeout=5)
+        matched_line = None
+        # Eşleşme kriteri: proto + --dport host_port + --to-destination vm_ip:vm_port
+        needle_dest = f"--to-destination {vm_ip}:{vm_port}"
+        needle_dport = f"--dport {host_port}"
+        needle_proto = f"-p {proto}"
+        for line in ls.stdout.splitlines():
+            if not line.startswith("-A PREROUTING"):
+                continue
+            if needle_proto not in line:
+                continue
+            if needle_dport not in line:
+                continue
+            if needle_dest not in line:
+                continue
+            # host_ip belirtilmişse onu da doğrula (defense-in-depth)
+            if host_ip and f"-d {host_ip}" not in line and f"-d {host_ip}/32" not in line:
+                continue
+            matched_line = line
+            break
+
+        if not matched_line:
+            # Kural zaten yok — idempotent başarı
+            ev.info(f"Port yönlendirme zaten yok (idempotent): :{host_port}→{vm_ip}:{vm_port}", category="network")
+            # FORWARD ACCEPT'i de temizlemeyi dene (zararsız fail)
+            subprocess.run(
+                ["iptables", "-D", "FORWARD", "-p", proto, "-d", vm_ip, "--dport", vm_port, "-j", "ACCEPT"],
+                capture_output=True, timeout=5
+            )
+            return ok(deleted=True, already_absent=True)
+
+        # -A → -D çevir ve parçala
+        del_parts = matched_line.replace("-A PREROUTING", "-D PREROUTING", 1).split()
+        r = subprocess.run(
+            ["iptables", "-t", "nat"] + del_parts,
+            capture_output=True, text=True, timeout=10
+        )
+
+        # FORWARD chain ACCEPT kuralını da kaldır (varsa)
+        subprocess.run(
+            ["iptables", "-D", "FORWARD", "-p", proto, "-d", vm_ip, "--dport", vm_port, "-j", "ACCEPT"],
+            capture_output=True, timeout=5
+        )
 
         if r.returncode == 0:
-            ev.info(f"Port yönlendirme silindi: {host_ip}:{host_port} → {vm_ip}:{vm_port}", category="network")
+            ev.info(f"Port yönlendirme silindi: :{host_port} → {vm_ip}:{vm_port}", category="network")
             threading.Thread(target=_save_iptables_rules, daemon=True).start()
             return ok(deleted=True)
         else:
-            return err(f"iptables hatası: {r.stderr.strip()}", 500)
+            return err(f"iptables hatası: {r.stderr.strip() or 'bilinmeyen hata'}", 500)
     except Exception as e:
-        return err(e)
+        return err(str(e))
 
 
 _PF_RULES_FILE = "/var/lib/oxware/pf_rules.json"
