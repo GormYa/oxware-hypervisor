@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.5.x (latest) | ✅ Active support |
-| 2.x (older)    | ⚠️  Security patches only |
-| 1.x            | ❌ End of life |
+| 2.5.x (latest) | Active support |
+| 2.x (older) | WARN️ Security patches only |
+| 1.x | End of life |
 
 ## Reporting a Vulnerability
 
@@ -75,67 +75,67 @@ OXware runs as root on a KVM hypervisor host. The attack surface includes:
 
 Aşağıdaki bulgular v2.5 sürümünde çözülmüş ve kullanıcılara açıklanmıştır.
 
-### ✅ Kritik (Critical)
+### Kritik (Critical)
 
 | ID | Başlık | CVSS | Durum |
 |----|--------|------|-------|
-| OXW-2026-014 | `/api/update/*` uçnoktalarında rol kontrolü eksikliği — herhangi bir kullanıcı supply-chain RCE yapabiliyordu | 9.9 | ✅ **Düzeltildi** — `@require_role("administrator")` eklendi |
-| OXW-2026-015 | Güncelleyicide repo_url allow-list yoktu — zararlı repo URL kabul ediliyordu | 9.1 | ✅ **Düzeltildi** — `UPDATE_ALLOWED_REPOS` config ile kısıtlandı |
-| OXW-2026-001 | CSRF "token yoksa geç" baypası — çift gönderim koruması işlevsizdi | 9.0 | ✅ **Düzeltildi** — Bearer header hariç tüm isteklerde token zorunlu |
-| OXW-2026-002 | CORS `origins="*"` + `supports_credentials=True` — CSRF ile zincirlenince admin RCE | 8.8 | ✅ **Düzeltildi** — Config tabanlı beyaz liste; wildcard kaldırıldı |
+| OXW-2026-014 | `/api/update/*` uçnoktalarında rol kontrolü eksikliği — herhangi bir kullanıcı supply-chain RCE yapabiliyordu | 9.9 | **Düzeltildi** — `@require_role("administrator")` eklendi |
+| OXW-2026-015 | Güncelleyicide repo_url allow-list yoktu — zararlı repo URL kabul ediliyordu | 9.1 | **Düzeltildi** — `UPDATE_ALLOWED_REPOS` config ile kısıtlandı |
+| OXW-2026-001 | CSRF "token yoksa geç" baypası — çift gönderim koruması işlevsizdi | 9.0 | **Düzeltildi** — Bearer header hariç tüm isteklerde token zorunlu |
+| OXW-2026-002 | CORS `origins="*"` + `supports_credentials=True` — CSRF ile zincirlenince admin RCE | 8.8 | **Düzeltildi** — Config tabanlı beyaz liste; wildcard kaldırıldı |
 
-### ✅ Yüksek (High)
-
-| ID | Başlık | CVSS | Durum |
-|----|--------|------|-------|
-| OXW-2026-016 | VNC WebSocket çerçeve uzunluğu sınırsızdı — bellek bombası DoS | 7.5 | ✅ **Düzeltildi** — 16 MiB çerçeve sınırı |
-| OXW-2026-005 | `/api/auth/2fa/debug` anlık TOTP kodunu döndürüyordu — 2FA bypass | 7.1 | ✅ **Düzeltildi** — Endpoint üretimden kaldırıldı (410 Gone) |
-| OXW-2026-004 | XFF başlığı ile rate-limit ve lockout bypass | 7.5 | ✅ **Düzeltildi** — Yalnızca `trusted_proxies` CIDR'inden XFF kabul |
-| OXW-2026-018 | LDAP arama filtresi enjeksiyonu — kullanıcı sayımı | 7.0 | ✅ **Düzeltildi** — RFC 4515 escape (`_ldap_escape`) |
-| rapor #33 | SSH `PermitRootLogin yes` + `PasswordAuthentication yes` — brute-force davetiyesi | HIGH | ✅ **Düzeltildi** — `prohibit-password` + `PasswordAuthentication no` |
-| rapor #6 | Update endpoint: herhangi bir kullanıcı supply-chain RCE | HIGH | ✅ **Düzeltildi** (OXW-2026-014 ile) |
-
-### ✅ Orta (Medium)
+### Yüksek (High)
 
 | ID | Başlık | CVSS | Durum |
 |----|--------|------|-------|
-| OXW-2026-020 | `_2fa_pending` kilitsiz TOCTOU + bellek sızıntısı | 5.3 | ✅ **Düzeltildi** — `threading.Lock` + atomik pop + cleanup thread |
-| OXW-2026-019 | API key ham SHA-256 + sabit-zamanlı olmayan karşılaştırma | 5.0 | ✅ **Düzeltildi** — HMAC-SHA256 (pepper) + `hmac.compare_digest` |
-| OXW-2026-017 | Webhook URL SSRF — iç ağ taraması yapılabiliyordu | 6.5 | ✅ **Düzeltildi** — RFC1918/loopback/link-local block-list |
-| OXW-2026-007 | `/api/pentest/run` SSRF — yönetici iç ağa yönlendirme | 6.5 | ✅ **Düzeltildi** — İç ağ block-list zorunlu |
-| OXW-2026-006 | Lockout state bellekte — yeniden başlatmada sıfırlanıyordu | 5.3 | ✅ **Düzeltildi** — `lockouts.json` diske persist |
-| OXW-2026-011 | DiyOcp PHP TLS doğrulama devre dışı seçeneği | 4.2 | ✅ **Düzeltildi** — `CURLOPT_SSL_VERIFYPEER` her zaman true |
-| rapor #19 | Parola politikası yoktu — "123456" gibi şifreler kabul ediliyordu | MEDIUM | ✅ **Düzeltildi** — Uzunluk, karmaşıklık, yaygın şifre kontrolü |
+| OXW-2026-016 | VNC WebSocket çerçeve uzunluğu sınırsızdı — bellek bombası DoS | 7.5 | **Düzeltildi** — 16 MiB çerçeve sınırı |
+| OXW-2026-005 | `/api/auth/2fa/debug` anlık TOTP kodunu döndürüyordu — 2FA bypass | 7.1 | **Düzeltildi** — Endpoint üretimden kaldırıldı (410 Gone) |
+| OXW-2026-004 | XFF başlığı ile rate-limit ve lockout bypass | 7.5 | **Düzeltildi** — Yalnızca `trusted_proxies` CIDR'inden XFF kabul |
+| OXW-2026-018 | LDAP arama filtresi enjeksiyonu — kullanıcı sayımı | 7.0 | **Düzeltildi** — RFC 4515 escape (`_ldap_escape`) |
+| rapor #33 | SSH `PermitRootLogin yes` + `PasswordAuthentication yes` — brute-force davetiyesi | HIGH | **Düzeltildi** — `prohibit-password` + `PasswordAuthentication no` |
+| rapor #6 | Update endpoint: herhangi bir kullanıcı supply-chain RCE | HIGH | **Düzeltildi** (OXW-2026-014 ile) |
 
-### ✅ Düşük (Low) / Bilgi (Info)
+### Orta (Medium)
+
+| ID | Başlık | CVSS | Durum |
+|----|--------|------|-------|
+| OXW-2026-020 | `_2fa_pending` kilitsiz TOCTOU + bellek sızıntısı | 5.3 | **Düzeltildi** — `threading.Lock` + atomik pop + cleanup thread |
+| OXW-2026-019 | API key ham SHA-256 + sabit-zamanlı olmayan karşılaştırma | 5.0 | **Düzeltildi** — HMAC-SHA256 (pepper) + `hmac.compare_digest` |
+| OXW-2026-017 | Webhook URL SSRF — iç ağ taraması yapılabiliyordu | 6.5 | **Düzeltildi** — RFC1918/loopback/link-local block-list |
+| OXW-2026-007 | `/api/pentest/run` SSRF — yönetici iç ağa yönlendirme | 6.5 | **Düzeltildi** — İç ağ block-list zorunlu |
+| OXW-2026-006 | Lockout state bellekte — yeniden başlatmada sıfırlanıyordu | 5.3 | **Düzeltildi** — `lockouts.json` diske persist |
+| OXW-2026-011 | DiyOcp PHP TLS doğrulama devre dışı seçeneği | 4.2 | **Düzeltildi** — `CURLOPT_SSL_VERIFYPEER` her zaman true |
+| rapor #19 | Parola politikası yoktu — "123456" gibi şifreler kabul ediliyordu | MEDIUM | **Düzeltildi** — Uzunluk, karmaşıklık, yaygın şifre kontrolü |
+
+### Düşük (Low) / Bilgi (Info)
 
 | ID | Başlık | Durum |
 |----|--------|-------|
-| OXW-2026-013 | Legacy SHA256 migration flag hatası | ✅ **Düzeltildi** — `migrated = True` atama hatası giderildi |
-| OXW-2026-010 | `install.sh` `set -e` devre dışıydı — sessiz kurulum hataları | ✅ **Düzeltildi** — `set -uo pipefail` aktif |
-| Hardcoded IP | `pentest.py` içinde production sunucu IP'si açık kodda | ✅ **Düzeltildi** — `REDACTED_HOST` → `127.0.0.1`, git geçmişi temizlendi |
-| OXW-2026-008 | VNC JWT sorgu dizesinde — tek kullanımlık token sistemi | ✅ **Düzeltildi** — `_vnc_one_time_tokens` + 60s TTL |
-| OXW-2026-009 | libvirt `auth_unix_rw="none"` → polkit geçişi | ✅ **Düzeltildi** — `polkit` auth + polkit rules |
-| OXW-2026-012 | Login timing oracle — sabit-zamanlı dummy PBKDF2 | ✅ **Düzeltildi** — `_dummy_pbkdf2()` ile sabit-zamanlı doğrulama |
-| rapor #15 | Login büyük/küçük harf bypass | ✅ **Düzeltildi** — `username.lower()` normalizasyonu |
-| rapor #16 | Stateless JWT revocation — aktif token blocklist | ✅ **Düzeltildi** — `revoke_all_user_sessions()` + `is_revoked(jti)` |
-| rapor #28 | WebSocket wildcard (`*`) — kiracı izolasyonu | ✅ **Düzeltildi** — vm-user rolünde wildcard engellendi |
-| rapor #30 | `/api/system/processes` herkese açıktı | ✅ **Düzeltildi** — admin/administrator rolü zorunlu |
-| rapor #34 | Ghost persistence — uninstall eksik temizlik | ✅ **Düzeltildi** — uninstall.sh adım 11–13: tunnel, polkit, cron |
-| rapor #38 | PTY shell audit log yok | ✅ **Düzeltildi** — `audit_log.log_action()` shell açılışında |
-| rapor #39 | Fork bomb koruması yok | ✅ **Düzeltildi** — `RLIMIT_NPROC=128, RLIMIT_NOFILE=1024` |
-| rapor #43 | ISO delete/rename URL path traversal | ✅ **Düzeltildi** — `validate_filename(name)` eklendi |
-| rapor #44 | Rate limiter OOM — sınırsız bucket | ✅ **Düzeltildi** — `_MAX_BUCKETS=50_000` + LRU eviction |
-| rapor #53 | Systemd kaynak limiti yok | ✅ **Düzeltildi** — `MemoryMax=2G, TasksMax=512, LimitNOFILE=65536` |
-| rapor #58 | Cloudflare tunnel token plaintext | ✅ **Düzeltildi** — 0600 dosya izni + tunnel_id API yanıtından kaldırıldı |
-| rapor #61 | nginx config injection | ✅ **Düzeltildi** — `_sanitize_nginx_token()` |
-| rapor #62 | Notes stored XSS | ✅ **Düzeltildi** — HTML tag stripping (`_sanitize_note()`) |
-| rapor #67 | SQL injection (audit_log/perf_history) | ✅ **Geçerli Değil** — Parametre bağlama (`?`) kullanılıyor |
-| rapor #70 | QCOW2 header doğrulama eksikliği | ✅ **Düzeltildi** — Magic bytes `QFIû` kontrolü import öncesi |
-| rapor #71 | Guest agent exec allow-list yok | ✅ **Düzeltildi** — Komut beyaz listesi + metachar arg validasyonu |
-| rapor #74 | BGP vtysh description/password injection | ✅ **Düzeltildi** — `_sanitize_bgp_str()` + prefix uzunluk validasyonu |
-| OXW-2026-003 | `/api/system/execute` shell=True sınırsız RCE | ✅ **Düzeltildi** — Komut whitelist + `shell=False` |
-| rapor #25 | VM disk/RAM quota — per-kullanıcı limit yok | ✅ **Düzeltildi** — `check_quota()` kullanıcı bazlı + `max_vcpus_per_user`, `max_memory_mb_per_user` |
+| OXW-2026-013 | Legacy SHA256 migration flag hatası | **Düzeltildi** — `migrated = True` atama hatası giderildi |
+| OXW-2026-010 | `install.sh` `set -e` devre dışıydı — sessiz kurulum hataları | **Düzeltildi** — `set -uo pipefail` aktif |
+| Hardcoded IP | `pentest.py` içinde production sunucu IP'si açık kodda | **Düzeltildi** — `REDACTED_HOST` -> `127.0.0.1`, git geçmişi temizlendi |
+| OXW-2026-008 | VNC JWT sorgu dizesinde — tek kullanımlık token sistemi | **Düzeltildi** — `_vnc_one_time_tokens` + 60s TTL |
+| OXW-2026-009 | libvirt `auth_unix_rw="none"` -> polkit geçişi | **Düzeltildi** — `polkit` auth + polkit rules |
+| OXW-2026-012 | Login timing oracle — sabit-zamanlı dummy PBKDF2 | **Düzeltildi** — `_dummy_pbkdf2()` ile sabit-zamanlı doğrulama |
+| rapor #15 | Login büyük/küçük harf bypass | **Düzeltildi** — `username.lower()` normalizasyonu |
+| rapor #16 | Stateless JWT revocation — aktif token blocklist | **Düzeltildi** — `revoke_all_user_sessions()` + `is_revoked(jti)` |
+| rapor #28 | WebSocket wildcard (`*`) — kiracı izolasyonu | **Düzeltildi** — vm-user rolünde wildcard engellendi |
+| rapor #30 | `/api/system/processes` herkese açıktı | **Düzeltildi** — admin/administrator rolü zorunlu |
+| rapor #34 | Ghost persistence — uninstall eksik temizlik | **Düzeltildi** — uninstall.sh adım 11–13: tunnel, polkit, cron |
+| rapor #38 | PTY shell audit log yok | **Düzeltildi** — `audit_log.log_action()` shell açılışında |
+| rapor #39 | Fork bomb koruması yok | **Düzeltildi** — `RLIMIT_NPROC=128, RLIMIT_NOFILE=1024` |
+| rapor #43 | ISO delete/rename URL path traversal | **Düzeltildi** — `validate_filename(name)` eklendi |
+| rapor #44 | Rate limiter OOM — sınırsız bucket | **Düzeltildi** — `_MAX_BUCKETS=50_000` + LRU eviction |
+| rapor #53 | Systemd kaynak limiti yok | **Düzeltildi** — `MemoryMax=2G, TasksMax=512, LimitNOFILE=65536` |
+| rapor #58 | Cloudflare tunnel token plaintext | **Düzeltildi** — 0600 dosya izni + tunnel_id API yanıtından kaldırıldı |
+| rapor #61 | nginx config injection | **Düzeltildi** — `_sanitize_nginx_token()` |
+| rapor #62 | Notes stored XSS | **Düzeltildi** — HTML tag stripping (`_sanitize_note()`) |
+| rapor #67 | SQL injection (audit_log/perf_history) | **Geçerli Değil** — Parametre bağlama (`?`) kullanılıyor |
+| rapor #70 | QCOW2 header doğrulama eksikliği | **Düzeltildi** — Magic bytes `QFIû` kontrolü import öncesi |
+| rapor #71 | Guest agent exec allow-list yok | **Düzeltildi** — Komut beyaz listesi + metachar arg validasyonu |
+| rapor #74 | BGP vtysh description/password injection | **Düzeltildi** — `_sanitize_bgp_str()` + prefix uzunluk validasyonu |
+| OXW-2026-003 | `/api/system/execute` shell=True sınırsız RCE | **Düzeltildi** — Komut whitelist + `shell=False` |
+| rapor #25 | VM disk/RAM quota — per-kullanıcı limit yok | **Düzeltildi** — `check_quota()` kullanıcı bazlı + `max_vcpus_per_user`, `max_memory_mb_per_user` |
 
 
 ---
@@ -144,16 +144,16 @@ Aşağıdaki bulgular v2.5 sürümünde çözülmüş ve kullanıcılara açıkl
 
 | CVE / ID | Severity | Component | Status |
 |----------|----------|-----------|--------|
-| OMERATI-2026-001 | **Critical** (CVSS 9.4) | VNC WebSocket middleware | ✅ Fixed in v2.2.1 |
-| OMERATI-2026-002 | **Critical** (CVSS 9.8) | Password reset API | ✅ Fixed in v2.2.2 |
-| OXW-2026-014 | **Critical** (CVSS 9.9) | Update endpoint auth bypass | ✅ Fixed in v2.5.0 |
-| OXW-2026-001 | **Critical** (CVSS 9.0) | CSRF bypass | ✅ Fixed in v2.5.0 |
-| OXW-2026-002 | **Critical** (CVSS 8.8) | CORS wildcard + credentials | ✅ Fixed in v2.5.0 |
-| OXW-2026-015 | **Critical** (CVSS 9.1) | Updater signature/allowlist | ✅ Fixed in v2.5.0 |
-| OXW-2026-016 | **High** (CVSS 7.5) | WebSocket memory bomb DoS | ✅ Fixed in v2.5.0 |
-| OXW-2026-005 | **High** (CVSS 7.1) | 2FA debug TOTP leak | ✅ Fixed in v2.5.0 |
-| OXW-2026-004 | **High** (CVSS 7.5) | XFF rate-limit bypass | ✅ Fixed in v2.5.0 |
-| OXW-2026-018 | **High** (CVSS 7.0) | LDAP filter injection | ✅ Fixed in v2.5.0 |
+| OMERATI-2026-001 | **Critical** (CVSS 9.4) | VNC WebSocket middleware | Fixed in v2.2.1 |
+| OMERATI-2026-002 | **Critical** (CVSS 9.8) | Password reset API | Fixed in v2.2.2 |
+| OXW-2026-014 | **Critical** (CVSS 9.9) | Update endpoint auth bypass | Fixed in v2.5.0 |
+| OXW-2026-001 | **Critical** (CVSS 9.0) | CSRF bypass | Fixed in v2.5.0 |
+| OXW-2026-002 | **Critical** (CVSS 8.8) | CORS wildcard + credentials | Fixed in v2.5.0 |
+| OXW-2026-015 | **Critical** (CVSS 9.1) | Updater signature/allowlist | Fixed in v2.5.0 |
+| OXW-2026-016 | **High** (CVSS 7.5) | WebSocket memory bomb DoS | Fixed in v2.5.0 |
+| OXW-2026-005 | **High** (CVSS 7.1) | 2FA debug TOTP leak | Fixed in v2.5.0 |
+| OXW-2026-004 | **High** (CVSS 7.5) | XFF rate-limit bypass | Fixed in v2.5.0 |
+| OXW-2026-018 | **High** (CVSS 7.0) | LDAP filter injection | Fixed in v2.5.0 |
 
 ---
 

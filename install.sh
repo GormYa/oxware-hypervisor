@@ -1,8 +1,8 @@
 #!/bin/bash
 # ============================================================
-#  OXware Hypervisor Installer v2.2
-#  Ubuntu/Debian KVM Hypervisor Yönetim Sistemi
-#  https://github.com/ShinnAsukha/oxware-hypervisor
+# OXware Hypervisor Installer v2.2
+# Ubuntu/Debian KVM Hypervisor Yönetim Sistemi
+# https://github.com/ShinnAsukha/oxware-hypervisor
 # ============================================================
 
 # OXW-2026-010 fix: set -e aktif — kritik hatalar kurulumu durdurur
@@ -19,64 +19,64 @@ CURRENT_STEP=0
 START_TIME=0
 
 progress_bar() {
-    local pct=$1
-    local label=$2
-    local elapsed=$3
-    local bar_width=30
-    local filled=$(( pct * bar_width / 100 ))
-    local empty=$(( bar_width - filled ))
-    local bar=""
-    local i
-    for (( i=0; i<filled; i++ )); do bar+="█"; done
-    for (( i=0; i<empty;  i++ )); do bar+="░"; done
-    printf "\r\033[0;32m[%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %s  \033[0;90m(%s geçti)\033[0m   " \
-        "$(printf '\033[0;32m%s' "$bar" | head -c $(( filled * 3 + 7 )))" \
-        "$(printf '\033[0;90m')" \
-        "$pct" \
-        "$label" \
-        "$elapsed" >&2
+ local pct=$1
+ local label=$2
+ local elapsed=$3
+ local bar_width=30
+ local filled=$(( pct * bar_width / 100 ))
+ local empty=$(( bar_width - filled ))
+ local bar=""
+ local i
+ for (( i=0; i<filled; i++ )); do bar+="█"; done
+ for (( i=0; i<empty; i++ )); do bar+="░"; done
+ printf "\r\033[0;32m[%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %s \033[0;90m(%s geçti)\033[0m " \
+ "$(printf '\033[0;32m%s' "$bar" | head -c $(( filled * 3 + 7 )))" \
+ "$(printf '\033[0;90m')" \
+ "$pct" \
+ "$label" \
+ "$elapsed" >&2
 }
 
 advance_progress() {
-    local label="${1:-}"
-    CURRENT_STEP=$(( CURRENT_STEP + 1 ))
-    local pct=$(( CURRENT_STEP * 100 / TOTAL_STEPS ))
-    local now elapsed_s elapsed_fmt
-    now=$(date +%s)
-    elapsed_s=$(( now - START_TIME ))
-    local mins=$(( elapsed_s / 60 ))
-    local secs=$(( elapsed_s % 60 ))
-    elapsed_fmt=$(printf "%02d:%02d" "$mins" "$secs")
-    # Draw bar: green filled blocks, dark gray empty blocks
-    local bar_width=30
-    local filled=$(( pct * bar_width / 100 ))
-    local empty=$(( bar_width - filled ))
-    local filled_str="" empty_str=""
-    local i
-    for (( i=0; i<filled; i++ )); do filled_str+="█"; done
-    for (( i=0; i<empty;  i++ )); do empty_str+="░"; done
-    printf "\r\033[0;32m[\033[0;32m%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %-45s  \033[0;90m(%s geçti)\033[0m   " \
-        "$filled_str" \
-        "$empty_str" \
-        "$pct" \
-        "$label" \
-        "$elapsed_fmt" >&2
-    # Move to next line so subsequent step() / log() output is below
-    printf "\n" >&2
+ local label="${1:-}"
+ CURRENT_STEP=$(( CURRENT_STEP + 1 ))
+ local pct=$(( CURRENT_STEP * 100 / TOTAL_STEPS ))
+ local now elapsed_s elapsed_fmt
+ now=$(date +%s)
+ elapsed_s=$(( now - START_TIME ))
+ local mins=$(( elapsed_s / 60 ))
+ local secs=$(( elapsed_s % 60 ))
+ elapsed_fmt=$(printf "%02d:%02d" "$mins" "$secs")
+ # Draw bar: green filled blocks, dark gray empty blocks
+ local bar_width=30
+ local filled=$(( pct * bar_width / 100 ))
+ local empty=$(( bar_width - filled ))
+ local filled_str="" empty_str=""
+ local i
+ for (( i=0; i<filled; i++ )); do filled_str+="█"; done
+ for (( i=0; i<empty; i++ )); do empty_str+="░"; done
+ printf "\r\033[0;32m[\033[0;32m%s\033[0;90m%s\033[0;32m]\033[0m \033[1;37m%3d%%\033[0m — %-45s \033[0;90m(%s geçti)\033[0m " \
+ "$filled_str" \
+ "$empty_str" \
+ "$pct" \
+ "$label" \
+ "$elapsed_fmt" >&2
+ # Move to next line so subsequent step() / log() output is below
+ printf "\n" >&2
 }
 
 OXWARE_VERSION="2.6.1"
 REPO_URL="https://github.com/ShinnAsukha/oxware-hypervisor.git"
 
 # ── Dizin Yapısı (sunucuyla tam uyumlu) ──────────────────────
-# /opt/oxware/          → ana dizin (git repo buraya klonlanır)
-# /opt/oxware/oxware/   → uygulama dosyaları (backend/ frontend/)
-# /opt/oxware/venv/     → Python virtual environment
-# /etc/oxware/          → konfigürasyon + SSL sertifikası
-# /var/log/oxware/      → loglar
-# /var/lib/oxware/      → veri (ISO, disk, yedek)
+# /opt/oxware/ -> ana dizin (git repo buraya klonlanır)
+# /opt/oxware/oxware/ -> uygulama dosyaları (backend/ frontend/)
+# /opt/oxware/venv/ -> Python virtual environment
+# /etc/oxware/ -> konfigürasyon + SSL sertifikası
+# /var/log/oxware/ -> loglar
+# /var/lib/oxware/ -> veri (ISO, disk, yedek)
 INSTALL_DIR="/opt/oxware"
-APP_DIR="${INSTALL_DIR}/oxware"          # backend/ ve frontend/ burası
+APP_DIR="${INSTALL_DIR}/oxware" # backend/ ve frontend/ burası
 VENV_DIR="${INSTALL_DIR}/venv"
 CONFIG_DIR="/etc/oxware"
 LOG_DIR="/var/log/oxware"
@@ -90,416 +90,416 @@ MIN_CPU_CORES=1
 
 # ── Yardımcı Fonksiyonlar ─────────────────────────────────────
 print_banner() {
-    clear
-    echo -e "${CYAN}"
-    cat << 'BANNER'
-  ██████╗ ██╗  ██╗██╗    ██╗ █████╗ ██████╗ ███████╗
- ██╔═══██╗╚██╗██╔╝██║    ██║██╔══██╗██╔══██╗██╔════╝
- ██║   ██║ ╚███╔╝ ██║ █╗ ██║███████║██████╔╝█████╗
- ██║   ██║ ██╔██╗ ██║███╗██║██╔══██║██╔══██╗██╔══╝
- ╚██████╔╝██╔╝ ██╗╚███╔███╔╝██║  ██║██║  ██║███████╗
-  ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+ clear
+ echo -e "${CYAN}"
+ cat << 'BANNER'
+ ██████╗ ██╗ ██╗██╗ ██╗ █████╗ ██████╗ ███████╗
+ ██╔═══██╗╚██╗██╔╝██║ ██║██╔══██╗██╔══██╗██╔════╝
+ ██║ ██║ ╚███╔╝ ██║ █╗ ██║███████║██████╔╝█████╗
+ ██║ ██║ ██╔██╗ ██║███╗██║██╔══██║██╔══██╗██╔══╝
+ ╚██████╔╝██╔╝ ██╗╚███╔███╔╝██║ ██║██║ ██║███████╗
+ ╚═════╝ ╚═╝ ╚═╝ ╚══╝╚══╝ ╚═╝ ╚═╝╚═╝ ╚═╝╚══════╝
 BANNER
-    echo -e "${WHITE}    Hypervisor Management System v${OXWARE_VERSION}${NC}"
-    echo -e "${YELLOW}    Ubuntu/KVM — ESXi/Proxmox Alternative${NC}"
-    echo ""
+ echo -e "${WHITE} Hypervisor Management System v${OXWARE_VERSION}${NC}"
+ echo -e "${YELLOW} Ubuntu/KVM — ESXi/Proxmox Alternative${NC}"
+ echo ""
 }
 
-log()  { echo -e "${GREEN}[✓]${NC} $1"; }
+log() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-err()  { echo -e "${RED}[✗] HATA:${NC} $1"; exit 1; }
+err() { echo -e "${RED}[FAIL] HATA:${NC} $1"; exit 1; }
 step() { echo -e "\n${CYAN}━━━ $1 ━━━${NC}"; }
 info() { echo -e "${BLUE}[i]${NC} $1"; }
 
 # ── Kontroller ────────────────────────────────────────────────
 check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        err "Root yetkisi gerekli: sudo bash install.sh"
-    fi
+ if [[ $EUID -ne 0 ]]; then
+ err "Root yetkisi gerekli: sudo bash install.sh"
+ fi
 }
 
 check_os() {
-    if grep -qiE "ubuntu|debian" /etc/os-release 2>/dev/null; then
-        OS_NAME=$(grep ^NAME= /etc/os-release | cut -d'"' -f2 || echo "Linux")
-        OS_VER=$(grep ^VERSION_ID= /etc/os-release | cut -d'"' -f2 || echo "")
-        log "İşletim sistemi: $OS_NAME $OS_VER"
-    else
-        err "Sadece Ubuntu 20.04+ ve Debian 11+ desteklenmektedir"
-    fi
+ if grep -qiE "ubuntu|debian" /etc/os-release 2>/dev/null; then
+ OS_NAME=$(grep ^NAME= /etc/os-release | cut -d'"' -f2 || echo "Linux")
+ OS_VER=$(grep ^VERSION_ID= /etc/os-release | cut -d'"' -f2 || echo "")
+ log "İşletim sistemi: $OS_NAME $OS_VER"
+ else
+ err "Sadece Ubuntu 20.04+ ve Debian 11+ desteklenmektedir"
+ fi
 }
 
 check_bios_virtualization() {
-    step "CPU Sanallaştırma Kontrolü"
-    if grep -qE "vmx|svm" /proc/cpuinfo 2>/dev/null; then
-        VIRT_TYPE=$(grep -oE "vmx|svm" /proc/cpuinfo | head -1 | tr 'a-z' 'A-Z')
-        if [ "$VIRT_TYPE" = "VMX" ]; then
-            log "CPU sanallaştırma aktif: VMX (Intel VT-x)"
-        else
-            log "CPU sanallaştırma aktif: SVM (AMD-V)"
-        fi
-    else
-        warn "CPU sanallaştırma (VT-x/AMD-V) tespit edilemedi — test modunda devam ediliyor"
-    fi
-    modprobe kvm 2>/dev/null || true
-    modprobe kvm_intel 2>/dev/null || modprobe kvm_amd 2>/dev/null || true
-    if [ -e /dev/kvm ]; then log "/dev/kvm hazır"; else warn "/dev/kvm bulunamadı"; fi
+ step "CPU Sanallaştırma Kontrolü"
+ if grep -qE "vmx|svm" /proc/cpuinfo 2>/dev/null; then
+ VIRT_TYPE=$(grep -oE "vmx|svm" /proc/cpuinfo | head -1 | tr 'a-z' 'A-Z')
+ if [ "$VIRT_TYPE" = "VMX" ]; then
+ log "CPU sanallaştırma aktif: VMX (Intel VT-x)"
+ else
+ log "CPU sanallaştırma aktif: SVM (AMD-V)"
+ fi
+ else
+ warn "CPU sanallaştırma (VT-x/AMD-V) tespit edilemedi — test modunda devam ediliyor"
+ fi
+ modprobe kvm 2>/dev/null || true
+ modprobe kvm_intel 2>/dev/null || modprobe kvm_amd 2>/dev/null || true
+ if [ -e /dev/kvm ]; then log "/dev/kvm hazır"; else warn "/dev/kvm bulunamadı"; fi
 }
 
 check_hardware() {
-    step "Donanım Gereksinimleri"
-    CPU_CORES=$(nproc)
-    CPU_MODEL=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Bilinmiyor")
-    if [[ $CPU_CORES -lt $MIN_CPU_CORES ]]; then
-        err "Minimum $MIN_CPU_CORES CPU çekirdeği gerekli (bulunan: $CPU_CORES)"
-    fi
-    log "CPU: $CPU_MODEL ($CPU_CORES çekirdek)"
+ step "Donanım Gereksinimleri"
+ CPU_CORES=$(nproc)
+ CPU_MODEL=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Bilinmiyor")
+ if [[ $CPU_CORES -lt $MIN_CPU_CORES ]]; then
+ err "Minimum $MIN_CPU_CORES CPU çekirdeği gerekli (bulunan: $CPU_CORES)"
+ fi
+ log "CPU: $CPU_MODEL ($CPU_CORES çekirdek)"
 
-    RAM_MB=$(grep MemTotal /proc/meminfo | awk '{print int($2/1024)}')
-    if [[ $RAM_MB -lt $MIN_RAM_MB ]]; then
-        warn "Düşük RAM: ${RAM_MB}MB (önerilen 2048MB+)"
-        read -p "Yine de devam et? [e/H]: " -r
-        if [[ ! $REPLY =~ ^[Ee]$ ]]; then exit 1; fi
-    fi
-    log "RAM: ${RAM_MB}MB"
+ RAM_MB=$(grep MemTotal /proc/meminfo | awk '{print int($2/1024)}')
+ if [[ $RAM_MB -lt $MIN_RAM_MB ]]; then
+ warn "Düşük RAM: ${RAM_MB}MB (önerilen 2048MB+)"
+ read -p "Yine de devam et? [e/H]: " -r
+ if [[ ! $REPLY =~ ^[Ee]$ ]]; then exit 1; fi
+ fi
+ log "RAM: ${RAM_MB}MB"
 
-    DISK_GB=$(df / | awk 'NR==2{print int($4/1024/1024)}')
-    if [[ $DISK_GB -lt $MIN_DISK_GB ]]; then
-        err "Minimum ${MIN_DISK_GB}GB boş disk gerekli (bulunan: ${DISK_GB}GB)"
-    fi
-    log "Disk: ${DISK_GB}GB boş"
+ DISK_GB=$(df / | awk 'NR==2{print int($4/1024/1024)}')
+ if [[ $DISK_GB -lt $MIN_DISK_GB ]]; then
+ err "Minimum ${MIN_DISK_GB}GB boş disk gerekli (bulunan: ${DISK_GB}GB)"
+ fi
+ log "Disk: ${DISK_GB}GB boş"
 }
 
 # ── Mevcut Kurulum Kontrolü ──────────────────────────────────
 check_existing_installation() {
-    step "Mevcut Kurulum Kontrolü"
+ step "Mevcut Kurulum Kontrolü"
 
-    FOUND=false
-    if [ -d "$INSTALL_DIR" ]; then FOUND=true; fi
-    if [ -f /etc/systemd/system/oxware.service ]; then FOUND=true; fi
+ FOUND=false
+ if [ -d "$INSTALL_DIR" ]; then FOUND=true; fi
+ if [ -f /etc/systemd/system/oxware.service ]; then FOUND=true; fi
 
-    if $FOUND; then
-        warn "Mevcut OXware kurulumu tespit edildi!"
-        echo ""
-        echo -e "  ${YELLOW}[1]${NC} Tamamen sil ve sıfırdan kur (önerilen)"
-        echo -e "  ${YELLOW}[2]${NC} Sadece dosyaları güncelle (konfigürasyon korunur)"
-        echo -e "  ${YELLOW}[3]${NC} İptal"
-        echo ""
-        read -p "Seçim [1/2/3]: " -r OPT
-        case $OPT in
-            1)
-                warn "Mevcut kurulum temizleniyor..."
-                purge_existing
-                log "Temizleme tamamlandı"
-                ;;
-            2)
-                info "Güncelleme modu..."
-                update_mode
-                exit 0
-                ;;
-            *)
-                echo "İptal edildi."
-                exit 0
-                ;;
-        esac
-    else
-        log "Temiz kurulum — mevcut kurulum yok"
-    fi
+ if $FOUND; then
+ warn "Mevcut OXware kurulumu tespit edildi!"
+ echo ""
+ echo -e " ${YELLOW}[1]${NC} Tamamen sil ve sıfırdan kur (önerilen)"
+ echo -e " ${YELLOW}[2]${NC} Sadece dosyaları güncelle (konfigürasyon korunur)"
+ echo -e " ${YELLOW}[3]${NC} İptal"
+ echo ""
+ read -p "Seçim [1/2/3]: " -r OPT
+ case $OPT in
+ 1)
+ warn "Mevcut kurulum temizleniyor..."
+ purge_existing
+ log "Temizleme tamamlandı"
+ ;;
+ 2)
+ info "Güncelleme modu..."
+ update_mode
+ exit 0
+ ;;
+ *)
+ echo "İptal edildi."
+ exit 0
+ ;;
+ esac
+ else
+ log "Temiz kurulum — mevcut kurulum yok"
+ fi
 }
 
 purge_existing() {
-    systemctl stop oxware 2>/dev/null || true
-    systemctl disable oxware 2>/dev/null || true
-    rm -f /etc/systemd/system/oxware.service
-    systemctl daemon-reload
-    rm -rf "$INSTALL_DIR"
-    rm -f /usr/local/bin/ox /usr/local/bin/oxupdate
-    log "Eski kurulum temizlendi"
+ systemctl stop oxware 2>/dev/null || true
+ systemctl disable oxware 2>/dev/null || true
+ rm -f /etc/systemd/system/oxware.service
+ systemctl daemon-reload
+ rm -rf "$INSTALL_DIR"
+ rm -f /usr/local/bin/ox /usr/local/bin/oxupdate
+ log "Eski kurulum temizlendi"
 }
 
 # ── Güncelleme Modu ───────────────────────────────────────────
 update_mode() {
-    step "Güncelleme Modu"
+ step "Güncelleme Modu"
 
-    # Git repo güncelle
-    if [ -d "${INSTALL_DIR}/.git" ]; then
-        cd "$INSTALL_DIR"
-        git fetch origin master 2>/dev/null
-        git reset --hard origin/main 2>/dev/null
-        log "Kod güncellendi"
-    else
-        warn "Git repo bulunamadı — dosya güncelleme atlanıyor"
-    fi
+ # Git repo güncelle
+ if [ -d "${INSTALL_DIR}/.git" ]; then
+ cd "$INSTALL_DIR"
+ git fetch origin master 2>/dev/null
+ git reset --hard origin/main 2>/dev/null
+ log "Kod güncellendi"
+ else
+ warn "Git repo bulunamadı — dosya güncelleme atlanıyor"
+ fi
 
-    # Python bağımlılıkları
-    if [ -f "${VENV_DIR}/bin/activate" ]; then
-        source "${VENV_DIR}/bin/activate"
-        if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
-            _REQ_TMP=$(mktemp)
-            trap 'rm -f "$_REQ_TMP"' RETURN EXIT
-            grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
-            pip install -r "$_REQ_TMP" -q 2>/dev/null || true
-            rm -f "$_REQ_TMP"
-        fi
-        deactivate
-        log "Python bağımlılıkları güncellendi"
-    fi
+ # Python bağımlılıkları
+ if [ -f "${VENV_DIR}/bin/activate" ]; then
+ source "${VENV_DIR}/bin/activate"
+ if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
+ _REQ_TMP=$(mktemp)
+ trap 'rm -f "$_REQ_TMP"' RETURN EXIT
+ grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
+ pip install -r "$_REQ_TMP" -q 2>/dev/null || true
+ rm -f "$_REQ_TMP"
+ fi
+ deactivate
+ log "Python bağımlılıkları güncellendi"
+ fi
 
-    install_cli_tools
-    download_fontawesome
+ install_cli_tools
+ download_fontawesome
 
-    # Servis dosyasını güncelle (StartLimitIntervalSec [Unit] konumu düzeltmesi)
-    create_service
+ # Servis dosyasını güncelle (StartLimitIntervalSec [Unit] konumu düzeltmesi)
+ create_service
 
-    # Reboot sonrası kararlılık fixleri uygula
-    configure_ssh
-    configure_hostname
-    fix_reboot_stability
+ # Reboot sonrası kararlılık fixleri uygula
+ configure_ssh
+ configure_hostname
+ fix_reboot_stability
 
-    # UFW iptables-legacy fix
-    if command -v update-alternatives &>/dev/null; then
-        update-alternatives --set iptables  /usr/sbin/iptables-legacy  2>/dev/null || true
-        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
-    fi
-    systemctl enable ufw 2>/dev/null || true
+ # UFW iptables-legacy fix
+ if command -v update-alternatives &>/dev/null; then
+ update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+ update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+ fi
+ systemctl enable ufw 2>/dev/null || true
 
-    systemctl daemon-reload
-    systemctl restart oxware 2>/dev/null || true
-    sleep 3
-    if systemctl is-active --quiet oxware; then
-        log "OXware yeniden başlatıldı"
-    else
-        warn "Servis başlatılamadı — kontrol: journalctl -u oxware -n 30"
-    fi
+ systemctl daemon-reload
+ systemctl restart oxware 2>/dev/null || true
+ sleep 3
+ if systemctl is-active --quiet oxware; then
+ log "OXware yeniden başlatıldı"
+ else
+ warn "Servis başlatılamadı — kontrol: journalctl -u oxware -n 30"
+ fi
 
-    HOST_IP=$(hostname -I | awk '{print $1}')
-    echo ""
-    echo -e "${GREEN}[✓] Güncelleme tamamlandı!${NC}"
-    echo -e "    Adres: ${CYAN}https://${HOST_IP}:${WEB_PORT}${NC}"
+ HOST_IP=$(hostname -I | awk '{print $1}')
+ echo ""
+ echo -e "${GREEN}[OK] Güncelleme tamamlandı!${NC}"
+ echo -e " Adres: ${CYAN}https://${HOST_IP}:${WEB_PORT}${NC}"
 }
 
 # ── Paket Kurulumu ────────────────────────────────────────────
 update_system() {
-    step "Sistem Güncelleniyor"
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get upgrade -y -qq 2>/dev/null || true
-    log "Sistem güncellendi"
+ step "Sistem Güncelleniyor"
+ export DEBIAN_FRONTEND=noninteractive
+ apt-get update -qq
+ apt-get upgrade -y -qq 2>/dev/null || true
+ log "Sistem güncellendi"
 }
 
 install_packages() {
-    step "Paket Kurulumu"
+ step "Paket Kurulumu"
 
-    # Pre-create dirs for packages with home_dir warnings (swtpm, etc.)
-    mkdir -p /var/lib/swtpm 2>/dev/null || true
-    chown root:root /var/lib/swtpm 2>/dev/null || true
+ # Pre-create dirs for packages with home_dir warnings (swtpm, etc.)
+ mkdir -p /var/lib/swtpm 2>/dev/null || true
+ chown root:root /var/lib/swtpm 2>/dev/null || true
 
-    PKGS=(
-        qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients libvirt-dev
-        python3 python3-pip python3-venv python3-dev python3-libvirt
-        pkg-config gcc build-essential
-        bridge-utils net-tools iptables iptables-persistent socat
-        lvm2 parted gdisk
-        openssl ca-certificates
-        novnc websockify
-        cpu-checker htop lsof curl wget git jq smartmontools
-        ufw fail2ban certbot python3-certbot
-        nftables wireguard
-        openvswitch-switch openvswitch-common
-        swtpm swtpm-tools
-    )
-    for pkg in "${PKGS[@]}"; do
-        dpkg -l "$pkg" &>/dev/null || apt-get install -y -qq "$pkg" 2>/dev/null \
-            || warn "Atlandı: $pkg"
-    done
+ PKGS=(
+ qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients libvirt-dev
+ python3 python3-pip python3-venv python3-dev python3-libvirt
+ pkg-config gcc build-essential
+ bridge-utils net-tools iptables iptables-persistent socat
+ lvm2 parted gdisk
+ openssl ca-certificates
+ novnc websockify
+ cpu-checker htop lsof curl wget git jq smartmontools
+ ufw fail2ban certbot python3-certbot
+ nftables wireguard
+ openvswitch-switch openvswitch-common
+ swtpm swtpm-tools
+ )
+ for pkg in "${PKGS[@]}"; do
+ dpkg -l "$pkg" &>/dev/null || apt-get install -y -qq "$pkg" 2>/dev/null \
+ || warn "Atlandı: $pkg"
+ done
 
-    # Post-install: ensure swtpm user has proper home (skip warning)
-    if id swtpm &>/dev/null; then
-        usermod -d /var/lib/swtpm swtpm 2>/dev/null || true
-        chown swtpm:swtpm /var/lib/swtpm 2>/dev/null || true
-    fi
+ # Post-install: ensure swtpm user has proper home (skip warning)
+ if id swtpm &>/dev/null; then
+ usermod -d /var/lib/swtpm swtpm 2>/dev/null || true
+ chown swtpm:swtpm /var/lib/swtpm 2>/dev/null || true
+ fi
 
-    log "Paketler kuruldu"
+ log "Paketler kuruldu"
 }
 
 # ── Repo Clone ───────────────────────────────────────────────
 clone_repo() {
-    step "OXware Kaynak Kodu İndiriliyor"
+ step "OXware Kaynak Kodu İndiriliyor"
 
-    if ! command -v git &>/dev/null; then
-        apt-get install -y -qq git
-    fi
+ if ! command -v git &>/dev/null; then
+ apt-get install -y -qq git
+ fi
 
-    # Mevcut dizin silinmiş olabilir (purge sonrası) — güvenli dizine geç
-    cd / 2>/dev/null || true
+ # Mevcut dizin silinmiş olabilir (purge sonrası) — güvenli dizine geç
+ cd / 2>/dev/null || true
 
-    rm -rf "$INSTALL_DIR"
-    mkdir -p "$INSTALL_DIR"
+ rm -rf "$INSTALL_DIR"
+ mkdir -p "$INSTALL_DIR"
 
-    # Git clone — en son main
-    git clone "$REPO_URL" "$INSTALL_DIR" --branch main --depth=1 \
-        || git clone "$REPO_URL" "$INSTALL_DIR" --depth=1
+ # Git clone — en son main
+ git clone "$REPO_URL" "$INSTALL_DIR" --branch main --depth=1 \
+ || git clone "$REPO_URL" "$INSTALL_DIR" --depth=1
 
-    log "Repo klonlandı → $INSTALL_DIR"
-    log "Uygulama dizini → $APP_DIR"
+ log "Repo klonlandı -> $INSTALL_DIR"
+ log "Uygulama dizini -> $APP_DIR"
 
-    # Dizin yapısını doğrula
-    if [ ! -f "${APP_DIR}/backend/app.py" ]; then
-        err "Beklenen dosya bulunamadı: ${APP_DIR}/backend/app.py"
-    fi
-    chmod -R 750 "$INSTALL_DIR"
+ # Dizin yapısını doğrula
+ if [ ! -f "${APP_DIR}/backend/app.py" ]; then
+ err "Beklenen dosya bulunamadı: ${APP_DIR}/backend/app.py"
+ fi
+ chmod -R 750 "$INSTALL_DIR"
 }
 
 # ── libvirt ───────────────────────────────────────────────────
 configure_libvirt() {
-    step "libvirt Yapılandırması"
-    systemctl enable --now libvirtd 2>/dev/null || true
-    if ! virsh net-list --all 2>/dev/null | grep -q "default"; then
-        virsh net-define /usr/share/libvirt/networks/default.xml 2>/dev/null || true
-    fi
-    virsh net-autostart default 2>/dev/null || true
-    virsh net-start default 2>/dev/null || true
-    cat > /etc/libvirt/libvirtd.conf << 'EOF'
+ step "libvirt Yapılandırması"
+ systemctl enable --now libvirtd 2>/dev/null || true
+ if ! virsh net-list --all 2>/dev/null | grep -q "default"; then
+ virsh net-define /usr/share/libvirt/networks/default.xml 2>/dev/null || true
+ fi
+ virsh net-autostart default 2>/dev/null || true
+ virsh net-start default 2>/dev/null || true
+ cat > /etc/libvirt/libvirtd.conf << 'EOF'
 unix_sock_group = "libvirt"
 unix_sock_rw_perms = "0770"
 auth_unix_rw = "polkit"
 EOF
-    # OXW-2026-009: polkit kuralı — sadece libvirt grubundaki kullanıcılar yetkili
-    mkdir -p /etc/polkit-1/rules.d
-    cat > /etc/polkit-1/rules.d/50-libvirt-oxware.rules << 'POLKIT'
+ # OXW-2026-009: polkit kuralı — sadece libvirt grubundaki kullanıcılar yetkili
+ mkdir -p /etc/polkit-1/rules.d
+ cat > /etc/polkit-1/rules.d/50-libvirt-oxware.rules << 'POLKIT'
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.libvirt.unix.manage" &&
-        subject.isInGroup("libvirt")) {
-        return polkit.Result.YES;
-    }
+ if (action.id == "org.libvirt.unix.manage" &&
+ subject.isInGroup("libvirt")) {
+ return polkit.Result.YES;
+ }
 });
 POLKIT
-    chmod 640 /etc/polkit-1/rules.d/50-libvirt-oxware.rules
-    systemctl restart libvirtd 2>/dev/null || true
-    log "libvirt yapılandırıldı"
+ chmod 640 /etc/polkit-1/rules.d/50-libvirt-oxware.rules
+ systemctl restart libvirtd 2>/dev/null || true
+ log "libvirt yapılandırıldı"
 }
 
 # ── Python Ortamı ─────────────────────────────────────────────
 setup_python() {
-    step "Python Sanal Ortamı"
+ step "Python Sanal Ortamı"
 
-    # Ubuntu 22.04+ için versiyonlu python3.X-venv paketi gerekli
-    PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "")
-    if [ -n "$PYVER" ]; then
-        apt-get install -y -qq "python3.${PYVER}-venv" 2>/dev/null || true
-    fi
-    apt-get install -y -qq python3-venv python3-full 2>/dev/null || true
+ # Ubuntu 22.04+ için versiyonlu python3.X-venv paketi gerekli
+ PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "")
+ if [ -n "$PYVER" ]; then
+ apt-get install -y -qq "python3.${PYVER}-venv" 2>/dev/null || true
+ fi
+ apt-get install -y -qq python3-venv python3-full 2>/dev/null || true
 
-    # Temiz venv oluştur — önceki başarısız deneme varsa sil
-    rm -rf "$VENV_DIR"
-    if ! python3 -m venv "$VENV_DIR" --system-site-packages 2>/dev/null; then
-        warn "venv --system-site-packages başarısız — system-packages olmadan deneniyor"
-        python3 -m venv "$VENV_DIR" \
-            || { warn "venv oluşturulamadı — kurulum pip olmadan devam edecek"; return; }
-    fi
+ # Temiz venv oluştur — önceki başarısız deneme varsa sil
+ rm -rf "$VENV_DIR"
+ if ! python3 -m venv "$VENV_DIR" --system-site-packages 2>/dev/null; then
+ warn "venv --system-site-packages başarısız — system-packages olmadan deneniyor"
+ python3 -m venv "$VENV_DIR" \
+ || { warn "venv oluşturulamadı — kurulum pip olmadan devam edecek"; return; }
+ fi
 
-    # shellcheck disable=SC1091
-    source "${VENV_DIR}/bin/activate" \
-        || { warn "venv activate başarısız — $VENV_DIR kontrol et"; return; }
+ # shellcheck disable=SC1091
+ source "${VENV_DIR}/bin/activate" \
+ || { warn "venv activate başarısız — $VENV_DIR kontrol et"; return; }
 
-    pip install --upgrade pip setuptools wheel -q
+ pip install --upgrade pip setuptools wheel -q
 
-    if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
-        # libvirt-python: apt paketi kullan (pip derlemesi Ubuntu <24.04'te bozuk)
-        # blinker: sistem distutils paketi varsa pip uninstall yapamaz — filtrele
-        _REQ_TMP=$(mktemp)
-        trap 'rm -f "$_REQ_TMP"' RETURN EXIT
-        grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
-        log "Python bağımlılıkları yükleniyor..."
-        if ! pip install -r "$_REQ_TMP" --quiet 2>&1; then
-            warn "İlk deneme başarısız — --ignore-installed ile yeniden deneniyor"
-            pip install -r "$_REQ_TMP" --quiet --ignore-installed 2>&1 \
-                | grep -E "^ERROR|Cannot" | head -10 || true
-        fi
-        log "requirements.txt kuruldu"
-        rm -f "$_REQ_TMP"
-    else
-        warn "requirements.txt bulunamadı — temel paketler kuruluyor"
-        pip install flask flask-jwt-extended flask-socketio flask-cors \
-                    eventlet cryptography paramiko psutil requests \
-                    python-dotenv -q
-    fi
+ if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
+ # libvirt-python: apt paketi kullan (pip derlemesi Ubuntu <24.04'te bozuk)
+ # blinker: sistem distutils paketi varsa pip uninstall yapamaz — filtrele
+ _REQ_TMP=$(mktemp)
+ trap 'rm -f "$_REQ_TMP"' RETURN EXIT
+ grep -viE "^(libvirt-python|blinker)" "${APP_DIR}/backend/requirements.txt" > "$_REQ_TMP"
+ log "Python bağımlılıkları yükleniyor..."
+ if ! pip install -r "$_REQ_TMP" --quiet 2>&1; then
+ warn "İlk deneme başarısız — --ignore-installed ile yeniden deneniyor"
+ pip install -r "$_REQ_TMP" --quiet --ignore-installed 2>&1 \
+ | grep -E "^ERROR|Cannot" | head -10 || true
+ fi
+ log "requirements.txt kuruldu"
+ rm -f "$_REQ_TMP"
+ else
+ warn "requirements.txt bulunamadı — temel paketler kuruluyor"
+ pip install flask flask-jwt-extended flask-socketio flask-cors \
+ eventlet cryptography paramiko psutil requests \
+ python-dotenv -q
+ fi
 
-    # libvirt Python binding kontrolü
-    if python3 -c "import libvirt" 2>/dev/null; then
-        log "libvirt Python modülü: OK"
-    else
-        warn "libvirt Python modülü bulunamadı — 'apt install python3-libvirt' gerekebilir"
-    fi
+ # libvirt Python binding kontrolü
+ if python3 -c "import libvirt" 2>/dev/null; then
+ log "libvirt Python modülü: OK"
+ else
+ warn "libvirt Python modülü bulunamadı — 'apt install python3-libvirt' gerekebilir"
+ fi
 
-    deactivate
-    log "Python ortamı hazır: $VENV_DIR"
+ deactivate
+ log "Python ortamı hazır: $VENV_DIR"
 }
 
 # ── Font Awesome (Yerel) ──────────────────────────────────────
 download_fontawesome() {
-    step "Font Awesome (Yerel Kurulum)"
-    STATIC_DIR="${APP_DIR}/frontend/static"
-    mkdir -p "$STATIC_DIR/webfonts"
+ step "Font Awesome (Yerel Kurulum)"
+ STATIC_DIR="${APP_DIR}/frontend/static"
+ mkdir -p "$STATIC_DIR/webfonts"
 
-    FA_BASE="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1"
+ FA_BASE="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1"
 
-    if curl -sf "${FA_BASE}/css/all.min.css" -o "$STATIC_DIR/fontawesome.css" 2>/dev/null; then
-        # CSS içindeki font yollarını düzelt
-        sed -i 's|../webfonts/|/static/webfonts/|g' "$STATIC_DIR/fontawesome.css"
+ if curl -sf "${FA_BASE}/css/all.min.css" -o "$STATIC_DIR/fontawesome.css" 2>/dev/null; then
+ # CSS içindeki font yollarını düzelt
+ sed -i 's|../webfonts/|/static/webfonts/|g' "$STATIC_DIR/fontawesome.css"
 
-        for font in fa-solid-900.woff2 fa-brands-400.woff2 fa-regular-400.woff2 \
-                    fa-solid-900.ttf  fa-brands-400.ttf  fa-regular-400.ttf; do
-            curl -sf "${FA_BASE}/webfonts/$font" \
-                -o "$STATIC_DIR/webfonts/$font" 2>/dev/null || warn "Atlandı: $font"
-        done
-        log "Font Awesome 6.5.1 yerel olarak indirildi"
-    else
-        warn "Font Awesome indirilemedi — CDN linki HTML'de kalacak"
-    fi
+ for font in fa-solid-900.woff2 fa-brands-400.woff2 fa-regular-400.woff2 \
+ fa-solid-900.ttf fa-brands-400.ttf fa-regular-400.ttf; do
+ curl -sf "${FA_BASE}/webfonts/$font" \
+ -o "$STATIC_DIR/webfonts/$font" 2>/dev/null || warn "Atlandı: $font"
+ done
+ log "Font Awesome 6.5.1 yerel olarak indirildi"
+ else
+ warn "Font Awesome indirilemedi — CDN linki HTML'de kalacak"
+ fi
 }
 
 # ── SSL Sertifikası ───────────────────────────────────────────
 generate_ssl() {
-    step "SSL Sertifikası Oluşturuluyor"
-    mkdir -p "$CONFIG_DIR/ssl"
-    HOST_IP=$(hostname -I | awk '{print $1}')
-    HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-    openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
-        -keyout "$CONFIG_DIR/ssl/oxware.key" \
-        -out    "$CONFIG_DIR/ssl/oxware.crt" \
-        -subj "/C=TR/O=OXware/CN=$HOSTNAME" \
-        -addext "subjectAltName=IP:$HOST_IP,DNS:$HOSTNAME,DNS:localhost" 2>/dev/null
-    chmod 600 "$CONFIG_DIR/ssl/oxware.key"
-    log "SSL sertifikası oluşturuldu (10 yıl, $HOSTNAME / $HOST_IP)"
+ step "SSL Sertifikası Oluşturuluyor"
+ mkdir -p "$CONFIG_DIR/ssl"
+ HOST_IP=$(hostname -I | awk '{print $1}')
+ HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+ openssl req -x509 -nodes -days 3650 -newkey rsa:4096 \
+ -keyout "$CONFIG_DIR/ssl/oxware.key" \
+ -out "$CONFIG_DIR/ssl/oxware.crt" \
+ -subj "/C=TR/O=OXware/CN=$HOSTNAME" \
+ -addext "subjectAltName=IP:$HOST_IP,DNS:$HOSTNAME,DNS:localhost" 2>/dev/null
+ chmod 600 "$CONFIG_DIR/ssl/oxware.key"
+ log "SSL sertifikası oluşturuldu (10 yıl, $HOSTNAME / $HOST_IP)"
 }
 
 # ── Konfigürasyon ─────────────────────────────────────────────
 write_config() {
-    step "Konfigürasyon Yazılıyor"
-    mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$DATA_DIR"/{isos,disks,backups,templates}
-    # Sadece root yazabilsin — root olmayan SSH kullanıcıları .passwd_reset oluşturamaz
-    chown root:root "$CONFIG_DIR"
-    chmod 700 "$CONFIG_DIR"
-    SECRET=$(openssl rand -hex 32)
-    cat > "$CONFIG_DIR/oxware.conf" << CONF
+ step "Konfigürasyon Yazılıyor"
+ mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$DATA_DIR"/{isos,disks,backups,templates}
+ # Sadece root yazabilsin — root olmayan SSH kullanıcıları .passwd_reset oluşturamaz
+ chown root:root "$CONFIG_DIR"
+ chmod 700 "$CONFIG_DIR"
+ SECRET=$(openssl rand -hex 32)
+ cat > "$CONFIG_DIR/oxware.conf" << CONF
 [server]
-host       = 0.0.0.0
-port       = ${WEB_PORT}
-ssl        = true
-ssl_cert   = ${CONFIG_DIR}/ssl/oxware.crt
-ssl_key    = ${CONFIG_DIR}/ssl/oxware.key
+host = 0.0.0.0
+port = ${WEB_PORT}
+ssl = true
+ssl_cert = ${CONFIG_DIR}/ssl/oxware.crt
+ssl_key = ${CONFIG_DIR}/ssl/oxware.key
 secret_key = ${SECRET}
 
 [storage]
-data_dir     = ${DATA_DIR}
-iso_dir      = ${DATA_DIR}/isos
-disk_dir     = ${DATA_DIR}/disks
-backup_dir   = ${DATA_DIR}/backups
+data_dir = ${DATA_DIR}
+iso_dir = ${DATA_DIR}/isos
+disk_dir = ${DATA_DIR}/disks
+backup_dir = ${DATA_DIR}/backups
 template_dir = ${DATA_DIR}/templates
 
 [vnc]
-start_port     = ${VNC_START_PORT}
-end_port       = 5999
+start_port = ${VNC_START_PORT}
+end_port = 5999
 websocket_port = 6080
 
 [libvirt]
@@ -507,30 +507,30 @@ uri = qemu:///system
 
 [logging]
 log_dir = ${LOG_DIR}
-level   = INFO
+level = INFO
 CONF
-    chmod 600 "$CONFIG_DIR/oxware.conf"
-    log "Konfigürasyon: $CONFIG_DIR/oxware.conf"
+ chmod 600 "$CONFIG_DIR/oxware.conf"
+ log "Konfigürasyon: $CONFIG_DIR/oxware.conf"
 }
 
 # ── noVNC ─────────────────────────────────────────────────────
 install_novnc() {
-    step "noVNC Konsol"
-    NOVNC_DIR="/usr/share/novnc"
-    [ ! -d "$NOVNC_DIR" ] && NOVNC_DIR="/opt/novnc"
-    if [ ! -d "$NOVNC_DIR" ]; then
-        git clone https://github.com/novnc/noVNC.git "$NOVNC_DIR" -q 2>/dev/null \
-            || mkdir -p "$NOVNC_DIR"
-    fi
-    grep -q "novnc_dir" "$CONFIG_DIR/oxware.conf" \
-        || echo "novnc_dir = $NOVNC_DIR" >> "$CONFIG_DIR/oxware.conf"
-    log "noVNC: $NOVNC_DIR"
+ step "noVNC Konsol"
+ NOVNC_DIR="/usr/share/novnc"
+ [ ! -d "$NOVNC_DIR" ] && NOVNC_DIR="/opt/novnc"
+ if [ ! -d "$NOVNC_DIR" ]; then
+ git clone https://github.com/novnc/noVNC.git "$NOVNC_DIR" -q 2>/dev/null \
+ || mkdir -p "$NOVNC_DIR"
+ fi
+ grep -q "novnc_dir" "$CONFIG_DIR/oxware.conf" \
+ || echo "novnc_dir = $NOVNC_DIR" >> "$CONFIG_DIR/oxware.conf"
+ log "noVNC: $NOVNC_DIR"
 }
 
 # ── Systemd Servis ────────────────────────────────────────────
 create_service() {
-    step "Systemd Servisi Oluşturuluyor"
-    cat > /etc/systemd/system/oxware.service << SERVICE
+ step "Systemd Servisi Oluşturuluyor"
+ cat > /etc/systemd/system/oxware.service << SERVICE
 [Unit]
 Description=OXware Hypervisor Management Service
 Documentation=https://github.com/ShinnAsukha/oxware-hypervisor
@@ -578,19 +578,19 @@ PrivateTmp=false
 [Install]
 WantedBy=multi-user.target
 SERVICE
-    systemctl daemon-reload
-    systemctl enable oxware
-    log "Servis oluşturuldu: /etc/systemd/system/oxware.service"
-    info "WorkingDirectory : ${APP_DIR}"
-    info "ExecStart        : ${VENV_DIR}/bin/python3 ${APP_DIR}/backend/app.py"
+ systemctl daemon-reload
+ systemctl enable oxware
+ log "Servis oluşturuldu: /etc/systemd/system/oxware.service"
+ info "WorkingDirectory : ${APP_DIR}"
+ info "ExecStart : ${VENV_DIR}/bin/python3 ${APP_DIR}/backend/app.py"
 }
 
 # ── CLI Araçları ──────────────────────────────────────────────
 install_cli_tools() {
-    step "CLI Araçları (ox / oxupdate)"
+ step "CLI Araçları (ox / oxupdate)"
 
-    # ox
-    cat > /usr/local/bin/ox << OXCMD
+ # ox
+ cat > /usr/local/bin/ox << OXCMD
 #!/bin/bash
 VERSION="${OXWARE_VERSION}"
 RED=\$'\033[0;31m'; GREEN=\$'\033[0;32m'; YELLOW=\$'\033[1;33m'
@@ -599,126 +599,126 @@ CYAN=\$'\033[0;36m'; WHITE=\$'\033[1;37m'; NC=\$'\033[0m'
 show_help() {
 cat << HELP
 \${CYAN}
-  ██████╗ ██╗  ██╗
+ ██████╗ ██╗ ██╗
  ██╔═══██╗\${NC}\${CYAN}╚██╗██╔╝
- ██║   ██║ \${NC}\${CYAN}╚███╔╝
- ██║   ██║ \${NC}\${CYAN}██╔██╗
+ ██║ ██║ \${NC}\${CYAN}╚███╔╝
+ ██║ ██║ \${NC}\${CYAN}██╔██╗
  ╚██████╔╝██╔╝ ██╗
-  ╚═════╝ ╚═╝  ╚═╝\${NC}
+ ╚═════╝ ╚═╝ ╚═╝\${NC}
 \${WHITE}OXware Hypervisor CLI v\${VERSION}\${NC}
 
 \${YELLOW}Kullanım:\${NC} ox [komut]
 
 \${YELLOW}Komutlar:\${NC}
-  \${GREEN}--help, -h\${NC}      Bu yardımı göster
-  \${GREEN}--status, -s\${NC}    Servis durumunu göster
-  \${GREEN}--start\${NC}         OXware'i başlat
-  \${GREEN}--stop\${NC}          OXware'i durdur
-  \${GREEN}--restart\${NC}       OXware'i yeniden başlat
-  \${GREEN}--logs, -l\${NC}      Son 50 log satırını göster
-  \${GREEN}--logs -f\${NC}       Canlı log takibi
-  \${GREEN}--info\${NC}          Sistem bilgilerini göster
-  \${GREEN}--vms\${NC}           Sanal makineleri listele
-  \${GREEN}--users\${NC}         Kullanıcıları listele
-  \${GREEN}--url\${NC}           Web arayüz adresini göster
-  \${GREEN}--update\${NC}        OXware'i güncelle (oxupdate)
-  \${GREEN}--version, -v\${NC}   Sürüm bilgisi
+ \${GREEN}--help, -h\${NC} Bu yardımı göster
+ \${GREEN}--status, -s\${NC} Servis durumunu göster
+ \${GREEN}--start\${NC} OXware'i başlat
+ \${GREEN}--stop\${NC} OXware'i durdur
+ \${GREEN}--restart\${NC} OXware'i yeniden başlat
+ \${GREEN}--logs, -l\${NC} Son 50 log satırını göster
+ \${GREEN}--logs -f\${NC} Canlı log takibi
+ \${GREEN}--info\${NC} Sistem bilgilerini göster
+ \${GREEN}--vms\${NC} Sanal makineleri listele
+ \${GREEN}--users\${NC} Kullanıcıları listele
+ \${GREEN}--url\${NC} Web arayüz adresini göster
+ \${GREEN}--update\${NC} OXware'i güncelle (oxupdate)
+ \${GREEN}--version, -v\${NC} Sürüm bilgisi
 HELP
 }
 
 show_users() {
-    echo -e "\n\${CYAN}━━━ OXware Kullanıcıları ━━━\${NC}"
-    printf "  \${WHITE}%-20s  %-12s\${NC}\n" "KULLANICI ADI" "YETKİ"
-    printf "  \${WHITE}%-20s  %-12s\${NC}\n" "--------------------" "------------"
+ echo -e "\n\${CYAN}━━━ OXware Kullanıcıları ━━━\${NC}"
+ printf " \${WHITE}%-20s %-12s\${NC}\n" "KULLANICI ADI" "YETKİ"
+ printf " \${WHITE}%-20s %-12s\${NC}\n" "--------------------" "------------"
 
-    # Primary admin
-    _PRIMARY=""
-    [ -f /etc/oxware/.username ] && _PRIMARY=\$(cat /etc/oxware/.username 2>/dev/null | tr -d '[:space:]')
-    if [ -n "\$_PRIMARY" ]; then
-        printf "  \${GREEN}%-20s\${NC}  \${YELLOW}%-12s\${NC}\n" "\$_PRIMARY" "admin"
-    fi
+ # Primary admin
+ _PRIMARY=""
+ [ -f /etc/oxware/.username ] && _PRIMARY=\$(cat /etc/oxware/.username 2>/dev/null | tr -d '[:space:]')
+ if [ -n "\$_PRIMARY" ]; then
+ printf " \${GREEN}%-20s\${NC} \${YELLOW}%-12s\${NC}\n" "\$_PRIMARY" "admin"
+ fi
 
-    # Extra users from /var/lib/oxware/users.json
-    if [ -f "/var/lib/oxware/users.json" ]; then
-        python3 - <<'PYUSERS' 2>/dev/null
+ # Extra users from /var/lib/oxware/users.json
+ if [ -f "/var/lib/oxware/users.json" ]; then
+ python3 - <<'PYUSERS' 2>/dev/null
 import json, os
 _UF = "/var/lib/oxware/users.json"
 _PF = "/etc/oxware/.username"
 try:
-    data = json.load(open(_UF))
-    users = data.get("users", {})
-    primary = open(_PF).read().strip() if os.path.exists(_PF) else ""
-    for uname, info in users.items():
-        if uname == primary:
-            continue
-        role = info.get("role", "viewer")
-        color = "\033[0;36m" if role in ("admin", "administrator") else "\033[0;37m"
-        print(f"  {color}{uname:<20}\033[0m  \033[0;37m{role:<12}\033[0m")
+ data = json.load(open(_UF))
+ users = data.get("users", {})
+ primary = open(_PF).read().strip() if os.path.exists(_PF) else ""
+ for uname, info in users.items():
+ if uname == primary:
+ continue
+ role = info.get("role", "viewer")
+ color = "\033[0;36m" if role in ("admin", "administrator") else "\033[0;37m"
+ print(f" {color}{uname:<20}\033[0m \033[0;37m{role:<12}\033[0m")
 except Exception as e:
-    print(f"  (users.json okunamadı: {e})")
+ print(f" (users.json okunamadı: {e})")
 PYUSERS
-    fi
-    echo ""
+ fi
+ echo ""
 }
 
 show_status() {
-    echo -e "\n\${CYAN}━━━ OXware Servis Durumu ━━━\${NC}"
-    systemctl status oxware --no-pager -l 2>/dev/null || echo "Servis bulunamadı"
-    HOST_IP=\$(hostname -I | awk '{print \$1}')
-    echo -e "\n  Web UI: \${CYAN}https://\${HOST_IP}:8006\${NC}\n"
+ echo -e "\n\${CYAN}━━━ OXware Servis Durumu ━━━\${NC}"
+ systemctl status oxware --no-pager -l 2>/dev/null || echo "Servis bulunamadı"
+ HOST_IP=\$(hostname -I | awk '{print \$1}')
+ echo -e "\n Web UI: \${CYAN}https://\${HOST_IP}:8006\${NC}\n"
 }
 
 show_info() {
-    HOST_IP=\$(hostname -I | awk '{print \$1}')
-    echo -e "\n\${CYAN}━━━ OXware Bilgileri ━━━\${NC}"
-    echo -e "  Sürüm    : \${WHITE}\${VERSION}\${NC}"
-    echo -e "  Web URL  : \${CYAN}https://\${HOST_IP}:8006\${NC}"
-    echo -e "  Uygulama : ${APP_DIR}"
-    echo -e "  Venv     : ${VENV_DIR}"
-    echo -e "  Konfig   : ${CONFIG_DIR}/oxware.conf"
-    echo -e "  Loglar   : ${LOG_DIR}/"
-    echo -e "  Veri     : ${DATA_DIR}/"
-    echo -e "\n\${CYAN}━━━ Sistem Kaynakları ━━━\${NC}"
-    echo -e "  CPU    : \$(nproc) çekirdek — \$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)"
-    RAM_MB=\$(grep MemTotal /proc/meminfo | awk '{print int(\$2/1024)}')
-    FREE_MB=\$(grep MemAvailable /proc/meminfo | awk '{print int(\$2/1024)}')
-    echo -e "  RAM    : \${RAM_MB}MB toplam, \${FREE_MB}MB boş"
-    echo -e "  Disk   : \$(df / | awk 'NR==2{print \$5}') kullanıldı, \$(df / | awk 'NR==2{print int(\$4/1024/1024)}')GB boş"
-    echo -e "\n\${CYAN}━━━ KVM Durumu ━━━\${NC}"
-    [ -e /dev/kvm ] && echo -e "  KVM    : \${GREEN}Aktif\${NC}" || echo -e "  KVM    : \${RED}Bulunamadı\${NC}"
-    echo ""
+ HOST_IP=\$(hostname -I | awk '{print \$1}')
+ echo -e "\n\${CYAN}━━━ OXware Bilgileri ━━━\${NC}"
+ echo -e " Sürüm : \${WHITE}\${VERSION}\${NC}"
+ echo -e " Web URL : \${CYAN}https://\${HOST_IP}:8006\${NC}"
+ echo -e " Uygulama : ${APP_DIR}"
+ echo -e " Venv : ${VENV_DIR}"
+ echo -e " Konfig : ${CONFIG_DIR}/oxware.conf"
+ echo -e " Loglar : ${LOG_DIR}/"
+ echo -e " Veri : ${DATA_DIR}/"
+ echo -e "\n\${CYAN}━━━ Sistem Kaynakları ━━━\${NC}"
+ echo -e " CPU : \$(nproc) çekirdek — \$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)"
+ RAM_MB=\$(grep MemTotal /proc/meminfo | awk '{print int(\$2/1024)}')
+ FREE_MB=\$(grep MemAvailable /proc/meminfo | awk '{print int(\$2/1024)}')
+ echo -e " RAM : \${RAM_MB}MB toplam, \${FREE_MB}MB boş"
+ echo -e " Disk : \$(df / | awk 'NR==2{print \$5}') kullanıldı, \$(df / | awk 'NR==2{print int(\$4/1024/1024)}')GB boş"
+ echo -e "\n\${CYAN}━━━ KVM Durumu ━━━\${NC}"
+ [ -e /dev/kvm ] && echo -e " KVM : \${GREEN}Aktif\${NC}" || echo -e " KVM : \${RED}Bulunamadı\${NC}"
+ echo ""
 }
 
 case "\$1" in
-    --help|-h|"") show_help ;;
-    --status|-s)  show_status ;;
-    --start)      systemctl start oxware  && echo -e "\${GREEN}[✓] OXware başlatıldı\${NC}" ;;
-    --stop)       systemctl stop oxware   && echo -e "\${YELLOW}[!] OXware durduruldu\${NC}" ;;
-    --restart)    systemctl restart oxware && echo -e "\${GREEN}[✓] OXware yeniden başlatıldı\${NC}" ;;
-    --logs|-l)
-        [ "\$2" = "-f" ] && journalctl -u oxware -f \
-                         || journalctl -u oxware -n 50 --no-pager ;;
-    --info)       show_info ;;
-    --vms)
-        echo -e "\n\${CYAN}━━━ Sanal Makineler ━━━\${NC}"
-        virsh list --all 2>/dev/null || echo "libvirt bağlantısı kurulamadı"
-        echo "" ;;
-    --users)    show_users ;;
-    --url)
-        HOST_IP=\$(hostname -I | awk '{print \$1}')
-        echo -e "  \${CYAN}https://\${HOST_IP}:8006\${NC}" ;;
-    --update)     oxupdate ;;
-    --version|-v) echo "OXware v\${VERSION}" ;;
-    *)
-        echo -e "\${RED}Bilinmeyen komut: \$1\${NC}"
-        echo "Yardım için: ox --help"
-        exit 1 ;;
+ --help|-h|"") show_help ;;
+ --status|-s) show_status ;;
+ --start) systemctl start oxware && echo -e "\${GREEN}[OK] OXware başlatıldı\${NC}" ;;
+ --stop) systemctl stop oxware && echo -e "\${YELLOW}[!] OXware durduruldu\${NC}" ;;
+ --restart) systemctl restart oxware && echo -e "\${GREEN}[OK] OXware yeniden başlatıldı\${NC}" ;;
+ --logs|-l)
+ [ "\$2" = "-f" ] && journalctl -u oxware -f \
+ || journalctl -u oxware -n 50 --no-pager ;;
+ --info) show_info ;;
+ --vms)
+ echo -e "\n\${CYAN}━━━ Sanal Makineler ━━━\${NC}"
+ virsh list --all 2>/dev/null || echo "libvirt bağlantısı kurulamadı"
+ echo "" ;;
+ --users) show_users ;;
+ --url)
+ HOST_IP=\$(hostname -I | awk '{print \$1}')
+ echo -e " \${CYAN}https://\${HOST_IP}:8006\${NC}" ;;
+ --update) oxupdate ;;
+ --version|-v) echo "OXware v\${VERSION}" ;;
+ *)
+ echo -e "\${RED}Bilinmeyen komut: \$1\${NC}"
+ echo "Yardım için: ox --help"
+ exit 1 ;;
 esac
 OXCMD
-    chmod +x /usr/local/bin/ox
+ chmod +x /usr/local/bin/ox
 
-    # oxupdate
-    cat > /usr/local/bin/oxupdate << OXUPDATE
+ # oxupdate
+ cat > /usr/local/bin/oxupdate << OXUPDATE
 #!/bin/bash
 RED=\$'\033[0;31m'; GREEN=\$'\033[0;32m'; YELLOW=\$'\033[1;33m'
 CYAN=\$'\033[0;36m'; NC=\$'\033[0m'
@@ -734,29 +734,29 @@ echo -e "\${YELLOW}[!]\${NC} OXware durduruluyor..."
 systemctl stop oxware 2>/dev/null || true
 
 if [ -d "\${INSTALL_DIR}/.git" ]; then
-    echo -e "\${CYAN}[i]\${NC} GitHub'dan güncelleniyor..."
-    cd "\${INSTALL_DIR}"
-    git fetch origin main
-    git reset --hard origin/main
-    echo -e "\${GREEN}[✓]\${NC} Kod güncellendi"
-    # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
-    if [ -f "\${INSTALL_DIR}/install.sh" ]; then
-        echo -e "\${CYAN}[i]\${NC} CLI araçları yenileniyor (ox / oxupdate)..."
-        bash "\${INSTALL_DIR}/install.sh" --refresh-cli 2>/dev/null \
-            && echo -e "\${GREEN}[✓]\${NC} ox / oxupdate güncellendi" \
-            || echo -e "\${YELLOW}[!]\${NC} CLI güncelleme atlandı"
-    fi
+ echo -e "\${CYAN}[i]\${NC} GitHub'dan güncelleniyor..."
+ cd "\${INSTALL_DIR}"
+ git fetch origin main
+ git reset --hard origin/main
+ echo -e "\${GREEN}[OK]\${NC} Kod güncellendi"
+ # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
+ if [ -f "\${INSTALL_DIR}/install.sh" ]; then
+ echo -e "\${CYAN}[i]\${NC} CLI araçları yenileniyor (ox / oxupdate)..."
+ bash "\${INSTALL_DIR}/install.sh" --refresh-cli 2>/dev/null \
+ && echo -e "\${GREEN}[OK]\${NC} ox / oxupdate güncellendi" \
+ || echo -e "\${YELLOW}[!]\${NC} CLI güncelleme atlandı"
+ fi
 else
-    echo -e "\${YELLOW}[!]\${NC} Git repo bulunamadı — atlanıyor"
+ echo -e "\${YELLOW}[!]\${NC} Git repo bulunamadı — atlanıyor"
 fi
 
 echo -e "\${CYAN}[i]\${NC} Python bağımlılıkları güncelleniyor..."
 source "\${VENV_DIR}/bin/activate"
 if [ -f "\${APP_DIR}/backend/requirements.txt" ]; then
-    _REQ_TMP=\$(mktemp)
-    grep -viE "^(libvirt-python|blinker)" "\${APP_DIR}/backend/requirements.txt" > "\$_REQ_TMP"
-    pip install -r "\$_REQ_TMP" -q 2>/dev/null || true
-    rm -f "\$_REQ_TMP"
+ _REQ_TMP=\$(mktemp)
+ grep -viE "^(libvirt-python|blinker)" "\${APP_DIR}/backend/requirements.txt" > "\$_REQ_TMP"
+ pip install -r "\$_REQ_TMP" -q 2>/dev/null || true
+ rm -f "\$_REQ_TMP"
 fi
 deactivate
 
@@ -765,84 +765,84 @@ systemctl start oxware
 sleep 3
 
 if systemctl is-active --quiet oxware; then
-    echo -e "\${GREEN}[✓] OXware güncellendi ve çalışıyor!\${NC}"
-    HOST_IP=\$(hostname -I | awk '{print \$1}')
-    echo -e "    Web UI: \${CYAN}https://\${HOST_IP}:8006\${NC}"
+ echo -e "\${GREEN}[OK] OXware güncellendi ve çalışıyor!\${NC}"
+ HOST_IP=\$(hostname -I | awk '{print \$1}')
+ echo -e " Web UI: \${CYAN}https://\${HOST_IP}:8006\${NC}"
 else
-    echo -e "\${RED}[✗] Servis başlatılamadı — kontrol: journalctl -u oxware -n 30\${NC}"
-    exit 1
+ echo -e "\${RED}[FAIL] Servis başlatılamadı — kontrol: journalctl -u oxware -n 30\${NC}"
+ exit 1
 fi
 OXUPDATE
-    chmod +x /usr/local/bin/oxupdate
+ chmod +x /usr/local/bin/oxupdate
 
-    log "ox komutu kuruldu → 'ox --help'"
-    log "oxupdate komutu kuruldu → 'sudo oxupdate'"
+ log "ox komutu kuruldu -> 'ox --help'"
+ log "oxupdate komutu kuruldu -> 'sudo oxupdate'"
 }
 
 # ── SSH Kalıcı Konfigürasyon ──────────────────────────────────
 configure_ssh() {
-    step "SSH Servisi"
-    # Ubuntu'da servis adı 'ssh', Debian'da 'sshd' olabilir
-    systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
-    systemctl start  ssh 2>/dev/null || systemctl start  sshd 2>/dev/null || true
+ step "SSH Servisi"
+ # Ubuntu'da servis adı 'ssh', Debian'da 'sshd' olabilir
+ systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
+ systemctl start ssh 2>/dev/null || systemctl start sshd 2>/dev/null || true
 
-    # SSH config — güvenli yapılandırma (rapor.md #33 / OXW güvenlik fix)
-    # PermitRootLogin yes VE PasswordAuthentication yes kombinasyonu brute-force davetiyesidir.
-    # Root giriş: prohibit-password (SSH key varsa izin ver, şifre ile hayır)
-    # PasswordAuthentication: varsayılan olarak kapalı — SSH key kullanımı zorunlu
-    SSH_CONF="/etc/ssh/sshd_config"
-    if [ -f "$SSH_CONF" ]; then
-        # PermitRootLogin yes — şifre ile root girişi açık
-        if grep -q "^#*PermitRootLogin" "$SSH_CONF"; then
-            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSH_CONF"
-        else
-            echo "PermitRootLogin yes" >> "$SSH_CONF"
-        fi
-        # PasswordAuthentication yes — şifre girişi açık
-        if grep -q "^#*PasswordAuthentication" "$SSH_CONF"; then
-            sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSH_CONF"
-        else
-            echo "PasswordAuthentication yes" >> "$SSH_CONF"
-        fi
-        # MaxAuthTries: brute-force'u yavaşlat
-        if grep -q "^#*MaxAuthTries" "$SSH_CONF"; then
-            sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' "$SSH_CONF"
-        else
-            echo "MaxAuthTries 3" >> "$SSH_CONF"
-        fi
-        systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
-    fi
-    warn "SSH şifre girişi KAPALI. Sunucuya erişmek için SSH key kullanın."
-    log "SSH servisi etkinleştirildi (key-only mod)"
+ # SSH config — güvenli yapılandırma (rapor.md #33 / OXW güvenlik fix)
+ # PermitRootLogin yes VE PasswordAuthentication yes kombinasyonu brute-force davetiyesidir.
+ # Root giriş: prohibit-password (SSH key varsa izin ver, şifre ile hayır)
+ # PasswordAuthentication: varsayılan olarak kapalı — SSH key kullanımı zorunlu
+ SSH_CONF="/etc/ssh/sshd_config"
+ if [ -f "$SSH_CONF" ]; then
+ # PermitRootLogin yes — şifre ile root girişi açık
+ if grep -q "^#*PermitRootLogin" "$SSH_CONF"; then
+ sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSH_CONF"
+ else
+ echo "PermitRootLogin yes" >> "$SSH_CONF"
+ fi
+ # PasswordAuthentication yes — şifre girişi açık
+ if grep -q "^#*PasswordAuthentication" "$SSH_CONF"; then
+ sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSH_CONF"
+ else
+ echo "PasswordAuthentication yes" >> "$SSH_CONF"
+ fi
+ # MaxAuthTries: brute-force'u yavaşlat
+ if grep -q "^#*MaxAuthTries" "$SSH_CONF"; then
+ sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' "$SSH_CONF"
+ else
+ echo "MaxAuthTries 3" >> "$SSH_CONF"
+ fi
+ systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+ fi
+ warn "SSH şifre girişi KAPALI. Sunucuya erişmek için SSH key kullanın."
+ log "SSH servisi etkinleştirildi (key-only mod)"
 }
 
 # ── Hostname Kalıcı Konfigürasyon ────────────────────────────
 configure_hostname() {
-    step "Hostname Yapılandırması"
+ step "Hostname Yapılandırması"
 
-    # Mevcut hostname'i koru, yoksa 'oxware-server' yap
-    CUR_HOST=$(hostname -s 2>/dev/null || echo "")
-    if [ -z "$CUR_HOST" ] || [ "$CUR_HOST" = "localhost" ] || [ "$CUR_HOST" = "localhost.localdomain" ]; then
-        NEW_HOST="oxware-server"
-    else
-        NEW_HOST="$CUR_HOST"
-    fi
+ # Mevcut hostname'i koru, yoksa 'oxware-server' yap
+ CUR_HOST=$(hostname -s 2>/dev/null || echo "")
+ if [ -z "$CUR_HOST" ] || [ "$CUR_HOST" = "localhost" ] || [ "$CUR_HOST" = "localhost.localdomain" ]; then
+ NEW_HOST="oxware-server"
+ else
+ NEW_HOST="$CUR_HOST"
+ fi
 
-    hostnamectl set-hostname "$NEW_HOST" 2>/dev/null || echo "$NEW_HOST" > /etc/hostname
+ hostnamectl set-hostname "$NEW_HOST" 2>/dev/null || echo "$NEW_HOST" > /etc/hostname
 
-    # /etc/hosts güncelle
-    if ! grep -q "$NEW_HOST" /etc/hosts; then
-        sed -i "/^127\.0\.1\.1/d" /etc/hosts
-        echo "127.0.1.1 $NEW_HOST" >> /etc/hosts
-    fi
+ # /etc/hosts güncelle
+ if ! grep -q "$NEW_HOST" /etc/hosts; then
+ sed -i "/^127\.0\.1\.1/d" /etc/hosts
+ echo "127.0.1.1 $NEW_HOST" >> /etc/hosts
+ fi
 
-    # Cloud-init hostname reset'ini devre dışı bırak
-    if [ -d /etc/cloud/cloud.cfg.d ]; then
-        echo "preserve_hostname: true" > /etc/cloud/cloud.cfg.d/99_hostname.cfg
-        log "Cloud-init hostname reset devre dışı bırakıldı"
-    fi
+ # Cloud-init hostname reset'ini devre dışı bırak
+ if [ -d /etc/cloud/cloud.cfg.d ]; then
+ echo "preserve_hostname: true" > /etc/cloud/cloud.cfg.d/99_hostname.cfg
+ log "Cloud-init hostname reset devre dışı bırakıldı"
+ fi
 
-    log "Hostname: $NEW_HOST"
+ log "Hostname: $NEW_HOST"
 }
 
 # ── Host Linux Bridge (oxbr0) ────────────────────────────────
@@ -850,244 +850,244 @@ configure_hostname() {
 # SSH bağlantısını koparabilir. Production sunucularda büyük risk.
 #
 # Aktifleştirmek için:
-#   OXWARE_SETUP_BRIDGE=1 bash install.sh
+# OXWARE_SETUP_BRIDGE=1 bash install.sh
 # veya kurulumdan sonra manuel:
-#   sudo /opt/oxware/scripts/setup-bridge.sh
+# sudo /opt/oxware/scripts/setup-bridge.sh
 setup_host_bridge() {
-    # Default: SKIP — kullanıcı opt-in etmedikçe bridge kurulmaz
-    if [ "${OXWARE_SETUP_BRIDGE:-0}" != "1" ]; then
-        info "Host bridge kurulumu atlandı (varsayılan: SSH kesilmesin diye)"
-        info "Manuel kurmak için: OXWARE_SETUP_BRIDGE=1 bash install.sh"
-        info "Veya kurulumdan sonra: /opt/oxware/scripts/setup-bridge.sh"
-        return 0
-    fi
+ # Default: SKIP — kullanıcı opt-in etmedikçe bridge kurulmaz
+ if [ "${OXWARE_SETUP_BRIDGE:-0}" != "1" ]; then
+ info "Host bridge kurulumu atlandı (varsayılan: SSH kesilmesin diye)"
+ info "Manuel kurmak için: OXWARE_SETUP_BRIDGE=1 bash install.sh"
+ info "Veya kurulumdan sonra: /opt/oxware/scripts/setup-bridge.sh"
+ return 0
+ fi
 
-    step "Host Bridge (oxbr0) Kurulumu — OPT-IN (SSH kesilebilir!)"
-    warn "⚠ Bu işlem netplan apply yapar. SSH bağlantın 10sn için düşebilir."
-    warn "⚠ Bridge kurulumu başarısız olursa sunucu UNREACHABLE olabilir."
-    sleep 5
+ step "Host Bridge (oxbr0) Kurulumu — OPT-IN (SSH kesilebilir!)"
+ warn "WARN Bu işlem netplan apply yapar. SSH bağlantın 10sn için düşebilir."
+ warn "WARN Bridge kurulumu başarısız olursa sunucu UNREACHABLE olabilir."
+ sleep 5
 
-    # Already fully configured?
-    if ip link show oxbr0 &>/dev/null && ip link show master oxbr0 &>/dev/null 2>/dev/null; then
-        log "oxbr0 bridge zaten mevcut ve üyesi var, atlanıyor"
-        _register_oxbridge_libvirt
-        return 0
-    fi
+ # Already fully configured?
+ if ip link show oxbr0 &>/dev/null && ip link show master oxbr0 &>/dev/null 2>/dev/null; then
+ log "oxbr0 bridge zaten mevcut ve üyesi var, atlanıyor"
+ _register_oxbridge_libvirt
+ return 0
+ fi
 
-    # Detect primary physical interface from default route
-    local PIFACE PIP PIP_PREFIX PGW
-    PIFACE=$(ip route show default 2>/dev/null \
-        | awk '/^default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
-    [ -z "$PIFACE" ] && PIFACE="ens160"
+ # Detect primary physical interface from default route
+ local PIFACE PIP PIP_PREFIX PGW
+ PIFACE=$(ip route show default 2>/dev/null \
+ | awk '/^default/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+ [ -z "$PIFACE" ] && PIFACE="ens160"
 
-    # Skip if already virtual/bridge
-    case "$PIFACE" in
-        virbr*|oxbr*|br*|vnet*|tap*|tun*|lo)
-            warn "Primary iface '$PIFACE' sanal görünüyor, bridge atlanıyor"
-            return 0
-            ;;
-    esac
+ # Skip if already virtual/bridge
+ case "$PIFACE" in
+ virbr*|oxbr*|br*|vnet*|tap*|tun*|lo)
+ warn "Primary iface '$PIFACE' sanal görünüyor, bridge atlanıyor"
+ return 0
+ ;;
+ esac
 
-    # Get current IP with prefix (e.g. 31.58.236.82/24)
-    PIP=$(ip addr show "$PIFACE" 2>/dev/null \
-        | awk '/inet /{print $2; exit}')
-    PGW=$(ip route show default 2>/dev/null \
-        | awk '/^default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
+ # Get current IP with prefix (e.g. 31.58.236.82/24)
+ PIP=$(ip addr show "$PIFACE" 2>/dev/null \
+ | awk '/inet /{print $2; exit}')
+ PGW=$(ip route show default 2>/dev/null \
+ | awk '/^default/{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}')
 
-    if [ -z "$PIP" ] || [ -z "$PGW" ]; then
-        warn "IP/gateway tespit edilemedi ($PIFACE), bridge kurulumu atlanıyor"
-        return 1
-    fi
+ if [ -z "$PIP" ] || [ -z "$PGW" ]; then
+ warn "IP/gateway tespit edilemedi ($PIFACE), bridge kurulumu atlanıyor"
+ return 1
+ fi
 
-    log "Bridge: $PIFACE ($PIP) → oxbr0, gw: $PGW"
+ log "Bridge: $PIFACE ($PIP) -> oxbr0, gw: $PGW"
 
-    # Backup original netplan dir before changes
-    cp -r /etc/netplan "/etc/netplan.bak.$(date +%s)" 2>/dev/null || true
+ # Backup original netplan dir before changes
+ cp -r /etc/netplan "/etc/netplan.bak.$(date +%s)" 2>/dev/null || true
 
-    # Write netplan bridge config
-    local NP="/etc/netplan/60-oxware-bridge.yaml"
-    cat > "$NP" << NETPLANCFG
+ # Write netplan bridge config
+ local NP="/etc/netplan/60-oxware-bridge.yaml"
+ cat > "$NP" << NETPLANCFG
 network:
-  version: 2
-  ethernets:
-    ${PIFACE}:
-      dhcp4: false
-  bridges:
-    oxbr0:
-      interfaces: [${PIFACE}]
-      dhcp4: false
-      addresses: [${PIP}]
-      routes:
-        - to: default
-          via: ${PGW}
-      nameservers:
-        addresses: [8.8.8.8, 1.1.1.1]
-      parameters:
-        stp: false
-        forward-delay: 0
+ version: 2
+ ethernets:
+ ${PIFACE}:
+ dhcp4: false
+ bridges:
+ oxbr0:
+ interfaces: [${PIFACE}]
+ dhcp4: false
+ addresses: [${PIP}]
+ routes:
+ - to: default
+ via: ${PGW}
+ nameservers:
+ addresses: [8.8.8.8, 1.1.1.1]
+ parameters:
+ stp: false
+ forward-delay: 0
 NETPLANCFG
-    chmod 600 "$NP"
+ chmod 600 "$NP"
 
-    # Strip all IP/route/gateway config from PIFACE in other netplan files.
-    for f in /etc/netplan/*.yaml; do
-        [ "$f" = "$NP" ] && continue
-        grep -q "$PIFACE" "$f" 2>/dev/null || continue
-        python3 - "$f" "$PIFACE" << 'PYCLEAN'
+ # Strip all IP/route/gateway config from PIFACE in other netplan files.
+ for f in /etc/netplan/*.yaml; do
+ [ "$f" = "$NP" ] && continue
+ grep -q "$PIFACE" "$f" 2>/dev/null || continue
+ python3 - "$f" "$PIFACE" << 'PYCLEAN'
 import sys, yaml
 fpath, iface = sys.argv[1], sys.argv[2]
 with open(fpath) as fp:
-    cfg = yaml.safe_load(fp) or {}
+ cfg = yaml.safe_load(fp) or {}
 eth = cfg.get('network', {}).get('ethernets', {})
 if iface in eth:
-    eth[iface] = {'dhcp4': False}
+ eth[iface] = {'dhcp4': False}
 with open(fpath, 'w') as fp:
-    yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
+ yaml.dump(cfg, fp, default_flow_style=False, allow_unicode=True)
 print(f"Cleaned {iface} config in {fpath}")
 PYCLEAN
-        chmod 600 "$f"
-    done
+ chmod 600 "$f"
+ done
 
-    # netplan try → 120s rollback timer if SSH dies, original config restored
-    log "netplan try kullanılıyor (120s rollback timer aktif)..."
-    if timeout 30 netplan try --timeout 120 < /dev/null; then
-        log "oxbr0 bridge aktif ✓ ($PIP üzerinde, $PIFACE bağlı)"
-        _register_oxbridge_libvirt
-    else
-        warn "netplan try iptal edildi veya başarısız — eski config geri yüklendi"
-        warn "Bridge kurulamadı. Sunucu önceki haline döndü, SSH güvende."
-        return 1
-    fi
+ # netplan try -> 120s rollback timer if SSH dies, original config restored
+ log "netplan try kullanılıyor (120s rollback timer aktif)..."
+ if timeout 30 netplan try --timeout 120 < /dev/null; then
+ log "oxbr0 bridge aktif OK ($PIP üzerinde, $PIFACE bağlı)"
+ _register_oxbridge_libvirt
+ else
+ warn "netplan try iptal edildi veya başarısız — eski config geri yüklendi"
+ warn "Bridge kurulamadı. Sunucu önceki haline döndü, SSH güvende."
+ return 1
+ fi
 }
 
 _register_oxbridge_libvirt() {
-    # Register oxbridge with libvirt (idempotent)
-    if virsh net-info oxbridge &>/dev/null; then
-        virsh net-autostart oxbridge &>/dev/null || true
-        virsh net-start oxbridge &>/dev/null || true
-        return 0
-    fi
-    cat > /tmp/_oxbridge_net.xml << 'LIBVIRTNET'
+ # Register oxbridge with libvirt (idempotent)
+ if virsh net-info oxbridge &>/dev/null; then
+ virsh net-autostart oxbridge &>/dev/null || true
+ virsh net-start oxbridge &>/dev/null || true
+ return 0
+ fi
+ cat > /tmp/_oxbridge_net.xml << 'LIBVIRTNET'
 <network>
-  <name>oxbridge</name>
-  <forward mode='bridge'/>
-  <bridge name='oxbr0'/>
+ <name>oxbridge</name>
+ <forward mode='bridge'/>
+ <bridge name='oxbr0'/>
 </network>
 LIBVIRTNET
-    virsh net-define /tmp/_oxbridge_net.xml
-    rm -f /tmp/_oxbridge_net.xml
-    virsh net-autostart oxbridge
-    virsh net-start oxbridge
-    log "libvirt oxbridge network kayıt edildi ✓"
+ virsh net-define /tmp/_oxbridge_net.xml
+ rm -f /tmp/_oxbridge_net.xml
+ virsh net-autostart oxbridge
+ virsh net-start oxbridge
+ log "libvirt oxbridge network kayıt edildi OK"
 }
 
 # ── Reboot Sonrası Ağ/Servis Kararlılığı ─────────────────────
 fix_reboot_stability() {
-    step "Reboot Kararlılığı"
+ step "Reboot Kararlılığı"
 
-    # systemd-networkd-wait-online zaman aşımı — çok uzun beklerse oxware geç başlar
-    mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
-    cat > /etc/systemd/system/systemd-networkd-wait-online.service.d/timeout.conf << 'EOF'
+ # systemd-networkd-wait-online zaman aşımı — çok uzun beklerse oxware geç başlar
+ mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
+ cat > /etc/systemd/system/systemd-networkd-wait-online.service.d/timeout.conf << 'EOF'
 [Service]
 TimeoutStartSec=15
 EOF
 
-    # network-online.target — NetworkManager tabanlı sistemlerde
-    if systemctl is-enabled NetworkManager 2>/dev/null | grep -q "enabled"; then
-        systemctl enable NetworkManager-wait-online.service 2>/dev/null || true
-    fi
+ # network-online.target — NetworkManager tabanlı sistemlerde
+ if systemctl is-enabled NetworkManager 2>/dev/null | grep -q "enabled"; then
+ systemctl enable NetworkManager-wait-online.service 2>/dev/null || true
+ fi
 
-    # libvirtd reboot'ta default ağı otomatik başlatsın
-    virsh net-autostart default 2>/dev/null || true
+ # libvirtd reboot'ta default ağı otomatik başlatsın
+ virsh net-autostart default 2>/dev/null || true
 
-    # KVM modüllerini reboot'ta yükle
-    if ! grep -q "^kvm" /etc/modules 2>/dev/null; then
-        echo "kvm" >> /etc/modules
-        grep -qE "vmx|svm" /proc/cpuinfo && {
-            grep -q "vmx" /proc/cpuinfo && echo "kvm_intel" >> /etc/modules || echo "kvm_amd" >> /etc/modules
-        }
-        log "KVM modülleri /etc/modules'a eklendi"
-    fi
+ # KVM modüllerini reboot'ta yükle
+ if ! grep -q "^kvm" /etc/modules 2>/dev/null; then
+ echo "kvm" >> /etc/modules
+ grep -qE "vmx|svm" /proc/cpuinfo && {
+ grep -q "vmx" /proc/cpuinfo && echo "kvm_intel" >> /etc/modules || echo "kvm_amd" >> /etc/modules
+ }
+ log "KVM modülleri /etc/modules'a eklendi"
+ fi
 
-    systemctl daemon-reload
-    log "Reboot kararlılığı yapılandırıldı"
+ systemctl daemon-reload
+ log "Reboot kararlılığı yapılandırıldı"
 }
 
 # ── Firewall ──────────────────────────────────────────────────
 configure_firewall() {
-    step "Güvenlik Duvarı (UFW)"
+ step "Güvenlik Duvarı (UFW)"
 
-    # Ubuntu 20.04+ nftables kullanır; UFW iptables beklediği için çakışır
-    # Çözüm: iptables-legacy kullan
-    if command -v update-alternatives &>/dev/null; then
-        update-alternatives --set iptables  /usr/sbin/iptables-legacy  2>/dev/null || true
-        update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
-        log "iptables-legacy seçildi (UFW uyumluluğu için)"
-    fi
+ # Ubuntu 20.04+ nftables kullanır; UFW iptables beklediği için çakışır
+ # Çözüm: iptables-legacy kullan
+ if command -v update-alternatives &>/dev/null; then
+ update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
+ update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
+ log "iptables-legacy seçildi (UFW uyumluluğu için)"
+ fi
 
-    ufw --force reset 2>/dev/null || true
-    ufw default deny incoming  2>/dev/null || true
-    ufw default allow outgoing 2>/dev/null || true
-    ufw allow 22/tcp   comment "SSH" 2>/dev/null || true
-    ufw allow 8006/tcp comment "OXware Web UI" 2>/dev/null || true
-    ufw allow 80/tcp   comment "HTTP (Let's Encrypt)" 2>/dev/null || true
-    ufw allow 5900:5999/tcp comment "VNC" 2>/dev/null || true
-    ufw allow 6080/tcp comment "noVNC WS" 2>/dev/null || true
-    echo "y" | ufw enable 2>/dev/null || true
-    systemctl enable ufw 2>/dev/null || true
-    log "UFW aktif"
+ ufw --force reset 2>/dev/null || true
+ ufw default deny incoming 2>/dev/null || true
+ ufw default allow outgoing 2>/dev/null || true
+ ufw allow 22/tcp comment "SSH" 2>/dev/null || true
+ ufw allow 8006/tcp comment "OXware Web UI" 2>/dev/null || true
+ ufw allow 80/tcp comment "HTTP (Let's Encrypt)" 2>/dev/null || true
+ ufw allow 5900:5999/tcp comment "VNC" 2>/dev/null || true
+ ufw allow 6080/tcp comment "noVNC WS" 2>/dev/null || true
+ echo "y" | ufw enable 2>/dev/null || true
+ systemctl enable ufw 2>/dev/null || true
+ log "UFW aktif"
 }
 
 configure_fail2ban() {
-    step "Fail2ban"
-    cat > /etc/fail2ban/jail.d/oxware.conf << 'F2B'
+ step "Fail2ban"
+ cat > /etc/fail2ban/jail.d/oxware.conf << 'F2B'
 [oxware-web]
-enabled  = true
-port     = 8006
-filter   = oxware-web
-logpath  = /var/log/oxware/oxware.log
+enabled = true
+port = 8006
+filter = oxware-web
+logpath = /var/log/oxware/oxware.log
 maxretry = 5
-bantime  = 3600
+bantime = 3600
 findtime = 600
 
 [sshd]
-enabled  = true
+enabled = true
 maxretry = 5
-bantime  = 3600
+bantime = 3600
 F2B
-    cat > /etc/fail2ban/filter.d/oxware-web.conf << 'F2BFILTER'
+ cat > /etc/fail2ban/filter.d/oxware-web.conf << 'F2BFILTER'
 [Definition]
 failregex = \[auth\].*Failed login.*<HOST>
 ignoreregex =
 F2BFILTER
-    systemctl enable --now fail2ban 2>/dev/null || true
-    systemctl reload fail2ban 2>/dev/null || true
-    log "Fail2ban yapılandırıldı"
+ systemctl enable --now fail2ban 2>/dev/null || true
+ systemctl reload fail2ban 2>/dev/null || true
+ log "Fail2ban yapılandırıldı"
 }
 
 # ── OpenVSwitch ───────────────────────────────────────────────
 install_ovs() {
-    step "OpenVSwitch (SDN)"
-    if ! command -v ovs-vsctl &>/dev/null; then
-        warn "ovs-vsctl bulunamadı — yeniden yükleniyor..."
-        apt-get install -y -qq openvswitch-switch openvswitch-common 2>/dev/null || true
-    fi
-    if command -v ovs-vsctl &>/dev/null; then
-        systemctl enable --now openvswitch-switch 2>/dev/null || true
-        ovs-vsctl show &>/dev/null || true
-        log "OpenVSwitch etkinleştirildi"
-    else
-        warn "OpenVSwitch kurulamadı — SDN özellikleri devre dışı kalacak"
-        warn "Manuel kurulum: apt-get install openvswitch-switch"
-    fi
+ step "OpenVSwitch (SDN)"
+ if ! command -v ovs-vsctl &>/dev/null; then
+ warn "ovs-vsctl bulunamadı — yeniden yükleniyor..."
+ apt-get install -y -qq openvswitch-switch openvswitch-common 2>/dev/null || true
+ fi
+ if command -v ovs-vsctl &>/dev/null; then
+ systemctl enable --now openvswitch-switch 2>/dev/null || true
+ ovs-vsctl show &>/dev/null || true
+ log "OpenVSwitch etkinleştirildi"
+ else
+ warn "OpenVSwitch kurulamadı — SDN özellikleri devre dışı kalacak"
+ warn "Manuel kurulum: apt-get install openvswitch-switch"
+ fi
 }
 
 # ── MOTD (SSH login / reboot uyarısı) ───────────────────────
 install_motd() {
-    step "MOTD — SSH Login Uyarısı"
-    MOTD_DIR="/etc/update-motd.d"
-    mkdir -p "$MOTD_DIR"
+ step "MOTD — SSH Login Uyarısı"
+ MOTD_DIR="/etc/update-motd.d"
+ mkdir -p "$MOTD_DIR"
 
-    cat > "${MOTD_DIR}/99-oxware" << 'MOTDSCRIPT'
+ cat > "${MOTD_DIR}/99-oxware" << 'MOTDSCRIPT'
 #!/bin/bash
 BOLD='\033[1m'; DIM='\033[2m'; RED='\033[0;31m'
 RESET='\033[0m'; LINE='\033[0;90m'
@@ -1095,82 +1095,82 @@ HOST=$(hostname -f 2>/dev/null || hostname)
 DATE=$(date '+%Y-%m-%d %H:%M:%S %Z')
 printf "\n"
 printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
-printf "  ${BOLD}OXware Hypervisor${RESET}  |  %s  |  %s\n" "$HOST" "$DATE"
+printf " ${BOLD}OXware Hypervisor${RESET} | %s | %s\n" "$HOST" "$DATE"
 printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
 printf "\n"
-printf "  ${RED}NOTICE:${RESET}  This system is restricted to authorized administrators.\n"
-printf "           All sessions are monitored and logged.\n"
+printf " ${RED}NOTICE:${RESET} This system is restricted to authorized administrators.\n"
+printf " All sessions are monitored and logged.\n"
 printf "\n"
-printf "  Do not execute commands obtained from external sources without\n"
-printf "  first verifying their purpose with the system administrator.\n"
+printf " Do not execute commands obtained from external sources without\n"
+printf " first verifying their purpose with the system administrator.\n"
 printf "\n"
-printf "  ${BOLD}Support${RESET}\n"
-printf "    Email   root@oxware.top\n"
-printf "    GitHub  https://github.com/ShinnAsukha/oxware-hypervisor\n"
-printf "    Docs    https://oxware.top/docs\n"
+printf " ${BOLD}Support${RESET}\n"
+printf " Email root@oxware.top\n"
+printf " GitHub https://github.com/ShinnAsukha/oxware-hypervisor\n"
+printf " Docs https://oxware.top/docs\n"
 printf "\n"
 printf "${LINE}────────────────────────────────────────────────────────────────${RESET}\n"
 printf "\n"
 MOTDSCRIPT
 
-    chmod +x "${MOTD_DIR}/99-oxware"
+ chmod +x "${MOTD_DIR}/99-oxware"
 
-    # Disable ALL Ubuntu default MOTD scripts — keep only 99-oxware
-    find "$MOTD_DIR" -type f ! -name "99-oxware" -exec chmod -x {} \;
-    # Disable motd-news background service/timer
-    systemctl disable motd-news.service motd-news.timer 2>/dev/null || true
-    sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || true
-    # Clear static /etc/motd
-    echo "" > /etc/motd 2>/dev/null || true
+ # Disable ALL Ubuntu default MOTD scripts — keep only 99-oxware
+ find "$MOTD_DIR" -type f ! -name "99-oxware" -exec chmod -x {} \;
+ # Disable motd-news background service/timer
+ systemctl disable motd-news.service motd-news.timer 2>/dev/null || true
+ sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || true
+ # Clear static /etc/motd
+ echo "" > /etc/motd 2>/dev/null || true
 
-    log "MOTD kuruldu → ${MOTD_DIR}/99-oxware"
+ log "MOTD kuruldu -> ${MOTD_DIR}/99-oxware"
 }
 
 # ── Servisleri Başlat ─────────────────────────────────────────
 start_services() {
-    step "Servisler Başlatılıyor"
-    systemctl restart libvirtd
-    sleep 2
-    systemctl start oxware
-    sleep 5
+ step "Servisler Başlatılıyor"
+ systemctl restart libvirtd
+ sleep 2
+ systemctl start oxware
+ sleep 5
 
-    if systemctl is-active --quiet oxware; then
-        log "OXware servisi çalışıyor"
-    else
-        warn "OXware başlatılamadı — son hatalar:"
-        journalctl -u oxware -n 20 --no-pager 2>/dev/null || true
-        echo ""
-        warn "Manuel başlatmak için: systemctl start oxware"
-        warn "Log için: journalctl -u oxware -n 50 --no-pager"
-    fi
+ if systemctl is-active --quiet oxware; then
+ log "OXware servisi çalışıyor"
+ else
+ warn "OXware başlatılamadı — son hatalar:"
+ journalctl -u oxware -n 20 --no-pager 2>/dev/null || true
+ echo ""
+ warn "Manuel başlatmak için: systemctl start oxware"
+ warn "Log için: journalctl -u oxware -n 50 --no-pager"
+ fi
 }
 
 # ── Lisans Aktivasyonu ────────────────────────────────────────
 activate_license() {
-    step "Lisans Aktivasyonu (İsteğe Bağlı)"
-    echo ""
-    echo -e "${WHITE}Lisans anahtarınız varsa aşağıya girin.${NC}"
-    echo -e "${YELLOW}Format: OXWARE-XXXX-XXXX-XXXX-XXXX${NC}"
-    echo -e "${BLUE}Atlamak için ENTER'a basın${NC}"
-    echo ""
-    read -p "Lisans anahtarı: " -r LICENSE_KEY
+ step "Lisans Aktivasyonu (İsteğe Bağlı)"
+ echo ""
+ echo -e "${WHITE}Lisans anahtarınız varsa aşağıya girin.${NC}"
+ echo -e "${YELLOW}Format: OXWARE-XXXX-XXXX-XXXX-XXXX${NC}"
+ echo -e "${BLUE}Atlamak için ENTER'a basın${NC}"
+ echo ""
+ read -p "Lisans anahtarı: " -r LICENSE_KEY
 
-    if [ -n "$LICENSE_KEY" ]; then
-        HOST_IP=$(hostname -I | awk '{print $1}')
-        # Admin token al (ilk login — setup yapılmamışsa boş döner)
-        RESPONSE=$(curl -sk -X POST "https://${HOST_IP}:${WEB_PORT}/api/license/validate" \
-            -H "Content-Type: application/json" \
-            -d "{\"code\":\"${LICENSE_KEY}\"}" 2>/dev/null || echo '{}')
+ if [ -n "$LICENSE_KEY" ]; then
+ HOST_IP=$(hostname -I | awk '{print $1}')
+ # Admin token al (ilk login — setup yapılmamışsa boş döner)
+ RESPONSE=$(curl -sk -X POST "https://${HOST_IP}:${WEB_PORT}/api/license/validate" \
+ -H "Content-Type: application/json" \
+ -d "{\"code\":\"${LICENSE_KEY}\"}" 2>/dev/null || echo '{}')
 
-        if echo "$RESPONSE" | grep -q '"valid":true'; then
-            log "Lisans başarıyla aktive edildi!"
-            echo -e "  ${GREEN}✓ 7/24 Destek aktif${NC}"
-        else
-            warn "Lisans doğrulanamadı — web arayüzünden (Güvenlik → OXware Lisans) ekleyebilirsin"
-        fi
-    else
-        info "Lisans aktivasyonu atlandı — web arayüzünden (Güvenlik → OXware Lisans) ekleyebilirsin"
-    fi
+ if echo "$RESPONSE" | grep -q '"valid":true'; then
+ log "Lisans başarıyla aktive edildi!"
+ echo -e " ${GREEN}OK 7/24 Destek aktif${NC}"
+ else
+ warn "Lisans doğrulanamadı — web arayüzünden (Güvenlik -> OXware Lisans) ekleyebilirsin"
+ fi
+ else
+ info "Lisans aktivasyonu atlandı — web arayüzünden (Güvenlik -> OXware Lisans) ekleyebilirsin"
+ fi
 }
 
 # ── Tamamlama Ekranı ──────────────────────────────────────────
@@ -1178,153 +1178,153 @@ activate_license() {
 # Kurulum istatistiği toplar. IP tam saklanmaz. Tamamen sessiz, hata vermez.
 TRACKER_URL="${OXWARE_TRACKER_URL:-https://oxware.top/api/install}"
 send_install_ping() {
-    # Arka planda, timeout'lu, hata yoksay — kurulumu asla bloklamaz
-    (
-        HOSTNAME_VAL=$(hostname 2>/dev/null || echo "unknown")
-        OS_VAL=$(grep -oP '(?<=^PRETTY_NAME=").*(?="$)' /etc/os-release 2>/dev/null || echo "unknown")
-        CPU_VAL=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//' || echo "unknown")
-        CPU_CORES=$(nproc 2>/dev/null || echo "?")
-        RAM_GB=$(awk '/MemTotal/ {printf "%.1f", $2/1048576}' /proc/meminfo 2>/dev/null || echo "0")
-        PUB_IP=$(hostname -I | awk '{print $1}')
+ # Arka planda, timeout'lu, hata yoksay — kurulumu asla bloklamaz
+ (
+ HOSTNAME_VAL=$(hostname 2>/dev/null || echo "unknown")
+ OS_VAL=$(grep -oP '(?<=^PRETTY_NAME=").*(?="$)' /etc/os-release 2>/dev/null || echo "unknown")
+ CPU_VAL=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^ *//' || echo "unknown")
+ CPU_CORES=$(nproc 2>/dev/null || echo "?")
+ RAM_GB=$(awk '/MemTotal/ {printf "%.1f", $2/1048576}' /proc/meminfo 2>/dev/null || echo "0")
+ PUB_IP=$(hostname -I | awk '{print $1}')
 
-        JSON=$(cat <<EOF
+ JSON=$(cat <<EOF
 {"hostname":"${HOSTNAME_VAL}","os":"${OS_VAL}","cpu":"${CPU_VAL} (${CPU_CORES} core)","ram_gb":"${RAM_GB}","version":"2.5.8","ip":"${PUB_IP}"}
 EOF
 )
-        curl -fsSL --max-time 8 -X POST "$TRACKER_URL" \
-            -H "Content-Type: application/json" \
-            -d "$JSON" >/dev/null 2>&1 || true
-    ) &
-    disown 2>/dev/null || true
+ curl -fsSL --max-time 8 -X POST "$TRACKER_URL" \
+ -H "Content-Type: application/json" \
+ -d "$JSON" >/dev/null 2>&1 || true
+ ) &
+ disown 2>/dev/null || true
 }
 
 print_done() {
-    HOST_IP=$(hostname -I | awk '{print $1}')
-    echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗"
-    echo -e "║         OXware Hypervisor Kurulumu Tamamlandı!              ║"
-    echo -e "╠══════════════════════════════════════════════════════════════╣"
-    echo -e "║${NC}                                                              ${GREEN}║"
-    echo -e "║${NC}  🌐 Web UI    : ${CYAN}https://${HOST_IP}:${WEB_PORT}${NC}$(printf '%*s' $((21-${#HOST_IP})) '')${GREEN}║"
-    echo -e "║${NC}  🔑 İlk giriş : Admin kullanıcısı oluştur                   ${GREEN}║"
-    echo -e "║${NC}                                                              ${GREEN}║"
-    echo -e "╠══════════════════════════════════════════════════════════════╣"
-    echo -e "║${NC}  ${YELLOW}Dizin Yapısı:${NC}                                               ${GREEN}║"
-    echo -e "║${NC}  Uygulama : ${APP_DIR}         ${GREEN}║"
-    echo -e "║${NC}  Konfig   : ${CONFIG_DIR}/                           ${GREEN}║"
-    echo -e "║${NC}  Loglar   : ${LOG_DIR}/                        ${GREEN}║"
-    echo -e "║${NC}  Veri     : ${DATA_DIR}/                     ${GREEN}║"
-    echo -e "╠══════════════════════════════════════════════════════════════╣"
-    echo -e "║${NC}  ${YELLOW}CLI Komutları:${NC}                                              ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}ox --status${NC}      — Servis durumu                         ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}ox --logs -f${NC}     — Canlı log takibi                      ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}ox --vms${NC}         — Sanal makineleri listele              ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}ox --users${NC}       — Kullanıcıları listele                 ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}ox --restart${NC}     — Servisi yeniden başlat               ${GREEN}║"
-    echo -e "║${NC}  ${CYAN}sudo oxupdate${NC}    — Güncel sürüme geç                     ${GREEN}║"
-    echo -e "╠══════════════════════════════════════════════════════════════╣"
-    echo -e "║${NC}  ${YELLOW}Sorun mu var?${NC}                                               ${GREEN}║"
-    echo -e "║${NC}  journalctl -u oxware -n 50 --no-pager                      ${GREEN}║"
-    echo -e "╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${YELLOW}SSL uyarısı: Tarayıcıda 'Gelişmiş → Devam et' tıkla.${NC}"
-    echo ""
+ HOST_IP=$(hostname -I | awk '{print $1}')
+ echo ""
+ echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗"
+ echo -e "║ OXware Hypervisor Kurulumu Tamamlandı! ║"
+ echo -e "╠══════════════════════════════════════════════════════════════╣"
+ echo -e "║${NC} ${GREEN}║"
+ echo -e "║${NC} Web UI : ${CYAN}https://${HOST_IP}:${WEB_PORT}${NC}$(printf '%*s' $((21-${#HOST_IP})) '')${GREEN}║"
+ echo -e "║${NC} İlk giriş : Admin kullanıcısı oluştur ${GREEN}║"
+ echo -e "║${NC} ${GREEN}║"
+ echo -e "╠══════════════════════════════════════════════════════════════╣"
+ echo -e "║${NC} ${YELLOW}Dizin Yapısı:${NC} ${GREEN}║"
+ echo -e "║${NC} Uygulama : ${APP_DIR} ${GREEN}║"
+ echo -e "║${NC} Konfig : ${CONFIG_DIR}/ ${GREEN}║"
+ echo -e "║${NC} Loglar : ${LOG_DIR}/ ${GREEN}║"
+ echo -e "║${NC} Veri : ${DATA_DIR}/ ${GREEN}║"
+ echo -e "╠══════════════════════════════════════════════════════════════╣"
+ echo -e "║${NC} ${YELLOW}CLI Komutları:${NC} ${GREEN}║"
+ echo -e "║${NC} ${CYAN}ox --status${NC} — Servis durumu ${GREEN}║"
+ echo -e "║${NC} ${CYAN}ox --logs -f${NC} — Canlı log takibi ${GREEN}║"
+ echo -e "║${NC} ${CYAN}ox --vms${NC} — Sanal makineleri listele ${GREEN}║"
+ echo -e "║${NC} ${CYAN}ox --users${NC} — Kullanıcıları listele ${GREEN}║"
+ echo -e "║${NC} ${CYAN}ox --restart${NC} — Servisi yeniden başlat ${GREEN}║"
+ echo -e "║${NC} ${CYAN}sudo oxupdate${NC} — Güncel sürüme geç ${GREEN}║"
+ echo -e "╠══════════════════════════════════════════════════════════════╣"
+ echo -e "║${NC} ${YELLOW}Sorun mu var?${NC} ${GREEN}║"
+ echo -e "║${NC} journalctl -u oxware -n 50 --no-pager ${GREEN}║"
+ echo -e "╚══════════════════════════════════════════════════════════════╝${NC}"
+ echo ""
+ echo -e "${YELLOW}SSL uyarısı: Tarayıcıda 'Gelişmiş -> Devam et' tıkla.${NC}"
+ echo ""
 }
 
 # ── Ana Akış ─────────────────────────────────────────────────
 main() {
-    # Hızlı mod: sadece CLI araçlarını güncelle
-    if [ "${1:-}" = "--refresh-cli" ]; then
-        check_root
-        install_cli_tools
-        echo -e "\033[0;32m[✓] ox ve oxupdate güncellendi\033[0m"
-        exit 0
-    fi
+ # Hızlı mod: sadece CLI araçlarını güncelle
+ if [ "${1:-}" = "--refresh-cli" ]; then
+ check_root
+ install_cli_tools
+ echo -e "\033[0;32m[OK] ox ve oxupdate güncellendi\033[0m"
+ exit 0
+ fi
 
-    START_TIME=$(date +%s)
+ START_TIME=$(date +%s)
 
-    print_banner
-    check_root
-    check_os
-    check_existing_installation
-    check_bios_virtualization
-    check_hardware
+ print_banner
+ check_root
+ check_os
+ check_existing_installation
+ check_bios_virtualization
+ check_hardware
 
-    echo ""
-    echo -e "${WHITE}Kurulum özeti:${NC}"
-    echo -e "  Repo URL    : $REPO_URL"
-    echo -e "  Kurulum     : $INSTALL_DIR  (git repo)"
-    echo -e "  Uygulama    : $APP_DIR"
-    echo -e "  Python venv : $VENV_DIR"
-    echo -e "  Konfig      : $CONFIG_DIR/oxware.conf"
-    echo -e "  Web portu   : $WEB_PORT (HTTPS)"
-    echo ""
-    read -p "Kuruluma devam edilsin mi? [E/h]: " -r
-    [[ $REPLY =~ ^[Hh]$ ]] && exit 0
+ echo ""
+ echo -e "${WHITE}Kurulum özeti:${NC}"
+ echo -e " Repo URL : $REPO_URL"
+ echo -e " Kurulum : $INSTALL_DIR (git repo)"
+ echo -e " Uygulama : $APP_DIR"
+ echo -e " Python venv : $VENV_DIR"
+ echo -e " Konfig : $CONFIG_DIR/oxware.conf"
+ echo -e " Web portu : $WEB_PORT (HTTPS)"
+ echo ""
+ read -p "Kuruluma devam edilsin mi? [E/h]: " -r
+ [[ $REPLY =~ ^[Hh]$ ]] && exit 0
 
-    advance_progress "Sistem güncelleniyor"
-    update_system
-    advance_progress "Paketler kuruluyor"
-    install_packages
-    advance_progress "Kaynak kod indiriliyor"
-    clone_repo
-    advance_progress "KVM/libvirt yapılandırılıyor"
-    configure_libvirt
-    advance_progress "Python ortamı hazırlanıyor"
-    setup_python
-    advance_progress "Font Awesome indiriliyor"
-    download_fontawesome
-    advance_progress "SSL sertifikası oluşturuluyor"
-    generate_ssl
-    advance_progress "Konfigürasyon yazılıyor"
-    write_config
-    advance_progress "noVNC kuruluyor"
-    install_novnc
-    advance_progress "Systemd servisi oluşturuluyor"
-    create_service
-    advance_progress "SSH yapılandırılıyor"
-    configure_ssh
-    advance_progress "Hostname yapılandırılıyor"
-    configure_hostname
-    advance_progress "Güvenlik duvarı (UFW) yapılandırılıyor"
-    configure_firewall
-    advance_progress "Fail2ban yapılandırılıyor"
-    configure_fail2ban
-    advance_progress "OpenVSwitch kuruluyor"
-    install_ovs          # OVS bridge setup'tan önce başlatılmalı — netplan apply OVS'ye ulaşmaya çalışır
-    advance_progress "Host bridge (oxbr0) kuruluyor"
-    setup_host_bridge
-    advance_progress "Reboot kararlılığı yapılandırılıyor"
-    fix_reboot_stability
-    advance_progress "MOTD kuruluyor"
-    install_motd
-    advance_progress "CLI araçları kuruluyor (ox / oxupdate)"
-    install_cli_tools
-    advance_progress "Servisler başlatılıyor"
-    start_services
-    advance_progress "Lisans aktivasyonu"
-    activate_license
+ advance_progress "Sistem güncelleniyor"
+ update_system
+ advance_progress "Paketler kuruluyor"
+ install_packages
+ advance_progress "Kaynak kod indiriliyor"
+ clone_repo
+ advance_progress "KVM/libvirt yapılandırılıyor"
+ configure_libvirt
+ advance_progress "Python ortamı hazırlanıyor"
+ setup_python
+ advance_progress "Font Awesome indiriliyor"
+ download_fontawesome
+ advance_progress "SSL sertifikası oluşturuluyor"
+ generate_ssl
+ advance_progress "Konfigürasyon yazılıyor"
+ write_config
+ advance_progress "noVNC kuruluyor"
+ install_novnc
+ advance_progress "Systemd servisi oluşturuluyor"
+ create_service
+ advance_progress "SSH yapılandırılıyor"
+ configure_ssh
+ advance_progress "Hostname yapılandırılıyor"
+ configure_hostname
+ advance_progress "Güvenlik duvarı (UFW) yapılandırılıyor"
+ configure_firewall
+ advance_progress "Fail2ban yapılandırılıyor"
+ configure_fail2ban
+ advance_progress "OpenVSwitch kuruluyor"
+ install_ovs # OVS bridge setup'tan önce başlatılmalı — netplan apply OVS'ye ulaşmaya çalışır
+ advance_progress "Host bridge (oxbr0) kuruluyor"
+ setup_host_bridge
+ advance_progress "Reboot kararlılığı yapılandırılıyor"
+ fix_reboot_stability
+ advance_progress "MOTD kuruluyor"
+ install_motd
+ advance_progress "CLI araçları kuruluyor (ox / oxupdate)"
+ install_cli_tools
+ advance_progress "Servisler başlatılıyor"
+ start_services
+ advance_progress "Lisans aktivasyonu"
+ activate_license
 
-    # OS rebranding (opt-in via OXWARE_REBRAND_OS=1; defaults to off to avoid surprising users)
-    if [ "${OXWARE_REBRAND_OS:-0}" = "1" ] && [ -f "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" ]; then
-        advance_progress "OS rebranding (OXWARE_REBRAND_OS=1)"
-        bash "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" || \
-            warn "OS rebrand başarısız (kritik değil — kurulum devam ediyor)"
-    fi
+ # OS rebranding (opt-in via OXWARE_REBRAND_OS=1; defaults to off to avoid surprising users)
+ if [ "${OXWARE_REBRAND_OS:-0}" = "1" ] && [ -f "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" ]; then
+ advance_progress "OS rebranding (OXWARE_REBRAND_OS=1)"
+ bash "${SCRIPT_DIR:-/opt/oxware-src}/scripts/rebrand-os.sh" || \
+ warn "OS rebrand başarısız (kritik değil — kurulum devam ediyor)"
+ fi
 
-    # Kurulum bildirimi gönder (anonim, sessiz)
-    send_install_ping
+ # Kurulum bildirimi gönder (anonim, sessiz)
+ send_install_ping
 
-    # Final completion message
-    local now elapsed_s mins secs
-    now=$(date +%s)
-    elapsed_s=$(( now - START_TIME ))
-    mins=$(( elapsed_s / 60 ))
-    secs=$(( elapsed_s % 60 ))
-    printf "\n\033[0;32m[████████████████████████████████] 100%% — Kurulum tamamlandı! (%02d:%02d)\033[0m\n\n" \
-        "$mins" "$secs" >&2
+ # Final completion message
+ local now elapsed_s mins secs
+ now=$(date +%s)
+ elapsed_s=$(( now - START_TIME ))
+ mins=$(( elapsed_s / 60 ))
+ secs=$(( elapsed_s % 60 ))
+ printf "\n\033[0;32m[████████████████████████████████] 100%% — Kurulum tamamlandı! (%02d:%02d)\033[0m\n\n" \
+ "$mins" "$secs" >&2
 
-    print_done
+ print_done
 }
 
 main "$@"
