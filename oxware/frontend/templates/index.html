@@ -1094,7 +1094,7 @@
         <svg viewBox="0 0 16 16"><path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/></svg>
         Create VM
       </button>
-      <button class="tb-action" onclick="navigate('updates')">
+      <button class="tb-action" onclick="openSubTabPage('page-tab-settings','tab-settings','updates')">
         <svg viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 01.192.41l-1.966 2.36a.25.25 0 01-.384 0l-1.966-2.36a.25.25 0 01.192-.41zm-11 2h3.932a.25.25 0 00.192-.41L2.692 6.23a.25.25 0 00-.384 0L.342 8.59A.25.25 0 00.534 9z"/></svg>
         <span data-i18n="Updates">Updates</span> <span id="update-badge" style="display:none;background:var(--orange);color:#000;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px">!</span>
       </button>
@@ -25281,6 +25281,17 @@ function _pgInstallAll() {
   Object.keys(_PAGE_TABS).forEach(_pgInstallTabs);
 }
 window.addEventListener('DOMContentLoaded', () => { setTimeout(_pgInstallAll, 200); });
+
+// Navigate to a main page AND open one of its sub-tabs.
+// Used by topbar shortcuts (e.g. Updates button -> Settings page, updates sub-tab).
+function openSubTabPage(mainPageId, navKey, tabKey) {
+  navigate(navKey);
+  // Ensure sub-tabs are installed, then switch
+  setTimeout(() => {
+    _pgInstallTabs(mainPageId);
+    _pgSwitchTab(mainPageId, tabKey);
+  }, 120);
+}
 
 /* ──── API Docs Panel ──── */
 let _apiDocsLoaded = false;
