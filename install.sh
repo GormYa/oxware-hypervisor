@@ -223,9 +223,10 @@ update_mode() {
  # Git repo güncelle
  if [ -d "${INSTALL_DIR}/.git" ]; then
  cd "$INSTALL_DIR"
- git fetch origin master 2>/dev/null
+ git fetch origin main 2>/dev/null
  git reset --hard origin/main 2>/dev/null
  log "Kod güncellendi"
+ _cleanup_docs
  else
  warn "Git repo bulunamadı — dosya güncelleme atlanıyor"
  fi
@@ -346,7 +347,24 @@ clone_repo() {
  if [ ! -f "${APP_DIR}/backend/app.py" ]; then
  err "Beklenen dosya bulunamadı: ${APP_DIR}/backend/app.py"
  fi
+
+ # Sunucuda gereksiz döküman/meta dosyalarını temizle (GitHub'da kalır, sunucuda yer kaplamaz)
+ _cleanup_docs
+
  chmod -R 750 "$INSTALL_DIR"
+}
+
+# Sunucuda gerekmeyen döküman/meta dosyalarını sil (repo'da kalır, sadece klonda silinir)
+_cleanup_docs() {
+ local junk=(
+ LICENSE CNAME CHANGELOG.md README.md SECURITY.md THREAT_MODEL.md
+ CONTRIBUTING.md README.md.bloated.bak install.sh.v2.2.bak
+ planning tests .github
+ )
+ for f in "${junk[@]}"; do
+ rm -rf "${INSTALL_DIR:?}/${f}" 2>/dev/null || true
+ done
+ log "Gereksiz döküman dosyaları temizlendi (LICENSE/README/CHANGELOG/...)"
 }
 
 # ── libvirt ───────────────────────────────────────────────────
@@ -739,6 +757,8 @@ if [ -d "\${INSTALL_DIR}/.git" ]; then
  git fetch origin main
  git reset --hard origin/main
  echo -e "\${GREEN}[OK]\${NC} Kod güncellendi"
+ # Gereksiz döküman dosyalarını temizle
+ rm -rf "\${INSTALL_DIR}"/{LICENSE,CNAME,CHANGELOG.md,README.md,SECURITY.md,THREAT_MODEL.md,CONTRIBUTING.md,planning,tests,.github} 2>/dev/null || true
  # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
  if [ -f "\${INSTALL_DIR}/install.sh" ]; then
  echo -e "\${CYAN}[i]\${NC} CLI araçları yenileniyor (ox / oxupdate)..."

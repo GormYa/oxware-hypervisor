@@ -302,6 +302,7 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
  echo -e "${CYAN}[i]${NC} Git pull..."
  git fetch --all --quiet
  git reset --hard origin/main --quiet
+ rm -rf "${INSTALL_DIR}"/{LICENSE,CNAME,CHANGELOG.md,README.md,SECURITY.md,THREAT_MODEL.md,CONTRIBUTING.md,planning,tests,.github} 2>/dev/null || true
  echo -e "${GREEN}[OK]${NC} Kod güncellendi"
 
  # CLI'ı kendinden güncelle
