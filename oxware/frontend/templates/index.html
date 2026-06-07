@@ -1116,8 +1116,8 @@
         <span>Yükle</span>
       </button>
       <!-- OXY AI Chat Button -->
-      <button id="oxy-btn" onclick="toggleOxyPanel()" title="OXY — AI Asistan">
-        <span style="font-size:16px"></span>
+      <button id="oxy-btn" onclick="toggleOxyPanel()" title="OXY — AI Asistan" style="display:inline-flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-robot fa-fw" style="color:var(--accent-lt)"></i>
         <span style="font-weight:700;color:var(--accent-lt)">OXY</span>
         <div id="oxy-notif"></div>
       </button>
@@ -1125,19 +1125,20 @@
 
     <div style="height:100%;display:flex;align-items:center;padding:0 10px;border-left:1px solid var(--border)">
       <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Tema Değiştir">
-        <span id="themeIcon"></span>
+        <i id="themeIcon" class="fa-solid fa-moon"></i>
       </button>
     </div>
 
-    <div class="tb-action" style="position:relative" id="lang-btn" onclick="toggleLangMenu()">
+    <div class="tb-action" style="position:relative;display:inline-flex;align-items:center;gap:6px;padding:0 12px;cursor:pointer" id="lang-btn" onclick="toggleLangMenu()">
       <i class="fa-solid fa-globe"></i>
-      <span id="current-lang-label">EN</span>
-      <div id="lang-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;min-width:140px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.4)">
-        <div class="lang-opt" onclick="setLang('en');event.stopPropagation()"> English</div>
-        <div class="lang-opt" onclick="setLang('tr');event.stopPropagation()"> Türkçe</div>
-        <div class="lang-opt" onclick="setLang('es');event.stopPropagation()"> Español</div>
-        <div class="lang-opt" onclick="setLang('de');event.stopPropagation()"> Deutsch</div>
-        <div class="lang-opt" onclick="setLang('zh');event.stopPropagation()"> 中文</div>
+      <span id="current-lang-label" style="font-weight:600">EN</span>
+      <i class="fa-solid fa-chevron-down" style="font-size:9px;opacity:.6"></i>
+      <div id="lang-menu" style="display:none;position:absolute;top:100%;right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;min-width:150px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.4);overflow:hidden">
+        <div class="lang-opt" onclick="setLang('en');event.stopPropagation()" data-lang-code="en"><span class="lang-code">EN</span> English</div>
+        <div class="lang-opt" onclick="setLang('tr');event.stopPropagation()" data-lang-code="tr"><span class="lang-code">TR</span> Türkçe</div>
+        <div class="lang-opt" onclick="setLang('es');event.stopPropagation()" data-lang-code="es"><span class="lang-code">ES</span> Español</div>
+        <div class="lang-opt" onclick="setLang('de');event.stopPropagation()" data-lang-code="de"><span class="lang-code">DE</span> Deutsch</div>
+        <div class="lang-opt" onclick="setLang('zh');event.stopPropagation()" data-lang-code="zh"><span class="lang-code">ZH</span> 中文</div>
       </div>
     </div>
 
@@ -7602,39 +7603,39 @@ systemctl enable --now qemu-guest-agent</pre>
           <div class="cvm-sec-title">İşletim Sistemi</div>
           <div class="os-grid" id="os-grid">
             <div class="os-card selected" data-os="ubuntu22.04" onclick="cvmSelectOS(this)">
-              <div class="os-icon"></div>
+              <div class="os-icon"><i class="fa-brands fa-ubuntu" style="color:#E95420"></i></div>
               <div class="os-label">Ubuntu 22.04</div>
             </div>
             <div class="os-card" data-os="ubuntu20.04" onclick="cvmSelectOS(this)">
-              <div class="os-icon"></div>
+              <div class="os-icon"><i class="fa-brands fa-ubuntu" style="color:#E95420"></i></div>
               <div class="os-label">Ubuntu 20.04</div>
             </div>
             <div class="os-card" data-os="debian12" onclick="cvmSelectOS(this)">
-              <div class="os-icon"></div>
+              <div class="os-icon"><i class="fa-brands fa-debian" style="color:#A81D33"></i></div>
               <div class="os-label">Debian 12</div>
             </div>
             <div class="os-card" data-os="centos8" onclick="cvmSelectOS(this)">
-              <div class="os-icon"></div>
+              <div class="os-icon"><i class="fa-brands fa-centos" style="color:#932279"></i></div>
               <div class="os-label">CentOS 8</div>
             </div>
             <div class="os-card" data-os="win2022" onclick="cvmSelectOS(this)">
-              <div class="os-icon">🪟</div>
+              <div class="os-icon"><i class="fa-brands fa-windows" style="color:#0078D6"></i></div>
               <div class="os-label">Windows Server 2022</div>
             </div>
             <div class="os-card" data-os="win2019" onclick="cvmSelectOS(this)">
-              <div class="os-icon">🪟</div>
+              <div class="os-icon"><i class="fa-brands fa-windows" style="color:#0078D6"></i></div>
               <div class="os-label">Windows 2019</div>
             </div>
             <div class="os-card" data-os="win10" onclick="cvmSelectOS(this)">
-              <div class="os-icon">🪟</div>
+              <div class="os-icon"><i class="fa-brands fa-windows" style="color:#0078D6"></i></div>
               <div class="os-label">Windows 10</div>
             </div>
             <div class="os-card" data-os="freebsd" onclick="cvmSelectOS(this)">
-              <div class="os-icon"></div>
+              <div class="os-icon"><i class="fa-brands fa-freebsd" style="color:#AB2B28"></i></div>
               <div class="os-label">FreeBSD</div>
             </div>
             <div class="os-card" data-os="generic" onclick="cvmSelectOS(this)">
-              <div class="os-icon">️</div>
+              <div class="os-icon"><i class="fa-solid fa-compact-disc" style="color:var(--text-muted)"></i></div>
               <div class="os-label">Genel / Diğer</div>
             </div>
           </div>
@@ -12450,15 +12451,15 @@ async function loadVMDetail(vmId) {
     // Row 1: primary state-dependent controls
     let primaryHtml = "";
     if (v.state !== "running") {
-      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','start')">▶ Başlat</button>`;
+      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','start')"><i class="fa-solid fa-play"></i> Başlat</button>`;
     } else {
-      primaryHtml += `<button class="vd-btn danger" onclick="vmForceStop('${_vid}')">⏻ Durdur</button>`;
-      primaryHtml += `<button class="vd-btn primary" onclick="openConsole('${_vid}')">▣ Konsol</button>`;
-      primaryHtml += `<button class="vd-btn" onclick="vmAction('${_vid}','reboot')">↺ Yeniden Başlat</button>`;
-      primaryHtml += `<button class="vd-btn warning" onclick="vmAction('${_vid}','pause')">⏸ Duraklat</button>`;
+      primaryHtml += `<button class="vd-btn danger" onclick="vmForceStop('${_vid}')"><i class="fa-solid fa-power-off"></i> Durdur</button>`;
+      primaryHtml += `<button class="vd-btn primary" onclick="openConsole('${_vid}')"><i class="fa-solid fa-display"></i> Konsol</button>`;
+      primaryHtml += `<button class="vd-btn" onclick="vmAction('${_vid}','reboot')"><i class="fa-solid fa-rotate-right"></i> Yeniden Başlat</button>`;
+      primaryHtml += `<button class="vd-btn warning" onclick="vmAction('${_vid}','pause')"><i class="fa-solid fa-pause"></i> Duraklat</button>`;
     }
     if (v.state === "paused") {
-      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','resume')">▶ Devam Et</button>`;
+      primaryHtml += `<button class="vd-btn success" onclick="vmAction('${_vid}','resume')"><i class="fa-solid fa-play"></i> Devam Et</button>`;
     }
 
     // Row 2: management actions grouped by category (admin/operator only)
@@ -13502,9 +13503,9 @@ async function loadVMs() {
           <td>
             <div class="action-btns">
               ${v.state !== "running"
-                ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat">▶ Başlat</button>`
-                : `<button class="btn sm primary" onclick="openConsole('${v.id}')" title="Konsol">▣ Konsol</button>
-                   <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat">↺</button>`}
+                ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat"><i class="fa-solid fa-play"></i> Başlat</button>`
+                : `<button class="btn sm primary" onclick="openConsole('${v.id}')" title="Konsol"><i class="fa-solid fa-display"></i> Konsol</button>
+                   <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat"><i class="fa-solid fa-rotate-right"></i></button>`}
             </div>
           </td>
         </tr>`;
@@ -13522,12 +13523,12 @@ async function loadVMs() {
         <td>
           <div class="action-btns" style="flex-wrap:nowrap;gap:3px">
             ${v.state !== "running"
-              ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat">▶</button>`
-              : `<button class="btn sm danger" onclick="vmForceStop('${v.id}')" title="Zorla Durdur">⏻</button>
-                 <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat">↺</button>
-                 <button class="btn sm" style="color:var(--accent-lt)" onclick="openConsole('${v.id}')" title="Konsol">▣</button>`}
-            <button class="btn sm" onclick="openVmMoreMenu(event,'${v.id}','${escHtml(v.name)}','${v.state}')" title="Daha fazla" style="font-weight:700;letter-spacing:1px;min-width:26px">⋯</button>
-            <button class="btn sm danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')" title="Sil"></button>
+              ? `<button class="btn sm success" onclick="vmAction('${v.id}','start')" title="Başlat"><i class="fa-solid fa-play"></i></button>`
+              : `<button class="btn sm danger" onclick="vmForceStop('${v.id}')" title="Zorla Durdur"><i class="fa-solid fa-power-off"></i></button>
+                 <button class="btn sm" onclick="vmAction('${v.id}','reboot')" title="Yeniden Başlat"><i class="fa-solid fa-rotate-right"></i></button>
+                 <button class="btn sm" style="color:var(--accent-lt)" onclick="openConsole('${v.id}')" title="Konsol"><i class="fa-solid fa-display"></i></button>`}
+            <button class="btn sm" onclick="openVmMoreMenu(event,'${v.id}','${escHtml(v.name)}','${v.state}')" title="Daha fazla" style="min-width:26px"><i class="fa-solid fa-ellipsis"></i></button>
+            <button class="btn sm danger" onclick="deleteVM('${v.id}','${escHtml(v.name)}')" title="Sil"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>`;
@@ -17474,7 +17475,8 @@ function closeMobileNav() {
 function toggleTheme() {
   const body = document.body;
   const isLight = body.classList.toggle('light-theme');
-  document.getElementById('themeIcon').textContent = isLight ? '️' : '';
+  const ti = document.getElementById('themeIcon');
+  if (ti) ti.className = isLight ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
   localStorage.setItem('oxware_theme', isLight ? 'light' : 'dark');
 }
 
@@ -19154,7 +19156,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (localStorage.getItem('oxware_theme') === 'light') {
     document.body.classList.add('light-theme');
     const ti = document.getElementById('themeIcon');
-    if (ti) ti.textContent = '️';
+    if (ti) ti.className = 'fa-solid fa-sun';
   }
 
   initCharts();
@@ -24962,16 +24964,16 @@ const _PAGE_TABS = {
     {key:'list', label:'Liste', src:'native'},
     {key:'tab-templates', label:'Şablonlar', src:'page-tab-templates'},
     {key:'snapshots', label:'Snapshot', src:'page-snapshots'},
-    {key:'consolerec', label:'Konsol Kaydı', src:'ent-consolerec'},
-    {key:'drs', label:'DRS', src:'ent-drs'},
-    {key:'affinity', label:'Yakınlık', src:'ent-affinity'},
-    {key:'evc', label:'EVC', src:'ent-evc'},
-    {key:'numa', label:'NUMA', src:'ent-numa'},
-    {key:'rightsize', label:'Boyutlandırma', src:'ent-rightsize'},
-    {key:'maint', label:'Bakım', src:'ent-maint'},
-    {key:'faultol', label:'Fault Tolerance', src:'ent-faultol'},
-    {key:'firecracker', label:'microVM', src:'ent-firecracker'},
-    {key:'kata', label:'Kata', src:'ent-kata'},
+    {key:'consolerec', label:'Konsol Kaydı', src:'ent-pane-consolerec'},
+    {key:'drs', label:'DRS', src:'ent-pane-drs'},
+    {key:'affinity', label:'Yakınlık', src:'ent-pane-affinity'},
+    {key:'evc', label:'EVC', src:'ent-pane-evc'},
+    {key:'numa', label:'NUMA', src:'ent-pane-numa'},
+    {key:'rightsize', label:'Boyutlandırma', src:'ent-pane-rightsize'},
+    {key:'maint', label:'Bakım', src:'ent-pane-maint'},
+    {key:'faultol', label:'Fault Tolerance', src:'ent-pane-faultol'},
+    {key:'firecracker', label:'microVM', src:'ent-pane-firecracker'},
+    {key:'kata', label:'Kata', src:'ent-pane-kata'},
   ],
   'page-networks': [
     {key:'list', label:'Ağlar', src:'native'},
@@ -24981,54 +24983,54 @@ const _PAGE_TABS = {
     {key:'tab-proxy', label:'Proxy & LB', src:'page-tab-proxy'},
     {key:'tab-firewall', label:'Güvenlik Duvarı', src:'page-tab-firewall'},
     {key:'topology', label:'Topoloji', src:'page-topology'},
-    {key:'nioc', label:'NIOC', src:'ent-nioc'},
-    {key:'net-adv', label:'Ağ+', src:'ent-net-adv'},
-    {key:'microseg', label:'Mikrosegment', src:'ent-microseg'},
-    {key:'bfd', label:'BFD', src:'ent-bfd'},
-    {key:'svcchain', label:'Servis Zinciri', src:'ent-svcchain'},
-    {key:'mesh', label:'Service Mesh', src:'ent-mesh'},
+    {key:'nioc', label:'NIOC', src:'ent-pane-nioc'},
+    {key:'net-adv', label:'Ağ+', src:'ent-pane-net-adv'},
+    {key:'microseg', label:'Mikrosegment', src:'ent-pane-microseg'},
+    {key:'bfd', label:'BFD', src:'ent-pane-bfd'},
+    {key:'svcchain', label:'Servis Zinciri', src:'ent-pane-svcchain'},
+    {key:'mesh', label:'Service Mesh', src:'ent-pane-mesh'},
     {key:'cf-tunnels', label:'CF Tunnels', src:'page-cf-tunnels'},
   ],
   'page-storage': [
     {key:'list', label:'Havuzlar', src:'native'},
     {key:'tab-backup', label:'Yedekleme', src:'page-tab-backup'},
     {key:'snapshots', label:'Snapshot', src:'page-snapshots'},
-    {key:'stor-adv', label:'Depolama+', src:'ent-stor-adv'},
-    {key:'storedrs', label:'Storage DRS', src:'ent-storedrs'},
-    {key:'bkup-enc', label:'Yedek Şifreleme', src:'ent-bkup-enc'},
-    {key:'disk-enc', label:'Disk Şifreleme', src:'ent-disk-enc'},
-    {key:'backupadv', label:'Backup+', src:'ent-backupadv'},
-    {key:'dr', label:'Felaket Kurtarma', src:'ent-dr'},
-    {key:'lifecycle', label:'Yaşam Döngüsü', src:'ent-lifecycle'},
+    {key:'stor-adv', label:'Depolama+', src:'ent-pane-stor-adv'},
+    {key:'storedrs', label:'Storage DRS', src:'ent-pane-storedrs'},
+    {key:'bkup-enc', label:'Yedek Şifreleme', src:'ent-pane-bkup-enc'},
+    {key:'disk-enc', label:'Disk Şifreleme', src:'ent-pane-disk-enc'},
+    {key:'backupadv', label:'Backup+', src:'ent-pane-backupadv'},
+    {key:'dr', label:'Felaket Kurtarma', src:'ent-pane-dr'},
+    {key:'lifecycle', label:'Yaşam Döngüsü', src:'ent-pane-lifecycle'},
   ],
   'page-monitor': [
     {key:'list', label:'Canlı', src:'native'},
     {key:'tab-syslog', label:'Syslog', src:'page-tab-syslog'},
-    {key:'otel', label:'Tracing', src:'ent-otel'},
-    {key:'grafana', label:'Grafana', src:'ent-grafana'},
-    {key:'topoviz', label:'Topoloji', src:'ent-topoviz'},
-    {key:'forecast', label:'ML Tahmin', src:'ent-forecast'},
-    {key:'driftcap', label:'Drift/Kapasite', src:'ent-driftcap'},
-    {key:'alertcorr', label:'Uyarı Korelasyon', src:'ent-alertcorr'},
+    {key:'otel', label:'Tracing', src:'ent-pane-otel'},
+    {key:'grafana', label:'Grafana', src:'ent-pane-grafana'},
+    {key:'topoviz', label:'Topoloji', src:'ent-pane-topoviz'},
+    {key:'forecast', label:'ML Tahmin', src:'ent-pane-forecast'},
+    {key:'driftcap', label:'Drift/Kapasite', src:'ent-pane-driftcap'},
+    {key:'alertcorr', label:'Uyarı Korelasyon', src:'ent-pane-alertcorr'},
   ],
   'page-tab-security': [
     {key:'list', label:'Genel', src:'native'},
-    {key:'siem', label:'SIEM', src:'ent-siem'},
-    {key:'sessrec', label:'Oturum Kaydı', src:'ent-sessrec'},
-    {key:'cvm', label:'Gizli VM', src:'ent-cvm'},
-    {key:'compliance', label:'Uyumluluk', src:'ent-compliance'},
-    {key:'dlp', label:'DLP', src:'ent-dlp'},
-    {key:'forensics', label:'Adli', src:'ent-forensics'},
-    {key:'mfa-policy', label:'2FA Politika', src:'ent-mfa-policy'},
-    {key:'sso', label:'SSO (SAML/OIDC)', src:'ent-sso'},
-    {key:'oauth2', label:'OAuth 2.0', src:'ent-oauth2'},
+    {key:'siem', label:'SIEM', src:'ent-pane-siem'},
+    {key:'sessrec', label:'Oturum Kaydı', src:'ent-pane-sessrec'},
+    {key:'cvm', label:'Gizli VM', src:'ent-pane-cvm'},
+    {key:'compliance', label:'Uyumluluk', src:'ent-pane-compliance'},
+    {key:'dlp', label:'DLP', src:'ent-pane-dlp'},
+    {key:'forensics', label:'Adli', src:'ent-pane-forensics'},
+    {key:'mfa-policy', label:'2FA Politika', src:'ent-pane-mfa-policy'},
+    {key:'sso', label:'SSO (SAML/OIDC)', src:'ent-pane-sso'},
+    {key:'oauth2', label:'OAuth 2.0', src:'ent-pane-oauth2'},
   ],
   'page-users': [
     {key:'list', label:'Kullanıcılar', src:'native'},
-    {key:'tenants', label:'Tenants', src:'ent-tenants'},
-    {key:'chargeback', label:'Chargeback', src:'ent-chargeback'},
-    {key:'svc-cat', label:'Servis Kataloğu', src:'ent-svc-cat'},
-    {key:'rate-limit', label:'Rate Limit', src:'ent-rate-limit'},
+    {key:'tenants', label:'Tenants', src:'ent-pane-tenants'},
+    {key:'chargeback', label:'Chargeback', src:'ent-pane-chargeback'},
+    {key:'svc-cat', label:'Servis Kataloğu', src:'ent-pane-svc-cat'},
+    {key:'rate-limit', label:'Rate Limit', src:'ent-pane-rate-limit'},
   ],
   'page-tab-settings': [
     {key:'list', label:'Genel', src:'native'},
@@ -25037,24 +25039,24 @@ const _PAGE_TABS = {
     {key:'tab-hosting', label:'Hosting API', src:'page-tab-hosting'},
     {key:'tab-plugins', label:'Eklentiler', src:'page-tab-plugins'},
     {key:'updates', label:'Güncelleme', src:'page-updates'},
-    {key:'workflow', label:'Workflow', src:'ent-workflow'},
-    {key:'opa', label:'Policy (OPA)', src:'ent-opa'},
-    {key:'cloudevents', label:'CloudEvents', src:'ent-cloudevents'},
-    {key:'desktop', label:'Desktop Client', src:'ent-desktop'},
-    {key:'cloudexport', label:'Cloud Export', src:'ent-cloudexport'},
-    {key:'k8scsi', label:'K8s CSI', src:'ent-k8scsi'},
-    {key:'k8sop', label:'K8s Operator', src:'ent-k8sop'},
-    {key:'kubevirt', label:'KubeVirt', src:'ent-kubevirt'},
-    {key:'gitops', label:'GitOps', src:'ent-gitops'},
-    {key:'pulumi', label:'Pulumi', src:'ent-pulumi'},
-    {key:'wasm', label:'WASM', src:'ent-wasm'},
-    {key:'edge', label:'Edge', src:'ent-edge'},
-    {key:'greenmode', label:'Green Mode', src:'ent-greenmode'},
-    {key:'multiregion', label:'Multi-Region', src:'ent-multiregion'},
-    {key:'marketplace', label:'Marketplace', src:'ent-marketplace'},
-    {key:'cloudburst', label:'Cloud Burst', src:'ent-cloudburst'},
-    {key:'baremetal', label:'Bare-Metal', src:'ent-baremetal'},
-    {key:'apidocs', label:'API Docs', src:'ent-apidocs'},
+    {key:'workflow', label:'Workflow', src:'ent-pane-workflow'},
+    {key:'opa', label:'Policy (OPA)', src:'ent-pane-opa'},
+    {key:'cloudevents', label:'CloudEvents', src:'ent-pane-cloudevents'},
+    {key:'desktop', label:'Desktop Client', src:'ent-pane-desktop'},
+    {key:'cloudexport', label:'Cloud Export', src:'ent-pane-cloudexport'},
+    {key:'k8scsi', label:'K8s CSI', src:'ent-pane-k8scsi'},
+    {key:'k8sop', label:'K8s Operator', src:'ent-pane-k8sop'},
+    {key:'kubevirt', label:'KubeVirt', src:'ent-pane-kubevirt'},
+    {key:'gitops', label:'GitOps', src:'ent-pane-gitops'},
+    {key:'pulumi', label:'Pulumi', src:'ent-pane-pulumi'},
+    {key:'wasm', label:'WASM', src:'ent-pane-wasm'},
+    {key:'edge', label:'Edge', src:'ent-pane-edge'},
+    {key:'greenmode', label:'Green Mode', src:'ent-pane-greenmode'},
+    {key:'multiregion', label:'Multi-Region', src:'ent-pane-multiregion'},
+    {key:'marketplace', label:'Marketplace', src:'ent-pane-marketplace'},
+    {key:'cloudburst', label:'Cloud Burst', src:'ent-pane-cloudburst'},
+    {key:'baremetal', label:'Bare-Metal', src:'ent-pane-baremetal'},
+    {key:'apidocs', label:'API Docs', src:'ent-pane-apidocs'},
   ],
 };
 
@@ -25063,9 +25065,9 @@ const _PAGE_TABS_ORIGINAL_PARENT = new WeakMap();
 
 // Loader map (extracted from ENT_LOADERS at runtime)
 function _pgLoaderFor(srcId) {
-  // ent-X -> entSubTab key
-  if (srcId.startsWith('ent-')) {
-    const key = srcId.slice(4);
+  // ent-pane-X -> ENT_LOADERS key
+  if (srcId.startsWith('ent-pane-')) {
+    const key = srcId.slice(9);
     const fn = (typeof ENT_LOADERS !== 'undefined') ? ENT_LOADERS[key] : null;
     return fn;
   }
@@ -25107,7 +25109,7 @@ function _pgInstallTabs(mainPageId) {
   // Create sub-tab bar
   const bar = document.createElement('div');
   bar.className = 'page-subtabs sub-tabs';
-  bar.style.cssText = 'margin-bottom:10px;overflow-x:auto;white-space:nowrap;flex-shrink:0';
+  bar.style.cssText = 'margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px';
   bar.innerHTML = tabs.map((t, i) => `<button class="sub-tab${i===0?' active':''}" data-pg-tab="${t.key}" onclick="_pgSwitchTab('${mainPageId}','${t.key}')">${_esc(t.label)}</button>`).join('');
 
   // Slot for embedded panes
@@ -25141,6 +25143,9 @@ function _pgSwitchTab(mainPageId, tabKey) {
     const c = slot.firstChild;
     const orig = _PAGE_TABS_ORIGINAL_PARENT.get(c);
     if (orig) {
+      // Re-add .page class if it was a page-* element (id starts with page-)
+      if (c.id && c.id.startsWith('page-')) c.classList.add('page');
+      c.style.removeProperty('display');
       c.style.display = 'none'; // hide when restored
       orig.appendChild(c);
     } else {
@@ -25165,7 +25170,10 @@ function _pgSwitchTab(mainPageId, tabKey) {
   if (!_PAGE_TABS_ORIGINAL_PARENT.has(target)) {
     _PAGE_TABS_ORIGINAL_PARENT.set(target, target.parentElement);
   }
-  target.style.display = '';
+  // CRITICAL: .page class has display:none in stylesheet, and ent-pane-* default
+  // to display:none inline. Force block so the moved content is actually visible.
+  target.style.setProperty('display', 'block', 'important');
+  target.classList.remove('page');  // strip .page so router CSS can't hide it while embedded
   slot.appendChild(target);
   nativeWrap.style.display = 'none';
   slot.style.display = '';

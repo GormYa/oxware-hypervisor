@@ -104,11 +104,11 @@
   <div class="vm-label">VNC Konsol › <span id="vm-name">Yükleniyor…</span></div>
   <div class="spacer"></div>
   <span id="status" class="status">Bağlanıyor…</span>
-  <button id="lock-btn" class="btn" onclick="togglePointerLock()" title="Mouse'u konsola kilitle (veya konsola tıkla)"> Mouse Kilitle</button>
-  <button class="btn" onclick="vncPaste()" title="Panodan yapıştır (Ctrl+Shift+V)"> Yapıştır</button>
+  <button id="lock-btn" class="btn" onclick="togglePointerLock()" title="Mouse'u konsola kilitle (veya konsola tıkla)">Mouse Kilitle</button>
+  <button class="btn" onclick="vncPaste()" title="Panodan yapıştır (Ctrl+Shift+V)">Yapıştır</button>
   <button class="btn" onclick="sendCtrlAltDel()">Ctrl+Alt+Del</button>
-  <button class="btn" onclick="toggleFS()"> Tam Ekran</button>
-  <button class="btn danger" onclick="window.close()"> Kapat</button>
+  <button class="btn" onclick="toggleFS()">Tam Ekran</button>
+  <button class="btn danger" onclick="window.close()">Kapat</button>
 </div>
 {% endif %}
 
@@ -306,7 +306,7 @@ function _updateLockBtn() {
   const btn = document.getElementById("lock-btn");
   const locked = !!document.pointerLockElement;
   if (!btn) return;
-  btn.textContent = locked ? " Ctrl+Alt = Serbest" : " Mouse Kilitle";
+  btn.textContent = locked ? "Ctrl+Alt = Serbest" : "Mouse Kilitle";
   btn.style.color = locked ? "#3fb950" : "";
   btn.style.borderColor = locked ? "rgba(63,185,80,.5)" : "";
 }
@@ -410,7 +410,7 @@ function vncPaste() {
   box.style.cssText = "background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 22px;width:400px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.7)";
 
   const ttl = document.createElement("div");
-  ttl.textContent = " VM'ye Yapıştır";
+  ttl.textContent = "VM'ye Yapıştır";
   ttl.style.cssText = "font-size:14px;font-weight:700;color:#e6edf3;margin-bottom:5px";
 
   const hint = document.createElement("div");
