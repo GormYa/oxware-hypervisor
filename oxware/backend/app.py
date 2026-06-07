@@ -799,8 +799,12 @@ def index():
     return resp
 
 @app.route("/docs")
+@app.route("/docs/")
 def docs_page():
-    return render_template("docs.html")
+    # Panel artık kendi docs.html'ini servis etmiyor — merkezi dokümana yönlendir.
+    # Tek kaynak: https://oxware.top/docs (bakım kolaylığı + dosya yoğunluğu azalır)
+    from flask import redirect as _redirect
+    return _redirect("https://oxware.top/docs/", code=302)
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
