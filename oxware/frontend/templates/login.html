@@ -326,7 +326,7 @@
       pointer-events: none;
       transition: opacity 0.35s ease;
     }
-    #login-splash.splash-in  { opacity: 1; pointer-events: all; }
+    #login-splash.splash-in { opacity: 1; pointer-events: all; }
     #login-splash.splash-out { opacity: 0; }
 
     /* same geo shapes as background */
@@ -397,7 +397,7 @@
     }
     @keyframes splashShimmer {
       from { left: -80%; }
-      to   { left: 160%; }
+      to { left: 160%; }
     }
 
     .splash-tagline {
@@ -429,7 +429,7 @@
     }
     @keyframes splashProgress {
       from { width: 0; left: 0; }
-      to   { width: 100%; left: 0; }
+      to { width: 100%; left: 0; }
     }
   </style>
 </head>
@@ -486,7 +486,7 @@
       <!-- 2FA panel -->
       <div id="twofa-panel" style="display:none">
         <div class="twofa-header">
-          <div class="twofa-icon">🔐</div>
+          <div class="twofa-icon"></div>
           <div class="twofa-title">Two-Factor Authentication</div>
           <p>Enter the 6-digit code from your authenticator app</p>
         </div>
@@ -546,10 +546,10 @@
 
     document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const btn   = document.getElementById("loginBtn");
+      const btn = document.getElementById("loginBtn");
       const errEl = document.getElementById("errorMsg");
-      const user  = document.getElementById("username").value.trim();
-      const pass  = document.getElementById("password").value;
+      const user = document.getElementById("username").value.trim();
+      const pass = document.getElementById("password").value;
 
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Signing in...';
@@ -587,8 +587,8 @@
     });
 
     async function doVerify2fa() {
-      const code  = document.getElementById("totp-code").value.trim();
-      const btn   = document.getElementById("verifyBtn");
+      const code = document.getElementById("totp-code").value.trim();
+      const btn = document.getElementById("verifyBtn");
       const errEl = document.getElementById("twofa-errorMsg");
       if (code.length !== 6) { errEl.textContent = "Enter 6-digit code."; errEl.style.display = "block"; return; }
       btn.disabled = true;

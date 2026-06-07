@@ -11330,28 +11330,51 @@ function buildContextNav(type) {
   }
 
   if (type === "node") {
+    // Simplified 2-group navigation. Most-used items live at top; rare items collapse under "More".
     html = `
-  <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('general')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body">
+  <div class="ctx-section-body" style="padding-top:6px">
     <div class="ctx-item active" data-page="summary" onclick="navigate('summary');closeMobileNav()">
       <i class="fa-solid fa-gauge-high fa-fw"></i>${t('summary')}
     </div>
-    ${isAdmin ? `<div class="ctx-item" data-page="console" onclick="navigate('console');closeMobileNav()">
-      <i class="fa-solid fa-terminal fa-fw"></i>${t('shell console')}
-    </div>` : ''}
-  </div>
-
-  <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('virtualization')}</span><span class="ctx-section-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body collapsed">
     <div class="ctx-item" data-page="vms" onclick="navigate('vms');closeMobileNav()">
       <i class="fa-solid fa-server fa-fw"></i>${t('vms')}
       <span class="vm-expand-btn" onclick="toggleVmSubList(event)"><i class="fa-solid fa-chevron-right"></i></span>
     </div>
     <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
+    <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
+      <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
+    </div>
+    ${isOperator ? `<div class="ctx-item" data-page="networks" onclick="navigate('networks');closeMobileNav()">
+      <i class="fa-solid fa-network-wired fa-fw"></i>${t('networks')}
+    </div>
+    <div class="ctx-item" data-page="storage" onclick="navigate('storage');closeMobileNav()">
+      <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
+    </div>
+    <div class="ctx-item" data-page="tab-backup" onclick="navigate('tab-backup');closeMobileNav()">
+      <i class="fa-solid fa-floppy-disk fa-fw"></i>${t('backup')}
+    </div>
+    <div class="ctx-item" data-page="tab-firewall" onclick="navigate('tab-firewall');closeMobileNav()">
+      <i class="fa-solid fa-shield-halved fa-fw"></i>${t('firewall')}
+    </div>` : ''}
+    ${isAdmin ? `<div class="ctx-item" data-page="tab-security" onclick="navigate('tab-security');closeMobileNav()">
+      <i class="fa-solid fa-user-shield fa-fw"></i>${t('security')}
+    </div>
+    <div class="ctx-item" data-page="users" onclick="navigate('users');closeMobileNav()">
+      <i class="fa-solid fa-users fa-fw"></i>${t('users')}
+    </div>
+    <div class="ctx-item" data-page="tab-enterprise" onclick="navigate('tab-enterprise');closeMobileNav()">
+      <i class="fa-solid fa-building fa-fw"></i>Enterprise
+    </div>
+    <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
+      <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
+    </div>` : ''}
+  </div>
+
+  ${isAdmin || isOperator ? `
+  <div class="ctx-section-header" onclick="toggleNavSection(this)" style="margin-top:10px">
+    <span>${t('more') || 'Daha Fazla'}</span><span class="ctx-section-arrow"><i class="fa-solid fa-chevron-right"></i></span>
+  </div>
+  <div class="ctx-section-body collapsed">
     <div class="ctx-item" data-page="snapshots" onclick="navigate('snapshots');closeMobileNav()">
       <i class="fa-solid fa-camera fa-fw"></i>${t('snapshots')}
     </div>
@@ -11367,39 +11390,6 @@ function buildContextNav(type) {
     ${isOperator ? `<div class="ctx-item" data-page="tab-templates" onclick="navigate('tab-templates');closeMobileNav()">
       <i class="fa-solid fa-clone fa-fw"></i>${t('templates')}
     </div>
-    <div class="ctx-item" data-page="tab-backup" onclick="navigate('tab-backup');closeMobileNav()">
-      <i class="fa-solid fa-floppy-disk fa-fw"></i>${t('backup')}
-    </div>` : ''}
-  </div>
-
-  <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('system')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body">
-    ${isOperator ? `
-    <div class="ctx-item" data-page="networks" onclick="navigate('networks');closeMobileNav()">
-      <i class="fa-solid fa-network-wired fa-fw"></i>${t('networks')}
-    </div>
-    <div class="ctx-item" data-page="storage" style="display:flex;align-items:center;justify-content:space-between;padding-right:6px">
-      <span onclick="navigate('storage');closeMobileNav()" style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer">
-        <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
-      </span>
-      <span id="storage-expand-btn" onclick="toggleStorageSubnav(event)" style="padding:2px 6px;cursor:pointer;color:var(--text-muted);font-size:11px;border-radius:4px;transition:background .15s" title="Alt menüyü aç/kapat">
-        <i id="storage-chevron" class="fa-solid fa-chevron-right" style="font-size:9px;transition:transform .2s"></i>
-      </span>
-    </div>
-    <div id="storage-subnav" style="display:none;overflow:hidden">
-      <div class="ctx-item" data-page="tab-datastore" onclick="navigate('tab-datastore');closeMobileNav()" style="padding-left:26px;font-size:12px">
-        <i class="fa-solid fa-folder-open fa-fw" style="font-size:11px;color:var(--accent-lt)"></i>Datastore
-      </div>
-    </div>` : ''}
-    <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
-      <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
-    </div>
-    ${isOperator ? `
-    <div class="ctx-item" data-page="tab-firewall" onclick="navigate('tab-firewall');closeMobileNav()">
-      <i class="fa-solid fa-shield-halved fa-fw"></i>${t('firewall')}
-    </div>
     <div class="ctx-item" data-page="tab-vpn" onclick="navigate('tab-vpn');closeMobileNav()">
       <i class="fa-solid fa-lock fa-fw"></i>${t('vpn')}
     </div>
@@ -11411,31 +11401,15 @@ function buildContextNav(type) {
     </div>
     <div class="ctx-item" data-page="tab-proxy" onclick="navigate('tab-proxy');closeMobileNav()">
       <i class="fa-solid fa-arrows-left-right fa-fw"></i>${t('proxy')}
-    </div>` : ''}
-
-    ${isOperator ? `<div class="ctx-item" data-page="tab-ai" onclick="navigate('tab-ai');closeMobileNav()">
+    </div>
+    <div class="ctx-item" data-page="tab-ai" onclick="navigate('tab-ai');closeMobileNav()">
       <i class="fa-solid fa-robot fa-fw"></i>${t('ai')}
-    </div>` : ''}
-    ${isOperator ? `
+    </div>
     <div class="ctx-item" data-page="tab-syslog" onclick="navigate('tab-syslog');closeMobileNav()">
       <i class="fa-solid fa-scroll fa-fw"></i>Syslog
-    </div>
-` : ''}
-  </div>
-
-  ${isAdmin ? `
-  <div class="ctx-section-header" onclick="toggleNavSection(this)">
-    <span>${t('management')}</span><span class="ctx-section-arrow" style="transform:rotate(90deg)"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body">
-    <div class="ctx-item" data-page="users" onclick="navigate('users');closeMobileNav()">
-      <i class="fa-solid fa-users fa-fw"></i>${t('users')}
-    </div>
-    <div class="ctx-item" data-page="updates" onclick="navigate('updates');closeMobileNav()">
+    </div>` : ''}
+    ${isAdmin ? `<div class="ctx-item" data-page="updates" onclick="navigate('updates');closeMobileNav()">
       <i class="fa-solid fa-rotate fa-fw"></i>${t('updates')}
-    </div>
-    <div class="ctx-item" data-page="tab-security" onclick="navigate('tab-security');closeMobileNav()">
-      <i class="fa-solid fa-user-shield fa-fw"></i>${t('security')}
     </div>
     <div class="ctx-item" data-page="tab-integrations" onclick="navigate('tab-integrations');closeMobileNav()">
       <i class="fa-solid fa-plug fa-fw"></i>${t('integrations')}
@@ -11446,22 +11420,17 @@ function buildContextNav(type) {
     <div class="ctx-item" data-page="cf-tunnels" onclick="navigate('cf-tunnels');closeMobileNav()">
       <i class="fa-brands fa-cloudflare fa-fw"></i>CF Tunnels
     </div>
-    <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
-      <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
-    </div>
     <div class="ctx-item" data-page="tab-plugins" onclick="navigate('tab-plugins');closeMobileNav()">
-      <i class="fa-solid fa-puzzle-piece" style="width:15px;text-align:center"></i>
-      <span>Eklentiler</span>
+      <i class="fa-solid fa-puzzle-piece fa-fw"></i>Eklentiler
     </div>
-    <!-- Enterprise (v2.5.6+: single nav item, sub-tabs inside page) -->
-    <div class="ctx-item" data-page="tab-enterprise" onclick="navigate('tab-enterprise');closeMobileNav()"
-         title="Enterprise özellikleri — DRS, Affinity, Bakım, EVC, DR, SIEM, Tenants, Chargeback ve daha fazlası" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px">
-      <i class="fa-solid fa-building fa-fw" style="color:var(--accent-lt)"></i>Enterprise
-    </div>
+    <div class="ctx-item" data-page="console" onclick="navigate('console');closeMobileNav()">
+      <i class="fa-solid fa-terminal fa-fw"></i>${t('shell console')}
+    </div>` : ''}
+  </div>` : ''}
 
-    <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:4px;border-top:1px solid var(--border);padding-top:8px" title="Oturumu kapat">
-      <i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap
-    </div>
+  ${isAdmin ? `
+  <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:auto;border-top:1px solid var(--border);padding-top:10px;padding-bottom:10px" title="Oturumu kapat">
+    <i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap
   </div>` : ''}
 
   ${isOperator && !isAdmin ? `

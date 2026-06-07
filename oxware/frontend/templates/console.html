@@ -9,17 +9,17 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg:       #0a0e17;
-      --surface:  #0f1521;
-      --panel:    #141c2e;
-      --border:   rgba(255,255,255,0.07);
-      --accent:   #3d82f0;
-      --accent2:  #00d4ff;
-      --green:    #3fb950;
-      --red:      #f85149;
-      --text:     #e6edf3;
-      --muted:    #7d8590;
-      --radius:   8px;
+      --bg: #0a0e17;
+      --surface: #0f1521;
+      --panel: #141c2e;
+      --border: rgba(255,255,255,0.07);
+      --accent: #3d82f0;
+      --accent2: #00d4ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --radius: 8px;
     }
 
     html, body { height: 100%; overflow: hidden; }
@@ -264,7 +264,7 @@
       transition: opacity 0.4s;
     }
     .step-item.active { opacity: 1; color: var(--accent2); }
-    .step-item.done   { opacity: 0.6; color: var(--green); }
+    .step-item.done { opacity: 0.6; color: var(--green); }
     .step-icon { width: 14px; text-align: center; }
 
     /* ── STATUS BAR ──────────────────────────────────────────────── */
@@ -386,15 +386,15 @@
       <div class="load-text">Konsol bağlantısı kuruluyor…</div>
       <div class="load-steps">
         <div class="step-item active" id="step1">
-          <span class="step-icon">⚡</span>
+          <span class="step-icon"></span>
           <span>Kimlik doğrulanıyor</span>
         </div>
         <div class="step-item" id="step2">
-          <span class="step-icon">🖥</span>
+          <span class="step-icon"></span>
           <span>VNC sunucusuna bağlanılıyor</span>
         </div>
         <div class="step-item" id="step3">
-          <span class="step-icon">✓</span>
+          <span class="step-icon"></span>
           <span>Ekran akışı başlatılıyor</span>
         </div>
       </div>
@@ -433,12 +433,12 @@
   </div>
 
   <script>
-    const vmId = {{ vm_id | tojson }};  /* OXW-2026-SEC-006: tojson = XSS-safe JS literal */
+    const vmId = {{ vm_id | tojson }}; /* OXW-2026-SEC-006: tojson = XSS-safe JS literal */
 
     // ── Auth: vnc_token (WiseCP/WHMCS) veya JWT (native panel) ──────────────
     const _urlParams = new URLSearchParams(window.location.search);
-    const _vncToken  = _urlParams.get("vnc_token");
-    const _jwtToken  = localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
+    const _vncToken = _urlParams.get("vnc_token");
+    const _jwtToken = localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
 
     if (!_vncToken && !_jwtToken) { window.location.href = "/login"; }
 
@@ -454,7 +454,7 @@
     // ── Step progress helpers ─────────────────────────────────────────────────
     function stepDone(id) {
       const el = document.getElementById("step" + id);
-      if (el) { el.classList.remove("active"); el.classList.add("done"); el.querySelector(".step-icon").textContent = "✓"; }
+      if (el) { el.classList.remove("active"); el.classList.add("done"); el.querySelector(".step-icon").textContent = ""; }
     }
     function stepActive(id) {
       const el = document.getElementById("step" + id);
@@ -471,7 +471,7 @@
     // ── Status badge ─────────────────────────────────────────────────────────
     function setStatus(state) {
       const badge = document.getElementById("statusBadge");
-      const txt   = document.getElementById("statusText");
+      const txt = document.getElementById("statusText");
       if (state === "running") {
         badge.className = "status-badge";
         txt.textContent = "Çalışıyor";
@@ -496,7 +496,7 @@
             );
             if (infoRes.ok) {
               const info = await infoRes.json();
-              vmName  = info.name  || vmId;
+              vmName = info.name || vmId;
               vmState = info.state || "unknown";
             }
           } catch (_) {}
@@ -505,11 +505,11 @@
           setStatus(vmState);
 
           const wsPath = "ws/vnc/" + vmId + "?vnc_token=" + encodeURIComponent(_vncToken);
-          const port   = location.port || (isHttps ? "443" : "80");
+          const port = location.port || (isHttps ? "443" : "80");
           const novncUrl = "/novnc/vnc.html?" +
-            "host="     + encodeURIComponent(location.hostname) +
-            "&port="    + port +
-            "&path="    + encodeURIComponent(wsPath) +
+            "host=" + encodeURIComponent(location.hostname) +
+            "&port=" + port +
+            "&path=" + encodeURIComponent(wsPath) +
             "&encrypt=" + (isHttps ? "1" : "0") +
             "&autoconnect=1&resize=scale&show_dot=1";
 
@@ -557,15 +557,15 @@
             if (_wsToken) _wsParam = "vnc_token";
           }
         } catch (_) {}
-        if (!_wsToken) _wsToken = _jwtToken;  // fallback (eski sunucu) — yine de çalışsın
+        if (!_wsToken) _wsToken = _jwtToken; // fallback (eski sunucu) — yine de çalışsın
 
         // Flask WS proxy — same host:port as the page, no websockify needed
-        const wsPath   = "ws/vnc/" + vmId + "?" + _wsParam + "=" + encodeURIComponent(_wsToken);
-        const wsPort   = location.port || (isHttps ? "443" : "80");
+        const wsPath = "ws/vnc/" + vmId + "?" + _wsParam + "=" + encodeURIComponent(_wsToken);
+        const wsPort = location.port || (isHttps ? "443" : "80");
         const novncUrl = "/novnc/vnc.html?" +
-          "host="     + encodeURIComponent(location.hostname) +
-          "&port="    + wsPort +
-          "&path="    + encodeURIComponent(wsPath) +
+          "host=" + encodeURIComponent(location.hostname) +
+          "&port=" + wsPort +
+          "&path=" + encodeURIComponent(wsPath) +
           "&encrypt=" + (isHttps ? "1" : "0") +
           "&autoconnect=1&resize=scale&show_dot=1";
 
@@ -596,14 +596,14 @@
     function sendCtrlAltDel() {
       try {
         document.getElementById("novnc-iframe").contentWindow
-          .postMessage({ type: "ctrlAltDel" }, location.origin);  /* OXW-2026-SEC-007 */
+          .postMessage({ type: "ctrlAltDel" }, location.origin); /* OXW-2026-SEC-007 */
       } catch (_) {}
     }
 
     function takeScreenshot() {
       try {
         const iframe = document.getElementById("novnc-iframe");
-        iframe.contentWindow.postMessage({ type: "screenshot" }, location.origin);  /* OXW-2026-SEC-007 */
+        iframe.contentWindow.postMessage({ type: "screenshot" }, location.origin); /* OXW-2026-SEC-007 */
       } catch (_) {}
     }
 
@@ -623,29 +623,29 @@
         const s = doc.createElement("script");
         s.textContent = [
           "(function(){",
-          "  function getRfb(){",
-          "    return window.rfb||(window.UI&&window.UI.rfb)||null;",
-          "  }",
-          "  window.addEventListener('message',function(ev){",
-          "    if(ev.origin!==location.origin)return;",
-          "    if(!ev.data||ev.data.type!=='oxware_keys')return;",
-          "    var txt=ev.data.text||'';",
-          "    var i=0;",
-          "    function next(){",
-          "      if(i>=txt.length)return;",
-          "      var rfb=getRfb();",
-          "      if(!rfb||typeof rfb.sendKey!=='function'){setTimeout(next,300);return;}",
-          "      var ch=txt[i++];",
-          "      var ks;",
-          "      if(ch==='\\n'||ch==='\\r'){ks=0xff0d;}",
-          "      else if(ch==='\\t'){ks=0xff09;}",
-          "      else{var c=ch.charCodeAt(0);ks=(c>=0x20&&c<=0x7e)?c:(0x1000000|c);}",
-          "      rfb.sendKey(ks,'',true);",
-          "      rfb.sendKey(ks,'',false);",
-          "      setTimeout(next,30);",
-          "    }",
-          "    next();",
-          "  });",
+          " function getRfb(){",
+          " return window.rfb||(window.UI&&window.UI.rfb)||null;",
+          " }",
+          " window.addEventListener('message',function(ev){",
+          " if(ev.origin!==location.origin)return;",
+          " if(!ev.data||ev.data.type!=='oxware_keys')return;",
+          " var txt=ev.data.text||'';",
+          " var i=0;",
+          " function next(){",
+          " if(i>=txt.length)return;",
+          " var rfb=getRfb();",
+          " if(!rfb||typeof rfb.sendKey!=='function'){setTimeout(next,300);return;}",
+          " var ch=txt[i++];",
+          " var ks;",
+          " if(ch==='\\n'||ch==='\\r'){ks=0xff0d;}",
+          " else if(ch==='\\t'){ks=0xff09;}",
+          " else{var c=ch.charCodeAt(0);ks=(c>=0x20&&c<=0x7e)?c:(0x1000000|c);}",
+          " rfb.sendKey(ks,'',true);",
+          " rfb.sendKey(ks,'',false);",
+          " setTimeout(next,30);",
+          " }",
+          " next();",
+          " });",
           "})();"
         ].join("\n");
         doc.head.appendChild(s);
@@ -665,7 +665,7 @@
       box.style.cssText = "background:#141c2e;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:22px 24px;width:420px;max-width:90vw;box-shadow:0 16px 48px rgba(0,0,0,.7)";
 
       const ttl = document.createElement("div");
-      ttl.textContent = "📋 VM'ye Yapıştır";
+      ttl.textContent = " VM'ye Yapıştır";
       ttl.style.cssText = "font-size:14px;font-weight:700;color:#e6edf3;margin-bottom:6px";
 
       const hint = document.createElement("div");
@@ -676,7 +676,7 @@
       ta.placeholder = "Metni buraya yapıştırın…";
       ta.style.cssText = "width:100%;height:90px;box-sizing:border-box;background:#0d1117;border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:9px 12px;color:#e6edf3;font-size:13px;font-family:monospace;resize:vertical;outline:none";
       ta.addEventListener("focus", () => { ta.style.borderColor = "rgba(61,130,240,.5)"; });
-      ta.addEventListener("blur",  () => { ta.style.borderColor = "rgba(255,255,255,.15)"; });
+      ta.addEventListener("blur", () => { ta.style.borderColor = "rgba(255,255,255,.15)"; });
 
       const row = document.createElement("div");
       row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:10px";
@@ -710,7 +710,7 @@
     function sendTextToVNC(text) {
       // postMessage → injected script in iframe calls rfb.sendKey() with X11 keysyms
       document.getElementById("novnc-iframe").contentWindow
-        .postMessage({ type: "oxware_keys", text: text }, location.origin);  /* OXW-2026-SEC-007 */
+        .postMessage({ type: "oxware_keys", text: text }, location.origin); /* OXW-2026-SEC-007 */
     }
 
     initConsole();
