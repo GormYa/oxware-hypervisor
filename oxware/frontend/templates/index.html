@@ -9017,7 +9017,7 @@ function toast(msg, type = "info", duration = 4000) {
   const dur = Math.max(1500, duration | 0);
   el.innerHTML =
     `<span class="toast-icon">${icons[type] || "ℹ"}</span>` +
-    `<span class="toast-msg">${escHtml(msg)}</span>` +
+    `<span class="toast-msg">${escHtml(_t(msg))}</span>` +
     `<span class="toast-close" title="Kapat"></span>` +
     `<span class="toast-bar" style="animation-duration:${dur}ms"></span>`;
 
@@ -9116,11 +9116,11 @@ function showConfirm(message, title = 'Emin misiniz?', danger = false) {
       document.getElementById('modal-confirm').style.display = 'none';
       resolve(val);
     };
-    document.getElementById('modal-confirm-title').textContent = title;
-    document.getElementById('modal-confirm-msg').textContent = message;
+    document.getElementById('modal-confirm-title').textContent = _t(title);
+    document.getElementById('modal-confirm-msg').textContent = _t(message);
     document.getElementById('modal-confirm-icon').textContent = danger ? '️' : '️';
     const okBtn = document.getElementById('modal-confirm-ok');
-    okBtn.textContent = 'Onayla';
+    okBtn.textContent = _t('Onayla');
     okBtn.style.background = danger ? 'var(--red-lt)' : 'var(--accent)';
     okBtn.style.color = '#fff';
     document.getElementById('modal-confirm').style.display = 'flex';
@@ -9472,6 +9472,19 @@ let currentLang = localStorage.getItem('ox-lang') || 'en';
 
 function t(key) {
   return (LANGS[currentLang]?.strings?.[key.toLowerCase()] || key);
+}
+
+/* _t: çalışma-zamanı TR→hedef dil çevirisi (toast/confirm/prompt/dinamik metin).
+   PAGE_STRINGS Türkçe-anahtarlı; eşleşme yoksa orijinali döndürür. */
+function _t(s) {
+  if (s == null || currentLang === 'tr') return s;
+  try {
+    const map = PAGE_STRINGS[currentLang];
+    if (!map) return s;
+    if (map[s]) return map[s];
+    // "X verisi alınamadı" gibi dinamik son ekleri kısmen çevir
+    return s;
+  } catch (_) { return s; }
 }
 
 /* ── Sayfa içeriği çeviri tablosu ── */
@@ -10812,6 +10825,7 @@ function setLang(code) {
   buildContextNav('node');
   applyPageTranslations(code); // null map → restores TR originals
   applyI18nToDOM(); // data-i18n / data-i18n-html attribute translation
+  _pgRefreshTabLabels(); // sub-tab etiketlerini yeni dile göre güncelle
   const msgs = {en:'Language changed to English',tr:'Dil Türkçe olarak ayarlandı',
                 es:'Idioma cambiado a Español',de:'Sprache auf Deutsch geändert',zh:'语言已更改为中文'};
   toast(msgs[code] || 'Language changed', 'info');
@@ -25198,7 +25212,7 @@ function _pgInstallTabs(mainPageId) {
   const bar = document.createElement('div');
   bar.className = 'page-subtabs sub-tabs';
   bar.style.cssText = 'margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px';
-  bar.innerHTML = tabs.map((t, i) => `<button class="sub-tab${i===0?' active':''}" data-pg-tab="${t.key}" onclick="_pgSwitchTab('${mainPageId}','${t.key}')">${_esc(t.label)}</button>`).join('');
+  bar.innerHTML = tabs.map((t, i) => `<button class="sub-tab${i===0?' active':''}" data-pg-tab="${t.key}" onclick="_pgSwitchTab('${mainPageId}','${t.key}')">${_esc(_t(t.label))}</button>`).join('');
 
   // Slot for embedded panes
   const slot = document.createElement('div');
@@ -25275,6 +25289,19 @@ function _pgInstallAll() {
   Object.keys(_PAGE_TABS).forEach(_pgInstallTabs);
 }
 window.addEventListener('DOMContentLoaded', () => { setTimeout(_pgInstallAll, 200); });
+
+// Re-translate sub-tab button labels on language switch (without rebuilding DOM)
+function _pgRefreshTabLabels() {
+  Object.entries(_PAGE_TABS).forEach(([pageId, tabs]) => {
+    const main = document.getElementById(pageId);
+    if (!main) return;
+    main.querySelectorAll(':scope > .page-subtabs .sub-tab').forEach(btn => {
+      const key = btn.dataset.pgTab;
+      const def = tabs.find(x => x.key === key);
+      if (def) btn.textContent = _t(def.label);
+    });
+  });
+}
 
 // Navigate to a main page AND open one of its sub-tabs.
 // Used by topbar shortcuts (e.g. Updates button -> Settings page, updates sub-tab).
