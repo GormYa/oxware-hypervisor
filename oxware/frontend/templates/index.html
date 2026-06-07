@@ -11368,7 +11368,7 @@ function buildContextNav(type) {
   </div>
 
   ${isAdmin ? `
-  <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:auto;border-top:1px solid var(--border);padding-top:10px;padding-bottom:10px" title="Oturumu kapat">
+  <div class="ctx-item" onclick="logout()" style="color:#f85149;border-top:1px solid var(--border);padding-top:10px;padding-bottom:10px" title="Oturumu kapat">
     <i class="fa-solid fa-right-from-bracket fa-fw"></i>Çıkış Yap
   </div>` : ''}
 
@@ -11376,7 +11376,49 @@ function buildContextNav(type) {
   <div style="padding:10px 12px;font-size:10px;color:var(--text-dim);border-top:1px solid var(--border);margin-top:6px">
     <i class="fa-solid fa-shield fa-fw"></i> ${t('operator role — limited access') || 'Operator mode'}
   </div>` : ''}
-    `;
+
+  <!-- Sidebar Host Info (compact, fills empty bottom space) -->
+  <div id="sb-host-card" style="margin-top:auto;padding:12px 12px 14px;border-top:1px solid var(--border);font-size:11px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+      <i class="fa-solid fa-server" style="color:var(--accent-lt);font-size:13px"></i>
+      <span id="sb-host-name" style="font-weight:700;color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">oxware</span>
+      <span id="sb-host-state" style="margin-left:auto;font-size:9px;font-weight:600;color:#22c55e;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:1px 7px">Normal</span>
+    </div>
+    <!-- VM counts -->
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <div style="flex:1;text-align:center;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.18);border-radius:5px;padding:5px 2px">
+        <div id="sb-vm-running" style="font-size:15px;font-weight:700;color:#22c55e">0</div>
+        <div style="font-size:8px;color:var(--text-muted);letter-spacing:.5px">ÇALIŞAN</div>
+      </div>
+      <div style="flex:1;text-align:center;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.18);border-radius:5px;padding:5px 2px">
+        <div id="sb-vm-stopped" style="font-size:15px;font-weight:700;color:#f85149">0</div>
+        <div style="font-size:8px;color:var(--text-muted);letter-spacing:.5px">DURDU</div>
+      </div>
+      <div style="flex:1;text-align:center;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.18);border-radius:5px;padding:5px 2px">
+        <div id="sb-vm-total" style="font-size:15px;font-weight:700;color:var(--accent-lt)">0</div>
+        <div style="font-size:8px;color:var(--text-muted);letter-spacing:.5px">TOPLAM</div>
+      </div>
+    </div>
+    <!-- CPU / RAM mini bars -->
+    <div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:var(--text-muted)">CPU</span><span id="sb-cpu-pct" style="color:var(--text)">—</span></div>
+      <div style="height:4px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="sb-cpu-bar" style="height:100%;width:0;background:#3b82f6;transition:width .4s"></div></div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="color:var(--text-muted)">RAM</span><span id="sb-ram-pct" style="color:var(--text)">—</span></div>
+      <div style="height:4px;background:var(--surface3);border-radius:2px;overflow:hidden"><div id="sb-ram-bar" style="height:100%;width:0;background:#22c55e;transition:width .4s"></div></div>
+    </div>
+    <!-- Key facts -->
+    <div style="display:flex;flex-direction:column;gap:3px;color:var(--text-muted);font-size:10px">
+      <div style="display:flex;justify-content:space-between"><span>Host IP</span><span id="sb-host-ip" style="color:var(--text);font-family:monospace">—</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Sürüm</span><span id="sb-version" style="color:var(--text)">2.6.3</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Uptime</span><span id="sb-uptime" style="color:var(--text)">—</span></div>
+      <div style="display:flex;justify-content:space-between"><span>CPU</span><span id="sb-cpu-count" style="color:var(--text)">—</span></div>
+      <div style="display:flex;justify-content:space-between"><span>KVM</span><span id="sb-kvm" style="color:#22c55e">—</span></div>
+    </div>
+  </div>`;
+    // Load host info into sidebar (async, non-blocking)
+    setTimeout(() => { try { _loadSidebarHost(); } catch(_){} }, 100);
   } else if (type === "vm") {
     html = `
       <div class="ctx-section">VM '${escHtml(currentVmName || "VM")}'</div>
@@ -12089,6 +12131,52 @@ function updateCharts(cpu, ram, load) {
 }
 
 /* ══════════════════ Node Summary ══════════════════ */
+
+// Compact host info card in sidebar (always visible, all pages)
+async function _loadSidebarHost() {
+  if (!document.getElementById('sb-host-card')) return;
+  try {
+    const [stats, vmsum, info] = await Promise.all([
+      api('/system/stats').catch(()=>null),
+      api('/system/vmsummary').catch(()=>null),
+      api('/system/info').catch(()=>null),
+    ]);
+    const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    const setBar = (id, pct) => { const e = document.getElementById(id); if (e) e.style.width = Math.min(100, pct) + '%'; };
+
+    if (info && info.host) {
+      const h = info.host;
+      const hn = h.hostname || 'oxware';
+      set('sb-host-name', hn);
+      set('sb-uptime', h.uptime || '—');
+      set('sb-host-ip', (h.ip || (h.ips && h.ips[0]) || '—'));
+      set('sb-version', info.oxware_version || '2.6.3');
+      const cpuN = h.cpu_count_logical || h.cpu_count || 0;
+      set('sb-cpu-count', cpuN ? cpuN + ' vCPU' : '—');
+      set('sb-kvm', h.kvm_available === false ? 'Yok' : 'Available');
+      const kvmEl = document.getElementById('sb-kvm');
+      if (kvmEl) kvmEl.style.color = h.kvm_available === false ? '#f85149' : '#22c55e';
+    }
+    if (stats && stats.stats) {
+      const s = stats.stats;
+      const cpuPct = Math.round(s.cpu.percent);
+      const ramPct = Math.round(s.memory.percent);
+      set('sb-cpu-pct', cpuPct + '%'); setBar('sb-cpu-bar', cpuPct);
+      set('sb-ram-pct', ramPct + '%'); setBar('sb-ram-bar', ramPct);
+      const cb = document.getElementById('sb-cpu-bar');
+      if (cb) cb.style.background = cpuPct > 85 ? '#f85149' : cpuPct > 60 ? '#d29922' : '#3b82f6';
+      const rb = document.getElementById('sb-ram-bar');
+      if (rb) rb.style.background = ramPct > 85 ? '#f85149' : ramPct > 60 ? '#d29922' : '#22c55e';
+    }
+    if (vmsum) {
+      const running = vmsum.running ?? 0;
+      const total = vmsum.total ?? 0;
+      set('sb-vm-running', running);
+      set('sb-vm-stopped', (total - running));
+      set('sb-vm-total', total);
+    }
+  } catch(e) { console.warn('sidebar host load fail', e); }
+}
 
 async function loadNodeSummary() {
   try {
