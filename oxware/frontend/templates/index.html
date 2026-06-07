@@ -11330,7 +11330,9 @@ function buildContextNav(type) {
   }
 
   if (type === "node") {
-    // Simplified 2-group navigation. Most-used items live at top; rare items collapse under "More".
+    // Ultra-minimal sidebar: only top-level pages. Everything else (DNS/VPN/IPAM/
+    // Proxy/Firewall/Backup/Templates/AI/Syslog/Updates/Integrations/Plugins/
+    // Enterprise sub-features) is reached via sub-tabs INSIDE the main pages.
     html = `
   <div class="ctx-section-body" style="padding-top:6px">
     <div class="ctx-item active" data-page="summary" onclick="navigate('summary');closeMobileNav()">
@@ -11341,92 +11343,28 @@ function buildContextNav(type) {
       <span class="vm-expand-btn" onclick="toggleVmSubList(event)"><i class="fa-solid fa-chevron-right"></i></span>
     </div>
     <div class="nav-sub-list" id="vm-sub-list" style="display:none"></div>
-    <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
-      <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
-    </div>
     ${isOperator ? `<div class="ctx-item" data-page="networks" onclick="navigate('networks');closeMobileNav()">
       <i class="fa-solid fa-network-wired fa-fw"></i>${t('networks')}
     </div>
     <div class="ctx-item" data-page="storage" onclick="navigate('storage');closeMobileNav()">
       <i class="fa-solid fa-hard-drive fa-fw"></i>${t('storage')}
-    </div>
-    <div class="ctx-item" data-page="tab-backup" onclick="navigate('tab-backup');closeMobileNav()">
-      <i class="fa-solid fa-floppy-disk fa-fw"></i>${t('backup')}
-    </div>
-    <div class="ctx-item" data-page="tab-firewall" onclick="navigate('tab-firewall');closeMobileNav()">
-      <i class="fa-solid fa-shield-halved fa-fw"></i>${t('firewall')}
     </div>` : ''}
+    <div class="ctx-item" data-page="monitor" onclick="navigate('monitor');closeMobileNav()">
+      <i class="fa-solid fa-chart-line fa-fw"></i>${t('monitor')}
+    </div>
     ${isAdmin ? `<div class="ctx-item" data-page="tab-security" onclick="navigate('tab-security');closeMobileNav()">
       <i class="fa-solid fa-user-shield fa-fw"></i>${t('security')}
     </div>
     <div class="ctx-item" data-page="users" onclick="navigate('users');closeMobileNav()">
       <i class="fa-solid fa-users fa-fw"></i>${t('users')}
     </div>
-    <div class="ctx-item" data-page="tab-enterprise" onclick="navigate('tab-enterprise');closeMobileNav()">
-      <i class="fa-solid fa-building fa-fw"></i>Enterprise
-    </div>
     <div class="ctx-item" data-page="tab-settings" onclick="navigate('tab-settings');closeMobileNav()">
       <i class="fa-solid fa-gear fa-fw"></i>${t('settings')}
-    </div>` : ''}
-  </div>
-
-  ${isAdmin || isOperator ? `
-  <div class="ctx-section-header" onclick="toggleNavSection(this)" style="margin-top:10px">
-    <span>${t('more') || 'Daha Fazla'}</span><span class="ctx-section-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-  </div>
-  <div class="ctx-section-body collapsed">
-    <div class="ctx-item" data-page="snapshots" onclick="navigate('snapshots');closeMobileNav()">
-      <i class="fa-solid fa-camera fa-fw"></i>${t('snapshots')}
     </div>
-    <div class="ctx-item" data-page="topology" onclick="navigate('topology');closeMobileNav()">
-      <i class="fa-solid fa-diagram-project fa-fw"></i>${t('topology')}
-    </div>
-    <div class="ctx-item" data-page="containers" onclick="navigate('containers');closeMobileNav()">
-      <i class="fa-brands fa-docker fa-fw"></i>Containers
-    </div>
-    <div class="ctx-item" data-page="ha" onclick="navigate('ha');closeMobileNav()">
-      <i class="fa-solid fa-circle-nodes fa-fw"></i>HA Cluster
-    </div>
-    ${isOperator ? `<div class="ctx-item" data-page="tab-templates" onclick="navigate('tab-templates');closeMobileNav()">
-      <i class="fa-solid fa-clone fa-fw"></i>${t('templates')}
-    </div>
-    <div class="ctx-item" data-page="tab-vpn" onclick="navigate('tab-vpn');closeMobileNav()">
-      <i class="fa-solid fa-lock fa-fw"></i>${t('vpn')}
-    </div>
-    <div class="ctx-item" data-page="tab-dns" onclick="navigate('tab-dns');closeMobileNav()">
-      <i class="fa-solid fa-earth-americas fa-fw"></i>${t('dns')}
-    </div>
-    <div class="ctx-item" data-page="tab-ipam" onclick="navigate('tab-ipam');closeMobileNav()">
-      <i class="fa-solid fa-network-wired fa-fw"></i>IPAM
-    </div>
-    <div class="ctx-item" data-page="tab-proxy" onclick="navigate('tab-proxy');closeMobileNav()">
-      <i class="fa-solid fa-arrows-left-right fa-fw"></i>${t('proxy')}
-    </div>
-    <div class="ctx-item" data-page="tab-ai" onclick="navigate('tab-ai');closeMobileNav()">
-      <i class="fa-solid fa-robot fa-fw"></i>${t('ai')}
-    </div>
-    <div class="ctx-item" data-page="tab-syslog" onclick="navigate('tab-syslog');closeMobileNav()">
-      <i class="fa-solid fa-scroll fa-fw"></i>Syslog
-    </div>` : ''}
-    ${isAdmin ? `<div class="ctx-item" data-page="updates" onclick="navigate('updates');closeMobileNav()">
-      <i class="fa-solid fa-rotate fa-fw"></i>${t('updates')}
-    </div>
-    <div class="ctx-item" data-page="tab-integrations" onclick="navigate('tab-integrations');closeMobileNav()">
-      <i class="fa-solid fa-plug fa-fw"></i>${t('integrations')}
-    </div>
-    <div class="ctx-item" data-page="tab-hosting" onclick="navigate('tab-hosting');closeMobileNav()">
-      <i class="fa-solid fa-box-open fa-fw"></i>Hosting API
-    </div>
-    <div class="ctx-item" data-page="cf-tunnels" onclick="navigate('cf-tunnels');closeMobileNav()">
-      <i class="fa-brands fa-cloudflare fa-fw"></i>CF Tunnels
-    </div>
-    <div class="ctx-item" data-page="tab-plugins" onclick="navigate('tab-plugins');closeMobileNav()">
-      <i class="fa-solid fa-puzzle-piece fa-fw"></i>Eklentiler
-    </div>
-    <div class="ctx-item" data-page="console" onclick="navigate('console');closeMobileNav()">
+    <div class="ctx-item" data-page="console" onclick="navigate('console');closeMobileNav()" title="Root shell">
       <i class="fa-solid fa-terminal fa-fw"></i>${t('shell console')}
     </div>` : ''}
-  </div>` : ''}
+  </div>
 
   ${isAdmin ? `
   <div class="ctx-item" onclick="logout()" style="color:#f85149;margin-top:auto;border-top:1px solid var(--border);padding-top:10px;padding-bottom:10px" title="Oturumu kapat">
@@ -25010,6 +24948,237 @@ async function crecDelete(id) {
   const d = await _api(`/api/console-recordings/${id}`,'DELETE');
   if (d) { toast('Kayıt silindi','success'); loadConsoleRecPage(); }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGE TABS ENGINE — embed enterprise panes + secondary pages
+   into main sidebar pages as inline sub-tabs.
+   Reduces sidebar to ~9 top-level items. No top-level Enterprise tab.
+   ══════════════════════════════════════════════════════════════════ */
+
+// Mapping: main page id -> list of sub-tabs.
+// Each tab: { key, label, src } where src is either 'page-X' or 'ent-X' or 'native' (default)
+const _PAGE_TABS = {
+  'page-vms': [
+    {key:'list', label:'Liste', src:'native'},
+    {key:'tab-templates', label:'Şablonlar', src:'page-tab-templates'},
+    {key:'snapshots', label:'Snapshot', src:'page-snapshots'},
+    {key:'consolerec', label:'Konsol Kaydı', src:'ent-consolerec'},
+    {key:'drs', label:'DRS', src:'ent-drs'},
+    {key:'affinity', label:'Yakınlık', src:'ent-affinity'},
+    {key:'evc', label:'EVC', src:'ent-evc'},
+    {key:'numa', label:'NUMA', src:'ent-numa'},
+    {key:'rightsize', label:'Boyutlandırma', src:'ent-rightsize'},
+    {key:'maint', label:'Bakım', src:'ent-maint'},
+    {key:'faultol', label:'Fault Tolerance', src:'ent-faultol'},
+    {key:'firecracker', label:'microVM', src:'ent-firecracker'},
+    {key:'kata', label:'Kata', src:'ent-kata'},
+  ],
+  'page-networks': [
+    {key:'list', label:'Ağlar', src:'native'},
+    {key:'tab-dns', label:'DNS', src:'page-tab-dns'},
+    {key:'tab-vpn', label:'VPN', src:'page-tab-vpn'},
+    {key:'tab-ipam', label:'IPAM', src:'page-tab-ipam'},
+    {key:'tab-proxy', label:'Proxy & LB', src:'page-tab-proxy'},
+    {key:'tab-firewall', label:'Güvenlik Duvarı', src:'page-tab-firewall'},
+    {key:'topology', label:'Topoloji', src:'page-topology'},
+    {key:'nioc', label:'NIOC', src:'ent-nioc'},
+    {key:'net-adv', label:'Ağ+', src:'ent-net-adv'},
+    {key:'microseg', label:'Mikrosegment', src:'ent-microseg'},
+    {key:'bfd', label:'BFD', src:'ent-bfd'},
+    {key:'svcchain', label:'Servis Zinciri', src:'ent-svcchain'},
+    {key:'mesh', label:'Service Mesh', src:'ent-mesh'},
+    {key:'cf-tunnels', label:'CF Tunnels', src:'page-cf-tunnels'},
+  ],
+  'page-storage': [
+    {key:'list', label:'Havuzlar', src:'native'},
+    {key:'tab-backup', label:'Yedekleme', src:'page-tab-backup'},
+    {key:'snapshots', label:'Snapshot', src:'page-snapshots'},
+    {key:'stor-adv', label:'Depolama+', src:'ent-stor-adv'},
+    {key:'storedrs', label:'Storage DRS', src:'ent-storedrs'},
+    {key:'bkup-enc', label:'Yedek Şifreleme', src:'ent-bkup-enc'},
+    {key:'disk-enc', label:'Disk Şifreleme', src:'ent-disk-enc'},
+    {key:'backupadv', label:'Backup+', src:'ent-backupadv'},
+    {key:'dr', label:'Felaket Kurtarma', src:'ent-dr'},
+    {key:'lifecycle', label:'Yaşam Döngüsü', src:'ent-lifecycle'},
+  ],
+  'page-monitor': [
+    {key:'list', label:'Canlı', src:'native'},
+    {key:'tab-syslog', label:'Syslog', src:'page-tab-syslog'},
+    {key:'otel', label:'Tracing', src:'ent-otel'},
+    {key:'grafana', label:'Grafana', src:'ent-grafana'},
+    {key:'topoviz', label:'Topoloji', src:'ent-topoviz'},
+    {key:'forecast', label:'ML Tahmin', src:'ent-forecast'},
+    {key:'driftcap', label:'Drift/Kapasite', src:'ent-driftcap'},
+    {key:'alertcorr', label:'Uyarı Korelasyon', src:'ent-alertcorr'},
+  ],
+  'page-tab-security': [
+    {key:'list', label:'Genel', src:'native'},
+    {key:'siem', label:'SIEM', src:'ent-siem'},
+    {key:'sessrec', label:'Oturum Kaydı', src:'ent-sessrec'},
+    {key:'cvm', label:'Gizli VM', src:'ent-cvm'},
+    {key:'compliance', label:'Uyumluluk', src:'ent-compliance'},
+    {key:'dlp', label:'DLP', src:'ent-dlp'},
+    {key:'forensics', label:'Adli', src:'ent-forensics'},
+    {key:'mfa-policy', label:'2FA Politika', src:'ent-mfa-policy'},
+    {key:'sso', label:'SSO (SAML/OIDC)', src:'ent-sso'},
+    {key:'oauth2', label:'OAuth 2.0', src:'ent-oauth2'},
+  ],
+  'page-users': [
+    {key:'list', label:'Kullanıcılar', src:'native'},
+    {key:'tenants', label:'Tenants', src:'ent-tenants'},
+    {key:'chargeback', label:'Chargeback', src:'ent-chargeback'},
+    {key:'svc-cat', label:'Servis Kataloğu', src:'ent-svc-cat'},
+    {key:'rate-limit', label:'Rate Limit', src:'ent-rate-limit'},
+  ],
+  'page-tab-settings': [
+    {key:'list', label:'Genel', src:'native'},
+    {key:'tab-ai', label:'AI', src:'page-tab-ai'},
+    {key:'tab-integrations', label:'Entegrasyon', src:'page-tab-integrations'},
+    {key:'tab-hosting', label:'Hosting API', src:'page-tab-hosting'},
+    {key:'tab-plugins', label:'Eklentiler', src:'page-tab-plugins'},
+    {key:'updates', label:'Güncelleme', src:'page-updates'},
+    {key:'workflow', label:'Workflow', src:'ent-workflow'},
+    {key:'opa', label:'Policy (OPA)', src:'ent-opa'},
+    {key:'cloudevents', label:'CloudEvents', src:'ent-cloudevents'},
+    {key:'desktop', label:'Desktop Client', src:'ent-desktop'},
+    {key:'cloudexport', label:'Cloud Export', src:'ent-cloudexport'},
+    {key:'k8scsi', label:'K8s CSI', src:'ent-k8scsi'},
+    {key:'k8sop', label:'K8s Operator', src:'ent-k8sop'},
+    {key:'kubevirt', label:'KubeVirt', src:'ent-kubevirt'},
+    {key:'gitops', label:'GitOps', src:'ent-gitops'},
+    {key:'pulumi', label:'Pulumi', src:'ent-pulumi'},
+    {key:'wasm', label:'WASM', src:'ent-wasm'},
+    {key:'edge', label:'Edge', src:'ent-edge'},
+    {key:'greenmode', label:'Green Mode', src:'ent-greenmode'},
+    {key:'multiregion', label:'Multi-Region', src:'ent-multiregion'},
+    {key:'marketplace', label:'Marketplace', src:'ent-marketplace'},
+    {key:'cloudburst', label:'Cloud Burst', src:'ent-cloudburst'},
+    {key:'baremetal', label:'Bare-Metal', src:'ent-baremetal'},
+    {key:'apidocs', label:'API Docs', src:'ent-apidocs'},
+  ],
+};
+
+// Remember original parents so we can restore on cleanup
+const _PAGE_TABS_ORIGINAL_PARENT = new WeakMap();
+
+// Loader map (extracted from ENT_LOADERS at runtime)
+function _pgLoaderFor(srcId) {
+  // ent-X -> entSubTab key
+  if (srcId.startsWith('ent-')) {
+    const key = srcId.slice(4);
+    const fn = (typeof ENT_LOADERS !== 'undefined') ? ENT_LOADERS[key] : null;
+    return fn;
+  }
+  // page-X -> navigate-style loader: try existing case in navigate()
+  if (srcId === 'page-snapshots') return () => loadSnapshots?.();
+  if (srcId === 'page-topology') return () => loadTopology?.();
+  if (srcId === 'page-tab-templates') return () => loadTemplates?.();
+  if (srcId === 'page-tab-backup') return () => loadBackupSchedules?.();
+  if (srcId === 'page-tab-firewall') return () => loadFirewallRules?.();
+  if (srcId === 'page-tab-vpn') return () => loadVpnPeers?.();
+  if (srcId === 'page-tab-dns') return () => loadDnsHosts?.();
+  if (srcId === 'page-tab-ipam') return () => loadIpamPools?.();
+  if (srcId === 'page-tab-proxy') return () => loadProxyConfig?.();
+  if (srcId === 'page-tab-ai') return () => loadAIAgents?.();
+  if (srcId === 'page-tab-syslog') return () => loadSyslog?.();
+  if (srcId === 'page-tab-integrations') return () => loadIntegrations?.();
+  if (srcId === 'page-tab-hosting') return () => loadHosting?.();
+  if (srcId === 'page-tab-plugins') return () => loadPluginSdkPage?.();
+  if (srcId === 'page-cf-tunnels') return () => loadCfTunnels?.();
+  if (srcId === 'page-updates') return () => loadUpdates?.();
+  return null;
+}
+
+// Install sub-tab strip in a page (idempotent)
+function _pgInstallTabs(mainPageId) {
+  const main = document.getElementById(mainPageId);
+  if (!main) return;
+  if (main.querySelector(':scope > .page-subtabs')) return; // already installed
+  const tabs = _PAGE_TABS[mainPageId];
+  if (!tabs) return;
+
+  // Wrap native children into a single container marked as "native"
+  const nativeWrap = document.createElement('div');
+  nativeWrap.className = 'page-native';
+  nativeWrap.dataset.pgNative = '1';
+  // Move existing children into nativeWrap
+  while (main.firstChild) nativeWrap.appendChild(main.firstChild);
+
+  // Create sub-tab bar
+  const bar = document.createElement('div');
+  bar.className = 'page-subtabs sub-tabs';
+  bar.style.cssText = 'margin-bottom:10px;overflow-x:auto;white-space:nowrap;flex-shrink:0';
+  bar.innerHTML = tabs.map((t, i) => `<button class="sub-tab${i===0?' active':''}" data-pg-tab="${t.key}" onclick="_pgSwitchTab('${mainPageId}','${t.key}')">${_esc(t.label)}</button>`).join('');
+
+  // Slot for embedded panes
+  const slot = document.createElement('div');
+  slot.className = 'page-ent-slot';
+  slot.dataset.pgSlot = '1';
+  slot.style.display = 'none';
+
+  main.appendChild(bar);
+  main.appendChild(nativeWrap);
+  main.appendChild(slot);
+}
+
+// Switch to a tab inside a main page
+function _pgSwitchTab(mainPageId, tabKey) {
+  const main = document.getElementById(mainPageId);
+  if (!main) return;
+  const tabs = _PAGE_TABS[mainPageId];
+  const tabDef = tabs?.find(t => t.key === tabKey);
+  if (!tabDef) return;
+
+  // Update active button
+  main.querySelectorAll(':scope > .page-subtabs .sub-tab').forEach(b => b.classList.toggle('active', b.dataset.pgTab === tabKey));
+
+  const nativeWrap = main.querySelector(':scope > .page-native');
+  const slot = main.querySelector(':scope > .page-ent-slot');
+  if (!nativeWrap || !slot) return;
+
+  // Restore previous embedded pane to original parent (if any)
+  while (slot.firstChild) {
+    const c = slot.firstChild;
+    const orig = _PAGE_TABS_ORIGINAL_PARENT.get(c);
+    if (orig) {
+      c.style.display = 'none'; // hide when restored
+      orig.appendChild(c);
+    } else {
+      slot.removeChild(c);
+    }
+  }
+
+  if (tabDef.src === 'native') {
+    nativeWrap.style.display = '';
+    slot.style.display = 'none';
+    return;
+  }
+
+  // Move target pane into slot
+  const target = document.getElementById(tabDef.src);
+  if (!target) {
+    nativeWrap.style.display = 'none';
+    slot.style.display = '';
+    slot.innerHTML = `<div class="card" style="padding:14px;color:var(--text-muted)">Bu özellik henüz yüklü değil: <code>${_esc(tabDef.src)}</code></div>`;
+    return;
+  }
+  if (!_PAGE_TABS_ORIGINAL_PARENT.has(target)) {
+    _PAGE_TABS_ORIGINAL_PARENT.set(target, target.parentElement);
+  }
+  target.style.display = '';
+  slot.appendChild(target);
+  nativeWrap.style.display = 'none';
+  slot.style.display = '';
+
+  // Trigger loader
+  try { const fn = _pgLoaderFor(tabDef.src); if (fn) fn(); } catch(e) { console.warn('pg loader fail', tabDef.src, e); }
+}
+
+// Install all sub-tab strips after DOM ready
+function _pgInstallAll() {
+  Object.keys(_PAGE_TABS).forEach(_pgInstallTabs);
+}
+window.addEventListener('DOMContentLoaded', () => { setTimeout(_pgInstallAll, 200); });
 
 /* ──── API Docs Panel ──── */
 let _apiDocsLoaded = false;
