@@ -294,6 +294,15 @@ INSTALL_DIR="/opt/oxware"
 APP_DIR="${INSTALL_DIR}/oxware"
 VENV_DIR="${INSTALL_DIR}/venv"
 
+_oxupdate_fail() {
+ echo -e "\n${RED}[FAIL] Güncelleme sırasında hata oluştu.${NC}"
+ echo -e "${YELLOW}Kurtarma için:${NC}"
+ echo -e "  ${CYAN}cd /opt/oxware && git pull${NC}"
+ echo -e "  ${CYAN}sudo bash repair.sh --fix-cli${NC}"
+ echo -e "  ${CYAN}sudo systemctl restart oxware${NC}"
+}
+trap _oxupdate_fail ERR
+
 echo -e "${CYAN}[i]${NC} OXware güncelleme başlıyor..."
 systemctl stop oxware 2>/dev/null || true
 

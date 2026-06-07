@@ -745,6 +745,16 @@ APP_DIR="${APP_DIR}"
 VENV_DIR="${VENV_DIR}"
 INSTALL_DIR="${INSTALL_DIR}"
 
+# Herhangi bir hatada kurtarma komutlarını göster
+_oxupdate_fail() {
+ echo -e "\n\${RED}[FAIL] Güncelleme sırasında hata oluştu.\${NC}"
+ echo -e "\${YELLOW}Kurtarma için şu komutları çalıştırın:\${NC}"
+ echo -e "  \${CYAN}cd /opt/oxware && git pull\${NC}"
+ echo -e "  \${CYAN}sudo bash repair.sh --fix-cli\${NC}"
+ echo -e "  \${CYAN}sudo systemctl restart oxware\${NC}"
+}
+trap _oxupdate_fail ERR
+
 echo -e "\${CYAN}━━━ OXware Güncelleme ━━━\${NC}"
 [[ \$EUID -ne 0 ]] && { echo -e "\${RED}Root gerekli: sudo oxupdate\${NC}"; exit 1; }
 
@@ -796,6 +806,12 @@ else
 fi
 OXUPDATE
  chmod +x /usr/local/bin/oxupdate
+
+ # Üretilen oxupdate'i syntax doğrula — bozuksa repair.sh ile yeniden kur
+ if ! bash -n /usr/local/bin/oxupdate 2>/dev/null; then
+ warn "Üretilen oxupdate bozuk — repair.sh --fix-cli ile yeniden kuruluyor"
+ [ -f "${INSTALL_DIR}/repair.sh" ] && bash "${INSTALL_DIR}/repair.sh" --fix-cli 2>/dev/null || true
+ fi
 
  log "ox komutu kuruldu -> 'ox --help'"
  log "oxupdate komutu kuruldu -> 'sudo oxupdate'"
