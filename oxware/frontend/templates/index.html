@@ -1063,7 +1063,7 @@
 
   <!-- ────────── TOPBAR ────────── -->
   <header id="topbar">
-    <button id="mob-menu-btn" onclick="toggleMobileNav()" title="Menü"></button>
+    <button id="mob-menu-btn" onclick="toggleMobileNav()" title="Menü"><i class="fa-solid fa-bars"></i></button>
     <div class="tb-logo" title="OXware Hypervisor">
       <div class="tb-logo-icon">
         <img src="/static/img/sadeceikon.png" alt="OXware"
@@ -1492,7 +1492,7 @@
           <div class="charts-row">
             <!-- Top Resource VMs -->
             <div class="chart-card">
-              <h3> En Çok Kaynak Kullanan VM'ler</h3>
+              <h3>En Çok Kaynak Kullanan VM'ler</h3>
               <div class="table-wrap">
                 <table>
                   <thead><tr><th>VM Adı</th><th>vCPU</th><th>RAM (MB)</th><th>Durum</th></tr></thead>
@@ -1502,7 +1502,7 @@
             </div>
             <!-- Recent Events -->
             <div class="chart-card">
-              <h3> Son Olaylar</h3>
+              <h3>Son Olaylar</h3>
               <div id="dash-events" style="max-height:200px;overflow-y:auto">
                 <div class="empty-state"><div class="icon">⏳</div><p>Yükleniyor...</p></div>
               </div>
@@ -1586,7 +1586,7 @@
               </div>
               <div style="display:flex;gap:8px;flex-shrink:0">
                 <button class="btn sm warning" id="vd-iso-eject-btn" onclick="_isoPostInstallEject()">⏏ ISO Çıkar &amp; Yeniden Başlat</button>
-                <button class="btn sm" onclick="document.getElementById('vd-iso-banner').style.display='none'" title="Kapat"></button>
+                <button class="btn sm" onclick="document.getElementById('vd-iso-banner').style.display='none'" title="Kapat"><i class="fa-solid fa-xmark"></i></button>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">
@@ -2258,7 +2258,7 @@
         <!-- Add Disk Modal -->
         <div class="modal-overlay" id="modal-add-disk-overlay" onclick="hwCloseAddDisk()" style="display:none"></div>
         <div class="modal" id="modal-add-disk" style="display:none;max-width:380px">
-          <div class="modal-header"><span> Yeni Disk Ekle</span><button class="modal-close" onclick="hwCloseAddDisk()"></button></div>
+          <div class="modal-header"><span>Yeni Disk Ekle</span><button class="modal-close" onclick="hwCloseAddDisk()"><i class="fa-solid fa-xmark"></i></button></div>
           <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
             <div class="form-group">
               <label>Boyut (GB)</label>
@@ -2289,7 +2289,7 @@
         <!-- Add NIC Modal -->
         <div class="modal-overlay" id="modal-add-nic-overlay" onclick="hwCloseAddNic()" style="display:none"></div>
         <div class="modal" id="modal-add-nic" style="display:none;max-width:380px">
-          <div class="modal-header"><span> Yeni NIC Ekle</span><button class="modal-close" onclick="hwCloseAddNic()"></button></div>
+          <div class="modal-header"><span>Yeni NIC Ekle</span><button class="modal-close" onclick="hwCloseAddNic()"><i class="fa-solid fa-xmark"></i></button></div>
           <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
             <div class="form-group">
               <label>Ağ</label>
@@ -2314,8 +2314,8 @@
         <div class="modal-overlay open" id="modal-inject-ip" style="display:none" onclick="if(event.target===this)closeInjectIpModal()">
           <div class="modal" style="max-width:420px">
             <div class="modal-header">
-              <h3> Statik IP Ata</h3>
-              <button class="modal-close" onclick="closeInjectIpModal()"></button>
+              <h3>Statik IP Ata</h3>
+              <button class="modal-close" onclick="closeInjectIpModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="display:flex;flex-direction:column;gap:13px">
               <div style="background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.3);border-radius:4px;padding:10px 12px;font-size:11px;color:#67e8f9;line-height:1.6">
@@ -2614,8 +2614,7 @@
             </div>
 
             <div class="card" style="margin-bottom:14px">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                Mevcut Bridge'ler
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">Mevcut Bridge'ler
                 <button class="btn sm" onclick="loadBridgeStatus()" style="margin-left:auto">↻</button>
               </div>
               <div id="bridge-list-container" style="font-size:12px;color:var(--text-muted)">— Yüklemek için ↻ tıklayın —</div>
@@ -2792,7 +2791,7 @@
           <div id="storage-tab-pools">
             <!-- Ceph status card (hidden until loaded) -->
             <div id="ceph-status-card" class="card" style="display:none;margin-bottom:14px">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px"> Ceph Cluster Durumu
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">Ceph Cluster Durumu
                 <button class="btn-sm" style="margin-left:auto" onclick="loadCephStatus()">↻</button>
               </div>
               <div id="ceph-status-content" style="padding:4px 0;font-size:13px"></div>
@@ -3127,7 +3126,7 @@
         <!-- ─────── Containers Page ─────── -->
         <div class="page" id="page-containers">
           <div class="section-header">
-            <h2> Container Yönetimi</h2>
+            <h2>Container Yönetimi</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadContainers()">↻ Yenile</button>
             <button class="btn primary" onclick="openModal('modal-docker-create')">+ Docker</button>
@@ -3177,14 +3176,14 @@
         <!-- ─────── HA Cluster Page ─────── -->
         <div class="page" id="page-ha">
           <div class="section-header">
-            <h2> HA Cluster Yönetimi</h2>
+            <h2>HA Cluster Yönetimi</h2>
             <div class="spacer"></div>
             <button class="btn" onclick="loadHaPage()">↻ Yenile</button>
             <button class="btn primary" onclick="openModal('modal-ha-add-node')">+ Node Ekle</button>
           </div>
           <!-- DRS analyze -->
           <div class="card" style="margin-bottom:14px">
-            <div class="card-title"> DRS — Kaynak Dağılım Analizi</div>
+            <div class="card-title">DRS — Kaynak Dağılım Analizi</div>
             <div style="display:flex;gap:10px;align-items:center;padding:0 14px 10px">
               <button class="btn" onclick="loadDrsAnalyze()"> Analiz Et</button>
               <span style="font-size:12px;color:var(--text-muted)">VM CPU/RAM kullanımını analiz eder, öneriler sunar</span>
@@ -3203,7 +3202,7 @@
           </div>
           <!-- Live migration -->
           <div class="card" style="margin-top:14px">
-            <div class="card-title"> Live Migration</div>
+            <div class="card-title">Live Migration</div>
             <div style="display:flex;gap:10px;align-items:center;padding:0 14px 12px;flex-wrap:wrap">
               <select id="ha-mig-vm" style="width:200px"><option value="">— VM seçin —</option></select>
               <select id="ha-mig-target" style="width:200px"><option value="">— Hedef node IP —</option></select>
@@ -3231,7 +3230,7 @@
             </table>
           </div>
           <div class="card" style="margin-top:14px;font-size:12px;color:var(--text-muted)">
-            <div class="card-title"> Kurulum Adımları</div>
+            <div class="card-title">Kurulum Adımları</div>
             <ol style="padding:0 14px 12px;line-height:1.8">
               <li><code>curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null</code></li>
               <li><code>sudo apt install cloudflared</code></li>
@@ -3287,7 +3286,7 @@
           </div>
           <div id="snap-tree-container" style="margin-bottom:14px;display:none">
             <div class="card">
-              <div class="card-title"> Snapshot Ağacı</div>
+              <div class="card-title">Snapshot Ağacı</div>
               <div id="snap-tree-view" style="padding:8px;font-family:monospace;font-size:12px;line-height:1.8"></div>
             </div>
           </div>
@@ -3323,7 +3322,7 @@
 
           <!-- AI Analiz Kartı -->
           <div id="upd-ai-card" style="display:none;margin-bottom:14px" class="card">
-            <div class="card-title"> AI Commit Analizi</div>
+            <div class="card-title">AI Commit Analizi</div>
             <div id="upd-ai-text" style="font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--text)"></div>
             <div id="upd-ai-time" style="font-size:10px;color:var(--text-dim);margin-top:8px"></div>
           </div>
@@ -3381,7 +3380,7 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <!-- OVA Import -->
             <div class="card">
-              <div class="card-title"> OVA İçe Aktar</div>
+              <div class="card-title">OVA İçe Aktar</div>
               <div style="display:flex;flex-direction:column;gap:10px">
                 <div class="form-group" style="margin:0">
                   <label style="font-size:11px">OVA Dosya Yolu (sunucuda)</label>
@@ -3587,7 +3586,7 @@
             <div class="card-title" style="display:flex;align-items:center;gap:8px">
               <i class="fa-solid fa-circle-info" style="color:var(--accent-lt)"></i>
               WireGuard Kurulum &amp; Kullanım Rehberi
-              <button class="btn sm" style="margin-left:auto" onclick="document.getElementById('vpnGuideCard').style.display='none'"></button>
+              <button class="btn sm" style="margin-left:auto" onclick="document.getElementById('vpnGuideCard').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:10px">
               <div>
@@ -3851,7 +3850,7 @@
           <div class="modal" style="width:640px;max-height:90vh;display:flex;flex-direction:column">
             <div class="modal-header">
               <h3><i class="fa-solid fa-cloud-arrow-down" style="margin-right:8px;color:var(--accent-lt)"></i>ISO Otomatik İndir</h3>
-              <button class="modal-close" onclick="closeIsoFetchModal()"></button>
+              <button class="modal-close" onclick="closeIsoFetchModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="padding:20px;overflow-y:auto;flex:1">
               <!-- Ubuntu -->
@@ -3978,7 +3977,7 @@
           <div class="modal" style="width:520px">
             <div class="modal-header">
               <h3><i class="fa-solid fa-network-wired" style="color:var(--accent-lt);margin-right:6px"></i>Yeni IP Havuzu Oluştur</h3>
-              <button class="modal-close" onclick="ipamCloseCreatePool()"></button>
+              <button class="modal-close" onclick="ipamCloseCreatePool()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
               <div class="form-grid">
@@ -4029,7 +4028,7 @@
           <div class="modal" style="width:620px;max-height:80vh;display:flex;flex-direction:column">
             <div class="modal-header" style="flex-shrink:0">
               <h3 id="ipam-pool-ips-title">Havuz IP'leri</h3>
-              <button class="modal-close" onclick="document.getElementById('modal-ipam-pool-ips').classList.remove('open')"></button>
+              <button class="modal-close" onclick="document.getElementById('modal-ipam-pool-ips').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="padding:16px;overflow-y:auto;flex:1">
               <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -4050,7 +4049,7 @@
           <div class="modal" style="width:460px">
             <div class="modal-header">
               <h3><i class="fa-solid fa-pen" style="margin-right:8px;color:var(--accent-lt)"></i>Havuz Düzenle: <span id="ipam-edit-pool-name"></span></h3>
-              <button class="modal-close" onclick="document.getElementById('modal-ipam-edit').classList.remove('open')"></button>
+              <button class="modal-close" onclick="document.getElementById('modal-ipam-edit').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="padding:20px">
               <input type="hidden" id="ipam-edit-pool-name-hidden">
@@ -4079,7 +4078,7 @@
           <div class="modal" style="width:460px">
             <div class="modal-header">
               <h3><i class="fa-solid fa-plus" style="margin-right:8px;color:var(--accent-lt)"></i>Manuel IP Ekle</h3>
-              <button class="modal-close" onclick="document.getElementById('modal-ipam-manual').classList.remove('open')"></button>
+              <button class="modal-close" onclick="document.getElementById('modal-ipam-manual').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="padding:20px">
               <div class="form-group" style="margin-bottom:12px">
@@ -4111,7 +4110,7 @@
           <div class="modal" style="width:480px">
             <div class="modal-header">
               <h3><i class="fa-solid fa-server" style="margin-right:8px;color:var(--accent-lt)"></i>VM'e IP Ata</h3>
-              <button class="modal-close" onclick="document.getElementById('modal-ipam-vmassign').classList.remove('open')"></button>
+              <button class="modal-close" onclick="document.getElementById('modal-ipam-vmassign').classList.remove('open')"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="padding:20px">
               <div class="form-group" style="margin-bottom:12px">
@@ -4220,8 +4219,7 @@
             </div>
             <!-- Frontends -->
             <div class="card" style="margin-bottom:14px">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                Frontends
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">Frontends
                 <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-ha-frontend')">+ Frontend Ekle</button>
               </div>
               <div class="table-wrap" style="margin:0">
@@ -4233,8 +4231,7 @@
             </div>
             <!-- Backends -->
             <div class="card">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                Backends
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">Backends
                 <button class="btn-sm primary" style="margin-left:auto" onclick="openModal('modal-ha-backend')">+ Backend Ekle</button>
                 <button class="btn-sm" onclick="haproxyReload()">↻ Reload</button>
               </div>
@@ -4714,7 +4711,7 @@
             <div style="background:var(--surface1);border:1px solid var(--border1);border-radius:10px;padding:24px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.5)">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
                 <span style="font-size:15px;font-weight:600;color:var(--text)"><i class="fa-solid fa-terminal" style="color:var(--accent-lt);margin-right:6px"></i>Hook Script</span>
-                <button class="btn-danger" style="padding:4px 10px;font-size:12px" onclick="closeHookModal()"></button>
+                <button class="btn-danger" style="padding:4px 10px;font-size:12px" onclick="closeHookModal()"><i class="fa-solid fa-xmark"></i></button>
               </div>
               <div class="form-row" style="margin-bottom:10px">
                 <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Olay</label>
@@ -4927,8 +4924,7 @@
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div class="card">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                SDN Durumu (OVS)
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">SDN Durumu (OVS)
                 <button class="btn sm" onclick="loadSdnStatus()" style="margin-left:auto" title="Yenile"><i class="fa-solid fa-rotate-right"></i></button>
               </div>
               <div id="sdnStatusCard" style="padding:8px 0">
@@ -5026,8 +5022,7 @@
 
           <!-- BGP Ayarları -->
           <div class="card" style="margin-bottom:14px">
-            <div class="card-title" style="display:flex;align-items:center;gap:8px">
-               BGP Yönlendirme
+            <div class="card-title" style="display:flex;align-items:center;gap:8px">BGP Yönlendirme
               <span id="bgp-backend-badge" style="margin-left:auto;font-size:10px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text-muted)">Yükleniyor...</span>
             </div>
             <div id="bgp-status-card" style="font-size:12px;color:var(--text-muted);padding:6px 0">Yükleniyor...</div>
@@ -5044,7 +5039,7 @@
 
           <!-- SFTP Uzak Yedekleme -->
           <div class="card" style="margin-bottom:14px">
-            <div class="card-title"> SFTP / SSH — Uzak Yedekleme</div>
+            <div class="card-title">SFTP / SSH — Uzak Yedekleme</div>
             <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
               Yedeklerinizi uzak bir SFTP/SSH sunucusuna gönderin. Backup sekmesinde bu hedefi seçebilirsiniz.
             </p>
@@ -5076,7 +5071,7 @@
 
           <!-- Source selector -->
           <div class="card" style="margin-bottom:14px">
-            <div class="card-title"> Toplu VM Taşıma — Proxmox / ESXi → OXware</div>
+            <div class="card-title">Toplu VM Taşıma — Proxmox / ESXi → OXware</div>
             <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
               Proxmox VE veya VMware ESXi üzerindeki sanal makineleri OXware'e toplu aktarın.
               Disk dışa aktarımı SSH + SFTP üzerinden yapılır; qemu-img ile qcow2'ye dönüştürülür.
@@ -5133,7 +5128,7 @@
           <!-- VM list + import -->
           <div class="card" style="margin-bottom:14px" id="mig-vm-list-card" style="display:none">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-              <div class="card-title" style="margin:0"> Bulunan VM'ler
+              <div class="card-title" style="margin:0">Bulunan VM'ler
                 <span id="mig-vm-count" style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:8px"></span>
               </div>
               <div style="display:flex;gap:8px;align-items:center">
@@ -5172,7 +5167,7 @@
           <!-- Jobs progress -->
           <div class="card" id="mig-jobs-card">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <div class="card-title" style="margin:0"> Aktarım İşleri</div>
+              <div class="card-title" style="margin:0">Aktarım İşleri</div>
               <button class="btn sm" onclick="migRefreshJobs()">↻ Yenile</button>
             </div>
             <div id="mig-jobs-list" style="font-size:12px;color:var(--text-muted)">Henüz işlem başlatılmadı.</div>
@@ -5286,8 +5281,7 @@
               <div id="dpm-analysis-out" style="margin-bottom:12px"></div>
             </div>
             <div class="card">
-              <div class="card-title" style="display:flex;align-items:center;gap:8px">
-                Node Listesi
+              <div class="card-title" style="display:flex;align-items:center;gap:8px">Node Listesi
                 <button class="btn sm" onclick="loadDpmNodes()" style="margin-left:auto">↻</button>
               </div>
               <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
@@ -7155,7 +7149,7 @@
 <!-- ── Setup Guide Modal ── -->
 <div id="modal-setup-guide" class="modal-overlay" style="z-index:9990" onclick="if(event.target===this)closeModal('modal-setup-guide')">
   <div class="modal" style="max-width:680px;max-height:80vh;overflow-y:auto">
-    <div class="modal-header"><span> Sunucu Kurulum Rehberi</span><button class="modal-close" onclick="closeModal('modal-setup-guide')"></button></div>
+    <div class="modal-header"><span>Sunucu Kurulum Rehberi</span><button class="modal-close" onclick="closeModal('modal-setup-guide')"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="modal-body" style="font-size:13px;line-height:1.7">
 
       <div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:12px;margin-bottom:16px">
@@ -7743,7 +7737,7 @@ systemctl enable --now qemu-guest-agent</pre>
           <div class="cvm-row" style="margin-bottom:6px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
               <input type="checkbox" id="vm-use-clone" onchange="cvmToggleClone(this.checked)" style="width:15px;height:15px;accent-color:#a78bfa">
-              <span> Şablondan Klonla <span style="font-size:10px;color:#a78bfa;font-weight:600">(anlık)</span></span>
+              <span>Şablondan Klonla <span style="font-size:10px;color:#a78bfa;font-weight:600">(anlık)</span></span>
             </label>
             <div id="clone-options" style="display:none;margin-top:8px;padding:10px;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.25);border-radius:6px">
               <div class="cvm-row" style="margin-bottom:8px">
@@ -7914,7 +7908,7 @@ systemctl enable --now qemu-guest-agent</pre>
           </div>
           <div style="margin-top:8px;font-size:11px;color:var(--text-muted,#7d8590)">
             Seçili: <span id="selected-app-name" style="color:var(--accent2,#00d4ff);font-weight:600">Yok</span>
-            <button onclick="clearAppInstall()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0 4px;line-height:1"></button>
+            <button onclick="clearAppInstall()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0 4px;line-height:1"><i class="fa-solid fa-xmark"></i></button>
           </div>
         </div>
 
@@ -8080,8 +8074,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-ipv6-net" onclick="if(event.target===this)closeModal('modal-ipv6-net')">
   <div class="modal" style="width:420px">
     <div class="modal-header">
-      <h2> IPv6 Yapılandır: <span id="ipv6-net-name"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-ipv6-net')"></button>
+      <h2>IPv6 Yapılandır: <span id="ipv6-net-name"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-ipv6-net')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>IPv6 Adresi</label><input id="ipv6-address" type="text" class="form-control" placeholder="fd00::1" value="fd00::1"></div>
@@ -8102,8 +8096,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-nfs-pool" onclick="if(event.target===this)closeModal('modal-nfs-pool')">
   <div class="modal" style="width:440px">
     <div class="modal-header">
-      <h2> NFS Depolama Havuzu Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-nfs-pool')"></button>
+      <h2>NFS Depolama Havuzu Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-nfs-pool')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Havuz Adı</label><input id="nfs-pool-name" type="text" class="form-control" placeholder="nfs-pool-1"></div>
@@ -8123,8 +8117,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-ceph-pool" onclick="if(event.target===this)closeModal('modal-ceph-pool')">
   <div class="modal" style="width:460px">
     <div class="modal-header">
-      <h2> Ceph RBD Havuzu Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-ceph-pool')"></button>
+      <h2>Ceph RBD Havuzu Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-ceph-pool')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Havuz Adı</label><input id="ceph-pool-name" type="text" class="form-control" placeholder="ceph-rbd-pool"></div>
@@ -8147,7 +8141,7 @@ function clearAppInstall() {
   <div class="modal" style="width:400px">
     <div class="modal-header">
       <h2>HAProxy Frontend Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-ha-frontend')"></button>
+      <button class="modal-close" onclick="closeModal('modal-ha-frontend')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Ad</label><input id="ha-front-name" type="text" class="form-control" placeholder="http-in"></div>
@@ -8166,7 +8160,7 @@ function clearAppInstall() {
   <div class="modal" style="width:400px">
     <div class="modal-header">
       <h2>HAProxy Backend Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-ha-backend')"></button>
+      <button class="modal-close" onclick="closeModal('modal-ha-backend')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Ad</label><input id="ha-back-name" type="text" class="form-control" placeholder="web-backend"></div>
@@ -8192,7 +8186,7 @@ function clearAppInstall() {
   <div class="modal" style="width:400px">
     <div class="modal-header">
       <h2>Server Ekle: <span id="ha-server-back-label"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-ha-server')"></button>
+      <button class="modal-close" onclick="closeModal('modal-ha-server')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Server Adı</label><input id="ha-server-name" type="text" class="form-control" placeholder="web1"></div>
@@ -8210,8 +8204,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-respool-create" onclick="if(event.target===this)closeModal('modal-respool-create')">
   <div class="modal" style="width:420px">
     <div class="modal-header">
-      <h2> Kaynak Havuzu Oluştur</h2>
-      <button class="modal-close" onclick="closeModal('modal-respool-create')"></button>
+      <h2>Kaynak Havuzu Oluştur</h2>
+      <button class="modal-close" onclick="closeModal('modal-respool-create')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Ad</label><input id="respool-name" type="text" class="form-control" placeholder="prod-pool"></div>
@@ -8231,7 +8225,7 @@ function clearAppInstall() {
   <div class="modal" style="width:380px">
     <div class="modal-header">
       <h2>VM Ekle: <span id="pool-vm-pool-label"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-pool-add-vm')"></button>
+      <button class="modal-close" onclick="closeModal('modal-pool-add-vm')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>VM</label>
@@ -8249,8 +8243,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-rbac-grant" onclick="if(event.target===this)closeModal('modal-rbac-grant')">
   <div class="modal" style="width:440px">
     <div class="modal-header">
-      <h2> Kaynak İzni Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-rbac-grant')"></button>
+      <h2>Kaynak İzni Ekle</h2>
+      <button class="modal-close" onclick="closeModal('modal-rbac-grant')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Kullanıcı Adı</label><input id="rbac-username" type="text" class="form-control" placeholder="john"></div>
@@ -8282,7 +8276,7 @@ function clearAppInstall() {
   <div class="modal" style="width:440px">
     <div class="modal-header">
       <h2>Ağ Düzenle: <span id="edit-net-name-label"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-edit-net')"></button>
+      <button class="modal-close" onclick="closeModal('modal-edit-net')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-net-uuid">
@@ -8345,7 +8339,7 @@ function clearAppInstall() {
   <div class="modal" style="width:440px">
     <div class="modal-header">
       <h2>Havuz Düzenle: <span id="edit-pool-name-label"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-edit-pool')"></button>
+      <button class="modal-close" onclick="closeModal('modal-edit-pool')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-pool-uuid">
@@ -8376,7 +8370,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>Yeni Ağ Oluştur</h2>
-      <button class="modal-close" onclick="closeModal('modal-create-net')"></button>
+      <button class="modal-close" onclick="closeModal('modal-create-net')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Ağ Adı</label><input id="net-name" placeholder="custom-net"></div>
@@ -8417,7 +8411,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>Depolama Havuzu Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-create-pool')"></button>
+      <button class="modal-close" onclick="closeModal('modal-create-pool')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Havuz Adı</label><input id="pool-name" placeholder="data-pool"></div>
@@ -8435,7 +8429,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>Yeni Kullanıcı</h2>
-      <button class="modal-close" onclick="closeModal('modal-create-user')"></button>
+      <button class="modal-close" onclick="closeModal('modal-create-user')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Kullanıcı Adı</label><input id="new-username" placeholder="kullanici"></div>
@@ -8464,7 +8458,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>Kullanıcı Düzenle</h2>
-      <button class="modal-close" onclick="closeModal('modal-edit-user')"></button>
+      <button class="modal-close" onclick="closeModal('modal-edit-user')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-user-orig">
@@ -8490,8 +8484,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-vm-assign">
   <div class="modal" style="max-width:520px">
     <div class="modal-header">
-      <h2> VM Atama — <span id="vm-assign-name"></span></h2>
-      <button class="modal-close" onclick="closeModal('modal-vm-assign')"></button>
+      <h2>VM Atama — <span id="vm-assign-name"></span></h2>
+      <button class="modal-close" onclick="closeModal('modal-vm-assign')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
@@ -8526,7 +8520,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2><i class="fa-solid fa-camera" style="margin-right:8px;color:var(--accent-lt)"></i>Snapshot Al</h2>
-      <button class="modal-close" onclick="closeModal('modal-create-snap')"></button>
+      <button class="modal-close" onclick="closeModal('modal-create-snap')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Snapshot Adı</label><input id="new-snap-name" placeholder="snap-2024-01"></div>
@@ -8544,7 +8538,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2><i class="fa-solid fa-robot" style="margin-right:8px;color:var(--accent-lt)"></i>AI Ajan Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-add-agent')"></button>
+      <button class="modal-close" onclick="closeModal('modal-add-agent')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Ajan ID</label><input id="agent-id" placeholder="main-agent"></div>
@@ -8608,7 +8602,7 @@ function clearAppInstall() {
     </div>
     <div class="oxy-header-btns">
       <button class="oxy-header-btn" onclick="clearOxyHistory()" title="Geçmişi temizle">️</button>
-      <button class="oxy-header-btn" onclick="toggleOxyPanel()" title="Kapat"></button>
+      <button class="oxy-header-btn" onclick="toggleOxyPanel()" title="Kapat"><i class="fa-solid fa-xmark"></i></button>
     </div>
   </div>
   <div class="oxy-agent-bar">
@@ -8645,8 +8639,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-vm-template">
   <div class="modal" style="max-width:700px">
     <div class="modal-header">
-      <h2> VM Şablonları</h2>
-      <button class="modal-close" onclick="closeModal('modal-vm-template')"></button>
+      <h2>VM Şablonları</h2>
+      <button class="modal-close" onclick="closeModal('modal-vm-template')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -8685,7 +8679,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>Şablon Kaydet</h2>
-      <button class="modal-close" onclick="closeModal('modal-save-template')"></button>
+      <button class="modal-close" onclick="closeModal('modal-save-template')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Şablon Adı</label><input id="tpl-name" placeholder="my-template"></div>
@@ -8705,8 +8699,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-live-migrate">
   <div class="modal">
     <div class="modal-header">
-      <h2> Canlı Geçiş (Live Migration)</h2>
-      <button class="modal-close" onclick="closeModal('modal-live-migrate')"></button>
+      <h2>Canlı Geçiş (Live Migration)</h2>
+      <button class="modal-close" onclick="closeModal('modal-live-migrate')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Kaynak VM</label>
@@ -8735,7 +8729,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2>⏰ Otomatik Yedekleme Planı</h2>
-      <button class="modal-close" onclick="closeModal('modal-backup-schedule')"></button>
+      <button class="modal-close" onclick="closeModal('modal-backup-schedule')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>VM</label>
@@ -8767,7 +8761,7 @@ function clearAppInstall() {
   <div class="modal">
     <div class="modal-header">
       <h2><i class="fa-solid fa-calendar-check"></i> VM Zamanlaması Ekle</h2>
-      <button class="modal-close" onclick="closeModal('modal-vm-sched')"></button>
+      <button class="modal-close" onclick="closeModal('modal-vm-sched')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-row"><label>Sanal Makine</label>
@@ -8809,7 +8803,7 @@ function clearAppInstall() {
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
       <h2><i class="fa-solid fa-expand"></i> Disk Genişlet</h2>
-      <button class="modal-close" onclick="closeModal('modal-disk-resize')"></button>
+      <button class="modal-close" onclick="closeModal('modal-disk-resize')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div id="disk-resize-vm-name" style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent-lt)"></div>
@@ -8852,8 +8846,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-vm-meta">
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
-      <h2> Not & Etiket</h2>
-      <button class="modal-close" onclick="closeModal('modal-vm-meta')"></button>
+      <h2>Not & Etiket</h2>
+      <button class="modal-close" onclick="closeModal('modal-vm-meta')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div id="vm-meta-name" style="font-size:13px;font-weight:600;color:var(--accent-lt);margin-bottom:12px"></div>
@@ -8888,8 +8882,8 @@ function clearAppInstall() {
 <div class="modal-overlay" id="modal-cdrom">
   <div class="modal" style="max-width:440px">
     <div class="modal-header">
-      <h2> CD-ROM Yönetimi</h2>
-      <button class="modal-close" onclick="closeModal('modal-cdrom')"></button>
+      <h2>CD-ROM Yönetimi</h2>
+      <button class="modal-close" onclick="closeModal('modal-cdrom')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body">
       <div id="cdrom-vm-name" style="font-size:13px;font-weight:600;color:var(--accent-lt);margin-bottom:12px"></div>
@@ -12957,7 +12951,7 @@ async function _loadVdSnapshots(vmId) {
           <td>${escHtml(s.description || "—")}</td>
           <td>
             <button class="btn sm" onclick="revertSnapshot('${vmId}','${escHtml(s.name)}')">↶ Geri Yükle</button>
-            <button class="btn sm danger" onclick="deleteSnapshot('${vmId}','${escHtml(s.name)}')"></button>
+            <button class="btn sm danger" onclick="deleteSnapshot('${vmId}','${escHtml(s.name)}')"><i class="fa-solid fa-trash"></i></button>
           </td>
         </tr>`).join("")
       : `<tr><td colspan="4"><div class="empty-state"><p>Snapshot yok</p></div></td></tr>`;
@@ -14433,7 +14427,7 @@ function loadCustomTemplates() {
         <div class="template-icon"></div>
         <div><div style="font-weight:600;font-size:13px">${escHtml(t.name)}</div>
           <div style="font-size:11px;color:var(--text-muted)">${escHtml(t.desc||'—')} · ${new Date(t.created).toLocaleDateString()}</div></div>
-        <button class="btn sm danger" style="margin-left:auto" onclick="deleteCustomTemplate(${i})"></button>
+        <button class="btn sm danger" style="margin-left:auto" onclick="deleteCustomTemplate(${i})"><i class="fa-solid fa-trash"></i></button>
       </div>`).join('');
 }
 
@@ -14766,7 +14760,7 @@ async function loadPortForwards(vmId) {
       <td style="font-family:monospace">:${escHtml(r.vm_port)}</td>
       <td>
         <button class="btn-danger" style="font-size:10px;padding:2px 7px"
-          onclick="deletePortForward('${escHtml(vmId)}','${escHtml(r.proto)}','${escHtml(r.host_ip||'')}','${escHtml(r.host_port)}','${escHtml(r.vm_ip)}','${escHtml(r.vm_port)}')"></button>
+          onclick="deletePortForward('${escHtml(vmId)}','${escHtml(r.proto)}','${escHtml(r.host_ip||'')}','${escHtml(r.host_port)}','${escHtml(r.vm_ip)}','${escHtml(r.vm_port)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
   `).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:10px;font-size:12px">— Henüz kural yok —</td></tr>';
@@ -15454,12 +15448,12 @@ async function loadNetworks() {
       </td>
       <td>
         <div class="action-btns">
-          <button class="btn sm" onclick="openEditNetwork('${n.uuid}','${escHtml(n.name)}')"></button>
-          <button class="btn sm" style="color:#818cf8" onclick="openIpv6Modal('${n.uuid}','${escHtml(n.name)}')" title="IPv6 yapılandır"> IPv6</button>
+          <button class="btn sm" onclick="openEditNetwork('${n.uuid}','${escHtml(n.name)}')" title="Düzenle"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn sm" style="color:#818cf8" onclick="openIpv6Modal('${n.uuid}','${escHtml(n.name)}')" title="IPv6 yapılandır"><i class="fa-solid fa-globe"></i> IPv6</button>
           ${n.active
-            ? `<button class="btn sm" onclick="netAction('${n.uuid}','stop')">■ Durdur</button>`
-            : `<button class="btn sm success" onclick="netAction('${n.uuid}','start')">▶ Başlat</button>`}
-          <button class="btn sm danger" onclick="deleteNetwork('${n.uuid}','${escHtml(n.name)}')"></button>
+            ? `<button class="btn sm" onclick="netAction('${n.uuid}','stop')" title="Durdur"><i class="fa-solid fa-stop"></i> Durdur</button>`
+            : `<button class="btn sm success" onclick="netAction('${n.uuid}','start')" title="Başlat"><i class="fa-solid fa-play"></i> Başlat</button>`}
+          <button class="btn sm danger" onclick="deleteNetwork('${n.uuid}','${escHtml(n.name)}')" title="Sil"><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     </tr>`).join("") : `<tr><td colspan="8"><div class="empty-state"><div class="icon"></div><h3>Ağ yok</h3></div></td></tr>`;
@@ -15730,8 +15724,8 @@ async function loadPoolList() {
         </td>
         <td>${p.available_gb} GB</td>
         <td><div class="action-btns">
-          <button class="btn sm" onclick="openEditPool('${p.uuid}','${escHtml(p.name)}','${escHtml(p.type)}','${escHtml(p.path)}',${p.capacity_gb},${p.active ? 1:0})"></button>
-          <button class="btn sm danger" onclick="deletePool('${p.uuid}','${escHtml(p.name)}')"></button>
+          <button class="btn sm" onclick="openEditPool('${p.uuid}','${escHtml(p.name)}','${escHtml(p.type)}','${escHtml(p.path)}',${p.capacity_gb},${p.active ? 1:0})"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn sm danger" onclick="deletePool('${p.uuid}','${escHtml(p.name)}')"><i class="fa-solid fa-trash"></i></button>
         </div></td>
       </tr>`;
     }).join("") : `<tr><td colspan="8"><div class="empty-state"><div class="icon"></div><h3>Depolama havuzu yok</h3></div></td></tr>`;
@@ -16066,7 +16060,7 @@ async function _refreshAssignModal() {
       ? assignees.map(u => `
           <span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px">
              ${escHtml(u)}
-            <button onclick="doUnassignVm('${escHtml(u)}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:13px;padding:0 2px;line-height:1"></button>
+            <button onclick="doUnassignVm('${escHtml(u)}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:13px;padding:0 2px;line-height:1"><i class="fa-solid fa-trash"></i></button>
           </span>`).join("")
       : `<span style="color:var(--text-muted);font-size:12px">Atama yok</span>`;
   } catch(e) {
@@ -16287,7 +16281,7 @@ function renderSnapshotTree(snapshots) {
     if (isCurrent) html += ' <span style="color:#22c55e;font-size:10px">[şimdiki]</span>';
     if (node.creation_time) html += `<span style="color:var(--text-muted);font-size:10px;margin-left:8px">${escHtml(String(node.creation_time))}</span>`;
     html += `<button onclick="revertSnapshot('${escHtml(_currentSnapVm)}','${escHtml(node.name)}')" style="margin-left:8px;background:none;border:1px solid rgba(61,130,240,.4);border-radius:3px;padding:1px 6px;font-size:10px;color:var(--accent-lt);cursor:pointer">↩ Geri al</button>`;
-    html += `<button onclick="deleteSnapshot('${escHtml(_currentSnapVm)}','${escHtml(node.name)}')" style="margin-left:4px;background:none;border:1px solid rgba(239,68,68,.4);border-radius:3px;padding:1px 6px;font-size:10px;color:#ef4444;cursor:pointer"></button>`;
+    html += `<button onclick="deleteSnapshot('${escHtml(_currentSnapVm)}','${escHtml(node.name)}')" style="margin-left:4px;background:none;border:1px solid rgba(239,68,68,.4);border-radius:3px;padding:1px 6px;font-size:10px;color:#ef4444;cursor:pointer"><i class="fa-solid fa-trash"></i></button>`;
     html += '</div>';
     node.children.forEach((child, i) => {
       html += renderNode(child, childPrefix, i === node.children.length - 1);
@@ -16505,7 +16499,7 @@ async function loadAIAgents() {
           <span class="badge-dot"></span>${a.running ? "Çalışıyor" : (a.enabled ? "Aktif" : "Pasif")}
         </span>
         <button class="btn sm" onclick="triggerAgent('${escHtml(a.id)}')" title="Şimdi çalıştır">▶</button>
-        <button class="btn sm danger" onclick="deleteAIAgent('${escHtml(a.id)}')"></button>
+        <button class="btn sm danger" onclick="deleteAIAgent('${escHtml(a.id)}')"><i class="fa-solid fa-trash"></i></button>
       </div>
       <div style="display:flex;gap:4px;flex-wrap:wrap;padding-left:18px">
         ${(a.tasks||[]).map(t => `<span style="font-size:10px;padding:2px 7px;background:rgba(42,109,217,.18);border:1px solid rgba(42,109,217,.3);border-radius:3px;color:var(--accent-lt)">${PERM_LABELS[t]||t}</span>`).join("")}
@@ -17509,7 +17503,7 @@ async function loadVmSchedules() {
         <td style="font-family:monospace">${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</td>
         <td style="font-size:11px;color:var(--text-muted)">${days}</td>
         <td><span class="badge-${s.enabled?'success':'muted'}">${s.enabled?'Aktif':'Pasif'}</span></td>
-        <td><button class="btn sm danger" onclick="deleteVmSchedule('${escHtml(s.id)}')"></button></td>
+        <td><button class="btn sm danger" onclick="deleteVmSchedule('${escHtml(s.id)}')"><i class="fa-solid fa-trash"></i></button></td>
       </tr>`;
     }).join('');
   } catch(e) { tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:10px">${escHtml(e.message||String(e))}</td></tr>`; }
@@ -17644,7 +17638,7 @@ async function loadTemplates() {
         ? '<span class="badge-warning" style="font-size:11px"> Disk eksik</span>'
         : `<div style="display:flex;gap:6px">
             <button class="btn-primary btn-sm" style="flex:1" onclick="openDeployTemplate('${escHtml(t.id)}','${escHtml(t.name)}',${t.vcpus||2},${t.memory_mb||2048})">▶ VM Oluştur</button>
-            <button class="btn sm danger" onclick="deleteTemplateConfirm('${escHtml(t.id)}','${escHtml(t.name)}')"></button>
+            <button class="btn sm danger" onclick="deleteTemplateConfirm('${escHtml(t.id)}','${escHtml(t.name)}')"><i class="fa-solid fa-trash"></i></button>
            </div>`
       }
     </div>`;
@@ -17762,7 +17756,7 @@ async function loadBackupSchedules() {
       <td><span class="badge-${s.enabled ? 'success':'muted'}">${s.enabled?'Aktif':'Pasif'}</span></td>
       <td style="display:flex;gap:4px">
         <button class="btn-sm btn-primary" onclick="triggerBackup('${escHtml(s.id)}')">▶ Çalıştır</button>
-        <button class="btn-sm btn-danger" onclick="deleteBackupSchedule('${escHtml(s.id)}')"></button>
+        <button class="btn-sm btn-danger" onclick="deleteBackupSchedule('${escHtml(s.id)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:12px">Zamanlama yok</td></tr>';
@@ -17894,7 +17888,7 @@ async function loadFirewallRules() {
       <td>${r.src_ip||'any'}</td>
       <td>${r.dst_port||'any'}</td>
       <td><span class="badge-${r.action==='accept'?'success':r.action==='drop'?'danger':'warning'}">${(r.action||'—').toUpperCase()}</span></td>
-      <td><button class="btn-danger" onclick="deleteFirewallRule('${r.handle}','${r.chain}')"></button></td>
+      <td><button class="btn-danger" onclick="deleteFirewallRule('${r.handle}','${r.chain}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
   `).join('') || '<tr><td colspan="7" class="text-center text-muted" style="padding:12px">Kural yok</td></tr>';
 }
@@ -17946,7 +17940,7 @@ async function loadVpnPeers() {
       <td><span class="badge-${p.active?'success':'muted'}">${p.active?'Bağlı':'Bağlı Değil'}</span></td>
       <td style="display:flex;gap:4px">
         <button class="btn-sm" onclick="downloadPeerConfig('${escHtml(p.name||p.peer_name)}')"> Config</button>
-        <button class="btn-danger" onclick="deleteVpnPeer('${escHtml(p.name||p.peer_name)}')"></button>
+        <button class="btn-danger" onclick="deleteVpnPeer('${escHtml(p.name||p.peer_name)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:12px">Peer yok</td></tr>';
@@ -17979,7 +17973,7 @@ async function loadDnsHosts() {
   tbody.innerHTML = (d.hosts || []).map(h => `
     <tr>
       <td>${escHtml(h.ip)}</td><td>${escHtml(h.hostname)}</td><td>${escHtml(h.comment||'')}</td>
-      <td><button class="btn-danger" onclick="deleteDnsHost('${escHtml(h.hostname)}')"></button></td>
+      <td><button class="btn-danger" onclick="deleteDnsHost('${escHtml(h.hostname)}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:12px">Kayıt yok</td></tr>';
 }
@@ -18021,7 +18015,7 @@ async function loadNginxSites() {
       <td><span class="badge-${s.enabled?'success':'muted'}">${s.enabled?'Aktif':'Pasif'}</span></td>
       <td style="display:flex;gap:4px">
         <button class="btn-sm" onclick="${s.enabled?'disableNginxSite':'enableNginxSite'}('${escHtml(s.name)}')">${s.enabled?'Pasifleştir':'Aktifleştir'}</button>
-        <button class="btn-danger" onclick="deleteNginxSite('${escHtml(s.name)}')"></button>
+        <button class="btn-danger" onclick="deleteNginxSite('${escHtml(s.name)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:12px">Site yok</td></tr>';
@@ -18572,7 +18566,7 @@ async function loadWebhooks() {
       <td>${(w.events||[]).length} olay</td>
       <td style="display:flex;gap:4px">
         <button class="btn-sm" onclick="testWebhook('${escHtml(w.id)}')">Test</button>
-        <button class="btn-danger" onclick="deleteWebhook('${escHtml(w.id)}')"></button>
+        <button class="btn-danger" onclick="deleteWebhook('${escHtml(w.id)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Webhook yok</td></tr>';
@@ -18623,7 +18617,7 @@ async function loadHooks() {
             <td><span style="font-size:11px;padding:2px 6px;border-radius:3px;background:${s.executable ? 'rgba(var(--success-rgb),.15)' : 'rgba(var(--warn-rgb),.15)'};color:${s.executable ? 'var(--success)' : 'var(--warn)'}">${s.executable ? 'çalıştırılabilir' : 'çalıştırılamaz'}</span></td>
             <td style="display:flex;gap:4px">
               <button class="btn-sm" onclick="editHook('${escHtml(ev)}','${escHtml(s.name)}')">Düzenle</button>
-              <button class="btn-danger" style="padding:3px 8px;font-size:11px" onclick="deleteHook('${escHtml(ev)}','${escHtml(s.name)}')"></button>
+              <button class="btn-danger" style="padding:3px 8px;font-size:11px" onclick="deleteHook('${escHtml(ev)}','${escHtml(s.name)}')"><i class="fa-solid fa-trash"></i></button>
             </td>
           </tr>`).join('')
       : `<tr><td colspan="4" style="font-size:11px;color:var(--text-muted);padding:6px 0">Script yok</td></tr>`;
@@ -18757,7 +18751,7 @@ async function loadVlans() {
     <tr>
       <td>${v.vlan_id}</td><td>${escHtml(v.name)}</td>
       <td>${escHtml(v.parent_iface||'—')}</td><td>${escHtml(v.ip_address||'—')}</td>
-      <td><button class="btn-danger" onclick="deleteVlan(${v.vlan_id})"></button></td>
+      <td><button class="btn-danger" onclick="deleteVlan(${v.vlan_id})"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
   `).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:10px">VLAN yok</td></tr>';
 }
@@ -18810,7 +18804,7 @@ async function loadBgpSettings() {
           <td style="padding:3px 6px">AS${p.peer_asn}</td>
           <td style="padding:3px 6px">AS${p.local_asn}</td>
           <td style="padding:3px 6px"><span style="color:${s.state==='Established'?'#22c55e':'#f87171'}">${escHtml(s.state||'—')}</span></td>
-          <td style="padding:3px 6px"><button class="btn sm danger" onclick="bgpRemovePeer('${escHtml(p.peer_ip)}',${p.local_asn})"></button></td>
+          <td style="padding:3px 6px"><button class="btn sm danger" onclick="bgpRemovePeer('${escHtml(p.peer_ip)}',${p.local_asn})"><i class="fa-solid fa-trash"></i></button></td>
         </tr>`;
       }).join('')}</tbody></table>`
     : `<div style="color:var(--text-muted);font-size:11px">Peer yok</div>`;
@@ -19054,7 +19048,7 @@ async function loadScalerPolicies() {
       <td>${p.min_vcpus||'—'}–${p.max_vcpus||'—'} vCPU</td>
       <td>${p.min_memory_mb||'—'}–${p.max_memory_mb||'—'} MB</td>
       <td><span class="badge-${p.enabled?'success':'muted'}">${p.enabled?'Aktif':'Pasif'}</span></td>
-      <td><button class="btn-danger" onclick="deleteScalerPolicy('${escHtml(p.id)}')"></button></td>
+      <td><button class="btn-danger" onclick="deleteScalerPolicy('${escHtml(p.id)}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
   `).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:10px">Politika yok</td></tr>';
 }
@@ -19075,7 +19069,7 @@ async function loadQuotas() {
       <td>${escHtml(q.vm_id)}</td>
       <td>${q.max_vcpus||'—'} vCPU</td>
       <td>${q.max_memory_mb ? q.max_memory_mb+' MB' : '—'}</td>
-      <td><button class="btn-danger" onclick="deleteQuota('${escHtml(q.vm_id)}')"></button></td>
+      <td><button class="btn-danger" onclick="deleteQuota('${escHtml(q.vm_id)}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Kota yok</td></tr>';
 }
@@ -19498,7 +19492,7 @@ function renderVmFwRules() {
       <td style="padding:4px">${r.port||'*'}</td>
       <td style="padding:4px;color:${r.action==='ACCEPT'?'#34d399':'#f43f5e'}">${r.action}</td>
       <td style="padding:4px">${r.enabled!==false?'':'⏸'}</td>
-      <td style="padding:4px"><button class="btn sm danger" onclick="removeVmFwRule(${i})"></button></td>
+      <td style="padding:4px"><button class="btn sm danger" onclick="removeVmFwRule(${i})"><i class="fa-solid fa-trash"></i></button></td>
     </tr>`).join('')}</tbody>
   </table>`;
 }
@@ -20418,8 +20412,8 @@ async function loadVault() {
           <span style="background:rgba(42,109,217,.2);color:var(--accent-lt);border:1px solid rgba(42,109,217,.3);border-radius:3px;padding:1px 6px;font-size:10px;font-weight:600">${escHtml(e.type)}</span>
           <span style="font-size:12px;flex:1;min-width:80px">${escHtml(e.username)}</span>
           <span id="vault-pw-${escHtml(e.vm_id)}-${escHtml(e.type)}" style="font-size:12px;font-family:monospace;color:var(--text-muted)">••••••••</span>
-          <button class="btn sm" onclick="toggleVaultPassword(this,'${escHtml(e.vm_id)}','${escHtml(e.type)}')" style="font-size:10px"></button>
-          <button class="btn sm" onclick="deleteVaultEntry('${escHtml(e.vm_id)}','${escHtml(e.type)}')" style="font-size:10px;color:#ef4444"></button>
+          <button class="btn sm" onclick="toggleVaultPassword(this,'${escHtml(e.vm_id)}','${escHtml(e.type)}')" style="font-size:10px"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn sm" onclick="deleteVaultEntry('${escHtml(e.vm_id)}','${escHtml(e.type)}')" style="font-size:10px;color:#ef4444"><i class="fa-solid fa-trash"></i></button>
           ${e.note ? `<span style="font-size:10px;color:var(--text-muted);width:100%"> ${escHtml(e.note)}</span>` : ''}
         </div>`).join('');
       return `<div style="margin-bottom:10px">
@@ -20580,7 +20574,7 @@ function loadAlertRules() {
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px">
         <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleAlertRule(${i},this.checked)"> Etkin
       </label>
-      <button class="btn sm" onclick="deleteAlertRule(${i})" style="color:#ef4444;font-size:10px"></button>
+      <button class="btn sm" onclick="deleteAlertRule(${i})" style="color:#ef4444;font-size:10px"><i class="fa-solid fa-trash"></i></button>
     </div>`;
   }).join('');
   loadAlertHistory();
@@ -21132,7 +21126,7 @@ async function hwRefreshPciAttached() {
     const d = await _api(`/api/vms/${_hwVmId}/hardware/pci-devices`);
     const devs = d.devices || [];
     if (!devs.length) { el.textContent = '—'; return; }
-    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.pci)}</code> <button class="btn-sm btn-danger" onclick="hwRemovePci('${escHtml(dev.pci)}')"></button></span>`).join('');
+    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.pci)}</code> <button class="btn-sm btn-danger" onclick="hwRemovePci('${escHtml(dev.pci)}')"><i class="fa-solid fa-trash"></i></button></span>`).join('');
   } catch {}
 }
 async function hwAddPciPassthrough() {
@@ -21175,7 +21169,7 @@ async function hwRefreshUsbAttached() {
     const d = await _api(`/api/vms/${_hwVmId}/hardware/usb-devices`);
     const devs = d.devices || [];
     if (!devs.length) { el.textContent = '—'; return; }
-    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.vendor_id)}:${escHtml(dev.product_id)}</code> <button class="btn-sm btn-danger" onclick="hwRemoveUsb('${escHtml(dev.vendor_id)}','${escHtml(dev.product_id)}')"></button></span>`).join('');
+    el.innerHTML = devs.map(dev => `<span style="margin-right:8px"><code>${escHtml(dev.vendor_id)}:${escHtml(dev.product_id)}</code> <button class="btn-sm btn-danger" onclick="hwRemoveUsb('${escHtml(dev.vendor_id)}','${escHtml(dev.product_id)}')"><i class="fa-solid fa-trash"></i></button></span>`).join('');
   } catch {}
 }
 async function hwAddUsbPassthrough() {
@@ -21317,8 +21311,8 @@ async function loadContainers() {
           ? `<button class="btn-sm btn-danger" onclick="dockerAction('${escHtml(c.id)}','stop')">■ Durdur</button>`
           : `<button class="btn-sm" onclick="dockerAction('${escHtml(c.id)}','start')">▶ Başlat</button>`}
         <button class="btn-sm" onclick="dockerAction('${escHtml(c.id)}','restart')">↺</button>
-        <button class="btn-sm" onclick="showDockerLogs('${escHtml(c.id)}','${escHtml(c.name||'')}')"></button>
-        <button class="btn-sm btn-danger" onclick="dockerAction('${escHtml(c.id)}','rm')"></button>
+        <button class="btn-sm" onclick="showDockerLogs('${escHtml(c.id)}','${escHtml(c.name||'')}')"><i class="fa-solid fa-file-lines"></i></button>
+        <button class="btn-sm btn-danger" onclick="dockerAction('${escHtml(c.id)}','rm')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>`).join('') : '<tr><td colspan="6" class="empty-state">Docker container yok</td></tr>';
   }
@@ -21335,7 +21329,7 @@ async function loadContainers() {
         ${c.state==='running'
           ? `<button class="btn-sm btn-danger" onclick="lxcAction('${escHtml(c.name)}','stop')">■</button>`
           : `<button class="btn-sm" onclick="lxcAction('${escHtml(c.name)}','start')">▶</button>`}
-        <button class="btn-sm btn-danger" onclick="destroyLxc('${escHtml(c.name)}')"></button>
+        <button class="btn-sm btn-danger" onclick="destroyLxc('${escHtml(c.name)}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>`).join('') : '<tr><td colspan="5" class="empty-state">LXC container yok</td></tr>';
   }
@@ -21427,7 +21421,7 @@ async function loadCfTunnels() {
       ${t.status==='active'
         ? `<button class="btn-sm btn-danger" onclick="cfTunnelAction('${escHtml(t.vm_id)}','stop')">■</button>`
         : `<button class="btn-sm" onclick="cfTunnelAction('${escHtml(t.vm_id)}','start')">▶</button>`}
-      <button class="btn-sm btn-danger" onclick="cfTunnelDelete('${escHtml(t.vm_id)}')"></button>
+      <button class="btn-sm btn-danger" onclick="cfTunnelDelete('${escHtml(t.vm_id)}')"><i class="fa-solid fa-trash"></i></button>
     </td>
   </tr>`).join('') : '<tr><td colspan="6" class="empty-state">Tunnel yok</td></tr>';
 }
@@ -21477,7 +21471,7 @@ async function loadHaPage() {
       <td><span class="badge ${n.online?'badge-green':'badge-red'}">${n.online?'Online':'Offline'}</span></td>
       <td>${n.vms !== undefined ? n.vms : '—'}</td>
       <td>${n.libvirt!==undefined ? (n.libvirt ? '' : '') : '—'}</td>
-      <td><button class="btn-sm btn-danger" onclick="removeHaNode('${escHtml(n.ip||'')}')"></button></td>
+      <td><button class="btn-sm btn-danger" onclick="removeHaNode('${escHtml(n.ip||'')}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>`).join('') : '<tr><td colspan="7" class="empty-state">Node yok — tekli node modu</td></tr>';
   }
   // Fill migration VM select
@@ -21729,7 +21723,7 @@ async function loadResourcePools() {
     <td>${(p.vms || []).length} VM</td>
     <td>
       <button class="btn-sm" onclick="openAddVmToPool('${escHtml(p.id||'')}','${escHtml(p.name||'')}')">+ VM</button>
-      <button class="btn-sm btn-danger" onclick="deleteResourcePool('${escHtml(p.id||'')}','${escHtml(p.name||p.id||'')}')"></button>
+      <button class="btn-sm btn-danger" onclick="deleteResourcePool('${escHtml(p.id||'')}','${escHtml(p.name||p.id||'')}')"><i class="fa-solid fa-trash"></i></button>
     </td>
   </tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:10px">Kaynak havuzu yok</td></tr>';
 }
@@ -21784,7 +21778,7 @@ async function loadRbacPerms() {
         <td><code style="font-size:11px">${escHtml(key)}</code></td>
         <td>${escHtml(user)}</td>
         <td>${(ps||[]).map(p=>`<span class="badge" style="font-size:10px;margin:1px;background:var(--surface2)">${escHtml(p)}</span>`).join('')||'—'}</td>
-        <td><button class="btn-sm btn-danger" onclick="deleteRbacPerm('${escHtml(key)}','${escHtml(user)}')"></button></td>
+        <td><button class="btn-sm btn-danger" onclick="deleteRbacPerm('${escHtml(key)}','${escHtml(user)}')"><i class="fa-solid fa-trash"></i></button></td>
       </tr>`);
     }
   }
@@ -21965,7 +21959,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- CPU Pinning Modal -->
 <div id="modal-cpupin" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:520px">
-    <h3> CPU Pinning — <span id="cpupin-vmname"></span></h3>
+    <h3>CPU Pinning — <span id="cpupin-vmname"></span></h3>
     <p style="color:var(--fg2);font-size:13px">vCPU'yu fiziksel CPU çekirdeğine sabitle. VM durmalıysa etkili olmayabilir.</p>
     <div id="cpupin-list" style="margin:12px 0;font-family:monospace;font-size:13px;background:var(--bg2);padding:10px;border-radius:6px;min-height:40px"></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -21981,7 +21975,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- PCI Passthrough Modal -->
 <div id="modal-pci" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:660px">
-    <h3> PCI / USB Passthrough — <span id="pci-vmname"></span></h3>
+    <h3>PCI / USB Passthrough — <span id="pci-vmname"></span></h3>
     <p style="color:var(--fg2);font-size:12px;margin-bottom:12px">Host cihazını doğrudan VM'e aktar. VM kapalıyken daha güvenlidir.</p>
     <div class="sub-tabs" style="margin-bottom:12px">
       <div class="sub-tab active" id="pci-tab-pci" onclick="_pciUsbTab('pci')">️ PCI</div>
@@ -22000,7 +21994,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- VM Firewall Modal -->
 <div id="modal-vm-firewall" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:620px">
-    <h3> VM Firewall — <span id="vmfw-vmname"></span></h3>
+    <h3>VM Firewall — <span id="vmfw-vmname"></span></h3>
     <p style="color:var(--fg2);font-size:13px">Bu VM'e özgü iptables kuralları. FORWARD zinciri üzerinden uygulanır.</p>
     <div id="vmfw-rules-list" style="margin:12px 0;min-height:40px"></div>
     <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-top:8px">
@@ -22037,7 +22031,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- SPICE Info Modal -->
 <div id="modal-ssh" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:440px">
-    <h3> SSH Watchdog</h3>
+    <h3>SSH Watchdog</h3>
     <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">sshd servisi her 60 saniyede otomatik kontrol edilir. Ölürse yeniden başlatılır. Port 22 drop kuralları sistem tarafından engellenir.</p>
     <div id="ssh-modal-body"></div>
     <div style="text-align:right;margin-top:14px">
@@ -22048,7 +22042,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <div id="modal-spice" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:480px">
-    <h3> SPICE Konsol — <span id="spice-vmname"></span></h3>
+    <h3>SPICE Konsol — <span id="spice-vmname"></span></h3>
     <div id="spice-info-content" style="margin:16px 0;font-size:14px"></div>
     <div style="text-align:right"><button class="btn" onclick="document.getElementById('modal-spice').style.display='none'">Kapat</button></div>
   </div>
@@ -22057,7 +22051,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- OVA Import Modal -->
 <div id="modal-ova-import" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:480px">
-    <h3> VM Import</h3>
+    <h3>VM Import</h3>
     <p style="color:var(--fg2);font-size:13px">
       Desteklenen formatlar: <code>.ova</code> <code>.vmdk</code> <code>.ovf</code>
       <code>.qcow2</code> <code>.vhd</code> <code>.vhdx</code> <code>.raw</code>
@@ -22143,7 +22137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="display:flex;gap:6px">
       <button class="btn sm" onclick="loadNotifications()" style="font-size:10px" title="Yenile">↻</button>
       <button class="btn sm" onclick="notifMarkAllRead()" style="font-size:10px">Tümünü okudum</button>
-      <button class="btn sm" onclick="toggleNotifPanel()" style="font-size:10px"></button>
+      <button class="btn sm" onclick="toggleNotifPanel()" style="font-size:10px"><i class="fa-solid fa-xmark"></i></button>
     </div>
   </div>
   <div id="notif-list" style="overflow-y:auto;max-height:60vh"></div>
@@ -22197,7 +22191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ════ Vault Modal ════ -->
 <div id="modal-vault" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:500px">
-    <h3> Vault'a Kimlik Bilgisi Ekle</h3>
+    <h3>Vault'a Kimlik Bilgisi Ekle</h3>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <div class="form-row">
         <label>VM Seç</label>
@@ -22235,7 +22229,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ════ Alert Rule Modal ════ -->
 <div id="modal-alert-rule" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:480px">
-    <h3> Uyarı Kuralı</h3>
+    <h3>Uyarı Kuralı</h3>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <div class="form-row">
         <label>Kural Adı</label>
@@ -22300,7 +22294,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ════ Cost Config Modal ════ -->
 <div id="modal-cost-config" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:420px">
-    <h3> Maliyet Ayarları</h3>
+    <h3>Maliyet Ayarları</h3>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
       <div class="form-row">
         <label>CPU/vCPU/Saat (₺)</label>
@@ -22333,7 +22327,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ════ AI VM Create Modal ════ -->
 <div id="modal-ai-vm" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:560px">
-    <h3> AI ile VM Oluştur</h3>
+    <h3>AI ile VM Oluştur</h3>
     <p style="color:var(--fg2);font-size:13px;margin-bottom:14px">
       Ne tür bir VM oluşturmak istediğinizi açıklayın. AI otomatik yapılandırma önerisi oluşturur.
     </p>
@@ -22371,7 +22365,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- MAC Address Modal -->
 <div id="modal-mac" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:540px">
-    <h3> MAC Adresi — <span id="mac-vmname"></span></h3>
+    <h3>MAC Adresi — <span id="mac-vmname"></span></h3>
     <p style="color:var(--fg2);font-size:13px;margin-bottom:12px">NIC MAC adreslerini görüntüle ve değiştir. Değişiklik için VM kapalıysa XML güncellenir, açıksa hot-plug yapılır.</p>
     <div id="mac-nics-list" style="margin-bottom:14px"></div>
     <div style="background:var(--bg2);padding:12px;border-radius:8px">
@@ -22381,7 +22375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input id="mac-new-input" type="text" placeholder="52:54:00:xx:xx:xx (boş=rastgele)"
                style="flex:2;min-width:180px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);font-family:monospace"
                maxlength="17">
-        <button class="btn sm" onclick="generateMac()" title="Rastgele üret"></button>
+        <button class="btn sm" onclick="generateMac()" title="Rastgele üret"><i class="fa-solid fa-dice"></i></button>
         <button class="btn primary" onclick="doChangeMac()">Uygula</button>
       </div>
     </div>
@@ -22561,9 +22555,9 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- action buttons -->
       <button id="vnc-modal-lock-btn" onclick="vncModalPointerLock()" title="Mouse'u konsola kilitle" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer;white-space:nowrap"> Mouse Kilitle</button>
       <button onclick="vncModalCtrlAltDel()" title="Ctrl+Alt+Del" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer;white-space:nowrap">Ctrl+Alt+Del</button>
-      <button onclick="vncModalPaste()" title="Yapıştır" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer"></button>
+      <button onclick="vncModalPaste()" title="Yapıştır" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer"><i class="fa-solid fa-paste"></i></button>
       <button onclick="vncModalPopout()" title="Ayrı pencerede aç" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer">⤢</button>
-      <button onclick="vncModalFS()" title="Tam Ekran" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer"></button>
+      <button onclick="vncModalFS()" title="Tam Ekran" style="padding:3px 9px;border-radius:5px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-size:11px;cursor:pointer"><i class="fa-solid fa-expand"></i></button>
       <button onclick="closeVncModal()" title="Kapat" style="padding:3px 9px;border-radius:5px;border:1px solid rgba(248,81,73,.4);background:rgba(248,81,73,.08);color:#f85149;font-size:11px;cursor:pointer"> Kapat</button>
     </div>
     <!-- Screen div + loading overlay (direct noVNC — no iframe) -->
@@ -24171,7 +24165,7 @@ async function loadDlpPage() {
     <td style="font-family:monospace;font-size:10px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(rl.pattern)}</td>
     <td><span style="color:${rl.severity==='critical'||rl.severity==='high'?'#f87171':'#eab308'}">${_esc(rl.severity)}</span></td>
     <td><span class="badge-muted">${_esc(rl.action)}</span></td>
-    <td><button class="btn-danger" style="font-size:11px" onclick="dlpDelRule('${_esc(rl.id)}')"></button></td>
+    <td><button class="btn-danger" style="font-size:11px" onclick="dlpDelRule('${_esc(rl.id)}')"><i class="fa-solid fa-trash"></i></button></td>
   </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Kural yok</td></tr>';
 
   document.getElementById('dlp-events-tbody').innerHTML = (e.events||[]).map(ev=>`<tr>
