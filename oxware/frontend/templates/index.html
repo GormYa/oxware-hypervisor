@@ -11416,6 +11416,12 @@ function buildContextNav(type) {
       <div style="display:flex;justify-content:space-between"><span>CPU</span><span id="sb-cpu-count" style="color:var(--text)">—</span></div>
       <div style="display:flex;justify-content:space-between"><span>KVM</span><span id="sb-kvm" style="color:#22c55e">—</span></div>
     </div>
+    <!-- vCenter bağlantı durumu -->
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:7px">
+      <i class="fa-solid fa-diagram-project" style="color:var(--text-muted);font-size:12px"></i>
+      <span style="font-size:11px;color:var(--text-muted)">vCenter</span>
+      <span id="sb-vcenter-state" style="margin-left:auto;font-size:9px;font-weight:600;color:var(--text-dim);background:var(--surface3);border:1px solid var(--border);border-radius:10px;padding:1px 8px">Yakında</span>
+    </div>
   </div>`;
     // Load host info into sidebar (async, non-blocking)
     setTimeout(() => { try { _loadSidebarHost(); } catch(_){} }, 100);
