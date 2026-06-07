@@ -757,8 +757,10 @@ if [ -d "\${INSTALL_DIR}/.git" ]; then
  git fetch origin main
  git reset --hard origin/main
  echo -e "\${GREEN}[OK]\${NC} Kod güncellendi"
- # Gereksiz döküman dosyalarını temizle
- rm -rf "\${INSTALL_DIR}"/{LICENSE,CNAME,CHANGELOG.md,README.md,SECURITY.md,THREAT_MODEL.md,CONTRIBUTING.md,planning,tests,.github} 2>/dev/null || true
+ # Gereksiz döküman dosyalarını temizle (brace expansion YOK — unquoted heredoc'ta patlar)
+ for _j in LICENSE CNAME CHANGELOG.md README.md SECURITY.md THREAT_MODEL.md CONTRIBUTING.md planning tests .github; do
+ rm -rf "\${INSTALL_DIR}/\${_j}" 2>/dev/null || true
+ done
  # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
  if [ -f "\${INSTALL_DIR}/install.sh" ]; then
  echo -e "\${CYAN}[i]\${NC} CLI araçları yenileniyor (ox / oxupdate)..."
