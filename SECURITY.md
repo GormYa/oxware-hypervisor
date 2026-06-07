@@ -1,170 +1,150 @@
 # Security Policy
 
+This document describes how to report a security vulnerability in OXware and
+what to expect after you report it.
+
+---
+
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 2.5.x (latest) | Active support |
-| 2.x (older) | WARN️ Security patches only |
-| 1.x | End of life |
+Only the latest minor release receives security patches.
+
+| Version | Status                  |
+|---------|-------------------------|
+| 2.6.x   | Supported               |
+| 2.5.x   | End of life 2026-09-01  |
+| 2.4.x   | End of life             |
+| older   | End of life             |
+
+If you are running an unsupported version, upgrade before reporting an issue.
+We will not produce patches for end-of-life branches.
+
+---
 
 ## Reporting a Vulnerability
 
-**Do NOT open a public GitHub issue for security vulnerabilities.**
+Do not open a public GitHub issue for a security vulnerability.
 
-Report vulnerabilities privately via one of the following:
+Send a report to `security@oxware.top`.
 
-- **Email:** root@oxware.top
-- **GitHub Private Advisory:** [Security Advisories](https://github.com/ShinnAsukha/oxware-hypervisor/security/advisories/new)
+If you prefer encrypted email, use our PGP key. The current fingerprint is:
 
-### What to include
+```
+PGP fingerprint: TBD (will be published before 2.6.4)
+```
 
-- Description of the vulnerability
-- Steps to reproduce
-- Affected component (backend, frontend, installer, license system)
-- Potential impact assessment
-- Your suggested fix (optional)
+Include in your report:
 
-### Response timeline
+- A description of the vulnerability.
+- A minimal proof of concept, if you have one.
+- The affected version (`oxware --version`).
+- Your name or handle if you would like to be credited.
 
-| Stage | Timeframe |
-|-------|-----------|
-| Initial acknowledgement | Within 48 hours |
-| Triage & severity assessment | Within 7 days |
-| Fix development | Within 30 days (critical: 7 days) |
-| Public disclosure | After fix is released |
-
-We follow **responsible disclosure** — we will coordinate with you before any public announcement.
+You may also submit privately through GitHub Security Advisories:
+https://github.com/ShinnAsukha/oxware-hypervisor/security/advisories/new
 
 ---
 
-## Security Architecture
+## Response Timeline
 
-OXware runs as root on a KVM hypervisor host. The attack surface includes:
+- Acknowledgement within 72 hours of receipt.
+- Initial triage and severity assessment within 7 days.
+- Patch for critical issues within 14 days.
+- Patch for high-severity issues within 30 days.
+- Patch for medium and low severity within 90 days.
 
-| Component | Notes |
-|-----------|-------|
-| Web UI (HTTPS :8006) | Flask + self-signed SSL, JWT auth |
-| libvirt socket | Unix socket, root only |
-| VNC ports (5900–5999) | Per-VM, bound to host |
-| noVNC WebSocket (:6080) | Proxied through OXware |
-
-### Default hardening
-
-- UFW firewall enabled on install (SSH + 8006 + VNC only)
-- fail2ban active on SSH and web UI
-- SSL/TLS enforced on all web traffic
-- JWT tokens HS256-only (alg:none blocked)
-- All VM operations require authentication
-- PBKDF2-SHA256 with 260,000 iterations for passwords
-- Machine-ID based AES-256-CBC credential encryption
+These are targets, not guarantees. We will keep you informed if a fix takes
+longer.
 
 ---
 
-## Known Security Considerations
+## Disclosure Policy
 
-- **Self-signed SSL:** Browsers will show a warning. Replace with a trusted certificate for production use.
-- **Root process:** OXware runs as root (required for KVM/libvirt). Restrict network access accordingly.
-- **VNC ports:** VNC sessions are not encrypted by default. Use noVNC (WebSocket proxy) or a VPN.
-- **SSH key-only:** Installer configures SSH with `PermitRootLogin prohibit-password`. Use SSH keys.
-- **CORS:** Configure `cors_origins` in `/etc/oxware/oxware.conf` if frontend and API are on different origins.
+We follow coordinated disclosure with a 90-day deadline.
 
----
-
-## v2.5 Security Fixes — Güvenlik Güncellemesi
-
-Aşağıdaki bulgular v2.5 sürümünde çözülmüş ve kullanıcılara açıklanmıştır.
-
-### Kritik (Critical)
-
-| ID | Başlık | CVSS | Durum |
-|----|--------|------|-------|
-| OXW-2026-014 | `/api/update/*` uçnoktalarında rol kontrolü eksikliği — herhangi bir kullanıcı supply-chain RCE yapabiliyordu | 9.9 | **Düzeltildi** — `@require_role("administrator")` eklendi |
-| OXW-2026-015 | Güncelleyicide repo_url allow-list yoktu — zararlı repo URL kabul ediliyordu | 9.1 | **Düzeltildi** — `UPDATE_ALLOWED_REPOS` config ile kısıtlandı |
-| OXW-2026-001 | CSRF "token yoksa geç" baypası — çift gönderim koruması işlevsizdi | 9.0 | **Düzeltildi** — Bearer header hariç tüm isteklerde token zorunlu |
-| OXW-2026-002 | CORS `origins="*"` + `supports_credentials=True` — CSRF ile zincirlenince admin RCE | 8.8 | **Düzeltildi** — Config tabanlı beyaz liste; wildcard kaldırıldı |
-
-### Yüksek (High)
-
-| ID | Başlık | CVSS | Durum |
-|----|--------|------|-------|
-| OXW-2026-016 | VNC WebSocket çerçeve uzunluğu sınırsızdı — bellek bombası DoS | 7.5 | **Düzeltildi** — 16 MiB çerçeve sınırı |
-| OXW-2026-005 | `/api/auth/2fa/debug` anlık TOTP kodunu döndürüyordu — 2FA bypass | 7.1 | **Düzeltildi** — Endpoint üretimden kaldırıldı (410 Gone) |
-| OXW-2026-004 | XFF başlığı ile rate-limit ve lockout bypass | 7.5 | **Düzeltildi** — Yalnızca `trusted_proxies` CIDR'inden XFF kabul |
-| OXW-2026-018 | LDAP arama filtresi enjeksiyonu — kullanıcı sayımı | 7.0 | **Düzeltildi** — RFC 4515 escape (`_ldap_escape`) |
-| rapor #33 | SSH `PermitRootLogin yes` + `PasswordAuthentication yes` — brute-force davetiyesi | HIGH | **Düzeltildi** — `prohibit-password` + `PasswordAuthentication no` |
-| rapor #6 | Update endpoint: herhangi bir kullanıcı supply-chain RCE | HIGH | **Düzeltildi** (OXW-2026-014 ile) |
-
-### Orta (Medium)
-
-| ID | Başlık | CVSS | Durum |
-|----|--------|------|-------|
-| OXW-2026-020 | `_2fa_pending` kilitsiz TOCTOU + bellek sızıntısı | 5.3 | **Düzeltildi** — `threading.Lock` + atomik pop + cleanup thread |
-| OXW-2026-019 | API key ham SHA-256 + sabit-zamanlı olmayan karşılaştırma | 5.0 | **Düzeltildi** — HMAC-SHA256 (pepper) + `hmac.compare_digest` |
-| OXW-2026-017 | Webhook URL SSRF — iç ağ taraması yapılabiliyordu | 6.5 | **Düzeltildi** — RFC1918/loopback/link-local block-list |
-| OXW-2026-007 | `/api/pentest/run` SSRF — yönetici iç ağa yönlendirme | 6.5 | **Düzeltildi** — İç ağ block-list zorunlu |
-| OXW-2026-006 | Lockout state bellekte — yeniden başlatmada sıfırlanıyordu | 5.3 | **Düzeltildi** — `lockouts.json` diske persist |
-| OXW-2026-011 | DiyOcp PHP TLS doğrulama devre dışı seçeneği | 4.2 | **Düzeltildi** — `CURLOPT_SSL_VERIFYPEER` her zaman true |
-| rapor #19 | Parola politikası yoktu — "123456" gibi şifreler kabul ediliyordu | MEDIUM | **Düzeltildi** — Uzunluk, karmaşıklık, yaygın şifre kontrolü |
-
-### Düşük (Low) / Bilgi (Info)
-
-| ID | Başlık | Durum |
-|----|--------|-------|
-| OXW-2026-013 | Legacy SHA256 migration flag hatası | **Düzeltildi** — `migrated = True` atama hatası giderildi |
-| OXW-2026-010 | `install.sh` `set -e` devre dışıydı — sessiz kurulum hataları | **Düzeltildi** — `set -uo pipefail` aktif |
-| Hardcoded IP | `pentest.py` içinde production sunucu IP'si açık kodda | **Düzeltildi** — `REDACTED_HOST` -> `127.0.0.1`, git geçmişi temizlendi |
-| OXW-2026-008 | VNC JWT sorgu dizesinde — tek kullanımlık token sistemi | **Düzeltildi** — `_vnc_one_time_tokens` + 60s TTL |
-| OXW-2026-009 | libvirt `auth_unix_rw="none"` -> polkit geçişi | **Düzeltildi** — `polkit` auth + polkit rules |
-| OXW-2026-012 | Login timing oracle — sabit-zamanlı dummy PBKDF2 | **Düzeltildi** — `_dummy_pbkdf2()` ile sabit-zamanlı doğrulama |
-| rapor #15 | Login büyük/küçük harf bypass | **Düzeltildi** — `username.lower()` normalizasyonu |
-| rapor #16 | Stateless JWT revocation — aktif token blocklist | **Düzeltildi** — `revoke_all_user_sessions()` + `is_revoked(jti)` |
-| rapor #28 | WebSocket wildcard (`*`) — kiracı izolasyonu | **Düzeltildi** — vm-user rolünde wildcard engellendi |
-| rapor #30 | `/api/system/processes` herkese açıktı | **Düzeltildi** — admin/administrator rolü zorunlu |
-| rapor #34 | Ghost persistence — uninstall eksik temizlik | **Düzeltildi** — uninstall.sh adım 11–13: tunnel, polkit, cron |
-| rapor #38 | PTY shell audit log yok | **Düzeltildi** — `audit_log.log_action()` shell açılışında |
-| rapor #39 | Fork bomb koruması yok | **Düzeltildi** — `RLIMIT_NPROC=128, RLIMIT_NOFILE=1024` |
-| rapor #43 | ISO delete/rename URL path traversal | **Düzeltildi** — `validate_filename(name)` eklendi |
-| rapor #44 | Rate limiter OOM — sınırsız bucket | **Düzeltildi** — `_MAX_BUCKETS=50_000` + LRU eviction |
-| rapor #53 | Systemd kaynak limiti yok | **Düzeltildi** — `MemoryMax=2G, TasksMax=512, LimitNOFILE=65536` |
-| rapor #58 | Cloudflare tunnel token plaintext | **Düzeltildi** — 0600 dosya izni + tunnel_id API yanıtından kaldırıldı |
-| rapor #61 | nginx config injection | **Düzeltildi** — `_sanitize_nginx_token()` |
-| rapor #62 | Notes stored XSS | **Düzeltildi** — HTML tag stripping (`_sanitize_note()`) |
-| rapor #67 | SQL injection (audit_log/perf_history) | **Geçerli Değil** — Parametre bağlama (`?`) kullanılıyor |
-| rapor #70 | QCOW2 header doğrulama eksikliği | **Düzeltildi** — Magic bytes `QFIû` kontrolü import öncesi |
-| rapor #71 | Guest agent exec allow-list yok | **Düzeltildi** — Komut beyaz listesi + metachar arg validasyonu |
-| rapor #74 | BGP vtysh description/password injection | **Düzeltildi** — `_sanitize_bgp_str()` + prefix uzunluk validasyonu |
-| OXW-2026-003 | `/api/system/execute` shell=True sınırsız RCE | **Düzeltildi** — Komut whitelist + `shell=False` |
-| rapor #25 | VM disk/RAM quota — per-kullanıcı limit yok | **Düzeltildi** — `check_quota()` kullanıcı bazlı + `max_vcpus_per_user`, `max_memory_mb_per_user` |
-
-
----
-
-## Vulnerability Disclosure History
-
-| CVE / ID | Severity | Component | Status |
-|----------|----------|-----------|--------|
-| OMERATI-2026-001 | **Critical** (CVSS 9.4) | VNC WebSocket middleware | Fixed in v2.2.1 |
-| OMERATI-2026-002 | **Critical** (CVSS 9.8) | Password reset API | Fixed in v2.2.2 |
-| OXW-2026-014 | **Critical** (CVSS 9.9) | Update endpoint auth bypass | Fixed in v2.5.0 |
-| OXW-2026-001 | **Critical** (CVSS 9.0) | CSRF bypass | Fixed in v2.5.0 |
-| OXW-2026-002 | **Critical** (CVSS 8.8) | CORS wildcard + credentials | Fixed in v2.5.0 |
-| OXW-2026-015 | **Critical** (CVSS 9.1) | Updater signature/allowlist | Fixed in v2.5.0 |
-| OXW-2026-016 | **High** (CVSS 7.5) | WebSocket memory bomb DoS | Fixed in v2.5.0 |
-| OXW-2026-005 | **High** (CVSS 7.1) | 2FA debug TOTP leak | Fixed in v2.5.0 |
-| OXW-2026-004 | **High** (CVSS 7.5) | XFF rate-limit bypass | Fixed in v2.5.0 |
-| OXW-2026-018 | **High** (CVSS 7.0) | LDAP filter injection | Fixed in v2.5.0 |
+- We will work with you on a fix and a disclosure date.
+- If we are unable to release a fix within 90 days, you may publish your
+  findings. We ask that you tell us first.
+- After a fix is released we publish a GitHub Security Advisory and note the
+  issue in `CHANGELOG.md`.
 
 ---
 
 ## Hall of Fame
 
-We thank the following researchers for responsible disclosures:
+We credit researchers who report vulnerabilities responsibly.
 
-- **OMERATI-2026-001** — VNC WebSocket role bypass. Fixed in v2.2.1.
-- **OMERATI-2026-002** — Unauthenticated password reset RCE. Fixed in v2.2.2.
-- **Zencefil Efendi** @zencefilefendi — Comprehensive white-box security audit (2026-05-24). 20 findings including 4 critical attack chains. All critical and high findings addressed in v2.5.0.
+| Researcher | Issue | Year |
+|------------|-------|------|
+| _(placeholder)_ | _(placeholder)_ | _(placeholder)_ |
+
+If you want to be listed, say so in your report.
 
 ---
 
-*OXware Security Team — root@oxware.top*
+## Past Advisories
+
+Published advisories are listed at:
+https://github.com/ShinnAsukha/oxware-hypervisor/security/advisories
+
+### Security Patch Summary
+
+The following patches were issued in the 2.6.1 release:
+
+- SEC-001: API keys are read from `/etc/oxware/oxware.conf` (mode 0600)
+  instead of process environment variables.
+- SEC-002: WebSocket authentication tokens are no longer passed in the URL
+  query string; they are sent in the first frame after connect.
+- SEC-003: JWT revocation list is consulted on every request, not only at
+  refresh time.
+- SEC-004: Audit log entries are hash-chained with SHA-256 so deletion or
+  reordering is detectable.
+- SEC-005: Login timing is equalized between unknown user and incorrect
+  password to prevent user enumeration.
+- SEC-006: Console session recordings are stored in a directory with mode
+  0700, owned by the `oxware` user.
+- SEC-007: Storage endpoints resolve paths with `os.path.realpath` and
+  reject any path outside the configured root.
+- SEC-008: All state-changing endpoints require a double-submit CSRF token.
+
+---
+
+## Hardening Recommendations
+
+See the "Security" section of the `README.md` for the recommended
+configuration of nginx, sudo, file permissions, and operating system
+hardening.
+
+---
+
+## Out of Scope
+
+The following findings are not eligible for a security advisory:
+
+- Denial of service against publicly available test instances.
+- Missing security headers on `/docs` (Swagger UI) when the docs endpoint
+  is enabled.
+- Self-XSS that requires a user to paste content into their own browser
+  console.
+- Missing best-practice cookie flags on a development server running in
+  debug mode.
+- Reports generated solely by automated scanners without a working proof
+  of concept.
+- Issues in dependencies for which an upstream advisory already exists.
+
+---
+
+## Bounty Program
+
+OXware does not currently offer a paid bug bounty.
+
+If a bounty program is established in a future release, it will be announced
+on the project website and linked from this document.
+
+---
+
+## Contact
+
+- Security email: `security@oxware.top`
+- General contact: `hello@oxware.top`
+- GitHub: https://github.com/ShinnAsukha/oxware-hypervisor

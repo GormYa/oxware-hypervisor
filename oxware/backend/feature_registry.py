@@ -139,6 +139,13 @@ FEATURE_MANIFEST = [
     # ── v2.6.2 — Green Mode + OS branding + web installer ────────────────────────
     {"id": "green_mode",    "name": "Green Mode (Power AI)",  "category": "automation",   "module": "green_mode",          "status": "beta",   "version": "2.6.2"},
     {"id": "os_branding",   "name": "OS Rebranding",          "category": "lifecycle",    "module": "_script",             "status": "beta",   "version": "2.6.2"},
+
+    # ── v2.6.3 — Multi-Region, Marketplace, Cloud Burst, Bare-Metal, OAuth2 ──
+    {"id": "multi_region",  "name": "Multi-Region Placement", "category": "automation",   "module": "multi_region",        "status": "beta",   "version": "2.6.3"},
+    {"id": "marketplace",   "name": "App Marketplace",        "category": "automation",   "module": "app_marketplace",     "status": "beta",   "version": "2.6.3"},
+    {"id": "cloud_burst",   "name": "Cloud Bursting",         "category": "automation",   "module": "cloud_burst",         "status": "beta",   "version": "2.6.3"},
+    {"id": "bare_metal",    "name": "Bare-Metal Provisioning","category": "lifecycle",    "module": "bare_metal",          "status": "beta",   "version": "2.6.3"},
+    {"id": "oauth2_sso",    "name": "OAuth 2.0 SSO",          "category": "security",     "module": "oauth2_sso",          "status": "beta",   "version": "2.6.3"},
 ]
 
 

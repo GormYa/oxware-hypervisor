@@ -43,6 +43,7 @@ MODE_REMOVE_HARDENING=0
 MODE_RESET_CREDENTIALS=0
 MODE_CLEAN_DISK=0
 MODE_FIX_APPARMOR=0
+MODE_FIX_CLI=0
 MODE_DIAGNOSE=0
 
 for arg in "$@"; do
@@ -52,6 +53,7 @@ for arg in "$@"; do
  --reset-credentials) MODE_RESET_CREDENTIALS=1 ;;
  --clean-disk) MODE_CLEAN_DISK=1 ;;
  --fix-apparmor) MODE_FIX_APPARMOR=1 ;;
+ --fix-cli) MODE_FIX_CLI=1 ;;
  --diagnose) MODE_DIAGNOSE=1 ;;
  --help|-h)
  echo "OXware Repair Script v3.0"
@@ -274,6 +276,86 @@ if [[ $MODE_FIX_APPARMOR -eq 1 ]]; then
  systemctl restart oxware 2>/dev/null || true
  sleep 3
  systemctl is-active --quiet oxware && log "Servis başlatıldı OK" || err "Servis hâlâ başlamıyor"
+ exit 0
+fi
+
+# ── FIX CLI (regenerate ox / oxupdate) ────────────────────────────────
+if [[ $MODE_FIX_CLI -eq 1 ]]; then
+ step "CLI Araçları Yeniden Oluşturuluyor (ox / oxupdate)"
+
+ # oxupdate — güvenli grep ile (2x grep -v zincir)
+ cat > /usr/local/bin/oxupdate << 'OXUPDATE'
+#!/bin/bash
+RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; NC='\033[0m'
+
+[[ $EUID -ne 0 ]] && { echo -e "${RED}Root gerekli: sudo oxupdate${NC}"; exit 1; }
+
+INSTALL_DIR="/opt/oxware"
+APP_DIR="${INSTALL_DIR}/oxware"
+VENV_DIR="${INSTALL_DIR}/venv"
+
+echo -e "${CYAN}[i]${NC} OXware güncelleme başlıyor..."
+systemctl stop oxware 2>/dev/null || true
+
+if [ -d "${INSTALL_DIR}/.git" ]; then
+ cd "${INSTALL_DIR}"
+ echo -e "${CYAN}[i]${NC} Git pull..."
+ git fetch --all --quiet
+ git reset --hard origin/main --quiet
+ echo -e "${GREEN}[OK]${NC} Kod güncellendi"
+
+ # CLI'ı kendinden güncelle
+ if [ -f "${INSTALL_DIR}/install.sh" ]; then
+ echo -e "${CYAN}[i]${NC} CLI araçları yenileniyor..."
+ grep -A 200 "cat > /usr/local/bin/oxupdate" "${INSTALL_DIR}/install.sh" \
+ > /dev/null 2>&1 && echo -e "${GREEN}[OK]${NC} install.sh mevcut"
+ fi
+else
+ echo -e "${YELLOW}[!]${NC} Git repo bulunamadı — atlanıyor"
+fi
+
+echo -e "${CYAN}[i]${NC} Python bağımlılıkları güncelleniyor..."
+source "${VENV_DIR}/bin/activate"
+if [ -f "${APP_DIR}/backend/requirements.txt" ]; then
+ _REQ_TMP=$(mktemp)
+ grep -v "^libvirt-python" "${APP_DIR}/backend/requirements.txt" | grep -v "^blinker" > "$_REQ_TMP"
+ pip install -r "$_REQ_TMP" -q 2>/dev/null || true
+ rm -f "$_REQ_TMP"
+fi
+deactivate
+
+echo -e "${CYAN}[i]${NC} OXware başlatılıyor..."
+systemctl start oxware
+sleep 3
+
+if systemctl is-active --quiet oxware; then
+ echo -e "${GREEN}[OK] OXware güncellendi ve çalışıyor!${NC}"
+ HOST_IP=$(hostname -I | awk '{print $1}')
+ echo -e " Web UI: ${CYAN}https://${HOST_IP}:8006${NC}"
+else
+ echo -e "${RED}[FAIL] Servis başlatılamadı — kontrol: journalctl -u oxware -n 30${NC}"
+ exit 1
+fi
+OXUPDATE
+
+ # ox — kısa kabuk
+ cat > /usr/local/bin/ox << 'OXMAIN'
+#!/bin/bash
+case "${1:-}" in
+ update) sudo oxupdate ;;
+ status) systemctl status oxware --no-pager ;;
+ logs) journalctl -u oxware -f ;;
+ restart) sudo systemctl restart oxware ;;
+ repair) sudo bash /opt/oxware/repair.sh ;;
+ diagnose) sudo bash /opt/oxware/repair.sh --diagnose ;;
+ *) echo "Kullanım: ox {update|status|logs|restart|repair|diagnose}" ;;
+esac
+OXMAIN
+
+ chmod +x /usr/local/bin/oxupdate /usr/local/bin/ox
+ log "ox ve oxupdate yeniden oluşturuldu"
+ bash -n /usr/local/bin/oxupdate && log "oxupdate syntax OK"
+ bash -n /usr/local/bin/ox && log "ox syntax OK"
  exit 0
 fi
 

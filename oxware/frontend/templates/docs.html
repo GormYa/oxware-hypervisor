@@ -380,12 +380,12 @@
 
       <h3>Architecture</h3>
       <pre><code>Browser (SPA — dark theme, PWA, multi-language)
-  ├── REST API  Flask 3.x + Flask-SocketIO (real-time events)
+  ├── REST API Flask 3.x + Flask-SocketIO (real-time events)
   ├── JWT auth middleware + RBAC layer
-  ├── libvirt / QEMU-KVM  (VM lifecycle, XML domain management)
-  ├── noVNC WebSocket proxy  (browser VNC console)
-  ├── nftables  (per-VM and global firewall rules)
-  └── Nginx  (TLS termination, reverse proxy, Let's Encrypt)</code></pre>
+  ├── libvirt / QEMU-KVM (VM lifecycle, XML domain management)
+  ├── noVNC WebSocket proxy (browser VNC console)
+  ├── nftables (per-VM and global firewall rules)
+  └── Nginx (TLS termination, reverse proxy, Let's Encrypt)</code></pre>
 
       <h3>Requirements</h3>
       <table>
@@ -554,9 +554,9 @@
         <li>Go to <strong>Settings → Backup → SFTP/ESXi Yedek</strong>.</li>
         <li>Enter your ESXi host IP, SSH username, password or private key path.</li>
         <li>Select the <strong>import network</strong> from the dropdown.</li>
-        <li>Click <strong>📂 Dosyaları Listele</strong> — OXware connects via SFTP and lists the remote filesystem.</li>
+        <li>Click <strong> Dosyaları Listele</strong> — OXware connects via SFTP and lists the remote filesystem.</li>
         <li>Navigate to your datastore directory (e.g. <code>/vmfs/volumes/datastore1/myvm/</code>).</li>
-        <li>Click <strong>⬇ İndir+Import</strong> on any <code>.vmdk</code>, <code>.ova</code>, or <code>.qcow2</code> file.</li>
+        <li>Click <strong> İndir+Import</strong> on any <code>.vmdk</code>, <code>.ova</code>, or <code>.qcow2</code> file.</li>
         <li>OXware downloads the file in the background, converts it with <code>qemu-img</code>, and registers it in libvirt. Track progress in the Tasks panel.</li>
       </ol>
       <div class="callout callout-info">
@@ -583,9 +583,9 @@ curl -X POST https://localhost:8006/api/import/ova \
       <p>Zero-downtime migration between two OXware servers running KVM. Both nodes must have SSH access to each other and shared or compatible storage.</p>
       <pre><code>POST /api/vms/migrate
 {
-  "vm_id":      "myvm",
+  "vm_id": "myvm",
   "target_host": "192.168.1.20",
-  "protocol":   "qemu+ssh"
+  "protocol": "qemu+ssh"
 }</code></pre>
       <p>This calls <code>virsh migrate --live --persistent</code> under the hood. The VM keeps running during transfer; downtime is typically &lt; 1 second at final memory sync.</p>
 
@@ -679,7 +679,7 @@ curl -X POST https://localhost:8006/api/import/ova \
 
       <h3>Paste Support</h3>
       <ul>
-        <li><strong>noVNC:</strong> Click <em>📋 Yapıştır</em> toolbar button or press <kbd>Ctrl+Shift+V</kbd></li>
+        <li><strong>noVNC:</strong> Click <em> Yapıştır</em> toolbar button or press <kbd>Ctrl+Shift+V</kbd></li>
         <li><strong>xterm.js / Shell:</strong> <kbd>Ctrl+Shift+V</kbd>, right-click, or the Paste button</li>
       </ul>
       <p class="callout callout-info">Browser clipboard API requires HTTPS and explicit permission. Chrome/Edge: allow clipboard access in the address bar lock icon.</p>
@@ -808,7 +808,7 @@ ethernets:
       addresses: [8.8.8.8, 1.1.1.1]</code></pre>
 
       <h3>Network DHCP Live Edit <span class="tag tag-green">v2.6.1</span></h3>
-      <p>Click the <strong>✏</strong> button on any virtual network to open the edit modal. You can modify Gateway, Netmask, DHCP Start, and DHCP End. OXware stops the network, redefines it with updated XML, then restarts it — matching the <code>virsh net-destroy / net-define / net-start</code> workflow.</p>
+      <p>Click the <strong></strong> button on any virtual network to open the edit modal. You can modify Gateway, Netmask, DHCP Start, and DHCP End. OXware stops the network, redefines it with updated XML, then restarts it — matching the <code>virsh net-destroy / net-define / net-start</code> workflow.</p>
 
       <h3>Subnet Calculator <span class="tag tag-green">v2.6.1</span></h3>
       <p>Available in <strong>Network → IPAM</strong> at the bottom of the page. Enter any CIDR (e.g. <code>10.0.1.0/22</code>) to instantly see: Network address, Broadcast, First/Last host, Host count, Subnet mask, Wildcard, IP class, RFC1918 status, and binary representation. No server round-trip.</p>
@@ -947,18 +947,18 @@ ethernets:
       <table>
         <thead><tr><th>Region</th><th>Name</th><th>Country</th></tr></thead>
         <tbody>
-          <tr><td>🇹🇷 Turkey</td><td>İstanbul — Superonline</td><td>TR</td></tr>
-          <tr><td>🇹🇷 Turkey</td><td>İstanbul — Türk Telekom</td><td>TR</td></tr>
-          <tr><td>🇹🇷 Turkey</td><td>Ankara — Vodafone TR</td><td>TR</td></tr>
-          <tr><td>🇹🇷 Turkey</td><td>İzmir — Turkcell</td><td>TR</td></tr>
-          <tr><td>🇩🇪 Europe</td><td>Frankfurt — Linode</td><td>DE</td></tr>
-          <tr><td>🇳🇱 Europe</td><td>Amsterdam — Linode</td><td>NL</td></tr>
-          <tr><td>🇬🇧 Europe</td><td>London — Linode</td><td>GB</td></tr>
-          <tr><td>🇺🇸 Americas</td><td>New York — Linode</td><td>US</td></tr>
-          <tr><td>🇺🇸 Americas</td><td>Los Angeles — Linode</td><td>US</td></tr>
-          <tr><td>🇸🇬 Asia-Pacific</td><td>Singapore — Linode</td><td>SG</td></tr>
-          <tr><td>🇯🇵 Asia-Pacific</td><td>Tokyo — Linode</td><td>JP</td></tr>
-          <tr><td>🌍 Global</td><td>Cloudflare CDN</td><td>GLOBAL</td></tr>
+          <tr><td> Turkey</td><td>İstanbul — Superonline</td><td>TR</td></tr>
+          <tr><td> Turkey</td><td>İstanbul — Türk Telekom</td><td>TR</td></tr>
+          <tr><td> Turkey</td><td>Ankara — Vodafone TR</td><td>TR</td></tr>
+          <tr><td> Turkey</td><td>İzmir — Turkcell</td><td>TR</td></tr>
+          <tr><td> Europe</td><td>Frankfurt — Linode</td><td>DE</td></tr>
+          <tr><td> Europe</td><td>Amsterdam — Linode</td><td>NL</td></tr>
+          <tr><td> Europe</td><td>London — Linode</td><td>GB</td></tr>
+          <tr><td> Americas</td><td>New York — Linode</td><td>US</td></tr>
+          <tr><td> Americas</td><td>Los Angeles — Linode</td><td>US</td></tr>
+          <tr><td> Asia-Pacific</td><td>Singapore — Linode</td><td>SG</td></tr>
+          <tr><td> Asia-Pacific</td><td>Tokyo — Linode</td><td>JP</td></tr>
+          <tr><td> Global</td><td>Cloudflare CDN</td><td>GLOBAL</td></tr>
         </tbody>
       </table>
 

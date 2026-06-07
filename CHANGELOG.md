@@ -1,0 +1,213 @@
+# Changelog
+
+All notable changes to OXware Hypervisor are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+Entries are written plainly. Marketing language is avoided.
+
+---
+
+## [2.6.3] - 2026-06-06
+
+### Added
+- Multi-region controller with cross-region VM placement.
+- OAuth2 single sign-on (Google, GitHub, generic OIDC).
+- Application marketplace with signed app manifests.
+- Cloud bursting to AWS and Azure for transient capacity.
+- Bare-metal provisioning via Redfish and IPMI.
+
+### Changed
+- Controller scheduler split into a separate module for testability.
+- Default token TTL reduced from 30 to 15 minutes.
+
+### Fixed
+- Race condition when two operators edited the same VM concurrently.
+- Snapshot list returned stale entries after revert.
+
+### Security
+- Marketplace apps now require a valid signature before install.
+
+---
+
+## [2.6.2] - 2026-05-22
+
+### Added
+- Green mode: power capping and idle VM suspend.
+- repair.sh v3.0 with `--diagnose` and `--rollback` flags.
+
+### Changed
+- README rewritten in a factual tone; marketing language removed.
+- OS rebrand from internal "OX" prefix to "OXware" across the UI.
+
+### Fixed
+- repair.sh no longer fails on hosts without systemd-resolved.
+
+---
+
+## [2.6.1] - 2026-05-08
+
+### Added
+- Fault tolerance: lockstep VM mirroring across two hosts.
+- Storage DRS for automatic datastore balancing.
+- Console session recording to disk with retention policy.
+- Recovery codes for users with MFA enabled.
+- Plugin SDK with signature verification.
+- Disk hot-extend for running VMs.
+- Bulk VM operations (start/stop/delete) from the UI.
+
+### Fixed
+- Network mode IP assignment failed for bridged interfaces on Debian 12.
+
+### Security
+- SEC-001: API keys moved from environment to file-based config (0600).
+- SEC-002: WebSocket auth tokens removed from URL query strings.
+- SEC-003: JWT revocation list checked on every request.
+- SEC-004: Audit log entries hash-chained with SHA-256.
+- SEC-005: Login timing equalized between unknown user and bad password.
+- SEC-006: Console recording directory tightened to mode 0700.
+- SEC-007: Path traversal in storage endpoints blocked by realpath check.
+- SEC-008: CSRF double-submit cookie added to all state-changing endpoints.
+
+---
+
+## [2.5.12] - 2026-04-12
+
+### Added
+- Workflow engine for multi-step provisioning.
+- Open Policy Agent integration for admission control.
+- CloudEvents emitter for external automation.
+- Desktop client (Electron) for Linux, macOS, Windows.
+- Cloud export to AWS AMI and Azure VHD formats.
+
+### Changed
+- Pulumi provider moved out of core into a separate package.
+
+---
+
+## [2.5.11] - 2026-03-28
+
+### Added
+- Firecracker microVM driver.
+- Kata Containers runtime integration.
+- WebAssembly (wasmtime) workload driver.
+- Edge controller for sites with intermittent connectivity.
+
+### Fixed
+- Memory accounting for microVMs no longer double-counts host overhead.
+
+---
+
+## [2.5.10] - 2026-03-14
+
+### Added
+- Pulumi provider for declarative OXware resources.
+- CSI driver for Kubernetes persistent volumes.
+- Kubernetes operator (`oxware-operator`).
+- KubeVirt-compatible VirtualMachine custom resource.
+- GitOps controller watching a Git repository for VM manifests.
+
+---
+
+## [2.5.9] - 2026-02-28
+
+### Added
+- Microsegmentation policies per workload tag.
+- Bidirectional Forwarding Detection (BFD) for uplinks.
+- Service chaining across L4-L7 functions.
+- Service mesh integration (Istio sidecar injection for VMs).
+
+---
+
+## [2.5.8] - 2026-02-14
+
+### Added
+- OpenTelemetry tracing on the API and scheduler.
+- Bundled Grafana dashboards.
+- Topology view of hosts, VMs, and networks.
+- Capacity forecasting based on 90-day history.
+- Configuration drift detection against a golden baseline.
+
+### Fixed
+- Metrics endpoint returned 500 when Prometheus was unreachable.
+
+---
+
+## [2.5.7] - 2026-01-30
+
+### Added
+- Application-consistent snapshots via QEMU guest agent.
+- 3-2-1 backup policy templates.
+- Backup verification by automated restore-and-boot test.
+- Asynchronous replication to a remote site.
+
+---
+
+## [2.5.6] - 2026-01-16
+
+### Added
+- Multi-tenant model with hard resource quotas.
+- Self-service portal for tenant users.
+- Chargeback and showback reports.
+- Service catalog with approval workflow.
+- Per-tenant rate limits on the API.
+
+---
+
+## [2.5.5] - 2026-01-02
+
+### Added
+- AMD SEV and Intel TDX confidential VM support.
+- Live disk encryption (LUKS) for running VMs.
+- Compliance scanner with CIS and STIG profiles.
+- Data loss prevention rules on file uploads.
+- Forensic export of VM memory and disk.
+- MFA enforcement configurable per role.
+- SAML 2.0 and OIDC identity provider support.
+
+---
+
+## [2.5.4] - 2025-12-18
+
+### Added
+- Virtual TPM 2.0 per VM.
+- Secure Boot with custom key enrollment.
+- HashiCorp Vault integration for secret retrieval.
+- Hash-chained audit log (precursor to SEC-004).
+- HugePages allocation per VM.
+- SR-IOV passthrough configuration.
+- vGPU (NVIDIA vGPU and Intel GVT-g) profiles.
+- Continuous Data Protection (CDP) with 15-second RPO.
+- Boot order management.
+- Geo-DNS for multi-site failover.
+
+---
+
+## [2.5.3] - 2025-12-04
+
+### Added
+- Distributed Resource Scheduler (DRS) for load balancing.
+- VM affinity and anti-affinity rules.
+- Enhanced vMotion Compatibility (EVC) baselines per cluster.
+- Network I/O Control (NIOC) shares and limits.
+- NUMA-aware placement.
+- Cluster-wide resource pools.
+- Maintenance mode with automatic VM evacuation.
+
+---
+
+[Unreleased]: https://github.com/ShinnAsukha/oxware-hypervisor/compare/v2.6.3...HEAD
+[2.6.3]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.6.3
+[2.6.2]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.6.2
+[2.6.1]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.6.1
+[2.5.12]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.12
+[2.5.11]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.11
+[2.5.10]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.10
+[2.5.9]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.9
+[2.5.8]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.8
+[2.5.7]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.7
+[2.5.6]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.6
+[2.5.5]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.5
+[2.5.4]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.4
+[2.5.3]: https://github.com/ShinnAsukha/oxware-hypervisor/releases/tag/v2.5.3

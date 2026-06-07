@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.6.1
+OXware Hypervisor Management API v2.6.3
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -208,14 +208,14 @@ kata_runtime     = _safe_import("kata_runtime")
 wasm_runtime     = _safe_import("wasm_runtime")
 edge_mode        = _safe_import("edge_mode")
 
-# ── v2.6.1 IaC + Clients modules ────────────────────────────────────────────
+# ── v2.6.3 IaC + Clients modules ────────────────────────────────────────────
 workflow_engine  = _safe_import("workflow_engine")
 opa_policy       = _safe_import("opa_policy")
 cloudevents_mod  = _safe_import("cloudevents")
 electron_client  = _safe_import("electron_client")
 cloud_export     = _safe_import("cloud_export")
 
-# ── v2.6.1 modules ───────────────────────────────────────────────────────────
+# ── v2.6.3 modules ───────────────────────────────────────────────────────────
 fault_tolerance_mgr  = _safe_import("fault_tolerance")
 storage_drs_mgr      = _safe_import("storage_drs")
 console_recorder_mgr = _safe_import("console_recorder")
@@ -225,6 +225,13 @@ vm_hot_extend_mgr    = _safe_import("vm_hot_extend")
 bulk_vm_ops_mgr      = _safe_import("bulk_vm_ops")
 net_mode_mgr         = _safe_import("network_mode_manager")
 green_mode_mgr       = _safe_import("green_mode")
+
+# ── v2.6.3 modules ───────────────────────────────────────────────────────────
+multi_region_mgr     = _safe_import("multi_region")
+marketplace_mgr      = _safe_import("app_marketplace")
+cloud_burst_mgr      = _safe_import("cloud_burst")
+bare_metal_mgr       = _safe_import("bare_metal")
+oauth2_sso_mgr       = _safe_import("oauth2_sso")
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -797,12 +804,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.6.1-amd64.iso",
-    "/root/OXware-Hypervisor-2.6.1-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.6.1-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.6.1-amd64.iso",
-    "/root/OXware-Hypervisor-2.6.1-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.6.1-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/root/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/root/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.6.3-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4421,7 +4428,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.6.1",
+        oxware_version="2.6.3",
     )
 
 @app.route("/api/system/stats")
@@ -9710,7 +9717,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.6.1</span>
+  <span id="ver-badge">v2.6.3</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -9944,7 +9951,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.6.1",
+            "version": "2.6.3",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -11409,7 +11416,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.6.1", connected=True)
+    return ok(status="ok", panel=panel, version="2.6.3", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -18079,7 +18086,7 @@ def api_edge_profile():
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# v2.6.1 — IaC + Clients Endpoints (admin-only)
+# v2.6.3 — IaC + Clients Endpoints (admin-only)
 # workflow_engine / opa_policy / cloudevents / electron_client / cloud_export
 # All wrapped in try/except with safe defaults — modül yoksa boş döner.
 # ════════════════════════════════════════════════════════════════════════════
@@ -18438,7 +18445,7 @@ def api_cexport_targets():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# v2.6.1 — Enterprise Expansion Endpoints (admin-only)
+# v2.6.3 — Enterprise Expansion Endpoints (admin-only)
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Fault Tolerance ───────────────────────────────────────────────────────────
@@ -18875,8 +18882,336 @@ def api_green_history():
     days = int(request.args.get("days", 7))
     return ok(history=green_mode_mgr.get_history(days))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# v2.6.3 — Multi-Region, Marketplace, Cloud Burst, Bare-Metal, OAuth2 SSO
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Multi-Region ────────────────────────────────────────────────────────────
+@app.route("/api/regions", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_regions_list():
+    if not multi_region_mgr: return ok(regions=[])
+    return ok(regions=multi_region_mgr.list_regions())
+
+@app.route("/api/regions", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_regions_add():
+    if not multi_region_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**multi_region_mgr.add_region(
+            d.get("name",""), d.get("endpoint",""),
+            float(d.get("latitude", 0)), float(d.get("longitude", 0)),
+            d.get("timezone","UTC"), float(d.get("weight", 1.0))
+        )), 201
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/regions/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_regions_remove(name):
+    if not multi_region_mgr: return err("modül yok", 503)
+    return ok(**multi_region_mgr.remove_region(name))
+
+@app.route("/api/regions/place", methods=["POST"])
+@require_auth
+def api_regions_place_vm():
+    if not multi_region_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**multi_region_mgr.place_vm(
+        d.get("vm_spec", {}), d.get("prefer_region"), d.get("user_location")
+    ))
+
+@app.route("/api/regions/replication", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_regions_replication_status():
+    if not multi_region_mgr: return ok(replications=[])
+    return ok(replications=multi_region_mgr.get_replication_status())
+
+@app.route("/api/regions/<vm_id>/failover", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_regions_failover(vm_id):
+    if not multi_region_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**multi_region_mgr.failover_to_region(vm_id, d.get("target_region","")))
+
+@app.route("/api/regions/topology", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_regions_topology():
+    if not multi_region_mgr: return ok(nodes=[], edges=[])
+    return ok(**multi_region_mgr.get_topology())
+
+# ── App Marketplace ─────────────────────────────────────────────────────────
+@app.route("/api/marketplace/apps", methods=["GET"])
+@require_auth
+def api_marketplace_list():
+    if not marketplace_mgr: return ok(apps=[])
+    return ok(apps=marketplace_mgr.list_apps(request.args.get("category")))
+
+@app.route("/api/marketplace/search", methods=["GET"])
+@require_auth
+def api_marketplace_search():
+    if not marketplace_mgr: return ok(apps=[])
+    return ok(apps=marketplace_mgr.search_apps(request.args.get("q","")))
+
+@app.route("/api/marketplace/apps/<app_id>", methods=["GET"])
+@require_auth
+def api_marketplace_get(app_id):
+    if not marketplace_mgr: return err("modül yok", 503)
+    return ok(**marketplace_mgr.get_app(app_id))
+
+@app.route("/api/marketplace/install", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_marketplace_install():
+    if not marketplace_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**marketplace_mgr.install_app(d.get("app_id",""), d.get("target_dir")))
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/marketplace/uninstall", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_marketplace_uninstall():
+    if not marketplace_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**marketplace_mgr.uninstall_app(d.get("app_id","")))
+
+@app.route("/api/marketplace/refresh", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_marketplace_refresh():
+    if not marketplace_mgr: return err("modül yok", 503)
+    return ok(**marketplace_mgr.refresh_index())
+
+@app.route("/api/marketplace/installed", methods=["GET"])
+@require_auth
+def api_marketplace_installed():
+    if not marketplace_mgr: return ok(installed=[])
+    return ok(installed=marketplace_mgr.get_installed())
+
+@app.route("/api/marketplace/categories", methods=["GET"])
+@require_auth
+def api_marketplace_categories():
+    if not marketplace_mgr: return ok(categories=[])
+    return ok(categories=marketplace_mgr.get_categories())
+
+# ── Cloud Burst ─────────────────────────────────────────────────────────────
+@app.route("/api/cloud-burst/config", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_config():
+    if not cloud_burst_mgr: return ok({"enabled": False})
+    return ok(**cloud_burst_mgr.get_config())
+
+@app.route("/api/cloud-burst/config", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_config_set():
+    if not cloud_burst_mgr: return err("modül yok", 503)
+    return ok(**cloud_burst_mgr.set_config(request.get_json() or {}))
+
+@app.route("/api/cloud-burst/nodes", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_nodes():
+    if not cloud_burst_mgr: return ok(nodes=[])
+    return ok(nodes=cloud_burst_mgr.get_burst_nodes())
+
+@app.route("/api/cloud-burst/check", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_check():
+    if not cloud_burst_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**cloud_burst_mgr.check_should_burst(float(d.get("local_load_pct", 0))))
+
+@app.route("/api/cloud-burst/provision", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_provision():
+    if not cloud_burst_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**cloud_burst_mgr.provision_burst_node(d.get("provider","aws"), d.get("instance_type")))
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/cloud-burst/nodes/<node_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_retire(node_id):
+    if not cloud_burst_mgr: return err("modül yok", 503)
+    return ok(**cloud_burst_mgr.retire_burst_node(node_id))
+
+@app.route("/api/cloud-burst/costs", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_costs():
+    if not cloud_burst_mgr: return ok({"total_usd": 0})
+    days = int(request.args.get("days", 30))
+    return ok(**cloud_burst_mgr.get_burst_costs(days))
+
+@app.route("/api/cloud-burst/audit", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_burst_audit():
+    if not cloud_burst_mgr: return ok(audit=[])
+    limit = int(request.args.get("limit", 100))
+    return ok(audit=cloud_burst_mgr.get_audit_log(limit))
+
+# ── Bare-Metal Provisioning ─────────────────────────────────────────────────
+@app.route("/api/bare-metal/status", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_status():
+    if not bare_metal_mgr: return ok({"pxe_ready": False})
+    return ok(**bare_metal_mgr.get_pxe_status())
+
+@app.route("/api/bare-metal/setup", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_setup():
+    if not bare_metal_mgr: return err("modül yok", 503)
+    return ok(**bare_metal_mgr.setup_pxe_server())
+
+@app.route("/api/bare-metal/profiles", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_profiles_list():
+    if not bare_metal_mgr: return ok(profiles=[])
+    return ok(profiles=bare_metal_mgr.list_profiles())
+
+@app.route("/api/bare-metal/profiles", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_profile_create():
+    if not bare_metal_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**bare_metal_mgr.create_profile(
+            d.get("name",""), d.get("hostname",""), d.get("disk_layout","auto"),
+            d.get("network",{}), d.get("ssh_keys",[]), d.get("post_script","")
+        )), 201
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/bare-metal/profiles/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_profile_delete(name):
+    if not bare_metal_mgr: return err("modül yok", 503)
+    return ok(**bare_metal_mgr.delete_profile(name))
+
+@app.route("/api/bare-metal/macs", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_macs_list():
+    if not bare_metal_mgr: return ok(registrations=[])
+    return ok(registrations=bare_metal_mgr.list_registrations())
+
+@app.route("/api/bare-metal/macs", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_mac_register():
+    if not bare_metal_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**bare_metal_mgr.register_mac(d.get("mac",""), d.get("profile",""), d.get("hostname","")))
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/bare-metal/macs/<path:mac>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_mac_remove(mac):
+    if not bare_metal_mgr: return err("modül yok", 503)
+    return ok(**bare_metal_mgr.unregister_mac(mac))
+
+@app.route("/api/bare-metal/build-iso", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_baremetal_build_iso():
+    if not bare_metal_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**bare_metal_mgr.build_install_iso(d.get("profile",""), d.get("output_path","/var/lib/oxware/isos/oxware-autoinstall.iso")))
+    except Exception as e: return err(str(e), 500)
+
+# ── OAuth 2.0 SSO ───────────────────────────────────────────────────────────
+@app.route("/api/auth/oauth2/providers", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_oauth2_providers():
+    if not oauth2_sso_mgr: return ok(providers={})
+    return ok(providers=oauth2_sso_mgr.get_providers())
+
+@app.route("/api/auth/oauth2/providers/<name>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_oauth2_configure(name):
+    if not oauth2_sso_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    try:
+        return ok(**oauth2_sso_mgr.configure_provider(
+            name, d.get("client_id",""), d.get("client_secret",""),
+            d.get("tenant_id"), d.get("scopes"), d.get("role_map", {})
+        ))
+    except Exception as e: return err(str(e), 500)
+
+@app.route("/api/auth/oauth2/providers/<name>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_oauth2_remove(name):
+    if not oauth2_sso_mgr: return err("modül yok", 503)
+    return ok(**oauth2_sso_mgr.remove_provider(name))
+
+@app.route("/api/auth/oauth2/<provider>/start", methods=["GET"])
+def api_oauth2_start(provider):
+    """Public — initiates OAuth flow. Returns auth_url to redirect to."""
+    if not oauth2_sso_mgr: return err("OAuth2 modülü yok", 503)
+    redirect_uri = request.args.get("redirect", request.host_url + "api/auth/oauth2/" + provider + "/callback")
+    try:
+        return ok(**oauth2_sso_mgr.start_auth_flow(provider, redirect_uri))
+    except Exception as e: return err(str(e), 400)
+
+@app.route("/api/auth/oauth2/<provider>/callback", methods=["GET"])
+def api_oauth2_callback(provider):
+    """Public — handles IdP redirect, exchanges code for token, returns OXware JWT."""
+    if not oauth2_sso_mgr: return err("OAuth2 modülü yok", 503)
+    code = request.args.get("code", "")
+    state = request.args.get("state", "")
+    if not code or not state:
+        return err("code ve state zorunlu", 400)
+    try:
+        result = oauth2_sso_mgr.handle_callback(provider, code, state, request.host_url)
+        # Map email -> OXware user, issue JWT
+        email = result.get("email", "")
+        role = result.get("role", "vm-user")
+        if not email:
+            return err("E-posta alınamadı", 400)
+        # Create/update user
+        username = email.split("@")[0]
+        try:
+            if not user_manager.get_user(username):
+                user_manager.create_user(username=username, password=None,
+                    role=role, display_name=result.get("name", username), oauth2=True)
+        except Exception: pass
+        from flask_jwt_extended import create_access_token
+        token = create_access_token(identity=username)
+        ev.info(f"OAuth2 girişi başarılı: {username} ({provider} -> {role})", category="auth")
+        # Redirect to UI with token in fragment (hash, not query - avoids logging)
+        from flask import redirect as _redirect
+        return _redirect(f"/?oauth2_token={token}&user={username}#oauth2-success")
+    except Exception as e:
+        ev.warn(f"OAuth2 callback hatası: {provider} / {e}", category="auth")
+        return err(str(e), 400)
+
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.6.1 başlatılıyor")
+    log.info("OXware Hypervisor v2.6.3 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
