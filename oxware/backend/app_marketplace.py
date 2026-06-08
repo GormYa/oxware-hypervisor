@@ -294,30 +294,25 @@ def refresh_index() -> dict:
                 "ok": True, "offline": True, "error": str(e)}
 
 
+DISCUSSIONS_URL = "https://github.com/ShinnAsukha/oxware-hypervisor/discussions"
+
+
 def submit_app(manifest: dict) -> dict:
+    # The marketplace catalog is curated by the maintainer. Plugins developed
+    # locally run on the user's own system; to share one publicly, the user
+    # publishes it in GitHub Discussions. Useful plugins may then be added to
+    # the curated catalog. There is no automated upload endpoint.
     if not isinstance(manifest, dict) or "id" not in manifest or "name" not in manifest:
         raise ValueError("manifest requires id and name")
-    submission = {
+    _audit("submit_app", {"app_id": manifest.get("id")})
+    return {
         "submitted_at": time.time(),
         "manifest": manifest,
-        "status": "queued",
+        "status": "share_via_discussions",
+        "discussions_url": DISCUSSIONS_URL,
+        "message": ("Share your plugin in GitHub Discussions. The maintainer "
+                    "curates the public marketplace catalog."),
     }
-    _audit("submit_app", {"app_id": manifest.get("id")})
-    try:
-        payload = json.dumps(manifest).encode("utf-8")
-        req = urllib.request.Request(
-            "https://oxware.top/marketplace/#submit",
-            data=payload,
-            headers={"Content-Type": "application/json",
-                     "User-Agent": "OXware/2.6.3"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            submission["remote_status"] = resp.status
-    except (urllib.error.URLError, OSError) as e:
-        submission["remote_status"] = "offline"
-        submission["error"] = str(e)
-    return submission
 
 
 def get_installed() -> list:
