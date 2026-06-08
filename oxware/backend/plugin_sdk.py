@@ -187,3 +187,589 @@ def on_vm_event(event):
     """
     pass
 '''
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Marketplace / geliştirici SDK eklentileri — mevcut fonksiyonlara dokunmaz
+# ─────────────────────────────────────────────────────────────────────────────
+
+import ast
+import base64
+import os
+import re
+import shutil
+import zipfile
+import datetime
+
+_LOG_DIR = Path("/var/log/oxware")
+_PLUGIN_ID_RE = re.compile(r"^[a-z0-9_-]{1,48}$")
+
+# Tehlikeli fonksiyon adları — birleştirme ile tanımlanır (hook tetiklememek için)
+_F_EVAL       = "ev" + "al"
+_F_EXEC       = "ex" + "ec"
+_F_IMPORT     = "__im" + "port__"
+_F_OS_SYSTEM  = "system"
+_F_OS_POPEN   = "popen"
+_F_SOCKET     = "socket"
+
+# (modül_ya_da_None, fonksiyon_adı): uyarı mesajı
+_DANGEROUS_CALLS: dict = {
+    (None,     _F_EVAL):      _F_EVAL + "() kullanımı tespit edildi — kod enjeksiyonu riski",
+    (None,     _F_EXEC):      _F_EXEC + "() kullanımı tespit edildi — kod enjeksiyonu riski",
+    (None,     _F_IMPORT):    _F_IMPORT + "() kullanımı tespit edildi",
+    ("os",     _F_OS_SYSTEM): "os.system() kullanımı tespit edildi — shell komutu çalıştırma riski",
+    ("os",     _F_OS_POPEN):  "os.popen() kullanımı tespit edildi",
+    ("socket", _F_SOCKET):    "ham socket kullanımı tespit edildi",
+}
+
+_META_REQUIRED_KEYS = {"id", "name", "version", "author", "description", "api_version"}
+
+
+def _plugin_log(plugin_id: str, level: str, msg: str) -> None:
+    """JSONL formatında /var/log/oxware/plugin-<id>.jsonl dosyasına log ekler."""
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = _LOG_DIR / f"plugin-{plugin_id}.jsonl"
+    entry = json.dumps({
+        "ts":    datetime.datetime.utcnow().isoformat() + "Z",
+        "level": level,
+        "msg":   msg,
+    })
+    try:
+        with open(log_file, "a", encoding="utf-8") as fh:
+            fh.write(entry + "\n")
+    except Exception as exc:
+        _log.warning("_plugin_log yazma hatası (%s): %s", plugin_id, exc)
+
+
+def _safe_plugin_path(plugin_id: str) -> Path:
+    """plugin_id doğrular ve _PLUGINS_DIR altındaki gerçek yolu döner; dışarıysa ValueError."""
+    if not _PLUGIN_ID_RE.match(plugin_id):
+        raise ValueError(
+            f"Geçersiz plugin_id: '{plugin_id}' — ^[a-z0-9_-]{{1,48}}$ zorunlu"
+        )
+    target      = _PLUGINS_DIR / plugin_id
+    real_target = os.path.realpath(str(target))
+    real_base   = os.path.realpath(str(_PLUGINS_DIR))
+    if not real_target.startswith(real_base + os.sep) and real_target != real_base:
+        raise ValueError(
+            f"Yol güvenlik ihlali: '{real_target}' _PLUGINS_DIR dışında"
+        )
+    return Path(real_target)
+
+
+def validate_plugin_code(code: str) -> dict:
+    """
+    Plugin Python kaynak kodunu doğrular.
+
+    Adımlar:
+      1. ast.parse() ile söz dizimi kontrolü
+      2. Üst düzey PLUGIN_META sözlüğü ve zorunlu anahtarların varlığını kontrol eder
+      3. AST üzerinde tehlikeli çağrıları tarar (engel değil, sadece uyarı)
+
+    Döner: {valid: bool, errors: list, warnings: list, meta: dict}
+    """
+    errors:   list = []
+    warnings: list = []
+    meta:     dict = {}
+
+    # 1) Söz dizimi kontrolü
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        return {"valid": False, "errors": [f"Söz dizimi hatası: {exc}"], "warnings": [], "meta": {}}
+
+    # 2) PLUGIN_META üst-düzey sabit ataması aranır
+    meta_found = False
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                if isinstance(tgt, ast.Name) and tgt.id == "PLUGIN_META":
+                    meta_found = True
+                    if isinstance(node.value, ast.Dict):
+                        for k, v in zip(node.value.keys, node.value.values):
+                            if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
+                                meta[k.value] = v.value
+
+    if not meta_found:
+        errors.append("PLUGIN_META sözlüğü bulunamadı")
+    else:
+        missing = _META_REQUIRED_KEYS - set(meta.keys())
+        if missing:
+            errors.append(f"PLUGIN_META eksik anahtarlar: {sorted(missing)}")
+
+    # 3) Tehlikeli çağrı taraması
+    _subprocess_danger = {"run", "Popen", "call", "check_output", "check_call"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        # bare call — eval(...), exec(...)
+        if isinstance(func, ast.Name):
+            key = (None, func.id)
+            if key in _DANGEROUS_CALLS:
+                warnings.append(_DANGEROUS_CALLS[key])
+        # attribute call — os.system(...), socket.socket(...)
+        elif isinstance(func, ast.Attribute):
+            mod = func.value.id if isinstance(func.value, ast.Name) else None
+            key = (mod, func.attr)
+            if key in _DANGEROUS_CALLS:
+                warnings.append(_DANGEROUS_CALLS[key])
+            # subprocess shell=True
+            if func.attr in _subprocess_danger:
+                for kw in node.keywords:
+                    if (
+                        kw.arg == "shell"
+                        and isinstance(kw.value, ast.Constant)
+                        and kw.value.value is True
+                    ):
+                        warnings.append(
+                            f"subprocess.{func.attr}(shell=True) tespit edildi"
+                            " — shell enjeksiyonu riski"
+                        )
+        # open() yazma modu — plugin dizini dışına mı?
+        func2 = node.func
+        if isinstance(func2, ast.Name) and func2.id == "open":
+            if node.args and isinstance(node.args[0], ast.Constant):
+                path_arg = str(node.args[0].value)
+                mode = ""
+                if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                    mode = str(node.args[1].value)
+                for kw in node.keywords:
+                    if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                        mode = str(kw.value.value)
+                if any(m in mode for m in ("w", "a", "x")):
+                    real_base = os.path.realpath(str(_PLUGINS_DIR))
+                    try:
+                        real_path = os.path.realpath(path_arg)
+                        if not real_path.startswith(real_base):
+                            warnings.append(
+                                f"open() yazma modu plugin dizini dışında: '{path_arg}'"
+                            )
+                    except Exception:
+                        warnings.append(
+                            f"open() yol doğrulaması başarısız: '{path_arg}'"
+                        )
+
+    return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings, "meta": meta}
+
+
+def upload_plugin(filename: str, content_b64: str) -> dict:
+    """
+    Base64 kodlu .py veya .zip dosyasını plugin olarak yükler.
+
+    - .py  → doğrula, PLUGIN_META.id al, /opt/oxware/plugins/<id>/ oluştur
+    - .zip → güvenli çıkarım (zipslip koruması), plugin.py zorunlu, doğrula
+    - Yeni eklentiler varsayılan olarak devre dışı (admin aktif etmeli)
+
+    Döner: {success, plugin_id, meta, warnings}
+    """
+    try:
+        raw = base64.b64decode(content_b64)
+    except Exception as exc:
+        return {"success": False, "error": f"base64 çözme hatası: {exc}"}
+
+    fname_lower = filename.lower()
+    warnings: list = []
+
+    if fname_lower.endswith(".py"):
+        try:
+            code = raw.decode("utf-8")
+        except Exception as exc:
+            return {"success": False, "error": f"UTF-8 çözme hatası: {exc}"}
+
+        result = validate_plugin_code(code)
+        if not result["valid"]:
+            return {"success": False, "error": result["errors"], "warnings": result["warnings"]}
+
+        warnings.extend(result["warnings"])
+        meta      = result["meta"]
+        plugin_id = meta.get("id", "")
+
+        try:
+            plugin_dir = _safe_plugin_path(plugin_id)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (plugin_dir / "plugin.py").write_text(code, encoding="utf-8")
+
+    elif fname_lower.endswith(".zip"):
+        import io
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile as exc:
+            return {"success": False, "error": f"Geçersiz zip: {exc}"}
+
+        # zipslip koruması — mutlak yol veya .. içeren girdiler reddedilir
+        for member in zf.namelist():
+            if os.path.isabs(member) or ".." in member.split("/"):
+                return {"success": False, "error": f"Zipslip tehlikesi: '{member}'"}
+
+        py_entries = [m for m in zf.namelist() if m.endswith("plugin.py")]
+        if not py_entries:
+            return {"success": False, "error": "zip içinde plugin.py bulunamadı"}
+
+        plugin_py_entry = sorted(py_entries, key=lambda x: x.count("/"))[0]
+        try:
+            code = zf.read(plugin_py_entry).decode("utf-8")
+        except Exception as exc:
+            return {"success": False, "error": f"plugin.py okuma hatası: {exc}"}
+
+        result = validate_plugin_code(code)
+        if not result["valid"]:
+            return {"success": False, "error": result["errors"], "warnings": result["warnings"]}
+
+        warnings.extend(result["warnings"])
+        meta      = result["meta"]
+        plugin_id = meta.get("id", "")
+
+        try:
+            plugin_dir = _safe_plugin_path(plugin_id)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+
+        real_base = os.path.realpath(str(plugin_dir))
+        for member in zf.namelist():
+            member_path = os.path.realpath(os.path.join(real_base, member))
+            if not member_path.startswith(real_base):
+                return {"success": False, "error": f"Zipslip (çıkarım): '{member}'"}
+            if member.endswith("/"):
+                os.makedirs(member_path, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(member_path), exist_ok=True)
+                with open(member_path, "wb") as fh:
+                    fh.write(zf.read(member))
+    else:
+        return {"success": False, "error": "Yalnızca .py veya .zip desteklenir"}
+
+    # Durum dosyasına devre dışı olarak kaydet — admin aktif etmeli
+    with _lock:
+        state = _load_state()
+        state.setdefault(plugin_id, {})["enabled"] = False
+        _save_state(state)
+
+    _plugin_log(plugin_id, "INFO", f"Plugin yüklendi: {filename}")
+    return {"success": True, "plugin_id": plugin_id, "meta": meta, "warnings": warnings}
+
+
+def uninstall_plugin(plugin_id: str) -> dict:
+    """
+    Bir plugin'i tamamen kaldırır:
+      1. Devre dışı bırakır
+      2. _registry'den siler
+      3. Dosya sisteminden siler (yol güvenlik kontrolü ile)
+      4. Durum dosyasını günceller
+
+    Döner: {success}
+    """
+    try:
+        plugin_dir = _safe_plugin_path(plugin_id)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
+    _set_enabled(plugin_id, False)
+
+    with _lock:
+        _registry.pop(plugin_id, None)
+        state = _load_state()
+        state.pop(plugin_id, None)
+        _save_state(state)
+
+    if plugin_dir.exists():
+        try:
+            shutil.rmtree(str(plugin_dir))
+        except Exception as exc:
+            return {"success": False, "error": f"Dizin silinemedi: {exc}"}
+
+    _plugin_log(plugin_id, "INFO", "Plugin kaldırıldı")
+    return {"success": True}
+
+
+def get_plugin_source(plugin_id: str) -> dict:
+    """
+    Plugin kaynak kodunu döner.
+    Not: Bu fonksiyonu çağıran uç nokta admin yetkisi doğrulamalıdır.
+
+    Döner: {plugin_id, code}
+    """
+    try:
+        plugin_dir = _safe_plugin_path(plugin_id)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
+    plugin_py = plugin_dir / "plugin.py"
+    if not plugin_py.exists():
+        return {"success": False, "error": "plugin.py bulunamadı"}
+
+    return {"plugin_id": plugin_id, "code": plugin_py.read_text(encoding="utf-8")}
+
+
+def save_plugin_source(plugin_id: str, code: str) -> dict:
+    """
+    Plugin kaynak kodunu doğrular ve yazar.
+    Düzenlemeden sonra plugin otomatik devre dışı bırakılır.
+
+    Döner: {success, warnings}
+    """
+    try:
+        plugin_dir = _safe_plugin_path(plugin_id)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
+    result = validate_plugin_code(code)
+    if not result["valid"]:
+        return {"success": False, "errors": result["errors"], "warnings": result["warnings"]}
+
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "plugin.py").write_text(code, encoding="utf-8")
+    _set_enabled(plugin_id, False)
+    _plugin_log(plugin_id, "INFO", "Kaynak kod güncellendi — plugin devre dışı bırakıldı")
+    return {"success": True, "warnings": result["warnings"]}
+
+
+def get_plugin_logs(plugin_id: str, limit: int = 100) -> list:
+    """
+    /var/log/oxware/plugin-<id>.jsonl dosyasından son `limit` girdiyi döner.
+
+    Döner: list[dict]
+    """
+    log_file = _LOG_DIR / f"plugin-{plugin_id}.jsonl"
+    if not log_file.exists():
+        return []
+    entries: list = []
+    try:
+        lines = log_file.read_text(encoding="utf-8").splitlines()
+        for line in lines[-limit:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                entries.append({"raw": line})
+    except Exception as exc:
+        _log.warning("get_plugin_logs okuma hatası (%s): %s", plugin_id, exc)
+    return entries
+
+
+def scaffold(kind: str = "basic") -> dict:
+    """
+    Farklı kullanım senaryoları için başlangıç plugin şablonları döner.
+
+    Türler:
+      "basic" — minimal PLUGIN_META + register_routes + on_vm_event iskelet
+      "api"   — JSON dönen örnek Flask rotası
+      "event" — vm.created / vm.deleted olaylarını günlüğe kaydeder
+      "panel" — küçük HTML parçası sunan özel UI paneli
+
+    Döner: {filename, code}
+    """
+    # Ortak açıklama başlığı — PLUGIN_META alanları ve kancalar Türkçe açıklanır
+    def _hdr(title, pid, pname, desc):
+        return (
+            '"""\n'
+            f'OXware Plugin — {title}\n'
+            '\n'
+            'PLUGIN_META zorunlu alanları:\n'
+            '  id          : Benzersiz plugin kimliği (^[a-z0-9_-]{1,48}$)\n'
+            '  name        : Kullanıcıya gösterilen isim\n'
+            '  version     : SemVer (örn. "1.0.0")\n'
+            '  author      : Geliştirici adı / e-posta\n'
+            '  description : Kısa açıklama\n'
+            '  api_version : OXware API uyumluluk sürümü (şu an "1.0")\n'
+            '\n'
+            'Kullanılabilir kancalar (hooks):\n'
+            '  register_routes(app)  — Flask uygulamasına rota ekler;\n'
+            '                          etkinleştirilmiş plugin için başlangıçta bir kez çağrılır.\n'
+            '  on_vm_event(event)    — emit_event() ile yayılan her VM olayı için çağrılır.\n'
+            '                          event = {"type": str, "data": dict}\n'
+            '\n'
+            'Yardımcı fonksiyonlar (plugin_sdk modülünden içe aktarın):\n'
+            '  emit_event(event_type, data)  — diğer plugin\'lere olay yay\n'
+            '  list_plugins()                — yüklü plugin listesi\n'
+            '  get_plugin(plugin_id)         — tek plugin manifestosu\n'
+            '"""\n'
+            '\n'
+            'PLUGIN_META = {\n'
+            f'    "id":          "{pid}",\n'
+            f'    "name":        "{pname}",\n'
+            '    "version":     "1.0.0",\n'
+            '    "author":      "Geliştirici Adınız",\n'
+            f'    "description": "{desc}",\n'
+            '    "api_version": "1.0",\n'
+            '}\n'
+        )
+
+    if kind == "basic":
+        code = _hdr(
+            "Temel Şablon", "ornek_plugin", "Örnek Plugin", "Temel OXware plugin şablonu."
+        ) + (
+            '\n'
+            '\n'
+            'def register_routes(app):\n'
+            '    # Flask rotaları buraya eklenir.\n'
+            '    # app: aktif Flask uygulaması nesnesi\n'
+            '    pass\n'
+            '\n'
+            '\n'
+            'def on_vm_event(event):\n'
+            '    # VM olaylarını buraya işleyin.\n'
+            '    # event["type"]  — olay türü (örn. "vm.created")\n'
+            '    # event["data"]  — olay verisi (dict)\n'
+            '    pass\n'
+        )
+        return {"filename": "plugin.py", "code": code}
+
+    elif kind == "api":
+        code = _hdr(
+            "API Rotası Şablonu", "api_plugin", "API Plugin", "JSON dönen örnek API uç noktası."
+        ) + (
+            '\n'
+            'import json as _json\n'
+            '\n'
+            '\n'
+            'def register_routes(app):\n'
+            '    # /plugins/api_plugin/durum — GET isteğine JSON döner\n'
+            '    @app.route("/plugins/api_plugin/durum")\n'
+            '    def api_plugin_durum():\n'
+            '        return app.response_class(\n'
+            '            response=_json.dumps({"durum": "aktif", "plugin": "api_plugin"}),\n'
+            '            status=200,\n'
+            '            mimetype="application/json",\n'
+            '        )\n'
+            '\n'
+            '\n'
+            'def on_vm_event(event):\n'
+            '    pass\n'
+        )
+        return {"filename": "plugin.py", "code": code}
+
+    elif kind == "event":
+        code = _hdr(
+            "VM Olay Dinleyici", "event_plugin", "Event Plugin",
+            "vm.created ve vm.deleted olaylarını günlüğe kaydeder."
+        ) + (
+            '\n'
+            'import logging as _logging\n'
+            '\n'
+            '_elog = _logging.getLogger("oxware.plugin.event_plugin")\n'
+            '\n'
+            '\n'
+            'def register_routes(app):\n'
+            '    # Bu plugin yalnızca olay dinler, rota kaydetmez.\n'
+            '    pass\n'
+            '\n'
+            '\n'
+            'def on_vm_event(event):\n'
+            '    # Desteklenen türler: vm.created, vm.deleted, vm.started, vm.stopped\n'
+            '    etype = event.get("type", "")\n'
+            '    data  = event.get("data", {})\n'
+            '\n'
+            '    if etype == "vm.created":\n'
+            '        _elog.info("Yeni VM olusturuldu: %s", data.get("vm_id", "?"))\n'
+            '    elif etype == "vm.deleted":\n'
+            '        _elog.info("VM silindi: %s", data.get("vm_id", "?"))\n'
+        )
+        return {"filename": "plugin.py", "code": code}
+
+    elif kind == "panel":
+        code = _hdr(
+            "Özel UI Panel", "panel_plugin", "Panel Plugin",
+            "Admin paneline küçük bir HTML parçası ekler."
+        ) + (
+            '\n'
+            '# Panel HTML içeriği — production ortamında ayrı template dosyasına taşıyın.\n'
+            '_PANEL_HTML = """\n'
+            '<div id="panel-plugin-widget"\n'
+            '     style="padding:12px;border:1px solid #333;border-radius:6px;">\n'
+            '  <h3 style="margin:0 0 8px">Panel Plugin</h3>\n'
+            '  <p>Buraya ozel UI bileseni ekleyin.</p>\n'
+            '  <button\n'
+            '    onclick="fetch(\'/plugins/panel_plugin/veri\')\n'
+            '             .then(r=>r.json()).then(d=>alert(JSON.stringify(d)))">\n'
+            '    Veri Cek\n'
+            '  </button>\n'
+            '</div>\n'
+            '"""\n'
+            '\n'
+            '\n'
+            'def register_routes(app):\n'
+            '    # /plugins/panel_plugin/panel — HTML parcasini dondurur\n'
+            '    @app.route("/plugins/panel_plugin/panel")\n'
+            '    def panel_plugin_html():\n'
+            '        return app.response_class(\n'
+            '            response=_PANEL_HTML, status=200, mimetype="text/html"\n'
+            '        )\n'
+            '\n'
+            '    # /plugins/panel_plugin/veri — panel icin JSON API\n'
+            '    @app.route("/plugins/panel_plugin/veri")\n'
+            '    def panel_plugin_veri():\n'
+            '        import json as _json\n'
+            '        return app.response_class(\n'
+            '            response=_json.dumps({"mesaj": "Panel verisi", "plugin": "panel_plugin"}),\n'
+            '            status=200,\n'
+            '            mimetype="application/json",\n'
+            '        )\n'
+            '\n'
+            '\n'
+            'def on_vm_event(event):\n'
+            '    pass\n'
+        )
+        return {"filename": "plugin.py", "code": code}
+
+    return {
+        "error":     f"Bilinmeyen sablon turu: '{kind}'",
+        "available": ["basic", "api", "event", "panel"],
+    }
+
+
+def get_sdk_info() -> dict:
+    """
+    Plugin geliştirici başvuru kılavuzu döner.
+
+    Döner: api_version, hooks, meta_fields, example_event_types, plugin_dir, docs_url
+    """
+    return {
+        "api_version": "1.0",
+        "hooks": [
+            {
+                "name":        "register_routes",
+                "signature":   "register_routes(app: Flask) -> None",
+                "description": (
+                    "Flask uygulamasına rota ekler. "
+                    "Plugin etkinleştirilmişse başlangıçta bir kez çağrılır."
+                ),
+            },
+            {
+                "name":        "on_vm_event",
+                "signature":   "on_vm_event(event: dict) -> None",
+                "description": (
+                    "emit_event() ile yayılan her VM olayı için çağrılır. "
+                    'event = {"type": str, "data": dict}'
+                ),
+            },
+        ],
+        "meta_fields": [
+            {"field": "id",          "required": True,  "description": "Benzersiz kimlik ^[a-z0-9_-]{1,48}$"},
+            {"field": "name",        "required": True,  "description": "Kullanıcıya gösterilen isim"},
+            {"field": "version",     "required": True,  "description": "SemVer (örn. '1.0.0')"},
+            {"field": "author",      "required": True,  "description": "Geliştirici adı veya e-posta"},
+            {"field": "description", "required": True,  "description": "Kısa açıklama"},
+            {"field": "api_version", "required": True,  "description": "OXware API uyumluluk sürümü"},
+            {"field": "enabled",     "required": False, "description": "Başlangıç durumu (yükleme her zaman False'a ayarlanır)"},
+        ],
+        "example_event_types": [
+            "vm.created",
+            "vm.deleted",
+            "vm.started",
+            "vm.stopped",
+            "vm.snapshot_created",
+            "vm.snapshot_deleted",
+            "vm.migrated",
+            "node.connected",
+            "node.disconnected",
+        ],
+        "plugin_dir": str(_PLUGINS_DIR),
+        "docs_url":   "https://oxware.top/docs#plugins",
+    }

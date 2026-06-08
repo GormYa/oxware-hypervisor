@@ -4861,25 +4861,64 @@
         <!-- ─────── tab-plugins ─────── -->
         <div class="page" id="page-tab-plugins">
           <div class="section-header">
-            <h2><i class="fa-solid fa-puzzle-piece" style="margin-right:8px;color:var(--accent-lt)"></i>Plugin SDK</h2>
+            <h2><i class="fa-solid fa-puzzle-piece" style="margin-right:8px;color:var(--accent-lt)"></i>Plugin SDK &amp; Marketplace</h2>
             <div class="spacer"></div>
-            <button class="btn" onclick="loadPluginSdkPage()" style="font-size:12px">↻ Yenile</button>
+            <button class="btn" onclick="loadPluginSdkPage()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button>
           </div>
-          <div class="card" style="margin-bottom:14px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
-            <div style="font-size:12px;color:var(--text)">
-              <b style="color:var(--accent-lt)">Plugin SDK</b> — Python eklentileri <code>/opt/oxware/plugins/&lt;name&gt;/plugin.py</code> olarak yükleyin.
-              Flask route, VM olay kancası ve özel panel ekleyebilirsiniz. Fork gerekmez.
-              <a href="#" onclick="downloadPluginTemplate()" style="color:var(--accent-lt);margin-left:8px"> Başlangıç şablonunu indir</a>
+
+          <!-- Sekmeler -->
+          <div class="sub-tabs" style="margin-bottom:14px;display:flex;gap:4px;border-bottom:1px solid var(--border);padding-bottom:8px">
+            <button class="sub-tab active" onclick="pluginTab('installed')" id="ptab-installed">Yüklü Eklentiler</button>
+            <button class="sub-tab" onclick="pluginTab('develop')" id="ptab-develop">Geliştir</button>
+            <button class="sub-tab" onclick="pluginTab('market')" id="ptab-market">Marketplace</button>
+          </div>
+
+          <!-- 1) YÜKLÜ -->
+          <div id="pview-installed">
+            <div class="card">
+              <div class="card-title">Yüklü Eklentiler</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>Ad</th><th>Versiyon</th><th>Yazar</th><th>Açıklama</th><th>Durum</th><th>İşlem</th></tr></thead>
+                  <tbody id="plugins-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-title">Yüklü Eklentiler</div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>ID</th><th>Ad</th><th>Versiyon</th><th>Yazar</th><th>Açıklama</th><th>Durum</th><th>İşlem</th></tr></thead>
-                <tbody id="plugins-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
-              </table>
+
+          <!-- 2) GELİŞTİR -->
+          <div id="pview-develop" style="display:none">
+            <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
+              <div style="font-size:12px;line-height:1.6;color:var(--text)">
+                <b style="color:var(--accent-lt)">Plugin Geliştirme</b> — Python ile kendi eklentini yaz: Flask route ekle, VM olaylarını dinle (vm.created/deleted), özel panel sun. Şablon seç, düzenle, doğrula, yükle. Tam dokümantasyon: <a href="https://oxware.top/docs#plugins" target="_blank" style="color:var(--accent-lt)">oxware.top/docs</a>
+              </div>
             </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+              <label style="font-size:12px;color:var(--text-muted)">Şablon:</label>
+              <select id="pl-scaffold-kind" class="form-control" style="width:160px" onchange="plLoadScaffold()">
+                <option value="basic">Temel</option>
+                <option value="api">API Route</option>
+                <option value="event">VM Olay Dinleyici</option>
+                <option value="panel">Özel Panel</option>
+              </select>
+              <button class="btn" onclick="plValidate()" style="font-size:12px"><i class="fa-solid fa-circle-check"></i> Doğrula</button>
+              <button class="btn-primary" onclick="plUploadFromEditor()" style="font-size:12px"><i class="fa-solid fa-upload"></i> Yükle</button>
+              <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">veya dosya:</span>
+              <input type="file" id="pl-file" accept=".py,.zip" onchange="plUploadFile(this)" style="font-size:11px;max-width:200px">
+            </div>
+            <textarea id="pl-editor" spellcheck="false" style="width:100%;height:380px;font-family:'Courier New',monospace;font-size:12px;background:#0d1117;color:#e6edf3;border:1px solid var(--border);border-radius:6px;padding:12px;resize:vertical;line-height:1.5"></textarea>
+            <div id="pl-validate-result" style="margin-top:8px;font-size:12px"></div>
+          </div>
+
+          <!-- 3) MARKETPLACE -->
+          <div id="pview-market" style="display:none">
+            <div class="card" style="margin-bottom:12px;border-left:4px solid #d29922;background:rgba(210,153,34,.04);padding:14px">
+              <div style="font-size:12px;line-height:1.6;color:var(--text)">
+                <b style="color:#d29922">Plugin Marketplace</b> — Topluluk eklentilerini keşfet ve tek tıkla kur. Kendi eklentini paylaşmak için Geliştir sekmesinden yükleyip <code>oxware.top</code> marketplace'e gönderebilirsin.
+              </div>
+            </div>
+            <div style="margin-bottom:10px"><input id="pl-market-search" class="form-control" placeholder="Plugin ara..." style="width:240px" oninput="plMarketSearch(this.value)"></div>
+            <div id="pl-market-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px"><div class="text-muted" style="padding:14px">Yükleniyor...</div></div>
           </div>
         </div>
 
@@ -21003,10 +21042,13 @@ async function loadPluginSdkPage() {
     <td>${_esc(p.author||'-')}</td>
     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(p.description||'-')}</td>
     <td><span style="color:${p.enabled?'#3fb950':'#f85149'};font-weight:600">${p.enabled?'Aktif':'Pasif'}</span></td>
-    <td>
+    <td style="white-space:nowrap">
       <button class="btn sm" onclick="pluginToggle('${_esc(p.id)}',${!p.enabled})">${p.enabled?'Devre Dışı':'Etkinleştir'}</button>
+      <button class="btn sm" onclick="plEditPlugin('${_esc(p.id)}')" title="Düzenle"><i class="fa-solid fa-pen"></i></button>
+      <button class="btn sm" onclick="plViewLogs('${_esc(p.id)}')" title="Loglar"><i class="fa-solid fa-file-lines"></i></button>
+      <button class="btn sm danger" onclick="plUninstall('${_esc(p.id)}')" title="Kaldır"><i class="fa-solid fa-trash"></i></button>
     </td>
-  </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:18px">Eklenti yok — /opt/oxware/plugins/ dizinine ekleyin</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted" style="padding:18px">Eklenti yok — Geliştir sekmesinden oluştur veya Marketplace&#39;ten kur</td></tr>';
 }
 async function pluginToggle(id, enable) {
   const endpoint = enable ? `/api/plugins/${id}/enable` : `/api/plugins/${id}/disable`;
@@ -21021,6 +21063,121 @@ async function downloadPluginTemplate() {
   const a = document.createElement('a');
   a.href = url; a.download = 'plugin.py'; a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ──── Plugin SDK: sekmeler + geliştirme + marketplace ──── */
+function pluginTab(which) {
+  ['installed','develop','market'].forEach(t => {
+    const v = document.getElementById('pview-'+t);
+    const b = document.getElementById('ptab-'+t);
+    if (v) v.style.display = (t===which) ? '' : 'none';
+    if (b) b.classList.toggle('active', t===which);
+  });
+  if (which === 'develop' && !document.getElementById('pl-editor').value) plLoadScaffold();
+  if (which === 'market') plLoadMarket();
+}
+
+async function plLoadScaffold() {
+  const kind = document.getElementById('pl-scaffold-kind').value;
+  const d = await _api('/api/plugins/scaffold?kind='+encodeURIComponent(kind));
+  if (d && d.code) document.getElementById('pl-editor').value = d.code;
+}
+
+async function plValidate() {
+  const code = document.getElementById('pl-editor').value;
+  const res = document.getElementById('pl-validate-result');
+  if (!code.trim()) { if (res) res.textContent = 'Kod boş'; return; }
+  const d = await _api('/api/plugins/validate','POST',{code});
+  if (!d) { if (res) res.textContent = 'Doğrulama başarısız'; return; }
+  let html = '';
+  if (d.valid) html += `<div style="color:#3fb950">✓ Geçerli — ${_esc((d.meta&&d.meta.name)||'plugin')} v${_esc((d.meta&&d.meta.version)||'?')}</div>`;
+  else html += `<div style="color:#f85149">✗ Geçersiz: ${(d.errors||[]).map(_esc).join(', ')}</div>`;
+  if ((d.warnings||[]).length) html += `<div style="color:#d29922;margin-top:4px">⚠ Güvenlik uyarıları: ${(d.warnings||[]).map(_esc).join('; ')}</div>`;
+  if (res) res.innerHTML = html;
+}
+
+async function plUploadFromEditor() {
+  const code = document.getElementById('pl-editor').value;
+  if (!code.trim()) { toast('Kod boş','error'); return; }
+  // Mevcut plugin düzenleniyorsa kaynağı kaydet, değilse yeni yükle
+  if (window._plEditingId) {
+    const sd = await _api(`/api/plugins/${window._plEditingId}/source`,'POST',{code});
+    window._plEditingId = null;
+    if (sd && sd.success) { toast('Kaydedildi (pasif — etkinleştir)','success'); pluginTab('installed'); loadPluginSdkPage(); }
+    else toast('Kayıt başarısız: '+((sd&&(sd.errors||[]).join(', '))||''),'error');
+    return;
+  }
+  const b64 = btoa(unescape(encodeURIComponent(code)));
+  const d = await _api('/api/plugins/upload','POST',{filename:'plugin.py',content_b64:b64});
+  if (!d) return;
+  if (d.success) {
+    toast('Plugin yüklendi: '+(d.plugin_id||'')+' (pasif — etkinleştir)','success');
+    if ((d.warnings||[]).length) toast('Güvenlik uyarısı: '+d.warnings.join('; '),'warn');
+    pluginTab('installed'); loadPluginSdkPage();
+  } else {
+    toast('Yükleme başarısız: '+((d.errors||[]).join(', ')||d.error||''),'error');
+  }
+}
+
+function plUploadFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1];  // strip data: prefix
+    const d = await _api('/api/plugins/upload','POST',{filename:file.name,content_b64:b64});
+    if (d && d.success) { toast('Plugin yüklendi: '+(d.plugin_id||''),'success'); pluginTab('installed'); loadPluginSdkPage(); }
+    else toast('Yükleme başarısız: '+((d&&(d.errors||[]).join(', '))||''),'error');
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function plEditPlugin(id) {
+  const d = await _api(`/api/plugins/${id}/source`);
+  if (!d || !d.code) { toast('Kaynak alınamadı','error'); return; }
+  pluginTab('develop');
+  document.getElementById('pl-editor').value = d.code;
+  // Save replaces upload — store id for save
+  window._plEditingId = id;
+  toast(`${id} düzenleniyor — Yükle ile kaydet`,'info');
+}
+
+async function plViewLogs(id) {
+  const d = await _api(`/api/plugins/${id}/logs?limit=50`);
+  const logs = (d && d.logs) || [];
+  const body = logs.length ? logs.map(l => `[${_esc(l.level||l.ts||'')}] ${_esc(l.msg||JSON.stringify(l))}`).join('\n') : 'Log yok';
+  await showConfirm(body, `${id} logları`);
+}
+
+async function plUninstall(id) {
+  if (!await showConfirm(`${id} eklentisi kaldırılacak (dosyalar silinir). Devam?`,'Plugin Kaldır',true)) return;
+  const d = await _api(`/api/plugins/${id}`,'DELETE');
+  if (d) { toast('Plugin kaldırıldı','success'); loadPluginSdkPage(); }
+}
+
+let _plMarketApps = [];
+async function plLoadMarket() {
+  const g = document.getElementById('pl-market-grid'); if (!g) return;
+  const d = await _api('/api/marketplace/apps?category=plugin').catch(()=>null) || await _api('/api/marketplace/apps');
+  _plMarketApps = (d && d.apps) || [];
+  _plMarketRender(_plMarketApps);
+}
+function _plMarketRender(apps) {
+  const g = document.getElementById('pl-market-grid'); if (!g) return;
+  g.innerHTML = apps.length ? apps.map(a => `<div class="card" style="padding:12px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:2px">${_esc(a.name||a.id)}</div>
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">${_esc(a.category||'plugin')} · ${_esc(a.author||'community')}</div>
+    <div style="font-size:11px;line-height:1.5;margin-bottom:8px;min-height:34px">${_esc((a.description||'').slice(0,100))}</div>
+    <button class="btn-primary" style="font-size:11px;width:100%" onclick="plMarketInstall('${_esc(a.id)}')"><i class="fa-solid fa-download"></i> Kur</button>
+  </div>`).join('') : '<div class="text-muted" style="padding:14px">Marketplace boş veya çevrimdışı</div>';
+}
+function plMarketSearch(q) {
+  const ql=(q||'').toLowerCase();
+  _plMarketRender(_plMarketApps.filter(a => (a.name||'').toLowerCase().includes(ql) || (a.description||'').toLowerCase().includes(ql)));
+}
+async function plMarketInstall(id) {
+  const d = await _api('/api/marketplace/install','POST',{app_id:id});
+  if (d) { toast('Kuruluyor: '+id,'success'); pluginTab('installed'); loadPluginSdkPage(); }
 }
 
 /* ══════════════════ Init ══════════════════ */

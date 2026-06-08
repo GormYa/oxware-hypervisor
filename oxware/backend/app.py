@@ -18666,6 +18666,77 @@ def api_plugin_template():
     if not plugin_sdk_mgr: return err("modül yok", 503)
     return ok(template=plugin_sdk_mgr.get_plugin_template())
 
+# ── Plugin SDK — geliştirme + marketplace (v2.6.3) ────────────────────────────
+@app.route("/api/plugins/upload", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_upload():
+    """Plugin yükle (.py veya .zip, base64). Varsayılan: disabled (admin enable etmeli)."""
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    fn = d.get("filename", "")
+    content = d.get("content_b64", "")
+    if not fn or not content:
+        return err("filename ve content_b64 zorunlu")
+    try:
+        return ok(**plugin_sdk_mgr.upload_plugin(fn, content))
+    except Exception as e:
+        return err(str(e), 500)
+
+@app.route("/api/plugins/validate", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_validate():
+    """Plugin kodunu syntax + güvenlik taramasından geçir (yazmadan)."""
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**plugin_sdk_mgr.validate_plugin_code(d.get("code", "")))
+
+@app.route("/api/plugins/<plugin_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_uninstall(plugin_id):
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    return ok(**plugin_sdk_mgr.uninstall_plugin(plugin_id))
+
+@app.route("/api/plugins/<plugin_id>/source", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_source_get(plugin_id):
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    return ok(**plugin_sdk_mgr.get_plugin_source(plugin_id))
+
+@app.route("/api/plugins/<plugin_id>/source", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_source_save(plugin_id):
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    d = request.get_json() or {}
+    return ok(**plugin_sdk_mgr.save_plugin_source(plugin_id, d.get("code", "")))
+
+@app.route("/api/plugins/<plugin_id>/logs", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_logs(plugin_id):
+    if not plugin_sdk_mgr: return ok(logs=[])
+    limit = int(request.args.get("limit", 100))
+    return ok(logs=plugin_sdk_mgr.get_plugin_logs(plugin_id, limit))
+
+@app.route("/api/plugins/scaffold", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_scaffold():
+    if not plugin_sdk_mgr: return err("modül yok", 503)
+    kind = request.args.get("kind", "basic")
+    return ok(**plugin_sdk_mgr.scaffold(kind))
+
+@app.route("/api/plugins/sdk-info", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_plugin_sdk_info():
+    if not plugin_sdk_mgr: return ok({})
+    return ok(**plugin_sdk_mgr.get_sdk_info())
+
 # ── VM Disk Hot-Extend ────────────────────────────────────────────────────────
 @app.route("/api/vms/<vm_id>/disks", methods=["GET"])
 @require_auth
