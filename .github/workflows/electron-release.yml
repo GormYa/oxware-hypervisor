@@ -16,18 +16,10 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            artifact_glob: |
-              electron-app/dist/*.AppImage
-              electron-app/dist/*.deb
           - os: windows-latest
             platform: win
-            artifact_glob: |
-              electron-app/dist/*.exe
           - os: macos-latest
             platform: mac
-            artifact_glob: |
-              electron-app/dist/*.dmg
-              electron-app/dist/*.zip
 
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.platform }})
@@ -45,21 +37,11 @@ jobs:
         working-directory: electron-app
         run: npm install
 
-      - name: Build ${{ matrix.platform }}
+      - name: Build & publish ${{ matrix.platform }}
         working-directory: electron-app
-        run: npm run dist:${{ matrix.platform }}
+        run: npm run dist:${{ matrix.platform }} -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Skip code signing (no certificate — app will show OS warning)
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          WIN_CSC_LINK: ''
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.artifact_glob }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Skip code signing — unsigned build, OS will show a warning on first run
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          WIN_CSC_LINK: ""
