@@ -359,7 +359,7 @@ _cleanup_docs() {
  local junk=(
  LICENSE CNAME CHANGELOG.md README.md SECURITY.md THREAT_MODEL.md
  CONTRIBUTING.md README.md.bloated.bak install.sh.v2.2.bak
- planning tests .github
+ planning tests .github electron-app
  )
  for f in "${junk[@]}"; do
  rm -rf "${INSTALL_DIR:?}/${f}" 2>/dev/null || true
@@ -768,7 +768,7 @@ if [ -d "\${INSTALL_DIR}/.git" ]; then
  git reset --hard origin/main
  echo -e "\${GREEN}[OK]\${NC} Kod güncellendi"
  # Gereksiz döküman dosyalarını temizle (brace expansion YOK — unquoted heredoc'ta patlar)
- for _j in LICENSE CNAME CHANGELOG.md README.md SECURITY.md THREAT_MODEL.md CONTRIBUTING.md planning tests .github; do
+ for _j in LICENSE CNAME CHANGELOG.md README.md SECURITY.md THREAT_MODEL.md CONTRIBUTING.md planning tests .github electron-app; do
  rm -rf "\${INSTALL_DIR}/\${_j}" 2>/dev/null || true
  done
  # CLI araçlarını da güncelle (ox / oxupdate binary'leri)
