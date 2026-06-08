@@ -7063,6 +7063,78 @@
           </div>
         </div>
 
+        <!-- ══ Green Mode ══ -->
+        <div id="ent-pane-greenmode" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-leaf fa-fw" style="color:#3fb950"></i> Green Mode</h2><div class="spacer"></div><button class="btn" onclick="loadGreenModePage()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #3fb950;background:rgba(63,185,80,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#3fb950">Bu Nedir?</b> AI cluster güç optimizasyonu — düşük yük zamanlarında VM'leri tek node'a topla, boş node'ları uyut (ACPI/IPMI/WoL). Elektrik tasarrufu.</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="card"><div class="card-title">Yeşil Skor</div><div id="gm-score" class="text-muted" style="font-size:12px">Yükleniyor...</div></div>
+            <div class="card"><div class="card-title">Tasarruf Potansiyeli</div><div id="gm-savings" class="text-muted" style="font-size:12px">Yükleniyor...</div></div>
+          </div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Politika</div><div id="gm-config" class="text-muted" style="font-size:12px;margin-bottom:8px">Yükleniyor...</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="gmDryRun()" style="font-size:12px"><i class="fa-solid fa-magnifying-glass"></i> Öneri Gör (Dry Run)</button><button class="btn-primary" onclick="gmEnter()" style="font-size:12px"><i class="fa-solid fa-leaf"></i> Green Window Uygula</button></div><div id="gm-action-result" style="margin-top:8px;font-size:11px"></div></div>
+          <div class="card"><div class="card-title">Node Durumları</div><div class="table-wrap"><table><thead><tr><th>Node</th><th>Durum</th><th>Güç (W)</th><th>İşlem</th></tr></thead><tbody id="gm-nodes-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody></table></div></div>
+        </div>
+
+        <!-- ══ Multi-Region ══ -->
+        <div id="ent-pane-multiregion" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-earth-americas fa-fw" style="color:#58a6ff"></i> Multi-Region</h2><div class="spacer"></div><button class="btn" onclick="loadMultiRegionPage()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #58a6ff;background:rgba(88,166,255,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#58a6ff">Bu Nedir?</b> Coğrafi VM yerleştirme (haversine mesafe), bölgeler arası replikasyon, gecikme-duyarlı DRS.</div></div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Bölge Ekle</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Ad</label><input id="mr-name" class="form-control" placeholder="eu-west" style="width:130px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Endpoint</label><input id="mr-endpoint" class="form-control" placeholder="https://..." style="width:180px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Enlem</label><input id="mr-lat" class="form-control" type="number" placeholder="41.0" style="width:90px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Boylam</label><input id="mr-lon" class="form-control" type="number" placeholder="28.9" style="width:90px;margin-top:4px"></div>
+              <button class="btn-primary" onclick="mrAddRegion()" style="font-size:12px"><i class="fa-solid fa-plus"></i> Ekle</button>
+            </div><div id="mr-add-result" style="margin-top:8px;font-size:11px"></div>
+          </div>
+          <div class="card"><div class="card-title">Bölgeler</div><div class="table-wrap"><table><thead><tr><th>Ad</th><th>Endpoint</th><th>Konum</th><th>Gecikme</th><th>Ağırlık</th><th>İşlem</th></tr></thead><tbody id="mr-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody></table></div></div>
+        </div>
+
+        <!-- ══ App Marketplace ══ -->
+        <div id="ent-pane-marketplace" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-store fa-fw" style="color:#d29922"></i> App Marketplace</h2><div class="spacer"></div><input id="mp-search" class="form-control" placeholder="Ara..." style="width:180px;margin-right:8px" oninput="mpSearch(this.value)"><button class="btn" onclick="mpRefresh()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #d29922;background:rgba(210,153,34,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#d29922">Bu Nedir?</b> Topluluk VM şablonları + otomasyon workflow + plugin kayıt defteri. Tek tıkla kur.</div></div>
+          <div id="mp-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px"><div class="text-muted" style="padding:14px">Yükleniyor...</div></div>
+        </div>
+
+        <!-- ══ Cloud Burst ══ -->
+        <div id="ent-pane-cloudburst" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-cloud-arrow-up fa-fw" style="color:#a78bfa"></i> Cloud Burst</h2><div class="spacer"></div><button class="btn" onclick="loadCloudBurstPage()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #a78bfa;background:rgba(167,139,250,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#a78bfa">Bu Nedir?</b> Yerel cluster yükü eşiği aşınca AWS/GCP/Azure'da geçici burst VM aç. Yük düşünce otomatik kapat.</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div class="card"><div class="card-title">Yapılandırma</div><div id="cb-config" class="text-muted" style="font-size:12px">Yükleniyor...</div></div>
+            <div class="card"><div class="card-title">Maliyet (30 gün)</div><div id="cb-costs" class="text-muted" style="font-size:12px">Yükleniyor...</div>
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><select id="cb-provider" class="form-control" style="width:120px"><option value="aws">AWS</option><option value="gcp">GCP</option><option value="azure">Azure</option></select><button class="btn-primary" onclick="cbProvision()" style="font-size:12px"><i class="fa-solid fa-plus"></i> Burst Node Aç</button></div></div>
+          </div>
+          <div class="card"><div class="card-title">Burst Node'ları</div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Provider</th><th>Tip</th><th>Durum</th><th>Maliyet/sa</th><th>İşlem</th></tr></thead><tbody id="cb-nodes-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody></table></div></div>
+        </div>
+
+        <!-- ══ Bare-Metal ══ -->
+        <div id="ent-pane-baremetal" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-microchip fa-fw" style="color:#f85149"></i> Bare-Metal Provisioning</h2><div class="spacer"></div><button class="btn" onclick="loadBareMetalPage()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #f85149;background:rgba(248,81,73,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#f85149">Bu Nedir?</b> PXE + iPXE + cloud-init ile fiziksel sunucuları otomatik OXware node'a kur.</div></div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">PXE Durumu</div><div id="bm-status" class="text-muted" style="font-size:12px;margin-bottom:8px">Yükleniyor...</div><button class="btn" onclick="bmSetup()" style="font-size:12px"><i class="fa-solid fa-server"></i> PXE Sunucu Kur</button></div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Autoinstall Profilleri</div><div class="table-wrap"><table><thead><tr><th>Ad</th><th>Hostname</th><th>Disk</th><th>İşlem</th></tr></thead><tbody id="bm-profiles-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody></table></div></div>
+          <div class="card"><div class="card-title">MAC Kayıtları</div><div class="table-wrap"><table><thead><tr><th>MAC</th><th>Profil</th><th>Hostname</th><th>İşlem</th></tr></thead><tbody id="bm-macs-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody></table></div></div>
+        </div>
+
+        <!-- ══ OAuth 2.0 SSO ══ -->
+        <div id="ent-pane-oauth2" style="display:none">
+          <div class="section-header"><h2><i class="fa-solid fa-key fa-fw" style="color:#3fb950"></i> OAuth 2.0 SSO</h2><div class="spacer"></div><button class="btn" onclick="loadOAuth2Page()" style="font-size:12px"><i class="fa-solid fa-rotate"></i> Yenile</button></div>
+          <div class="card" style="margin-bottom:12px;border-left:4px solid #3fb950;background:rgba(63,185,80,.04);padding:14px"><div style="font-size:12px;line-height:1.6"><b style="color:#3fb950">Bu Nedir?</b> Kurumsal OAuth 2.0 (PKCE) — Google Workspace, Microsoft Entra ID, GitHub, GitLab, Okta, Auth0, Keycloak.</div></div>
+          <div class="card" style="margin-bottom:12px"><div class="card-title">Sağlayıcı Yapılandır</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Sağlayıcı</label><select id="o2-provider" class="form-control" style="width:140px;margin-top:4px"><option value="google">Google</option><option value="microsoft">Microsoft</option><option value="github">GitHub</option><option value="gitlab">GitLab</option><option value="okta">Okta</option><option value="auth0">Auth0</option><option value="keycloak">Keycloak</option></select></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Client ID</label><input id="o2-client-id" class="form-control" style="width:180px;margin-top:4px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Client Secret</label><input id="o2-client-secret" type="password" class="form-control" style="width:180px;margin-top:4px"></div>
+              <button class="btn-primary" onclick="o2Configure()" style="font-size:12px"><i class="fa-solid fa-floppy-disk"></i> Kaydet</button>
+            </div><div id="o2-config-result" style="margin-top:8px;font-size:11px"></div>
+          </div>
+          <div class="card"><div class="card-title">Sağlayıcılar</div><div id="o2-providers" class="text-muted" style="font-size:12px">Yükleniyor...</div></div>
+        </div>
+
         </div><!-- /page-tab-enterprise -->
 
         <!-- ══════════ /v2.5.6 ══════════ -->
@@ -26322,6 +26394,107 @@ async function cloudExportAws() {
   toast('AWS export başlatıldı','success');
   if (res) res.innerHTML = _entKV(d);
 }
+
+/* ──── Green Mode Panel ──── */
+async function loadGreenModePage() {
+  const sc = document.getElementById('gm-score'), sv = document.getElementById('gm-savings'),
+        cf = document.getElementById('gm-config'), tb = document.getElementById('gm-nodes-tbody');
+  const [score, savings, config, nodes] = await Promise.all([
+    _api('/api/green-mode/score'), _api('/api/green-mode/savings'),
+    _api('/api/green-mode/config'), _api('/api/green-mode/nodes')]);
+  if (sc) sc.innerHTML = score ? _entKV(score) : '<span class="text-muted">Veri yok</span>';
+  if (sv) sv.innerHTML = savings ? _entKV(savings) : '<span class="text-muted">Veri yok</span>';
+  if (cf) cf.innerHTML = config ? _entKV(config) : '<span class="text-muted">Veri yok</span>';
+  const arr = (nodes && nodes.nodes) || [];
+  if (tb) tb.innerHTML = arr.length ? arr.map(n => `<tr><td>${_esc(n.node||n.name||'-')}</td><td><span style="color:${n.state==='active'?'#3fb950':n.state==='suspended'?'#d29922':'#8b949e'}">${_esc(n.state||'-')}</span></td><td>${n.power_w!=null?n.power_w+' W':'-'}</td><td>${n.state==='suspended'?`<button class="btn sm" onclick="gmWake('${_esc(n.node||n.name)}')">Uyandır</button>`:`<button class="btn sm" onclick="gmSuspend('${_esc(n.node||n.name)}')">Uyut</button>`}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Node yok</td></tr>';
+}
+async function gmDryRun() {
+  const r = document.getElementById('gm-action-result'); if (r) r.textContent = 'Analiz ediliyor...';
+  const d = await _api('/api/green-mode/enter','POST',{dry_run:true});
+  if (d && r) r.innerHTML = `<span style="color:#3fb950">${_esc(JSON.stringify(d.recommendations||d).slice(0,200))}</span>`;
+}
+async function gmEnter() {
+  if (!await showConfirm('VM konsolidasyonu + node uyutma başlatılacak. Devam?','Green Window')) return;
+  const d = await _api('/api/green-mode/enter','POST',{dry_run:false});
+  if (d) { toast('Green window uygulandı','success'); loadGreenModePage(); }
+}
+async function gmWake(n) { const d = await _api(`/api/green-mode/nodes/${n}/wake`,'POST'); if (d) { toast('Node uyandırılıyor','success'); loadGreenModePage(); } }
+async function gmSuspend(n) { if (!await showConfirm(`${n} uyutulacak. Devam?`,'Node Uyut')) return; const d = await _api(`/api/green-mode/nodes/${n}/suspend`,'POST'); if (d) { toast('Node uyutuluyor','success'); loadGreenModePage(); } }
+
+/* ──── Multi-Region Panel ──── */
+async function loadMultiRegionPage() {
+  const tb = document.getElementById('mr-tbody');
+  const d = await _api('/api/regions');
+  const arr = (d && d.regions) || [];
+  if (tb) tb.innerHTML = arr.length ? arr.map(r => `<tr><td><b>${_esc(r.name||'-')}</b></td><td style="font-size:11px">${_esc(r.endpoint||'-')}</td><td>${r.latitude!=null?r.latitude+', '+r.longitude:'-'}</td><td>${r.latency_ms!=null?r.latency_ms+'ms':'-'}</td><td>${r.weight!=null?r.weight:'1.0'}</td><td><button class="btn sm danger" onclick="mrRemove('${_esc(r.name)}')"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Bölge yok</td></tr>';
+}
+async function mrAddRegion() {
+  const name=document.getElementById('mr-name').value.trim(), endpoint=document.getElementById('mr-endpoint').value.trim();
+  const lat=parseFloat(document.getElementById('mr-lat').value), lon=parseFloat(document.getElementById('mr-lon').value);
+  if (!name) { toast('Ad gerekli','error'); return; }
+  const d = await _api('/api/regions','POST',{name,endpoint,latitude:lat||0,longitude:lon||0});
+  if (d) { toast('Bölge eklendi','success'); loadMultiRegionPage(); }
+}
+async function mrRemove(n) { if (!await showConfirm(`${n} bölgesi silinecek. Devam?`,'Bölge Sil',true)) return; const d = await _api(`/api/regions/${n}`,'DELETE'); if (d) { toast('Bölge silindi','success'); loadMultiRegionPage(); } }
+
+/* ──── App Marketplace Panel ──── */
+let _mpApps = [];
+async function loadMarketplacePage() {
+  const d = await _api('/api/marketplace/apps');
+  _mpApps = (d && d.apps) || [];
+  _mpRender(_mpApps);
+}
+function _mpRender(apps) {
+  const g = document.getElementById('mp-grid'); if (!g) return;
+  g.innerHTML = apps.length ? apps.map(a => `<div class="card" style="padding:12px"><div style="font-weight:700;font-size:13px;margin-bottom:4px">${_esc(a.name||a.id)}</div><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${_esc(a.category||'')}</div><div style="font-size:11px;line-height:1.5;margin-bottom:8px;min-height:32px">${_esc((a.description||'').slice(0,90))}</div><button class="btn-primary" style="font-size:11px;width:100%" onclick="mpInstall('${_esc(a.id)}')"><i class="fa-solid fa-download"></i> Kur</button></div>`).join('') : '<div class="text-muted" style="padding:14px">Uygulama yok</div>';
+}
+function mpSearch(q) { const ql=(q||'').toLowerCase(); _mpRender(_mpApps.filter(a => (a.name||'').toLowerCase().includes(ql) || (a.description||'').toLowerCase().includes(ql) || (a.category||'').toLowerCase().includes(ql))); }
+async function mpInstall(id) { const d = await _api('/api/marketplace/install','POST',{app_id:id}); if (d) toast('Kurulum başlatıldı: '+id,'success'); }
+async function mpRefresh() { const d = await _api('/api/marketplace/refresh','POST'); if (d) toast('Katalog güncellendi','success'); loadMarketplacePage(); }
+
+/* ──── Cloud Burst Panel ──── */
+async function loadCloudBurstPage() {
+  const cf=document.getElementById('cb-config'), co=document.getElementById('cb-costs'), tb=document.getElementById('cb-nodes-tbody');
+  const [config, costs, nodes] = await Promise.all([_api('/api/cloud-burst/config'), _api('/api/cloud-burst/costs'), _api('/api/cloud-burst/nodes')]);
+  if (cf) cf.innerHTML = config ? _entKV(config) : '<span class="text-muted">Veri yok</span>';
+  if (co) co.innerHTML = costs ? _entKV(costs) : '<span class="text-muted">Veri yok</span>';
+  const arr = (nodes && nodes.nodes) || [];
+  if (tb) tb.innerHTML = arr.length ? arr.map(n => `<tr><td style="font-family:monospace;font-size:10px">${_esc((n.node_id||n.id||'').slice(0,14))}</td><td>${_esc(n.provider||'-')}</td><td>${_esc(n.instance_type||'-')}</td><td>${_esc(n.status||'-')}</td><td>${n.cost_per_hour!=null?'$'+n.cost_per_hour:'-'}</td><td><button class="btn sm danger" onclick="cbRetire('${_esc(n.node_id||n.id)}')"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Burst node yok</td></tr>';
+}
+async function cbProvision() { const provider=document.getElementById('cb-provider').value; const d = await _api('/api/cloud-burst/provision','POST',{provider}); if (d) { toast('Burst node açılıyor: '+provider,'success'); loadCloudBurstPage(); } }
+async function cbRetire(id) { if (!await showConfirm(`${id} burst node kapatılacak. Devam?`,'Node Kapat',true)) return; const d = await _api(`/api/cloud-burst/nodes/${id}`,'DELETE'); if (d) { toast('Burst node kapatıldı','success'); loadCloudBurstPage(); } }
+
+/* ──── Bare-Metal Panel ──── */
+async function loadBareMetalPage() {
+  const st=document.getElementById('bm-status'), pt=document.getElementById('bm-profiles-tbody'), mt=document.getElementById('bm-macs-tbody');
+  const [status, profiles, macs] = await Promise.all([_api('/api/bare-metal/status'), _api('/api/bare-metal/profiles'), _api('/api/bare-metal/macs')]);
+  if (st) st.innerHTML = status ? _entKV(status) : '<span class="text-muted">Veri yok</span>';
+  const pa = (profiles && profiles.profiles) || [];
+  if (pt) pt.innerHTML = pa.length ? pa.map(p => `<tr><td><b>${_esc(p.name||'-')}</b></td><td>${_esc(p.hostname||'-')}</td><td>${_esc(p.disk_layout||'-')}</td><td><button class="btn sm danger" onclick="bmDelProfile('${_esc(p.name)}')"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Profil yok</td></tr>';
+  const ma = (macs && macs.registrations) || [];
+  if (mt) mt.innerHTML = ma.length ? ma.map(m => `<tr><td style="font-family:monospace">${_esc(m.mac||'-')}</td><td>${_esc(m.profile||'-')}</td><td>${_esc(m.hostname||'-')}</td><td><button class="btn sm danger" onclick="bmDelMac('${_esc(m.mac)}')"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">MAC kaydı yok</td></tr>';
+}
+async function bmSetup() { const d = await _api('/api/bare-metal/setup','POST'); if (d) { toast('PXE sunucu yapılandırıldı','success'); loadBareMetalPage(); } }
+async function bmDelProfile(n) { if (!await showConfirm(`${n} profili silinecek. Devam?`,'Profil Sil',true)) return; const d = await _api(`/api/bare-metal/profiles/${n}`,'DELETE'); if (d) { toast('Profil silindi','success'); loadBareMetalPage(); } }
+async function bmDelMac(m) { const d = await _api(`/api/bare-metal/macs/${encodeURIComponent(m)}`,'DELETE'); if (d) { toast('MAC kaydı silindi','success'); loadBareMetalPage(); } }
+
+/* ──── OAuth 2.0 SSO Panel ──── */
+async function loadOAuth2Page() {
+  const el = document.getElementById('o2-providers');
+  const d = await _api('/api/auth/oauth2/providers');
+  if (!d) { if (el) el.innerHTML = '<span class="text-muted">Veri alınamadı</span>'; return; }
+  const provs = d.providers || {};
+  const keys = Object.keys(provs);
+  if (el) el.innerHTML = keys.length ? `<div class="table-wrap"><table><thead><tr><th>Sağlayıcı</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${keys.map(k => { const p=provs[k]; const configured = p && (p.configured || p.has_client_id); return `<tr><td><b>${_esc(k)}</b></td><td><span style="color:${configured?'#3fb950':'#8b949e'}">${configured?'Yapılandırıldı':'Yapılandırılmadı'}</span></td><td>${configured?`<button class="btn sm danger" onclick="o2Remove('${_esc(k)}')"><i class="fa-solid fa-trash"></i></button>`:'-'}</td></tr>`; }).join('')}</tbody></table></div>` : '<span class="text-muted">Sağlayıcı yapılandırılmamış</span>';
+}
+async function o2Configure() {
+  const provider=document.getElementById('o2-provider').value, client_id=document.getElementById('o2-client-id').value.trim(), client_secret=document.getElementById('o2-client-secret').value.trim();
+  const r = document.getElementById('o2-config-result');
+  if (!client_id || !client_secret) { toast('Client ID ve Secret gerekli','error'); return; }
+  const d = await _api(`/api/auth/oauth2/providers/${provider}`,'POST',{client_id,client_secret});
+  if (d) { toast(provider+' yapılandırıldı','success'); if (r) r.innerHTML='<span style="color:#3fb950">Kaydedildi</span>'; loadOAuth2Page(); }
+}
+async function o2Remove(p) { if (!await showConfirm(`${p} sağlayıcısı kaldırılacak. Devam?`,'Sağlayıcı Sil',true)) return; const d = await _api(`/api/auth/oauth2/providers/${p}`,'DELETE'); if (d) { toast('Sağlayıcı kaldırıldı','success'); loadOAuth2Page(); } }
 
 /* ──── Fault Tolerance Panel ──── */
 async function loadFaultTolerancePage() {
