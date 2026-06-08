@@ -3,7 +3,7 @@ OXware App Marketplace
 Community VM templates, automation workflows, plugin registry.
 Local cache: /var/lib/oxware/marketplace/
 Manifest: /var/lib/oxware/marketplace/index.json
-Remote: https://marketplace.oxware.top/index.json (optional, with offline fallback)
+Remote: https://oxware.top/marketplace/index.json (optional, with offline fallback)
 """
 
 import hashlib
@@ -23,7 +23,7 @@ APPS_DIR = CACHE_DIR / "apps"
 LOG_DIR = Path("/var/log/oxware")
 LOG_FILE = LOG_DIR / "marketplace.jsonl"
 
-REMOTE_INDEX_URL = "https://marketplace.oxware.top/index.json"
+REMOTE_INDEX_URL = "https://oxware.top/marketplace/index.json"
 
 BUNDLED_APPS = [
     {
@@ -306,7 +306,7 @@ def submit_app(manifest: dict) -> dict:
     try:
         payload = json.dumps(manifest).encode("utf-8")
         req = urllib.request.Request(
-            "https://marketplace.oxware.top/submit",
+            "https://oxware.top/marketplace/#submit",
             data=payload,
             headers={"Content-Type": "application/json",
                      "User-Agent": "OXware/2.6.3"},
