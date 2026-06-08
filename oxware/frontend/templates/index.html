@@ -4914,10 +4914,13 @@
           <div id="pview-market" style="display:none">
             <div class="card" style="margin-bottom:12px;border-left:4px solid #d29922;background:rgba(210,153,34,.04);padding:14px">
               <div style="font-size:12px;line-height:1.6;color:var(--text)">
-                <b style="color:#d29922">Plugin Marketplace</b> — Topluluk eklentilerini keşfet ve tek tıkla kur. Kendi eklentini paylaşmak için Geliştir sekmesinden yükleyip <code>oxware.top</code> marketplace'e gönderebilirsin.
+                <b style="color:#d29922">Plugin Marketplace</b> — Topluluk eklentilerini keşfet ve tek tıkla kur. Kendi eklentini Geliştir sekmesinde yaz, kendi sisteminde çalıştır. Paylaşmak istersen <a href="https://github.com/ShinnAsukha/oxware-hypervisor/discussions" target="_blank" rel="noopener" style="color:#58a6ff">GitHub Discussions</a>'ta yayınla.
               </div>
             </div>
-            <div style="margin-bottom:10px"><input id="pl-market-search" class="form-control" placeholder="Plugin ara..." style="width:240px" oninput="plMarketSearch(this.value)"></div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+              <input id="pl-market-search" class="form-control" placeholder="Plugin ara..." style="width:220px" oninput="plMarketSearch(this.value)">
+              <button class="btn-secondary" style="font-size:12px;padding:5px 10px" onclick="plRefreshMarket()"><i class="fa-solid fa-rotate"></i> Yenile</button>
+            </div>
             <div id="pl-market-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px"><div class="text-muted" style="padding:14px">Yükleniyor...</div></div>
           </div>
         </div>
@@ -21158,18 +21161,42 @@ async function plUninstall(id) {
 let _plMarketApps = [];
 async function plLoadMarket() {
   const g = document.getElementById('pl-market-grid'); if (!g) return;
-  const d = await _api('/api/marketplace/apps?category=plugin').catch(()=>null) || await _api('/api/marketplace/apps');
+  const d = await _api('/api/marketplace/apps').catch(()=>null);
   _plMarketApps = (d && d.apps) || [];
   _plMarketRender(_plMarketApps);
 }
+async function plRefreshMarket() {
+  const g = document.getElementById('pl-market-grid'); if (!g) return;
+  g.innerHTML = '<div class="text-muted" style="padding:14px">Katalog yenileniyor...</div>';
+  await _api('/api/marketplace/refresh','POST').catch(()=>null);
+  plLoadMarket();
+}
 function _plMarketRender(apps) {
   const g = document.getElementById('pl-market-grid'); if (!g) return;
-  g.innerHTML = apps.length ? apps.map(a => `<div class="card" style="padding:12px">
-    <div style="font-weight:700;font-size:13px;margin-bottom:2px">${_esc(a.name||a.id)}</div>
-    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">${_esc(a.category||'plugin')} · ${_esc(a.author||'community')}</div>
-    <div style="font-size:11px;line-height:1.5;margin-bottom:8px;min-height:34px">${_esc((a.description||'').slice(0,100))}</div>
-    <button class="btn-primary" style="font-size:11px;width:100%" onclick="plMarketInstall('${_esc(a.id)}')"><i class="fa-solid fa-download"></i> Kur</button>
-  </div>`).join('') : '<div class="text-muted" style="padding:14px">Marketplace boş veya çevrimdışı</div>';
+  if (!apps.length) {
+    g.innerHTML = '<div class="text-muted" style="padding:14px"><i class="fa-solid fa-box-open" style="margin-right:6px"></i>Katalog henüz boş &mdash; "Yenile" ile oxware.top\'tan çek.</div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  apps.forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.style.cssText = 'padding:12px';
+    const catBadge = a.category === 'plugin' ? '#bc8cff' : '#58a6ff';
+    div.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:2px">${_esc(a.name||a.id)}</div>
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">
+      <span style="background:rgba(188,140,255,.13);color:${catBadge};border:1px solid rgba(188,140,255,.3);border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;text-transform:uppercase">${_esc(a.category||'plugin')}</span>
+      &nbsp;${_esc(a.author||'community')} &nbsp;<span style="color:var(--text-muted)">v${_esc(a.version||'—')}</span>
+    </div>
+    <div style="font-size:11px;line-height:1.5;margin-bottom:8px;min-height:34px">${_esc((a.description||'').slice(0,120))}</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-primary" style="font-size:11px;flex:1" onclick="plMarketInstall('${_esc(a.id)}')"><i class="fa-solid fa-download"></i> Kur</button>
+      ${a.plugin_url ? `<a href="${_esc(a.plugin_url)}" target="_blank" rel="noopener" class="btn-secondary" style="font-size:11px;padding:5px 9px;text-decoration:none"><i class="fa-solid fa-code"></i></a>` : ''}
+    </div>`;
+    frag.appendChild(div);
+  });
+  while (g.firstChild) g.removeChild(g.firstChild);
+  g.appendChild(frag);
 }
 function plMarketSearch(q) {
   const ql=(q||'').toLowerCase();
