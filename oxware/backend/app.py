@@ -1689,6 +1689,9 @@ def api_create_vm():
         if app_install:
             ev.vm_event(f"App kurulum planlandı: {app_install}", vm_id, level="INFO")
         if webhook_mgr: webhook_mgr.trigger("vm.created", {"vm_id": vm_id, "vm_name": name})
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.created", {"vm_id": vm_id, "vm_name": name, "vcpus": vcpus, "memory_mb": memory_mb, "disk_gb": disk_gb})
+            except Exception as _pse: log.warning("plugin emit vm.created: %s", _pse)
         if resource_quota: resource_quota.check_quota(get_jwt_identity(), vcpus, memory_mb)
         resp = dict(result)
         if static_ip:
@@ -1750,6 +1753,9 @@ def api_delete_vm(vm_id):
         if mac:
             ip_pool_mgr.release_ip(mac)  # __internal__ entries stored with mac as vm_id
         ev.vm_event(f"VM silindi: {vm.get('name')}", vm_id, level="WARNING")
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.deleted", {"vm_id": vm_id, "vm_name": _vm_name_del})
+            except Exception as _pse: log.warning("plugin emit vm.deleted: %s", _pse)
         _bg_notify(f"VM silindi: {_vm_name_del}", level="INFO", category="vm",
                    vm_id=vm_id, details={"vm": _vm_name_del, "action": "delete",
                                          "delete_disk": str(delete_disk)})
@@ -1786,6 +1792,9 @@ def api_start_vm(vm_id):
         _bg_notify(f"VM başlatıldı: {_vm_name_start}", level="DEBUG", category="vm",
                    vm_id=vm_id, details={"vm": _vm_name_start, "action": "start"})
         if webhook_mgr: webhook_mgr.trigger("vm.started", {"vm_id": vm_id})
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.started", {"vm_id": vm_id, "vm_name": _vm_name_start})
+            except Exception as _pse: log.warning("plugin emit vm.started: %s", _pse)
         if uptime_tracker: uptime_tracker.record_start(vm_id, "")
         if hook_mgr:
             try: hook_mgr.run_hooks("post-start", vm_id, _vm_name_start)
@@ -1839,6 +1848,9 @@ def api_stop_vm(vm_id):
         _bg_notify(f"VM durduruldu: {_vm_name_stop}", level="DEBUG", category="vm",
                    vm_id=vm_id, details={"vm": _vm_name_stop, "action": "stop", "force": str(force)})
         if webhook_mgr: webhook_mgr.trigger("vm.stopped", {"vm_id": vm_id})
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.stopped", {"vm_id": vm_id, "vm_name": _vm_name_stop})
+            except Exception as _pse: log.warning("plugin emit vm.stopped: %s", _pse)
         if uptime_tracker: uptime_tracker.record_stop(vm_id)
         if hook_mgr:
             try: hook_mgr.run_hooks("post-stop", vm_id, _vm_name_stop)
@@ -5027,6 +5039,9 @@ def api_take_snapshot_v2(vm_id):
     try:
         result = vm_manager.take_snapshot(vm_id, snap_name, desc)
         ev.vm_event(f"Snapshot alındı: {snap_name}", vm_id, level="INFO")
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.snapshot_created", {"vm_id": vm_id, "snapshot": snap_name})
+            except Exception as _pse: log.warning("plugin emit vm.snapshot_created: %s", _pse)
         return ok(**result), 201
     except Exception as e:
         return err(e, 500)
@@ -5063,6 +5078,9 @@ def api_delete_snapshot_v2(vm_id, snap_name):
     try:
         result = vm_manager.delete_snapshot(vm_id, snap_name)
         ev.vm_event(f"Snapshot silindi: {snap_name}", vm_id, level="INFO")
+        if plugin_sdk_mgr:
+            try: plugin_sdk_mgr.emit_event("vm.snapshot_deleted", {"vm_id": vm_id, "snapshot": snap_name})
+            except Exception as _pse: log.warning("plugin emit vm.snapshot_deleted: %s", _pse)
         return ok(**result)
     except Exception as e:
         return err(e, 500)
@@ -19284,6 +19302,14 @@ def api_oauth2_callback(provider):
     except Exception as e:
         ev.warn(f"OAuth2 callback hatası: {provider} / {e}", category="auth")
         return err(str(e), 400)
+
+# ── Plugin startup — modül yüklendiğinde çalışır (python app.py + gunicorn) ───
+if plugin_sdk_mgr:
+    try:
+        _pl_loaded = plugin_sdk_mgr.load_all_plugins(app)
+        log.info("Plugin SDK: %d plugin yüklendi", len(_pl_loaded))
+    except Exception as _pse:
+        log.warning("Plugin startup yükleme hatası: %s", _pse)
 
 if __name__ == "__main__":
     log.info("OXware Hypervisor v2.6.3 başlatılıyor")

@@ -874,8 +874,7 @@
       .table-wrap{font-size:11px;overflow-x:auto}
       thead th,tbody td{padding:6px 8px!important}
       /* topbar */
-      #license-banner{display:none!important}
-      .tb-logo .tb-logo-text{display:none!important}
+.tb-logo .tb-logo-text{display:none!important}
       #oxy-panel{width:100%!important;right:0!important;left:0!important}
       /* topbar actions — sadece Create VM göster */
       .tb-actions .tb-action:not([id="createVmBtn"]){padding:0 8px!important}
@@ -1074,12 +1073,6 @@
       </div>
     </div>
 
-
-    <div id="license-banner" style="display:none;padding:0 14px;font-size:11px;height:100%;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(42,109,217,.1),rgba(42,109,217,.05));border-right:1px solid rgba(42,109,217,.2)">
-      <i class="fa-solid fa-star" style="color:#f5c842"></i>
-      <span style="color:var(--text-muted)">Bizi desteklediğiniz için teşekkür ederiz. 7/24 Danışmanlık Hizmetimizi Kullanmak İçin
-      <a href="https://wa.me/+905439769301" target="_blank" style="color:var(--accent-lt);text-decoration:underline;font-weight:600">Tıklayın</a></span>
-    </div>
 
     <div class="tb-spacer"></div>
 
@@ -4893,7 +4886,9 @@
                 <b style="color:var(--accent-lt)">Plugin Geliştirme</b> — Python ile kendi eklentini yaz: Flask route ekle, VM olaylarını dinle (vm.created/deleted), özel panel sun. Şablon seç, düzenle, doğrula, yükle. Tam dokümantasyon: <a href="https://oxware.top/docs#plugins" target="_blank" style="color:var(--accent-lt)">oxware.top/docs</a>
               </div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+              <button class="btn-primary" onclick="plNewPlugin()" style="font-size:12px"><i class="fa-solid fa-plus"></i> Yeni Plugin</button>
+              <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
               <label style="font-size:12px;color:var(--text-muted)">Şablon:</label>
               <select id="pl-scaffold-kind" class="form-control" style="width:160px" onchange="plLoadScaffold()">
                 <option value="basic">Temel</option>
@@ -4905,6 +4900,39 @@
               <button class="btn-primary" onclick="plUploadFromEditor()" style="font-size:12px"><i class="fa-solid fa-upload"></i> Yükle</button>
               <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">veya dosya:</span>
               <input type="file" id="pl-file" accept=".py,.zip" onchange="plUploadFile(this)" style="font-size:11px;max-width:200px">
+            </div>
+            <!-- Yeni plugin inline form -->
+            <div id="pl-new-form" style="display:none;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:600;color:var(--accent-lt);margin-bottom:8px"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Yeni Plugin Oluştur</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <div style="flex:1;min-width:160px">
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Plugin Adı</label>
+                  <input id="pl-new-name" class="form-control" placeholder="Örn: VM Notifier" style="font-size:12px" oninput="plPreviewId(this.value)">
+                </div>
+                <div style="flex:1;min-width:160px">
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Şablon Türü</label>
+                  <select id="pl-new-kind" class="form-control" style="font-size:12px">
+                    <option value="basic">Temel</option>
+                    <option value="api">API Route</option>
+                    <option value="event">VM Olay Dinleyici</option>
+                    <option value="panel">Özel Panel</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Oluşturulacak ID</label>
+                  <code id="pl-new-id-preview" style="font-size:11px;background:var(--surface2);padding:4px 8px;border-radius:4px;color:var(--accent-lt);display:block;min-width:140px">—</code>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn-primary" onclick="plCreateNew()" style="font-size:12px"><i class="fa-solid fa-wand-magic-sparkles"></i> Oluştur</button>
+                <button class="btn" onclick="document.getElementById('pl-new-form').style.display='none'" style="font-size:12px">İptal</button>
+              </div>
+            </div>
+            <!-- Düzenlenen plugin badge -->
+            <div id="pl-editing-badge" style="display:none;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:6px;padding:6px 12px;margin-bottom:8px;font-size:12px;color:#d29922;display:none;align-items:center;gap:8px">
+              <i class="fa-solid fa-pen"></i>
+              <span id="pl-editing-label">Plugin düzenleniyor</span>
+              <button onclick="plCancelEdit()" style="margin-left:auto;background:none;border:none;color:#d29922;cursor:pointer;font-size:11px"><i class="fa-solid fa-xmark"></i> İptal</button>
             </div>
             <textarea id="pl-editor" spellcheck="false" style="width:100%;height:380px;font-family:'Courier New',monospace;font-size:12px;background:#0d1117;color:#e6edf3;border:1px solid var(--border);border-radius:6px;padding:12px;resize:vertical;line-height:1.5"></textarea>
             <div id="pl-validate-result" style="margin-top:8px;font-size:12px"></div>
@@ -12737,8 +12765,6 @@ async function checkLicenseStatus() {
   try {
     const r = await fetch('/api/license/status', {headers:{'Authorization':'Bearer '+TOKEN()}});
     const d = await r.json();
-    const banner = document.getElementById('license-banner');
-    if (banner) banner.style.display = d.active ? 'flex' : 'none';
     _applyLicenseUI(d);
   } catch {}
 }
@@ -21032,6 +21058,88 @@ async function rcRevoke() {
 }
 
 /* ──── Plugin SDK ──── */
+
+function _plNameToId(name) {
+  // "VM Notifier" → "vm_notifier"  |  "My Cool Plugin!" → "my_cool_plugin"
+  return (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48) || 'my_plugin';
+}
+
+function plPreviewId(name) {
+  const el = document.getElementById('pl-new-id-preview');
+  if (el) el.textContent = _plNameToId(name) || '—';
+}
+
+function plNewPlugin() {
+  const form = document.getElementById('pl-new-form');
+  if (!form) return;
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+  const nameIn = document.getElementById('pl-new-name');
+  if (nameIn) { nameIn.value = ''; nameIn.focus(); }
+  plPreviewId('');
+}
+
+async function plCreateNew() {
+  const nameIn = document.getElementById('pl-new-name');
+  const kindSel = document.getElementById('pl-new-kind');
+  const name = (nameIn && nameIn.value.trim()) || '';
+  const kind = (kindSel && kindSel.value) || 'basic';
+  const id   = _plNameToId(name);
+
+  // Fetch scaffold then replace id/name in the template
+  const d = await _api('/api/plugins/scaffold?kind=' + encodeURIComponent(kind));
+  if (!d || !d.code) { toast('Şablon alınamadı', 'error'); return; }
+
+  let code = d.code;
+  // Replace PLUGIN_META id and name fields
+  if (name) {
+    code = code.replace(/"id":\s*"[^"]*"/, `"id":          "${id}"`);
+    code = code.replace(/"name":\s*"[^"]*"/, `"name":        "${name}"`);
+  }
+
+  const editor = document.getElementById('pl-editor');
+  if (editor) editor.value = code;
+
+  // Sync main scaffold select
+  const mainKind = document.getElementById('pl-scaffold-kind');
+  if (mainKind) mainKind.value = kind;
+
+  // Clear validate result
+  const res = document.getElementById('pl-validate-result');
+  if (res) { res.textContent = ''; }
+
+  // Hide form, clear editing state
+  const form = document.getElementById('pl-new-form');
+  if (form) form.style.display = 'none';
+  window._plEditingId = null;
+  _plUpdateEditingBadge(null);
+
+  toast('Şablon yüklendi — düzenleyip Yükle\'ye bas', 'info');
+}
+
+function plCancelEdit() {
+  window._plEditingId = null;
+  _plUpdateEditingBadge(null);
+  document.getElementById('pl-editor').value = '';
+  const res = document.getElementById('pl-validate-result');
+  if (res) res.textContent = '';
+}
+
+function _plUpdateEditingBadge(id) {
+  const badge = document.getElementById('pl-editing-badge');
+  const label = document.getElementById('pl-editing-label');
+  if (!badge) return;
+  if (id) {
+    if (label) label.textContent = id + ' düzenleniyor — Yükle ile kaydet';
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 async function loadPluginSdkPage() {
   const tb = document.getElementById('plugins-tbody');
   if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
@@ -21088,15 +21196,29 @@ async function plLoadScaffold() {
 
 async function plValidate() {
   const code = document.getElementById('pl-editor').value;
-  const res = document.getElementById('pl-validate-result');
-  if (!code.trim()) { if (res) res.textContent = 'Kod boş'; return; }
+  const res  = document.getElementById('pl-validate-result');
+  if (!res) return;
+  if (!code.trim()) { res.textContent = 'Kod boş'; res.style.color = '#f85149'; return; }
+  res.textContent = ''; res.style.color = '';
   const d = await _api('/api/plugins/validate','POST',{code});
-  if (!d) { if (res) res.textContent = 'Doğrulama başarısız'; return; }
-  let html = '';
-  if (d.valid) html += `<div style="color:#3fb950">✓ Geçerli — ${_esc((d.meta&&d.meta.name)||'plugin')} v${_esc((d.meta&&d.meta.version)||'?')}</div>`;
-  else html += `<div style="color:#f85149">✗ Geçersiz: ${(d.errors||[]).map(_esc).join(', ')}</div>`;
-  if ((d.warnings||[]).length) html += `<div style="color:#d29922;margin-top:4px">⚠ Güvenlik uyarıları: ${(d.warnings||[]).map(_esc).join('; ')}</div>`;
-  if (res) res.innerHTML = html;
+  if (!d) { res.textContent = 'Doğrulama başarısız'; res.style.color = '#f85149'; return; }
+  // valid / invalid line
+  const line1 = document.createElement('div');
+  if (d.valid) {
+    line1.style.color = '#3fb950';
+    line1.textContent = '✓ Geçerli — ' + ((d.meta&&d.meta.name)||'plugin') + ' v' + ((d.meta&&d.meta.version)||'?');
+  } else {
+    line1.style.color = '#f85149';
+    line1.textContent = '✗ Geçersiz: ' + (d.errors||[]).join(', ');
+  }
+  res.appendChild(line1);
+  // warnings
+  if ((d.warnings||[]).length) {
+    const line2 = document.createElement('div');
+    line2.style.cssText = 'color:#d29922;margin-top:4px';
+    line2.textContent = '⚠ Güvenlik uyarıları: ' + d.warnings.join('; ');
+    res.appendChild(line2);
+  }
 }
 
 async function plUploadFromEditor() {
@@ -21106,8 +21228,10 @@ async function plUploadFromEditor() {
   if (window._plEditingId) {
     const sd = await _api(`/api/plugins/${window._plEditingId}/source`,'POST',{code});
     window._plEditingId = null;
-    if (sd && sd.success) { toast('Kaydedildi (pasif — etkinleştir)','success'); pluginTab('installed'); loadPluginSdkPage(); }
-    else toast('Kayıt başarısız: '+((sd&&(sd.errors||[]).join(', '))||''),'error');
+    if (sd && sd.success) {
+      _plUpdateEditingBadge(null); window._plEditingId = null;
+      toast('Kaydedildi (pasif — etkinleştir)','success'); pluginTab('installed'); loadPluginSdkPage();
+    } else toast('Kayıt başarısız: '+((sd&&(sd.errors||[]).join(', '))||''),'error');
     return;
   }
   const b64 = btoa(unescape(encodeURIComponent(code)));
@@ -21140,16 +21264,52 @@ async function plEditPlugin(id) {
   if (!d || !d.code) { toast('Kaynak alınamadı','error'); return; }
   pluginTab('develop');
   document.getElementById('pl-editor').value = d.code;
-  // Save replaces upload — store id for save
   window._plEditingId = id;
-  toast(`${id} düzenleniyor — Yükle ile kaydet`,'info');
+  _plUpdateEditingBadge(id);
+  const res = document.getElementById('pl-validate-result');
+  if (res) res.textContent = '';
 }
 
 async function plViewLogs(id) {
-  const d = await _api(`/api/plugins/${id}/logs?limit=50`);
+  const d = await _api(`/api/plugins/${id}/logs?limit=100`);
   const logs = (d && d.logs) || [];
-  const body = logs.length ? logs.map(l => `[${_esc(l.level||l.ts||'')}] ${_esc(l.msg||JSON.stringify(l))}`).join('\n') : 'Log yok';
-  await showConfirm(body, `${id} logları`);
+
+  const modal   = document.getElementById('modal-confirm');
+  const titleEl = document.getElementById('modal-confirm-title');
+  const msgEl   = document.getElementById('modal-confirm-msg');
+  const okBtn   = document.getElementById('modal-confirm-ok');
+  const iconEl  = document.getElementById('modal-confirm-icon');
+  if (!modal || !msgEl) { alert(logs.map(l=>'['+l.level+'] '+l.msg).join('\n')); return; }
+
+  // Build a <pre> with textContent — no innerHTML
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'max-height:320px;overflow-y:auto;font-size:11px;margin:0;white-space:pre-wrap;word-break:break-all;background:#0d1117;border-radius:6px;padding:10px;color:#8b949e';
+  pre.textContent = logs.length
+    ? logs.map(l => {
+        const ts  = (l.ts||'').slice(0,19);
+        const lvl = (l.level||'INFO').toUpperCase().padEnd(5);
+        const msg = l.msg || JSON.stringify(l);
+        return ts + ' [' + lvl + '] ' + msg;
+      }).join('\n')
+    : 'Log girişi yok.';
+
+  // Replace p content with pre
+  while (msgEl.firstChild) msgEl.removeChild(msgEl.firstChild);
+  msgEl.appendChild(pre);
+
+  if (titleEl) titleEl.textContent = id + ' — Plugin Logları';
+  if (iconEl)  iconEl.textContent = '';
+  if (okBtn) {
+    okBtn.textContent = 'Kapat';
+    okBtn.style.background = 'var(--accent)';
+    okBtn.style.color = '#0d1117';
+    okBtn.onclick = () => {
+      modal.style.display = 'none';
+      // Restore p for future showConfirm calls
+      while (msgEl.firstChild) msgEl.removeChild(msgEl.firstChild);
+    };
+  }
+  modal.style.display = 'flex';
 }
 
 async function plUninstall(id) {

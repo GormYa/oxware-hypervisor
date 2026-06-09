@@ -11,25 +11,27 @@ const fs   = require('fs');
 // ─── Constants ────────────────────────────────────────────────────────────────
 const APP_NAME    = 'OXware';
 const CONFIG_FILE = path.join(app.getPath('userData'), 'servers.json');
-const DEFAULT_URL = 'https://localhost:8006';
+const CONNECT_URL = `file://${path.join(__dirname, 'connect.html')}`;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let mainWindow    = null;
 let tray          = null;
 let servers       = [];          // [{ url, label }]
-let activeUrl     = DEFAULT_URL;
+let activeUrl     = null;        // null = no server configured yet
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      const d  = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const d = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
       servers   = Array.isArray(d.servers) ? d.servers : [];
-      activeUrl = d.activeUrl || DEFAULT_URL;
+      activeUrl = d.activeUrl && servers.find((s) => s.url === d.activeUrl)
+        ? d.activeUrl
+        : (servers[0]?.url || null);
     }
   } catch (_) {
     servers   = [];
-    activeUrl = DEFAULT_URL;
+    activeUrl = null;
   }
 }
 
@@ -82,9 +84,19 @@ function createWindow() {
     show:  false,
   });
 
-  mainWindow.loadURL(activeUrl);
+  // Load connection screen if no server is configured yet; otherwise load the active server
+  mainWindow.loadURL(activeUrl || CONNECT_URL);
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  // If server URL fails to load (unreachable / wrong address), fall back to connect screen
+  mainWindow.webContents.on('did-fail-load', (_e, errCode, _errDesc, failedUrl) => {
+    // Ignore in-page navigation failures and the connect page itself
+    if (!failedUrl || failedUrl === CONNECT_URL || failedUrl.startsWith('file://')) return;
+    // -3 = ABORTED (user navigation / reload) — ignore
+    if (errCode === -3) return;
+    mainWindow.loadURL(CONNECT_URL);
+  });
 
   // Intercept certificate errors from self-signed OXware TLS
   mainWindow.webContents.on('certificate-error', (event, _url, _err, _cert, callback) => {
@@ -171,7 +183,7 @@ function switchServer(url) {
 
 function promptAddServer() {
   showWindow();
-  if (mainWindow) mainWindow.webContents.send('open-add-server');
+  if (mainWindow) mainWindow.loadURL(CONNECT_URL);
 }
 
 function removeActiveServer() {
@@ -180,9 +192,8 @@ function removeActiveServer() {
     activeUrl = servers[0].url;
     if (mainWindow) mainWindow.loadURL(activeUrl);
   } else {
-    servers   = [{ url: DEFAULT_URL, label: 'Local Server' }];
-    activeUrl = DEFAULT_URL;
-    if (mainWindow) mainWindow.loadURL(activeUrl);
+    activeUrl = null;
+    if (mainWindow) mainWindow.loadURL(CONNECT_URL);
   }
   saveConfig();
   rebuildTrayMenu();
@@ -207,8 +218,8 @@ ipcMain.handle('add-server', (_e, { url, label }) => {
 ipcMain.handle('remove-server', (_e, url) => {
   servers = servers.filter((s) => s.url !== url);
   if (activeUrl === url) {
-    activeUrl = servers[0]?.url || DEFAULT_URL;
-    if (mainWindow) mainWindow.loadURL(activeUrl);
+    activeUrl = servers[0]?.url || null;
+    if (mainWindow) mainWindow.loadURL(activeUrl || CONNECT_URL);
   }
   saveConfig();
   rebuildTrayMenu();
@@ -268,11 +279,7 @@ function setupAutoUpdater() {
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   loadConfig();
-
-  if (servers.length === 0) {
-    servers.push({ url: DEFAULT_URL, label: 'Local Server' });
-    saveConfig();
-  }
+  // Do NOT push a default URL — if servers is empty, connect.html will show.
 
   createWindow();
   createTray();

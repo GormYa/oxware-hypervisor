@@ -37,18 +37,21 @@
     "mac": {
       "category": "public.app-category.utilities",
       "hardenedRuntime": false,
+      "icon": "build/icons/icon.icns",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
       ]
     },
     "win": {
+      "icon": "build/icons/icon.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ]
     },
     "linux": {
       "category": "Utility",
+      "icon": "build/icons/icon.png",
       "target": [
         { "target": "AppImage", "arch": ["x64"] },
         { "target": "deb", "arch": ["x64"] }
