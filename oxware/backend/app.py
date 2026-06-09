@@ -1022,6 +1022,11 @@ _t_2fa_cleanup.start()
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
     data = request.get_json() or {}
+    # IP bazlı rate limit — brute-force koruması (20 deneme/60 sn/IP)
+    _client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
+    if not _ip_check_login(_client_ip):
+        ev.warn(f"Login IP rate limit aşıldı: {_client_ip}", category="auth")
+        return err("Çok fazla istek. Lütfen bekleyin.", 429)
     # rapor #15 fix: case-insensitive bypass önleme — kullanıcı adı her zaman lowercase
     username = data.get("username", "").strip().lower()
     password = data.get("password", "")
@@ -1147,6 +1152,9 @@ def api_login():
 @app.route("/api/auth/2fa/verify-login", methods=["POST"])
 def api_2fa_verify_login():
     """2FA doğrulama — temp_token + 6 haneli TOTP kodu → gerçek JWT."""
+    _client_ip2 = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
+    if not _ip_check_login(_client_ip2):
+        return err("Çok fazla istek. Lütfen bekleyin.", 429)
     data = request.get_json() or {}
     temp_token = data.get("temp_token", "").strip()
     code = data.get("code", "").strip()
@@ -8986,28 +8994,72 @@ def _block_sensitive_paths():
             return jsonify({"error": "Not found"}), 404
 
 # ── Global Security Headers ─────────────────────────────────────────────────
-# OXW-2026-SEC-001: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
-# Applied to all responses except noVNC (which has per-route overrides)
+# ── IP-based login rate limit (brute-force koruması, ek bağımlılık yok) ───────
+# Username lockout (security_hardening) credential stuffing'i durdurur;
+# bu katman aynı IP'den gelen yüksek hızlı istekleri durdurur.
+_ip_rl_lock  = threading.Lock()
+_ip_rl_hits: dict = {}          # {ip: [timestamp, ...]}
+_IP_RL_WINDOW = 60              # saniye
+_IP_RL_MAX    = 20              # pencere başına max deneme
+
+def _ip_check_login(ip: str) -> bool:
+    """True → izin ver, False → rate limit aşıldı (429 döndür)."""
+    now = time.time()
+    with _ip_rl_lock:
+        hits = _ip_rl_hits.get(ip, [])
+        # Pencerenin dışındaki eski kayıtları temizle
+        hits = [t for t in hits if now - t < _IP_RL_WINDOW]
+        if len(hits) >= _IP_RL_MAX:
+            _ip_rl_hits[ip] = hits
+            return False
+        hits.append(now)
+        _ip_rl_hits[ip] = hits
+        return True
+
+# OXW-2026-SEC-001: Tüm yanıtlara güvenlik başlıkları ekle (noVNC route overrides hariç)
 @app.after_request
 def _add_security_headers(resp):
-    # Prevent clickjacking — overridden per-route for noVNC/iframe embeds
+    # ── Clickjacking koruması ──────────────────────────────────────────────────
     if "X-Frame-Options" not in resp.headers:
         resp.headers["X-Frame-Options"] = "SAMEORIGIN"
-    # MIME-type sniffing prevention — whitelist of known-safe mime types for noVNC
+
+    # ── Content-Security-Policy ────────────────────────────────────────────────
+    # Panel inline script/style kullanıyor → unsafe-inline zorunlu.
+    # Nonce tabanlı CSP büyük refactor gerektirir; bu aşamada unsafe-inline kabul edilebilir.
+    if "Content-Security-Policy" not in resp.headers:
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://cdnjs.cloudflare.com data:; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' wss: ws:; "
+            "frame-src 'self'; "
+            "frame-ancestors 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        )
+
+    # ── MIME sniffing koruması ─────────────────────────────────────────────────
     if resp.content_type and not any(resp.content_type.startswith(x) for x in (
         "application/javascript", "text/javascript", "application/wasm"
     )):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    # HSTS — 1 year, include subdomains. Only meaningful over HTTPS (nginx terminates TLS)
+
+    # ── HSTS (1 yıl) ──────────────────────────────────────────────────────────
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-    # Referrer leakage prevention
+
+    # ── Referrer sızıntı koruması ──────────────────────────────────────────────
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    # Permissions policy — disable unused browser features
+
+    # ── Permissions Policy ─────────────────────────────────────────────────────
     resp.headers.setdefault(
         "Permissions-Policy",
         "geolocation=(), microphone=(), camera=(), payment=(), usb=(), bluetooth=()"
     )
-    # Remove server fingerprinting headers (pop is safe — no KeyError if missing)
+
+    # ── Server parmak izi kaldır ───────────────────────────────────────────────
     resp.headers.pop("Server", None)
     resp.headers.pop("X-Powered-By", None)
     return resp
