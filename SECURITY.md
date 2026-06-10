@@ -170,6 +170,23 @@ The following patches were issued in the 2.6.1 release:
 
 ---
 
+## Hardening Backlog (v2.8)
+
+The 2.7 CI pipeline blocks **new** Bandit HIGH findings. The following
+pre-existing items are tracked, explicitly skipped in CI for now, and will
+be addressed in 2.8. They are visible in `--skip B202,B321,B324,B402,B507`
+on the security audit job.
+
+| ID    | Where                          | Status | Plan                                                                                |
+|-------|--------------------------------|--------|-------------------------------------------------------------------------------------|
+| B202  | archive extract paths in app.py | Open  | Add path-normalising filter (`tarfile.data_filter`) + reject absolute/`..` members. |
+| B321  | `ftplib.FTP()` in backup_scheduler | Open | Move legacy FTP backup target behind `feature flag = off` and warn loudly.          |
+| B324  | RFC 6455 WebSocket handshake    | Won't fix | SHA1 is mandated by the protocol; not a security choice.                         |
+| B402  | `import ftplib` in backup_scheduler | Open | Removed together with B321.                                                       |
+| B507  | `paramiko.AutoAddPolicy()`      | Open  | Add known-hosts pinning to the OXware credential vault + first-contact prompt.      |
+
+When an item lands, drop its skip from `.github/workflows/ci.yml`.
+
 ## Hardening Recommendations
 
 See the "Security" section of the `README.md` for the recommended
