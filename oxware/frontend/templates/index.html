@@ -874,7 +874,8 @@
       .table-wrap{font-size:11px;overflow-x:auto}
       thead th,tbody td{padding:6px 8px!important}
       /* topbar */
-.tb-logo .tb-logo-text{display:none!important}
+#license-banner{display:none!important}
+      .tb-logo .tb-logo-text{display:none!important}
       #oxy-panel{width:100%!important;right:0!important;left:0!important}
       /* topbar actions — sadece Create VM göster */
       .tb-actions .tb-action:not([id="createVmBtn"]){padding:0 8px!important}
@@ -1073,6 +1074,11 @@
       </div>
     </div>
 
+    <div id="license-banner" style="display:none;padding:0 14px;font-size:11px;height:100%;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(42,109,217,.1),rgba(42,109,217,.05));border-right:1px solid rgba(42,109,217,.2)">
+      <i class="fa-solid fa-star" style="color:#f5c842"></i>
+      <span style="color:var(--text-muted)">Bizi desteklediğiniz için teşekkür ederiz. 7/24 Danışmanlık Hizmetimizi Kullanmak İçin
+      <a href="https://wa.me/+905439769301" target="_blank" style="color:var(--accent-lt);text-decoration:underline;font-weight:600">Tıklayın</a></span>
+    </div>
 
     <div class="tb-spacer"></div>
 
@@ -7694,7 +7700,7 @@ systemctl enable --now qemu-guest-agent</pre>
   <div class="cvm-modal">
     <!-- Header -->
     <div class="cvm-head">
-      <div class="cvm-head-icon"></div>
+      <div class="cvm-head-icon"><i id="cvm-head-icon-i" class="fa-brands fa-ubuntu" style="color:#E95420"></i></div>
       <div>
         <h2>Yeni Sanal Makine</h2>
         <p>KVM/QEMU tabanlı sanal makine yapılandırması</p>
@@ -8123,12 +8129,29 @@ function cvmUpdateSummary() {
   if (df && db) document.getElementById('sum-diskfmt').textContent = df.value + ' · ' + db.value.toUpperCase();
 }
 
+function osIcon(os) {
+  const k = String(os || '').toLowerCase();
+  if (k.startsWith('ubuntu')) return {i:'fa-brands fa-ubuntu', c:'#E95420'};
+  if (k.startsWith('debian')) return {i:'fa-brands fa-debian', c:'#A81D33'};
+  if (k.startsWith('centos') || k.startsWith('rhel') || k.startsWith('rocky') || k.startsWith('alma') || k.startsWith('fedora')) return {i:'fa-brands fa-centos', c:'#932279'};
+  if (k.startsWith('win')) return {i:'fa-brands fa-windows', c:'#0078D6'};
+  if (k.startsWith('freebsd') || k.startsWith('bsd')) return {i:'fa-brands fa-freebsd', c:'#AB2B28'};
+  if (k.startsWith('linux')) return {i:'fa-brands fa-linux', c:'#FCC624'};
+  return {i:'fa-solid fa-compact-disc', c:'#7d8590'};
+}
+
 function cvmSelectOS(card) {
   document.querySelectorAll('#os-grid .os-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
   const os = card.dataset.os;
   document.getElementById('vm-os').value = os;
   document.getElementById('sum-os').textContent = card.querySelector('.os-label').textContent;
+  const headIcon = document.getElementById('cvm-head-icon-i');
+  if (headIcon) {
+    const ic = osIcon(os);
+    headIcon.className = ic.i;
+    headIcon.style.color = ic.c;
+  }
   // Windows: disable cloud image, show warning
   const isWin = os.startsWith('win');
   const winNote = document.getElementById('win-cloud-note');
@@ -12765,6 +12788,8 @@ async function checkLicenseStatus() {
   try {
     const r = await fetch('/api/license/status', {headers:{'Authorization':'Bearer '+TOKEN()}});
     const d = await r.json();
+    const banner = document.getElementById('license-banner');
+    if (banner) banner.style.display = d.active ? 'flex' : 'none';
     _applyLicenseUI(d);
   } catch {}
 }
@@ -15434,10 +15459,13 @@ async function loadVMs() {
         : (v.state === "running" ? `<span style="color:var(--text-muted);font-size:11px">DHCP…</span>` : `<span style="color:var(--text-muted);font-size:11px">—</span>`);
       const checked = _selectedVMs.has(v.id) ? 'checked' : '';
 
+      const _oi = osIcon(v.os_type);
+      const _osIconHtml = `<i class="${_oi.i}" style="color:${_oi.c};margin-right:6px;width:14px;text-align:center" title="${escHtml(v.os_type||'')}"></i>`;
+
       // vm-user: minimal row (no checkboxes, no heavy action buttons)
       if (isVmUser) {
         return `<tr data-vmid="${v.id}">
-          <td><a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted)">${v.id.slice(0,8)}</small></td>
+          <td>${_osIconHtml}<a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted);margin-left:20px">${v.id.slice(0,8)}</small></td>
           <td>${stateBadge(v.state)}</td>
           <td>${v.vcpus} vCPU</td>
           <td>${(v.memory_mb||0).toLocaleString()} MB</td>
@@ -15456,7 +15484,7 @@ async function loadVMs() {
       // Full admin/operator row — 3 primary + ⋯ more + delete
       return `<tr data-vmid="${v.id}">
         <td style="width:32px" class="col-check"><input type="checkbox" class="vm-checkbox" data-vmid="${v.id}" ${checked} onchange="toggleVmSelection('${v.id}',this.checked)"></td>
-        <td><a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted)">${v.id.slice(0, 8)}</small></td>
+        <td>${_osIconHtml}<a style="color:var(--accent-lt);cursor:pointer" onclick="selectTreeItem('vm','${v.id}','${escHtml(v.name)}')"><strong>${escHtml(v.name)}</strong></a><br><small style="color:var(--text-muted);margin-left:20px">${v.id.slice(0, 8)}</small></td>
         <td>${stateBadge(v.state)}</td>
         <td class="col-cpu">${v.vcpus} vCPU</td>
         <td class="col-mem">${v.memory_mb.toLocaleString()} MB</td>
