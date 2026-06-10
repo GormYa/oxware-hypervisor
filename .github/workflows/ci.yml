@@ -122,6 +122,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # pip-audit resolves requirements.txt into a sandbox, which builds
+      # libvirt-python from source. Without libvirt-dev the wheel build
+      # crashes before pip-audit can read the lockfile.
+      - name: Install system deps (libvirt for pip-audit sandbox)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvirt-dev pkg-config gcc
       - name: Install scanners
         run: pip install bandit pip-audit
       # ── HARD GATE: full-tree bandit at HIGH severity (same documented
@@ -153,6 +160,7 @@ jobs:
       # build artifact so they are reviewed every release; the hard gate
       # is bandit + the rest. Tracked in SECURITY.md → Hardening Backlog.
       - name: pip-audit on requirements (informational)
+        continue-on-error: true
         run: |
           if ls oxware/backend/requirements*.txt 2>/dev/null; then
             pip-audit -r oxware/backend/requirements.txt --format=json > pip-audit-report.json || echo "::warning::pip-audit found advisories — see artifact pip-audit-report"
