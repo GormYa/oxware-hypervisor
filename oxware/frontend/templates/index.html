@@ -9165,7 +9165,10 @@ let loadHistory = Array(30).fill(0);
 let cpuChart, ramChart, loadChart;
 
 // Support both old "adaos_token" and new "oxware_token" keys
-const TOKEN = () => localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
+// Prefer sessionStorage (cleared on tab close, narrower lifetime than localStorage).
+// Falls back to legacy localStorage for password-login sessions until users opt-in
+// to a server-issued cookie session (planned in v2.8 — see SECURITY.md SEC-009).
+const TOKEN = () => sessionStorage.getItem("oxware_token") || localStorage.getItem("oxware_token") || localStorage.getItem("adaos_token");
 
 /* OXW-2026-SEC-008: WS URL'sinde raw JWT yerine tek-kullanımlık (60sn) vnc_token.
    Sunucu logları/referer'da JWT sızmasını önler. Başarısızlıkta JWT'ye düşer. */
@@ -9173,7 +9176,7 @@ async function _getVncToken(vmId) {
   try {
     const r = await fetch(`/api/vms/${vmId}/vnc-token`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + TOKEN(), 'X-CSRF-Token': (localStorage.getItem('ox_csrf')||'') }
+      headers: { 'Authorization': 'Bearer ' + TOKEN(), 'X-CSRF-Token': (sessionStorage.getItem('ox_csrf')||localStorage.getItem('ox_csrf')||'') }
     });
     if (r.ok) {
       const j = await r.json();
@@ -9519,6 +9522,8 @@ async function logout() {
 }
 
 function _clearSession() {
+  // Clear both storages — OAuth2 path uses sessionStorage, password login still uses localStorage.
+  try { sessionStorage.removeItem("oxware_token"); sessionStorage.removeItem("oxware_user"); sessionStorage.removeItem("oxware_role"); } catch(e){}
   localStorage.removeItem("oxware_token");
   localStorage.removeItem("oxware_user");
   localStorage.removeItem("oxware_role");

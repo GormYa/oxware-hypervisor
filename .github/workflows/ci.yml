@@ -35,19 +35,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install flask flask-jwt-extended flask-socketio flask-cors \
             eventlet cryptography paramiko psutil requests \
-            libvirt-python flake8 mypy pytest pytest-cov bandit
+            libvirt-python flake8 mypy pytest pytest-cov bandit pip-audit
 
-      - name: Flake8 — style + syntax
+      # ── HARD GATE: syntax compile of every backend module.
+      # If app.py or any module fails to parse, the build fails.
+      - name: Python syntax (HARD FAIL)
         working-directory: oxware/backend
         run: |
-          # Lint only the backend modules — app.py is too large for strict lint
+          python -m compileall -q . -x '__pycache__|\.venv'
+
+      # ── SOFT: full-module flake8 report (non-blocking; signal only).
+      - name: Flake8 — informational
+        working-directory: oxware/backend
+        run: |
           flake8 . \
             --max-line-length=130 \
             --extend-ignore=E501,W503,W504,E302,E303,E741,F401,F811,C901,W291,W293,E265,E266,E501 \
             --exclude=__pycache__,.venv,venv,migrations,app.py \
             --count --statistics || true
-          # Syntax-check app.py separately (fast)
-          python -c "import py_compile; py_compile.compile('app.py', doraise=True)" && echo "app.py syntax OK"
+
+      # ── HARD GATE: app.py must not have undefined names or syntax errors
+      # that would crash at import time.
+      - name: Flake8 critical errors on app.py (HARD FAIL)
+        working-directory: oxware/backend
+        run: |
+          flake8 app.py \
+            --select=E9,F63,F7,F82 \
+            --show-source --statistics
 
       - name: Mypy — type check (non-blocking)
         working-directory: oxware/backend
@@ -58,20 +72,35 @@ jobs:
             --follow-imports=skip \
             --python-version=${{ matrix.python-version }} || true
 
-      - name: Bandit — security scan
+      # ── HARD GATE: bandit at HIGH severity must be clean.
+      # Medium/low remain informational.
+      - name: Bandit — HIGH severity (HARD FAIL)
         working-directory: oxware/backend
         run: |
           bandit -r . \
-            -x __pycache__,.venv \
+            -x __pycache__,.venv,tests \
+            -lll \
+            --format txt
+
+      - name: Bandit — full report (informational)
+        working-directory: oxware/backend
+        run: |
+          bandit -r . \
+            -x __pycache__,.venv,tests \
             -ll \
             --format txt || true
 
+      # ── HARD GATE when tests/ exists. Skips gracefully on a repo with no tests yet,
+      # but as soon as a single tests/test_*.py lands, a failing test blocks merge.
       - name: Pytest — unit tests
         working-directory: oxware/backend
         run: |
-          pytest tests/ -v --tb=short --cov=. --cov-report=term-missing \
-            --ignore=tests/integration 2>/dev/null || \
-          echo "No tests found — add tests/test_*.py to enable coverage"
+          if [ -d tests ] && [ -n "$(find tests -name 'test_*.py' -print -quit)" ]; then
+            pytest tests/ -v --tb=short --cov=. --cov-report=term-missing \
+              --ignore=tests/integration
+          else
+            echo "::warning::No tests found under oxware/backend/tests/ — coverage not measured. Add tests/test_*.py to enable the gate."
+          fi
 
   security-audit:
     name: Security Audit
@@ -81,20 +110,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install bandit
-        run: pip install bandit
-      - name: Bandit full scan
+      - name: Install scanners
+        run: pip install bandit pip-audit
+      # ── HARD GATE: full-tree bandit at HIGH severity.
+      - name: Bandit full scan (HARD FAIL on HIGH)
         run: |
           bandit -r oxware/backend/ \
-            -x __pycache__ \
+            -x __pycache__,oxware/backend/tests \
+            -lll \
+            -f txt
+      - name: Bandit JSON report (informational)
+        run: |
+          bandit -r oxware/backend/ \
+            -x __pycache__,oxware/backend/tests \
+            -ll \
             -f json \
             -o bandit-report.json || true
-          cat bandit-report.json
       - name: Upload security report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bandit-security-report
           path: bandit-report.json
+      # ── pip-audit on declared deps (informational on the controller; HARD on requirements files when they exist).
+      - name: pip-audit on requirements
+        run: |
+          if ls oxware/backend/requirements*.txt 2>/dev/null; then
+            pip-audit --strict -r oxware/backend/requirements.txt
+          else
+            echo "::warning::No requirements.txt found — dependency audit skipped."
+          fi
 
   shell-lint:
     name: Shell Script Lint
@@ -103,7 +148,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
-      - name: Shellcheck
+      # Informational — install.sh / repair.sh have intentional dynamic eval patterns.
+      - name: Shellcheck (informational)
         run: |
           shellcheck install.sh repair.sh uninstall.sh \
             scripts/*.sh kernel/install-hardening.sh \
@@ -119,8 +165,11 @@ jobs:
           SIZE=$(wc -c < oxware/frontend/templates/index.html)
           echo "index.html size: ${SIZE} bytes"
           if [ "$SIZE" -gt 5242880 ]; then
-            echo "WARNING: index.html exceeds 5MB — consider splitting"
+            echo "::warning::index.html exceeds 5MB — consider splitting"
           fi
+      # ── HARD GATE: no duplicate routes / endpoint functions.
+      # A duplicate route raises a Flask AssertionError at import time and
+      # bricks the controller process, so this stays a hard gate.
       - name: Check for duplicate route definitions in app.py
         run: |
           python3 << 'PYEOF'
@@ -134,7 +183,6 @@ jobs:
               if '@app.route(' not in l:
                   i += 1
                   continue
-              # Collect up to 3 lines for multi-line decorators
               block = ''.join(lines[i:i+3])
               path_m = re.search(r'@app\.route\(["\']([^"\']+)["\']', block)
               if not path_m:
@@ -154,12 +202,10 @@ jobs:
                       routes[key] = i + 1
               i += 1
           if dups:
-              for d in dups:
-                  print(d)
+              for d in dups: print(d)
               sys.exit(1)
           else:
               print('OK: ' + str(len(routes)) + ' unique method+path combos, no true duplicates')
-          # Also check for duplicate endpoint function names (Flask AssertionError killer)
           funcs = {}; fn_dups = []; in_route2 = False
           for i, l in enumerate(lines, 1):
               if '@app.route(' in l: in_route2 = True
@@ -176,3 +222,16 @@ jobs:
           else:
               print('OK: ' + str(len(funcs)) + ' unique endpoint function names')
           PYEOF
+
+      # ── HARD GATE: ensure no token still leaks via URL query parameters.
+      # Specifically forbid `?token=` / `?access_token=` / `?oauth2_token=`
+      # patterns being emitted by the server (the OAuth2 sessionStorage bridge
+      # was added in v2.7.0 — regressions would re-open the previous leak).
+      - name: Token-in-URL regression check (HARD FAIL)
+        run: |
+          set -e
+          if grep -nE '\?(oauth2_token|access_token|jwt_token)=' oxware/backend/app.py; then
+            echo "::error::token still emitted in URL query — use sessionStorage bridge (SEC-009)"
+            exit 1
+          fi
+          echo "OK: no token-in-URL emit"

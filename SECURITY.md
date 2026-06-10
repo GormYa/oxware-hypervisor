@@ -90,6 +90,41 @@ https://github.com/ShinnAsukha/oxware-hypervisor/security/advisories
 
 ### Security Patch Summary
 
+The following hardening was issued in the 2.7.0 release:
+
+- **SEC-009 — OAuth2 token leak via URL**: callback now responds with a tiny
+  HTML bridge page that stashes the JWT in `sessionStorage` and immediately
+  calls `history.replaceState("/", …)`. The token never appears in the URL
+  (query or fragment), the Referer header, the browser back-button history,
+  or proxy access logs. The bridge page itself is `Cache-Control: no-store,
+  Referrer-Policy: no-referrer`. CI has a regression check (`?oauth2_token=`
+  patterns are now a hard build failure).
+- **SEC-010 — Setup endpoint takeover**: `/api/setup/init` now returns 403
+  for any non-loopback `request.remote_addr`. A fresh node bound to a public
+  interface can no longer be claimed by whoever reaches port 8006 first;
+  the first admin must be created from the host itself (over SSH or the
+  serial console) via `curl -X POST http://127.0.0.1:8006/api/setup/init`.
+  Override (development only): `OXWARE_SETUP_ALLOW_REMOTE=1`, which is
+  logged at WARN level every time it triggers.
+- **SEC-011 — High-risk feature default-off**: `feature_registry` now
+  defines a `HIGH_RISK_FEATURES` set (plugin_sdk, marketplace,
+  container_runtime, os_branding, oxupdate, bare_metal, cloud_burst,
+  kubevirt, gitops, k8s_operator, k8s_csi, federation). These features are
+  shipped *disabled* regardless of `status`. An operator must explicitly
+  enable each one via the Settings → Features panel or the
+  `oxctl feature enable <id>` command, which writes an audit-log entry.
+- **SEC-012 — Token storage migration to sessionStorage**: the panel now
+  reads tokens from `sessionStorage` first, falling back to `localStorage`
+  only for password-login sessions that pre-date this release. Logout
+  clears both storages. A cookie-based HttpOnly/Secure/SameSite session is
+  planned for v2.8 (large refactor — tracked separately).
+- **SEC-013 — CI hardening**: the GitHub Actions pipeline now hard-fails
+  on (a) any module that does not compile, (b) Flake8 critical errors
+  (E9/F63/F7/F82) in `app.py`, (c) Bandit findings at HIGH severity,
+  (d) duplicate Flask routes or endpoint functions in `app.py`, and
+  (e) regression of the token-in-URL pattern. Style nits, mypy hints, and
+  shellcheck warnings remain informational by design.
+
 The following patches were issued in the 2.6.1 release:
 
 - SEC-001: API keys are read from `/etc/oxware/oxware.conf` (mode 0600)

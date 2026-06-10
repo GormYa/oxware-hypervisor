@@ -16,6 +16,7 @@ import subprocess
 import threading
 import ipaddress
 from datetime import timedelta
+from html import escape as html_escape
 
 # Ensure .js files are served with correct MIME type even on minimal systems
 # (without this, X-Content-Type-Options: nosniff causes browsers to reject
@@ -981,10 +982,25 @@ def serve_novnc(filename="vnc.html"):
 def api_setup_status():
     return ok(done=cred_mgr.is_setup_done())
 
+def _is_local_request() -> bool:
+    """Allow setup only from loopback or trusted unix socket / X-Real-IP local.
+    Blocks remote first-admin takeover on a freshly booted, publicly-bound node.
+    Override with OXWARE_SETUP_ALLOW_REMOTE=1 (development only — logged on use)."""
+    if os.environ.get("OXWARE_SETUP_ALLOW_REMOTE") == "1":
+        log.warning("Setup remote-allow override active (OXWARE_SETUP_ALLOW_REMOTE=1) — INSECURE")
+        return True
+    addr = (request.remote_addr or "").strip()
+    return addr in ("127.0.0.1", "::1", "localhost", "")
+
+
 @app.route("/api/setup/init", methods=["POST"])
 def api_setup_init():
     if cred_mgr.is_setup_done():
         return err("Kurulum zaten tamamlandı", 409)
+    if not _is_local_request():
+        log.warning("Setup attempted from non-local address: %s", request.remote_addr)
+        return err("Setup endpoint sadece localhost'tan erişilebilir. "
+                   "Sunucuda 'curl -X POST http://127.0.0.1:8006/api/setup/init ...' kullanın.", 403)
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
@@ -19513,9 +19529,38 @@ def api_oauth2_callback(provider):
         from flask_jwt_extended import create_access_token
         token = create_access_token(identity=username)
         ev.info(f"OAuth2 girişi başarılı: {username} ({provider} -> {role})", category="auth")
-        # Redirect to UI with token in fragment (hash, not query - avoids logging)
-        from flask import redirect as _redirect
-        return _redirect(f"/?oauth2_token={token}&user={username}#oauth2-success")
+        # OXW-2026-SEC-009: Token never travels in URL (query nor fragment).
+        # Render a tiny HTML bridge that stashes the token in sessionStorage
+        # via inline JSON-injection, then replaces the URL and navigates to /.
+        # This prevents leakage through browser history, server logs, and
+        # the Referer header on the next navigation.
+        # Token + username land in a single <script type="application/json">
+        # block; the inline script reads from textContent (no HTML interpolation).
+        payload = json.dumps({"token": token, "user": username})
+        bridge = (
+            "<!doctype html><meta charset=\"utf-8\"><title>OXware — Login</title>"
+            "<style>body{background:#0d1117;color:#c9d1d9;font-family:system-ui;"
+            "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>"
+            "<div>Oturum açılıyor…</div>"
+            "<script id=\"oxware-oauth-payload\" type=\"application/json\">"
+            f"{html_escape(payload)}"
+            "</script>"
+            "<script>(function(){try{"
+            "var raw=document.getElementById('oxware-oauth-payload').textContent;"
+            "var p=JSON.parse(raw);"
+            "sessionStorage.setItem('oxware_token',p.token);"
+            "sessionStorage.setItem('oxware_user',p.user);"
+            "history.replaceState(null,'','/');"
+            "location.replace('/');"
+            "}catch(e){location.replace('/login?oauth_error=1')}})();</script>"
+        )
+        from flask import Response as _Response
+        resp = _Response(bridge, mimetype="text/html")
+        # Defense-in-depth: keep the bridge page itself out of the cache.
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        return resp
     except Exception as e:
         ev.warn(f"OAuth2 callback hatası: {provider} / {e}", category="auth")
         return err(str(e), 400)

@@ -156,17 +156,38 @@ FEATURE_MANIFEST = [
 
 
 # ── Persistent state ──────────────────────────────────────────────────────────
+# High-risk features: large attack surface, run arbitrary code or attach foreign
+# binaries to the host. Default DISABLED — admin must opt-in explicitly via the
+# Settings → Features panel or `oxctl feature enable <id>`.
+HIGH_RISK_FEATURES = {
+    "plugin_sdk",       # Loads arbitrary Python into the controller process
+    "marketplace",      # Pulls remote packages
+    "container_runtime", # Docker/LXC
+    "os_branding",      # Rewrites system files
+    "oxupdate",         # Downloads + executes update scripts
+    "bare_metal",       # PXE/iPXE + IPMI takeover
+    "cloud_burst",      # Provisions in third-party clouds with stored creds
+    "kubevirt",         # Bridges into external K8s cluster
+    "gitops",           # Auto-applies remote git state
+    "k8s_operator",     # Foreign control-plane access
+    "k8s_csi",
+    "federation",       # Cross-controller call forwarding
+}
+
+
 def _load() -> dict:
     try:
         if _REGISTRY_FILE.exists():
             return json.loads(_REGISTRY_FILE.read_text(encoding="utf-8"))
     except Exception as e:
         log.warning("registry load fail: %s", e)
-    # Defaults: stable+beta enabled, experimental+planned disabled
+    # Defaults: stable+beta enabled, experimental+planned disabled,
+    # HIGH_RISK_FEATURES disabled regardless of status — explicit opt-in required.
     state = {}
     for f in FEATURE_MANIFEST:
+        default_on = f["status"] in ("stable", "beta") and f["id"] not in HIGH_RISK_FEATURES
         state[f["id"]] = {
-            "enabled":   f["status"] in ("stable", "beta"),
+            "enabled":   default_on,
             "installed": True,
             "config":    {},
         }
