@@ -24048,7 +24048,7 @@ async function deleteRbacPerm(key, username) {
 /* ══════════════════════════════════════════════════════════════════════════════
    Enterprise Sub-Tab System (v2.5.6+)
 ══════════════════════════════════════════════════════════════════════════════ */
-const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','federation','firecracker','kata','wasm','edge','workflow','opa','cloudevents','runbook','desktop','cloudexport','faultol','storedrs','consolerec','greenmode','multiregion','marketplace','cloudburst','baremetal','oauth2','apidocs'];
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','federation','firecracker','kata','wasm','edge','workflow','opa','cloudevents','runbook','desktop','cloudexport','faultol','storedrs','consolerec','greenmode','multiregion','cloudburst','baremetal','oauth2','apidocs'];
 const ENT_LOADERS = {
   drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
   affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
@@ -24105,7 +24105,6 @@ const ENT_LOADERS = {
   consolerec: () => { try { loadConsoleRecPage(); } catch(e) { console.warn(e); } },
   greenmode:   () => { try { loadGreenModePage(); } catch(e) { console.warn(e); } },
   multiregion: () => { try { loadMultiRegionPage(); } catch(e) { console.warn(e); } },
-  marketplace: () => { try { loadMarketplacePage(); } catch(e) { console.warn(e); } },
   cloudburst:  () => { try { loadCloudBurstPage(); } catch(e) { console.warn(e); } },
   baremetal:   () => { try { loadBareMetalPage(); } catch(e) { console.warn(e); } },
   oauth2:      () => { try { loadOAuth2Page(); } catch(e) { console.warn(e); } },
@@ -24136,7 +24135,7 @@ const ENT_CATEGORIES = {
   observability:['otel','grafana','topoviz','forecast','driftcap'],
   cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops','federation'],
   modern:['firecracker','kata','wasm','edge'],
-  automation:['workflow','opa','cloudevents','runbook','greenmode','multiregion','cloudburst','baremetal','marketplace'],
+  automation:['workflow','opa','cloudevents','runbook','greenmode','multiregion','cloudburst','baremetal'],
   clients:['desktop','cloudexport'],
   docs:['apidocs']
 };
@@ -24151,7 +24150,7 @@ function entCat(cat) {
   if (bs[ci]) bs[ci].classList.add('active');
   // Build feature sub-tab bar for this category
   const feats = ENT_CATEGORIES[cat] || [];
-  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',oauth2:'OAuth2',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',federation:'Federation',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',runbook:'Auto-Remediation',greenmode:'Green Mode',multiregion:'Multi-Region',cloudburst:'Cloud Burst',baremetal:'Bare Metal',marketplace:'Marketplace',desktop:'Desktop Client',cloudexport:'Cloud Export',faultol:'Fault Tolerance',storedrs:'Storage DRS',consolerec:'Konsol Kaydı',apidocs:'API Referans'};
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',oauth2:'OAuth2',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',federation:'Federation',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',runbook:'Auto-Remediation',greenmode:'Green Mode',multiregion:'Multi-Region',cloudburst:'Cloud Burst',baremetal:'Bare Metal',desktop:'Desktop Client',cloudexport:'Cloud Export',faultol:'Fault Tolerance',storedrs:'Storage DRS',consolerec:'Konsol Kaydı',apidocs:'API Referans'};
   const bar = document.getElementById('ent-feat-tabs');
   bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
   // Hide all panes, show first feature of this category
@@ -27028,12 +27027,66 @@ async function loadMeshPage() {
 }
 
 /* ─── Cloud/K8s: Pulumi ─── */
+/* Render a YAML/text block with copy button (clean, no JSON escapes) */
+function _renderTextBlock(text, lang) {
+  const t = String(text || '');
+  const enc = JSON.stringify(t);
+  const langLbl = lang ? `<span class="badge-muted" style="margin-right:auto">${_esc(lang)}</span>` : '';
+  return `<div style="display:flex;align-items:center;margin-bottom:4px;gap:6px">${langLbl}<button onclick="navigator.clipboard?.writeText(${enc});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)">Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px;line-height:1.45;font-family:'JetBrains Mono','Fira Code',Consolas,monospace">${_esc(t)}</pre>`;
+}
+
+/* Render a bundle: object with multiple yaml/string fields + scalar metadata */
+function _renderYamlBundle(obj, scalarKeys) {
+  if (!obj || typeof obj !== 'object') return '<span class="text-muted">Veri yok</span>';
+  const scalars = {};
+  const blocks = [];
+  Object.entries(obj).forEach(([k, v]) => {
+    if (typeof v === 'string' && v.includes('\n')) {
+      blocks.push({key: k, text: v});
+    } else if (typeof v === 'object' && v !== null) {
+      blocks.push({key: k, text: JSON.stringify(v, null, 2), json: true});
+    } else {
+      scalars[k] = v;
+    }
+  });
+  let html = '';
+  if (Object.keys(scalars).length) {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px;margin-bottom:10px">';
+    Object.entries(scalars).forEach(([k, v]) => {
+      html += `<div style="padding:6px 10px;background:var(--surface2);border-radius:4px;font-size:11px"><span style="color:var(--text-muted)">${_esc(k)}:</span> <b>${_esc(String(v))}</b></div>`;
+    });
+    html += '</div>';
+  }
+  blocks.forEach(b => {
+    const label = b.key.replace(/_yaml$|_json$/, '').replace(/_/g,' ').toUpperCase();
+    html += `<div style="font-size:11px;color:var(--text-muted);font-weight:600;margin:8px 0 4px">${_esc(label)}</div>`;
+    html += _renderTextBlock(b.text, b.json ? 'json' : 'yaml');
+  });
+  return html || '<span class="text-muted">Boş</span>';
+}
+
 async function loadPulumiPage() {
   const el = document.getElementById('pulumi-schema-body');
   if (el) el.innerHTML = 'Yükleniyor...';
   const d = await _api('/api/pulumi/schema');
   if (!d) { toast('Pulumi schema alınamadı','error'); return; }
-  if (el) { const _pj=JSON.stringify(d,null,2); el.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_pj)});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)"> Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_pj)}</pre>`; }
+  if (el) {
+    // Schema is large nested JSON — render with summary header + collapsible pre
+    const sch = d.schema || d;
+    const name = sch.name || '-';
+    const desc = sch.description || '';
+    const resCount = sch.resources ? Object.keys(sch.resources).length : 0;
+    const fnCount  = sch.functions ? Object.keys(sch.functions).length : 0;
+    const _pj = JSON.stringify(sch, null, 2);
+    el.innerHTML =
+      `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px;margin-bottom:10px">
+         <div style="padding:6px 10px;background:var(--surface2);border-radius:4px;font-size:11px"><span style="color:var(--text-muted)">name:</span> <b>${_esc(name)}</b></div>
+         <div style="padding:6px 10px;background:var(--surface2);border-radius:4px;font-size:11px"><span style="color:var(--text-muted)">resources:</span> <b>${resCount}</b></div>
+         <div style="padding:6px 10px;background:var(--surface2);border-radius:4px;font-size:11px"><span style="color:var(--text-muted)">functions:</span> <b>${fnCount}</b></div>
+       </div>
+       ${desc?`<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px">${_esc(desc)}</div>`:''}
+       ${_renderTextBlock(_pj, 'json')}`;
+  }
 }
 async function pulumiGenerate() {
   const language = document.getElementById('pulumi-lang').value;
@@ -27055,7 +27108,7 @@ async function loadK8sCsiPage() {
   const [status, manifests, vols] = await Promise.all([_api('/api/k8s-csi/status'), _api('/api/k8s-csi/manifests'), _api('/api/k8s-csi/volumes')]);
   if (!status) { toast('K8s CSI verisi alınamadı','error'); return; }
   if (statusEl) statusEl.innerHTML = _entKV(status);
-  if (manifestEl) { const _mt = manifests ? (typeof manifests==='string'?manifests:JSON.stringify(manifests,null,2)) : null; manifestEl.innerHTML = _mt ? `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_mt||'')});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)"> Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_mt)}</pre>` : '<span class="text-muted">Manifest yok</span>'; }
+  if (manifestEl) manifestEl.innerHTML = _renderYamlBundle(manifests);
   const arr = Array.isArray(vols) ? vols : (vols?.volumes || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.capacity||'-')}</td><td>${_esc(v.access_mode||v.accessMode||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Volume yok</td></tr>';
 }
@@ -27069,7 +27122,7 @@ async function loadK8sOpPage() {
   if (tb) tb.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr>';
   const [crd, managed, rec] = await Promise.all([_api('/api/k8s-operator/crd'), _api('/api/k8s-operator/managed'), _api('/api/k8s-operator/reconcile')]);
   if (!crd) { toast('K8s Operator verisi alınamadı','error'); return; }
-  if (crdEl) { const _cj=JSON.stringify(crd,null,2); crdEl.innerHTML = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="navigator.clipboard?.writeText(${JSON.stringify(_cj)});toast('Kopyalandı','success')" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text)"> Kopyala</button></div><pre style="font-size:11px;background:var(--bg2);padding:10px;border-radius:6px;overflow-x:auto;max-height:400px">${_esc(_cj)}</pre>`; }
+  if (crdEl) crdEl.innerHTML = _renderYamlBundle(crd);
   const arr = Array.isArray(managed) ? managed : (managed?.vms || []);
   if (tb) tb.innerHTML = arr.length ? arr.map(v => `<tr><td>${_esc(v.name||'-')}</td><td>${_esc(v.namespace||'-')}</td><td>${_esc(v.status||v.phase||'-')}</td><td>${v.vcpus||'-'}</td><td>${v.ram_mb||'-'}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:14px">Yönetilen VM yok</td></tr>';
   if (recEl) recEl.innerHTML = rec ? _entKV(rec) : '<span class="text-muted">Veri yok</span>';
@@ -27608,7 +27661,6 @@ const _PAGE_TABS = {
     {key:'edge', label:'Edge', src:'ent-pane-edge'},
     {key:'greenmode', label:'Green Mode', src:'ent-pane-greenmode'},
     {key:'multiregion', label:'Multi-Region', src:'ent-pane-multiregion'},
-    {key:'marketplace', label:'Marketplace', src:'ent-pane-marketplace'},
     {key:'cloudburst', label:'Cloud Burst', src:'ent-pane-cloudburst'},
     {key:'baremetal', label:'Bare-Metal', src:'ent-pane-baremetal'},
     {key:'apidocs', label:'API Docs', src:'ent-pane-apidocs'},
