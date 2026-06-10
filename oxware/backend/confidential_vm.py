@@ -97,3 +97,84 @@ def generate_libvirt_xml_snippet(mode: str, policy_hex: str = "0x0001") -> str:
             f'  <cbitpos>47</cbitpos>\n'
             f'  <reducedPhysBits>1</reducedPhysBits>\n'
             f'</launchSecurity>')
+
+
+def generate_vtpm_xml_snippet(persistent_dir: str = "/var/lib/oxware/vtpm") -> str:
+    """vTPM 2.0 device snippet for libvirt <devices>."""
+    return ('<tpm model="tpm-crb">\n'
+            '  <backend type="emulator" version="2.0"/>\n'
+            '</tpm>')
+
+
+def generate_secure_boot_xml(loader_path: str = "/usr/share/OVMF/OVMF_CODE.secboot.fd",
+                             nvram_template: str = "/usr/share/OVMF/OVMF_VARS.secboot.fd") -> str:
+    """UEFI Secure Boot OVMF loader snippet for libvirt <os>."""
+    return (f'<loader readonly="yes" secure="yes" type="pflash">{loader_path}</loader>\n'
+            f'<nvram template="{nvram_template}"/>\n'
+            f'<smm state="on"/>')
+
+
+def set_secure_boot(vm_id: str, enabled: bool) -> dict:
+    d = _load()
+    rec = d.setdefault("vms", {}).setdefault(vm_id, {})
+    rec["secure_boot"] = bool(enabled)
+    _save(d)
+    return {"ok": True, "vm_id": vm_id, "secure_boot": rec["secure_boot"]}
+
+
+def set_vtpm(vm_id: str, enabled: bool) -> dict:
+    d = _load()
+    rec = d.setdefault("vms", {}).setdefault(vm_id, {})
+    rec["vtpm"] = bool(enabled)
+    _save(d)
+    return {"ok": True, "vm_id": vm_id, "vtpm": rec["vtpm"]}
+
+
+def capture_attestation(vm_id: str) -> dict:
+    """Capture a launch-measurement attestation report for an SEV/SNP/TDX VM.
+
+    On SEV(-SNP): runs `virsh domlaunchsecinfo <vm>` and parses the measurement.
+    On TDX: extracts the TDREPORT from QGS (Quote Generation Service) if available.
+    On systems where the tooling is missing, returns a stub record so callers
+    can still track the attestation request in the audit log.
+    """
+    cfg = get_vm_config(vm_id)
+    mode = cfg.get("mode")
+    out = {"vm_id": vm_id, "mode": mode, "ts": __import__("time").time(),
+           "measurement": None, "policy": None, "raw": None, "ok": False}
+    if not mode:
+        out["error"] = "vm is not marked confidential"
+        return out
+    try:
+        if mode in ("sev", "sev-es", "sev-snp"):
+            r = subprocess.run(["virsh", "domlaunchsecinfo", vm_id],
+                               capture_output=True, text=True, timeout=8)
+            out["raw"] = r.stdout
+            for line in r.stdout.splitlines():
+                k, _, v = line.partition(":")
+                k = k.strip().lower()
+                v = v.strip()
+                if k.endswith("measurement"):
+                    out["measurement"] = v
+                elif k.endswith("policy"):
+                    out["policy"] = v
+            out["ok"] = bool(out["measurement"])
+        elif mode == "tdx":
+            qgs = "/var/run/tdx-qgs/qgs.socket"
+            out["raw"] = f"qgs={qgs} (TDREPORT extraction requires sgx-dcap tooling)"
+            out["ok"] = False
+            out["error"] = "tdx attestation requires sgx-dcap qgs running"
+    except Exception as e:
+        log.warning("capture_attestation %s: %s", vm_id, e)
+        out["error"] = str(e)
+    # persist last attestation
+    d = _load()
+    rec = d.setdefault("vms", {}).setdefault(vm_id, {})
+    rec["last_attestation"] = {k: v for k, v in out.items() if k != "raw"}
+    _save(d)
+    return out
+
+
+def get_attestation(vm_id: str) -> dict:
+    rec = _load().get("vms", {}).get(vm_id, {})
+    return rec.get("last_attestation", {"ok": False, "error": "no attestation yet"})

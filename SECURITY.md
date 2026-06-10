@@ -11,6 +11,7 @@ Only the latest minor release receives security patches.
 
 | Version | Status                  |
 |---------|-------------------------|
+| 2.7.x   | Supported (current)     |
 | 2.6.x   | Supported               |
 | 2.5.x   | End of life 2026-09-01  |
 | 2.4.x   | End of life             |
@@ -117,7 +118,42 @@ hardening.
 
 ---
 
-## Out of Scope
+## Penetration Testing Scope
+
+OXware welcomes external penetration tests. The following are explicitly **in
+scope**:
+
+### In Scope
+
+- Authentication: JWT signing, refresh-token flow, 2FA bypass, account lockout
+  evasion, session fixation, OAuth2/SAML/OIDC binding attacks.
+- Authorization: RBAC bypass, vertical/horizontal privilege escalation,
+  cross-tenant data leakage in multi-tenant deployments.
+- API: input validation, mass-assignment, IDOR on `/api/vms/*`, `/api/storage/*`,
+  `/api/network/*`, SSRF in remote-fetch endpoints, RCE in webhook/plugin paths.
+- Web panel: stored/reflected XSS, DOM clobbering, CSRF on state-changing
+  endpoints (double-submit token), CSP bypass, prototype pollution.
+- Console: noVNC token replay, WebSocket auth, VNC password leakage.
+- Storage: path traversal in datastore browser, symlink attacks, ISO upload
+  smuggling.
+- Network: nftables/microsegmentation rule bypass, east-west traffic between
+  tenants.
+- Plugin sandbox: sandbox escape, audit-log forgery, malicious plugin upload
+  flow (note: catalog is maintainer-curated; no public upload exists).
+- Cryptographic: weak random, hardcoded secrets, LUKS2 key handling, vault
+  unseal flow.
+- Infrastructure: container escape on the controller host, hypervisor escape
+  via QEMU/KVM device emulation, libvirt API privilege boundaries.
+
+### Methodology Expectations
+
+- Use rate-limited credential testing; do not flood the lockout system.
+- Avoid destructive operations against production data. Use the demo
+  environment at `pentest.oxware.top` or your own self-hosted instance.
+- Report multi-step exploit chains with PoC scripts (Python preferred).
+- Provide CVSS v3.1 vector and a short remediation suggestion.
+
+### Out of Scope
 
 The following findings are not eligible for a security advisory:
 
@@ -131,6 +167,10 @@ The following findings are not eligible for a security advisory:
 - Reports generated solely by automated scanners without a working proof
   of concept.
 - Issues in dependencies for which an upstream advisory already exists.
+- CSP `unsafe-inline` for inline panel scripts (planned for nonce-based CSP
+  in v2.8 — large refactor in progress).
+- Social engineering against OXware staff or community members.
+- Physical attacks on hardware.
 
 ---
 

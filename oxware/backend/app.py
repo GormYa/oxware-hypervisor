@@ -233,6 +233,10 @@ cloud_burst_mgr      = _safe_import("cloud_burst")
 bare_metal_mgr       = _safe_import("bare_metal")
 oauth2_sso_mgr       = _safe_import("oauth2_sso")
 
+# ── v2.7.0 modules ───────────────────────────────────────────────────────────
+runbook_exec     = _safe_import("runbook_executor")
+federation_mgr   = _safe_import("cluster_federation")
+
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
 
@@ -16248,6 +16252,167 @@ def api_cvm_vm(vm_id):
         d = request.get_json(silent=True) or {}
         return ok(**confidential_vm.enable_for_vm(vm_id, d.get("mode", "sev")))
     except Exception as e: return err(e, 400)
+
+@app.route("/api/confidential-vm/vms/<vm_id>/vtpm", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_vtpm(vm_id):
+    if not confidential_vm: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**confidential_vm.set_vtpm(vm_id, bool(d.get("enabled", True))))
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/confidential-vm/vms/<vm_id>/secure-boot", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_sb(vm_id):
+    if not confidential_vm: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(**confidential_vm.set_secure_boot(vm_id, bool(d.get("enabled", True))))
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/confidential-vm/vms/<vm_id>/attest", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_attest(vm_id):
+    if not confidential_vm: return err("modül yok", 503)
+    try:
+        return ok(**confidential_vm.capture_attestation(vm_id))
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/confidential-vm/vms/<vm_id>/attestation")
+@require_auth
+@require_role("admin", "administrator")
+def api_cvm_get_attest(vm_id):
+    if not confidential_vm: return err("modül yok", 503)
+    return ok(**confidential_vm.get_attestation(vm_id))
+
+
+# ── Runbook Executor (Auto-Remediation) ───────────────────────────────────────
+@app.route("/api/runbooks", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_runbook_list():
+    if not runbook_exec: return ok(runbooks=[])
+    return ok(runbooks=runbook_exec.list_runbooks())
+
+@app.route("/api/runbooks", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_runbook_upsert():
+    if not runbook_exec: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        return ok(runbook=runbook_exec.upsert_runbook(d))
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/runbooks/<rb_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_runbook_delete(rb_id):
+    if not runbook_exec: return err("modül yok", 503)
+    return ok(removed=runbook_exec.delete_runbook(rb_id))
+
+@app.route("/api/runbooks/<rb_id>/run", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_runbook_run(rb_id):
+    if not runbook_exec: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**runbook_exec.execute_runbook(rb_id, d.get("ctx"), force=bool(d.get("force"))))
+
+@app.route("/api/runbooks/history")
+@require_auth
+@require_role("admin", "administrator")
+def api_runbook_history():
+    if not runbook_exec: return ok(history=[])
+    try: limit = int(request.args.get("limit", 100))
+    except Exception: limit = 100
+    return ok(history=runbook_exec.history(limit=limit))
+
+
+# ── Cluster Federation (Managed Clusters) ─────────────────────────────────────
+@app.route("/api/federation/members", methods=["GET"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fed_list():
+    if not federation_mgr: return ok(members=[])
+    # strip tokens from listing
+    members = []
+    for m in federation_mgr.list_members():
+        m2 = dict(m); m2["token"] = "***"; members.append(m2)
+    return ok(members=members)
+
+@app.route("/api/federation/members", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fed_add():
+    if not federation_mgr: return err("modül yok", 503)
+    try:
+        d = request.get_json(silent=True) or {}
+        m = federation_mgr.add_member(
+            url=d.get("url", ""), token=d.get("token", ""),
+            label=d.get("label", ""), region=d.get("region", ""),
+            role=d.get("role", "follower"),
+            verify_tls=bool(d.get("verify_tls", True)),
+        )
+        m = dict(m); m["token"] = "***"
+        return ok(member=m)
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/federation/members/<member_id>", methods=["PATCH", "DELETE"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fed_update(member_id):
+    if not federation_mgr: return err("modül yok", 503)
+    try:
+        if request.method == "DELETE":
+            return ok(removed=federation_mgr.remove_member(member_id))
+        d = request.get_json(silent=True) or {}
+        m = federation_mgr.update_member(member_id, d)
+        if not m: return err("not found", 404)
+        m = dict(m); m["token"] = "***"
+        return ok(member=m)
+    except Exception as e: return err(e, 400)
+
+@app.route("/api/federation/health")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_fed_health():
+    if not federation_mgr: return ok(members=[])
+    mid = request.args.get("member_id")
+    return ok(health=federation_mgr.health(mid))
+
+@app.route("/api/federation/inventory/vms")
+@require_auth
+@require_role("admin", "administrator", "operator")
+def api_fed_inventory_vms():
+    if not federation_mgr: return ok(total=0, members=[], vms=[])
+    return ok(**federation_mgr.inventory_vms())
+
+@app.route("/api/federation/forward/<member_id>", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fed_forward(member_id):
+    if not federation_mgr: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(**federation_mgr.forward(
+        member_id, d.get("path", "/api/health"),
+        method=d.get("method", "GET"), payload=d.get("payload"),
+    ))
+
+@app.route("/api/federation/bulk", methods=["POST"])
+@require_auth
+@require_role("admin", "administrator")
+def api_fed_bulk():
+    if not federation_mgr: return err("modül yok", 503)
+    d = request.get_json(silent=True) or {}
+    return ok(results=federation_mgr.bulk_action(
+        member_ids=d.get("member_ids", []), path=d.get("path", "/api/health"),
+        method=d.get("method", "POST"), payload=d.get("payload"),
+    ))
 
 
 # ── Disk Encryption ───────────────────────────────────────────────────────────

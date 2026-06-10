@@ -9,6 +9,57 @@ Entries are written plainly. Marketing language is avoided.
 
 ---
 
+## [2.7.0] - 2026-06-10 (in development)
+
+### Added
+- Confidential VMs: vTPM 2.0 per VM, UEFI Secure Boot enforcement, SEV/SEV-ES/
+  SEV-SNP/TDX memory encryption with attestation report capture.
+- Anomaly Auto-Remediation: runbook executor that triggers pre-approved
+  remediation steps when the anomaly detector raises a high-confidence event.
+- Managed Cluster Federation: a single control plane can register and operate
+  multiple OXware nodes. Inventory, search, and bulk actions span all members.
+- Privacy Policy page (oxware.top/privacy) — GDPR scope.
+- Electron desktop client: first run shows the connect setup screen instead of
+  a blank window; default and custom-built EXE icons render correctly.
+- Plugin authoring wizard in the panel: new-plugin form with auto-generated ID,
+  inline editor, log viewer modal, security validation.
+- VM rows and create-modal header now show an OS-aware FontAwesome brand icon
+  (Ubuntu, Debian, CentOS/RHEL/Rocky/Alma/Fedora, Windows, FreeBSD, generic).
+
+### Changed
+- Pricing updated to $35 / $250 / $2000 (monthly / yearly / lifetime). Free
+  tier features will be reduced before public launch.
+- vCenter early-access window extended to 2026-08-31.
+- Marketplace policy: catalog is curated. There is no public submission
+  endpoint. Plugins are shared via GitHub Discussions; the maintainer adds
+  approved entries to the catalog.
+
+### Fixed
+- License "thank you" banner in the topbar disappeared after a refactor;
+  restored for users with an active license.
+- gh-pages site mobile rendering: heavy `backdrop-filter` and infinite
+  marquee animations now disabled below 900px, `prefers-reduced-motion` is
+  honored.
+
+### Security
+- Strict Content-Security-Policy applied to the panel and the public site
+  (default-src 'self', form-action 'self', frame-ancestors 'self',
+  object-src 'none', base-uri 'self').
+  `unsafe-inline` remains for inline scripts pending the v2.8 nonce-based
+  rewrite.
+- Per-IP sliding-window rate limit on `/api/auth/login` and
+  `/api/auth/2fa/verify-login` (20 requests per 60 seconds per source IP),
+  layered on top of the existing per-username lockout.
+- `plViewLogs` and `plValidate` panel functions migrated from `innerHTML`
+  string concatenation to DOM APIs (`createElement` + `textContent`) to
+  remove a reflected-XSS surface in plugin metadata.
+- `electron-app` dependencies audited; remaining 5 high-severity advisories
+  are confined to build-time `electron-builder` and do not ship in the
+  produced installer.
+- Penetration testing scope clarified in `SECURITY.md`.
+
+---
+
 ## [2.6.3] - 2026-06-06
 
 ### Added

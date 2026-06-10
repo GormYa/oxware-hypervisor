@@ -35,6 +35,13 @@ except Exception:
     _notif = None
     NOTIF_AVAILABLE = False
 
+try:
+    import runbook_executor as _rbx
+    RUNBOOK_AVAILABLE = True
+except Exception:
+    _rbx = None
+    RUNBOOK_AVAILABLE = False
+
 
 # ── Yardımcı ──────────────────────────────────────────────────────────────────
 
@@ -250,6 +257,13 @@ def run_detection():
                             )
                         except Exception as ne:
                             log.debug("Bildirim gönderilemedi: %s", ne)
+                    if RUNBOOK_AVAILABLE:
+                        try:
+                            fired = _rbx.on_anomaly(anomaly)
+                            if fired:
+                                log.info("Auto-remediation tetiklendi: %s", fired)
+                        except Exception as re:
+                            log.debug("Runbook tetiklenmedi: %s", re)
             except Exception as e:
                 log.debug("Metrik kontrolü hatası (%s): %s", key, e)
 
