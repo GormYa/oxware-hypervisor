@@ -472,6 +472,28 @@
     .sub-tab{padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s,border-color .12s;background:none;border-top:none;border-left:none;border-right:none}
     .sub-tab.active{color:var(--accent-lt);border-bottom-color:var(--accent)}
     .sub-tab:hover{color:var(--text)}
+    /* ── Compact info banner (sade) ── */
+    .info-compact{font-size:11.5px;color:var(--text-muted);background:rgba(88,166,255,.04);
+      border-left:2px solid var(--accent);padding:8px 12px;border-radius:0 4px 4px 0;
+      margin-bottom:10px;line-height:1.55}
+    .info-compact i{color:var(--accent-lt);margin-right:6px}
+    .info-compact b{color:var(--text)}
+    /* Sadeleştirme: eski "ℹ Bu Nedir?" kartları (inline style) için compact override.
+       Pattern: card with border-left:4px solid var(--accent-lt). */
+    .card[style*="border-left:4px solid var(--accent-lt)"]{
+      padding:8px 12px!important;font-size:11.5px!important;border-radius:0 4px 4px 0!important;
+      border-left-width:2px!important;margin-bottom:10px!important;
+    }
+    .card[style*="border-left:4px solid var(--accent-lt)"] > div{font-size:11.5px!important;line-height:1.55!important}
+    .card[style*="border-left:4px solid var(--accent-lt)"] b{font-size:11.5px;font-weight:600}
+    /* btn sm normalize */
+    .btn.sm{padding:3px 8px;font-size:11px;border-radius:4px;margin:0 2px 2px 0}
+    .btn.sm.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .btn.sm.danger{background:transparent;color:#f87171;border-color:rgba(248,113,113,.4)}
+    .btn.sm:hover{filter:brightness(1.1)}
+    /* badge-muted tighter */
+    .badge-muted{display:inline-block;padding:1px 6px;font-size:10px;border-radius:3px;
+      background:rgba(125,141,153,.18);color:var(--text-muted);font-family:monospace}
     /* ── Console Type Cards ── */
     .con-type-card{border:1px solid var(--border);border-radius:8px;padding:14px 12px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:var(--surface)}
     .con-type-card:hover{border-color:var(--accent);background:var(--surface2)}
@@ -5988,10 +6010,8 @@
             <div class="spacer"></div>
             <button class="btn" onclick="loadCvmPage()" style="font-size:12px">↻ Yenile</button>
           </div>
-          <div class="card" style="margin-bottom:12px;border-left:4px solid var(--accent-lt);background:rgba(88,166,255,.04);padding:14px">
-            <div style="font-size:12px;color:var(--text);line-height:1.6">
-              <b style="color:var(--accent-lt)">ℹ Bu Nedir?</b> VM RAM'ini CPU seviyesinde şifreler (AMD SEV / Intel TDX). Hypervisor bile VM hafızasını okuyamaz. Hassas iş yükleri için.
-            </div>
+          <div class="info-compact">
+            <i class="fa-solid fa-circle-info"></i> VM RAM'ini CPU seviyesinde şifreler (AMD SEV / Intel TDX). Hypervisor bile VM hafızasını okuyamaz. vTPM 2.0 + UEFI Secure Boot ile güvene zincirleme tamamlanır.
           </div>
           <div class="card" style="margin-bottom:12px">
             <div class="card-title">Host Desteği (CPU / Kernel)</div>
@@ -6000,8 +6020,8 @@
           <div class="card">
             <div class="card-title">Korumalı VM'ler</div>
             <div class="table-wrap"><table>
-              <thead><tr><th>VM ID</th><th>Mod</th><th>Durum</th><th>İşlem</th></tr></thead>
-              <tbody id="cvm-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+              <thead><tr><th>VM ID</th><th>Mod</th><th>vTPM</th><th>SecureBoot</th><th>Son Attest</th><th>İşlem</th></tr></thead>
+              <tbody id="cvm-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
             </table></div>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:end">
               <div><label style="font-size:11px;display:block">VM ID</label><input id="cvm-vm-id" class="form-control" style="width:200px"></div>
@@ -6012,6 +6032,63 @@
                 </select></div>
               <button class="btn-primary" onclick="cvmEnable()" style="font-size:12px">Etkinleştir</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Runbook Executor (auto-remediation) -->
+        <div id="ent-pane-runbook" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-robot fa-fw" style="color:var(--accent-lt)"></i> Auto-Remediation Runbook'ları</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadRunbookPage()" style="font-size:12px">↻ Yenile</button>
+          </div>
+          <div class="info-compact">
+            <i class="fa-solid fa-circle-info"></i> Anomali dedektörü yüksek güvenle olay yakaladığında, eşleşen onaylı runbook'lar otomatik çalışır. Her runbook için cooldown ve saatlik kota uygulanır.
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Tanımlı Runbook'lar</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Ad</th><th>Tetik</th><th>Min z</th><th>Cooldown</th><th>Kota/saat</th><th>Onay</th><th>Durum</th><th>İşlem</th></tr></thead>
+              <tbody id="rb-tbody"><tr><td colspan="9" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Çalıştırma Geçmişi (son 100)</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Zaman</th><th>Runbook</th><th>Sonuç</th><th>Detay</th></tr></thead>
+              <tbody id="rb-hist-tbody"><tr><td colspan="4" class="text-center text-muted" style="padding:14px">—</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <!-- Cluster Federation -->
+        <div id="ent-pane-federation" style="display:none">
+          <div class="section-header">
+            <h2><i class="fa-solid fa-network-wired fa-fw" style="color:var(--accent-lt)"></i> Managed Cluster Federation</h2>
+            <div class="spacer"></div>
+            <button class="btn" onclick="loadFederationPage()" style="font-size:12px">↻ Yenile</button>
+            <button class="btn-primary" onclick="fedAddMemberPrompt()" style="font-size:12px">+ Üye Ekle</button>
+          </div>
+          <div class="info-compact">
+            <i class="fa-solid fa-circle-info"></i> Birden çok OXware kontrolcüsünü tek panelden yönet. Envanter, sağlık ve toplu eylemler tüm üyelerde paralel çalışır. Değişiklikler hedef üyenin kendi denetim kayıtlarına yazılır.
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Federasyon Üyeleri</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>ID</th><th>Etiket</th><th>URL</th><th>Bölge</th><th>Rol</th><th>Sağlık</th><th>Gecikme</th><th>İşlem</th></tr></thead>
+              <tbody id="fed-tbody"><tr><td colspan="8" class="text-center text-muted" style="padding:14px">Yükleniyor...</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Birleşik VM Envanteri</div>
+            <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
+              <button class="btn" onclick="fedLoadInventory()" style="font-size:12px">VM'leri Çek</button>
+              <span id="fed-inv-summary" class="text-muted" style="font-size:12px">—</span>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Üye</th><th>Bölge</th><th>VM ID</th><th>Ad</th><th>Durum</th><th>vCPU</th><th>RAM</th></tr></thead>
+              <tbody id="fed-inv-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:14px">—</td></tr></tbody>
+            </table></div>
           </div>
         </div>
 
@@ -23971,7 +24048,7 @@ async function deleteRbacPerm(key, username) {
 /* ══════════════════════════════════════════════════════════════════════════════
    Enterprise Sub-Tab System (v2.5.6+)
 ══════════════════════════════════════════════════════════════════════════════ */
-const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','firecracker','kata','wasm','edge','workflow','opa','cloudevents','desktop','cloudexport','faultol','storedrs','consolerec','greenmode','multiregion','marketplace','cloudburst','baremetal','oauth2','apidocs'];
+const ENT_SUB_TABS = ['drs','affinity','maint','evc','nioc','dr','lifecycle','stor-adv','net-adv','siem','sessrec','numa','bkup-enc','rightsize','alertcorr','cvm','disk-enc','compliance','dlp','forensics','mfa-policy','sso','tenants','chargeback','svc-cat','rate-limit','otel','grafana','topoviz','forecast','driftcap','backupadv','microseg','bfd','svcchain','mesh','pulumi','k8scsi','k8sop','kubevirt','gitops','federation','firecracker','kata','wasm','edge','workflow','opa','cloudevents','runbook','desktop','cloudexport','faultol','storedrs','consolerec','greenmode','multiregion','marketplace','cloudburst','baremetal','oauth2','apidocs'];
 const ENT_LOADERS = {
   drs: () => { try { loadDrsPage(); } catch(e) { console.warn(e); } },
   affinity: () => { try { loadAffinityPage(); } catch(e) { console.warn(e); } },
@@ -24032,6 +24109,8 @@ const ENT_LOADERS = {
   cloudburst:  () => { try { loadCloudBurstPage(); } catch(e) { console.warn(e); } },
   baremetal:   () => { try { loadBareMetalPage(); } catch(e) { console.warn(e); } },
   oauth2:      () => { try { loadOAuth2Page(); } catch(e) { console.warn(e); } },
+  runbook:     () => { try { loadRunbookPage(); } catch(e) { console.warn(e); } },
+  federation:  () => { try { loadFederationPage(); } catch(e) { console.warn(e); } },
   apidocs: () => { try { loadApiDocsPage(); } catch(e) { console.warn(e); } }
 };
 
@@ -24051,15 +24130,14 @@ const ENT_CATEGORIES = {
   compute:['drs','affinity','evc','numa','rightsize','maint','consolerec'],
   storage:['stor-adv','bkup-enc','disk-enc','backupadv','storedrs'],
   network:['nioc','net-adv','microseg','bfd','svcchain','mesh'],
-  security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','alertcorr'],
+  security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','oauth2','alertcorr'],
   dr:['dr','lifecycle','faultol'],
   tenancy:['tenants','chargeback','svc-cat','rate-limit'],
   observability:['otel','grafana','topoviz','forecast','driftcap'],
-  cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops'],
+  cloud:['pulumi','k8scsi','k8sop','kubevirt','gitops','federation'],
   modern:['firecracker','kata','wasm','edge'],
-  automation:['workflow','opa','cloudevents','greenmode','multiregion','cloudburst','baremetal','marketplace'],
+  automation:['workflow','opa','cloudevents','runbook','greenmode','multiregion','cloudburst','baremetal','marketplace'],
   clients:['desktop','cloudexport'],
-  security:['siem','sessrec','cvm','compliance','dlp','forensics','mfa-policy','sso','oauth2','alertcorr'],
   docs:['apidocs']
 };
 let _entCurrentCat = 'compute';
@@ -24073,7 +24151,7 @@ function entCat(cat) {
   if (bs[ci]) bs[ci].classList.add('active');
   // Build feature sub-tab bar for this category
   const feats = ENT_CATEGORIES[cat] || [];
-  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',desktop:'Desktop Client',cloudexport:'Cloud Export',faultol:'Fault Tolerance',storedrs:'Storage DRS',consolerec:'Konsol Kaydı',apidocs:'API Referans'};
+  const labels = {drs:'DRS',affinity:'Yakınlık',maint:'Bakım',evc:'EVC CPU',nioc:'Ağ QoS',dr:'Felaket Kurtarma',lifecycle:'Yaşam Döngüsü','stor-adv':'Depolama+','net-adv':'Ağ+',siem:'SIEM',sessrec:'Oturum Kaydı',numa:'NUMA','bkup-enc':'Yedek Şifreleme',rightsize:'Boyutlandırma',alertcorr:'Uyarı Korelasyon',cvm:'Gizli VM','disk-enc':'Disk Şifreleme',compliance:'Uyumluluk',dlp:'DLP',forensics:'Adli Analiz','mfa-policy':'2FA Politikası',sso:'SSO',oauth2:'OAuth2',tenants:'Tenants',chargeback:'Chargeback','svc-cat':'Servis Kataloğu','rate-limit':'Rate Limit',otel:'Tracing',grafana:'Grafana',topoviz:'Topoloji',forecast:'Tahmin/ML',driftcap:'Drift/Kapasite',backupadv:'Backup+',microseg:'Mikrosegment',bfd:'BFD',svcchain:'Servis Zinciri',mesh:'Service Mesh',pulumi:'Pulumi',k8scsi:'K8s CSI',k8sop:'K8s Operator',kubevirt:'KubeVirt',gitops:'GitOps',federation:'Federation',firecracker:'microVM',kata:'Kata',wasm:'WASM',edge:'Edge',workflow:'Workflow',opa:'Policy (OPA)',cloudevents:'CloudEvents',runbook:'Auto-Remediation',greenmode:'Green Mode',multiregion:'Multi-Region',cloudburst:'Cloud Burst',baremetal:'Bare Metal',marketplace:'Marketplace',desktop:'Desktop Client',cloudexport:'Cloud Export',faultol:'Fault Tolerance',storedrs:'Storage DRS',consolerec:'Konsol Kaydı',apidocs:'API Referans'};
   const bar = document.getElementById('ent-feat-tabs');
   bar.innerHTML = feats.map((f, i) => `<button class="sub-tab${i === 0 ? ' active' : ''}" onclick="entSubTab('${f}')">${labels[f] || f}</button>`).join('');
   // Hide all panes, show first feature of this category
@@ -26221,16 +26299,27 @@ async function loadCvmPage() {
   const sup = document.getElementById('cvm-support');
   const tb = document.getElementById('cvm-tbody');
   if (sup) sup.innerHTML = '<div class="text-muted">Yükleniyor...</div>';
-  if (tb) tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Yükleniyor...</td></tr>';
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Yükleniyor...</td></tr>';
   try {
     const [s, l] = await Promise.all([_api('/api/confidential-vm/support'), _api('/api/confidential-vm/vms')]);
-    sup.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">' +
+    sup.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">' +
       ['sev','sev_es','sev_snp','tdx'].map(k =>
-        `<div style="padding:8px;background:var(--surface2);border-radius:6px"><b>${k.toUpperCase()}</b>: ${s[k]?'<span style="color:#22c55e"> Destekleniyor</span>':'<span style="color:#f87171"> Yok</span>'}</div>`
+        `<div style="padding:8px;background:var(--surface2);border-radius:6px"><b>${k.toUpperCase()}</b>: ${s[k]?'<span style="color:#22c55e">Destekleniyor</span>':'<span style="color:#f87171">Yok</span>'}</div>`
       ).join('') + '</div>';
     const vms = l.vms || [];
-    tb.innerHTML = vms.length ? vms.map(v=>`<tr><td>${_esc(v.vm_id)}</td><td><span class="badge-muted">${_esc(v.mode)}</span></td><td>${v.enabled?'<span style="color:#22c55e">aktif</span>':'pasif'}</td><td><button class="btn-danger" style="font-size:11px" onclick="cvmDisable('${_esc(v.vm_id)}')">Devre Dışı Bırak</button></td></tr>`).join('') :
-      '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">Henüz koruma yok</td></tr>';
+    tb.innerHTML = vms.length ? vms.map(v=>{
+      const att = v.last_attestation || {};
+      const attStr = att.ok ? `<span style="color:#22c55e" title="${_esc(att.measurement||'')}">ok</span>` : (att.error?`<span style="color:#f87171" title="${_esc(att.error)}">hata</span>`:'<span class="text-muted">—</span>');
+      const vt = v.vtpm ? '<i class="fa-solid fa-check" style="color:#22c55e"></i>' : '<i class="fa-solid fa-xmark text-muted"></i>';
+      const sb = v.secure_boot ? '<i class="fa-solid fa-check" style="color:#22c55e"></i>' : '<i class="fa-solid fa-xmark text-muted"></i>';
+      return `<tr><td><code>${_esc(v.vm_id)}</code></td><td><span class="badge-muted">${_esc(v.mode||'-')}</span></td><td>${vt}</td><td>${sb}</td><td>${attStr}</td><td>
+        <button class="btn sm" onclick="cvmToggleVtpm('${_esc(v.vm_id)}',${!v.vtpm})" title="vTPM">${v.vtpm?'vTPM Off':'vTPM On'}</button>
+        <button class="btn sm" onclick="cvmToggleSb('${_esc(v.vm_id)}',${!v.secure_boot})" title="Secure Boot">${v.secure_boot?'SB Off':'SB On'}</button>
+        <button class="btn sm primary" onclick="cvmAttest('${_esc(v.vm_id)}')">Attest</button>
+        <button class="btn sm danger" onclick="cvmDisable('${_esc(v.vm_id)}')">Kaldır</button>
+      </td></tr>`;
+    }).join('') :
+      '<tr><td colspan="6" class="text-center text-muted" style="padding:14px">Henüz koruma yok</td></tr>';
   } catch(e) { sup.innerHTML = '<div style="color:#f87171">Hata: '+e.message+'</div>'; }
 }
 async function cvmEnable() {
@@ -26244,6 +26333,117 @@ async function cvmDisable(id) {
   if (!await showConfirm('VM\'den confidential korumayı kaldırmak istiyor musun?', 'Devre Dışı Bırak')) return;
   await _api('/api/confidential-vm/vms/'+encodeURIComponent(id),'DELETE');
   toast('Devre dışı','info'); loadCvmPage();
+}
+async function cvmToggleVtpm(id, enabled) {
+  await _api('/api/confidential-vm/vms/'+encodeURIComponent(id)+'/vtpm','POST',{enabled});
+  toast('vTPM '+(enabled?'açık':'kapalı'),'info'); loadCvmPage();
+}
+async function cvmToggleSb(id, enabled) {
+  await _api('/api/confidential-vm/vms/'+encodeURIComponent(id)+'/secure-boot','POST',{enabled});
+  toast('Secure Boot '+(enabled?'açık':'kapalı'),'info'); loadCvmPage();
+}
+async function cvmAttest(id) {
+  const d = await _api('/api/confidential-vm/vms/'+encodeURIComponent(id)+'/attest','POST',{});
+  if (d.ok) toast('Attestation alındı: '+(d.measurement||'').slice(0,16)+'...','success');
+  else toast('Attestation hata: '+(d.error||'bilinmeyen'),'error');
+  loadCvmPage();
+}
+
+/* ── Runbook Executor ───────────────────────────────────────────────────── */
+async function loadRunbookPage() {
+  const tb = document.getElementById('rb-tbody');
+  const ht = document.getElementById('rb-hist-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Yükleniyor...</td></tr>';
+  try {
+    const [l, h] = await Promise.all([_api('/api/runbooks'), _api('/api/runbooks/history?limit=100')]);
+    const items = l.runbooks || [];
+    tb.innerHTML = items.length ? items.map(r=>{
+      const t = r.trigger || {};
+      const enabled = r.enabled !== false;
+      return `<tr><td><code>${_esc(r.id)}</code></td><td>${_esc(r.name||'-')}</td><td><code style="font-size:11px">${_esc(t.metric_regex||'-')}</code></td><td>${t.min_z??'-'}</td><td>${t.cooldown_sec??'-'}s</td><td>${r.max_runs_per_hour??'-'}</td><td><span class="badge-muted">${_esc(r.approval||'auto')}</span></td><td>${enabled?'<span style="color:#22c55e">aktif</span>':'<span class="text-muted">kapalı</span>'}</td><td>
+        <button class="btn sm primary" onclick="rbRun('${_esc(r.id)}')">Çalıştır</button>
+        <button class="btn sm" onclick="rbToggle('${_esc(r.id)}',${!enabled})">${enabled?'Kapat':'Aç'}</button>
+        <button class="btn sm danger" onclick="rbDelete('${_esc(r.id)}')">Sil</button>
+      </td></tr>`;
+    }).join('') : '<tr><td colspan="9" class="text-center text-muted" style="padding:14px">Henüz runbook yok</td></tr>';
+    const hist = h.history || [];
+    ht.innerHTML = hist.length ? hist.slice().reverse().slice(0,100).map(e=>{
+      const ts = new Date((e.ts||0)*1000).toLocaleString();
+      const ok = e.ok ? '<span style="color:#22c55e">OK</span>' : '<span style="color:#f87171">Hata</span>';
+      const steps = (e.steps||[]).map(s=>`${s.type}:${s.ok?'ok':'fail'}`).join(', ');
+      return `<tr><td style="font-size:11px">${ts}</td><td><code>${_esc(e.runbook_id||'-')}</code></td><td>${ok}</td><td style="font-size:11px">${_esc(steps)}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:14px">—</td></tr>';
+  } catch(e) { tb.innerHTML = '<tr><td colspan="9" style="color:#f87171">Hata: '+_esc(e.message)+'</td></tr>'; }
+}
+async function rbRun(id) {
+  const d = await _api('/api/runbooks/'+encodeURIComponent(id)+'/run','POST',{force:true});
+  toast(d.ok?'Çalıştırıldı':'Hata: '+(d.error||''), d.ok?'success':'error');
+  loadRunbookPage();
+}
+async function rbToggle(id, enabled) {
+  const items = (await _api('/api/runbooks')).runbooks || [];
+  const rb = items.find(x=>x.id===id);
+  if (!rb) return;
+  rb.enabled = enabled;
+  await _api('/api/runbooks','POST',rb);
+  loadRunbookPage();
+}
+async function rbDelete(id) {
+  if (!await showConfirm('Runbook silinecek: '+id,'Sil')) return;
+  await _api('/api/runbooks/'+encodeURIComponent(id),'DELETE');
+  toast('Silindi','info'); loadRunbookPage();
+}
+
+/* ── Cluster Federation ─────────────────────────────────────────────────── */
+async function loadFederationPage() {
+  const tb = document.getElementById('fed-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Yükleniyor...</td></tr>';
+  try {
+    const [m, h] = await Promise.all([_api('/api/federation/members'), _api('/api/federation/health')]);
+    const members = m.members || [];
+    const healthMap = {};
+    (h.health || []).forEach(x => { healthMap[x.id] = x; });
+    tb.innerHTML = members.length ? members.map(mb=>{
+      const hl = healthMap[mb.id] || {};
+      const okBadge = hl.ok ? '<span style="color:#22c55e"><i class="fa-solid fa-circle-check"></i> sağlıklı</span>' : '<span style="color:#f87171"><i class="fa-solid fa-circle-xmark"></i> '+_esc(hl.error||'ulaşılamadı')+'</span>';
+      return `<tr><td><code style="font-size:11px">${_esc(mb.id.slice(0,8))}</code></td><td>${_esc(mb.label||'-')}</td><td style="font-size:11px"><code>${_esc(mb.url)}</code></td><td>${_esc(mb.region||'-')}</td><td><span class="badge-muted">${_esc(mb.role||'follower')}</span></td><td>${okBadge}</td><td>${hl.latency_ms?hl.latency_ms+'ms':'—'}</td><td>
+        <button class="btn sm" onclick="fedCheckOne('${_esc(mb.id)}')">Ping</button>
+        <button class="btn sm danger" onclick="fedRemove('${_esc(mb.id)}')">Kaldır</button>
+      </td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="text-center text-muted" style="padding:14px">Henüz üye yok. + Üye Ekle ile başla.</td></tr>';
+  } catch(e) { tb.innerHTML = '<tr><td colspan="8" style="color:#f87171">Hata: '+_esc(e.message)+'</td></tr>'; }
+}
+async function fedAddMemberPrompt() {
+  const url = prompt('Üye URL (örn: https://node2.example.com):');
+  if (!url) return;
+  const token = prompt('Federasyon API token:');
+  if (!token) return;
+  const label = prompt('Etiket (opsiyonel):', '') || '';
+  const region = prompt('Bölge (opsiyonel):', '') || '';
+  const d = await _api('/api/federation/members','POST',{url,token,label,region,role:'follower',verify_tls:true});
+  if (d.member) { toast('Üye eklendi','success'); loadFederationPage(); }
+  else toast('Hata: '+(d.error||''),'error');
+}
+async function fedRemove(id) {
+  if (!await showConfirm('Üye kaldırılacak: '+id.slice(0,8),'Kaldır')) return;
+  await _api('/api/federation/members/'+encodeURIComponent(id),'DELETE');
+  toast('Kaldırıldı','info'); loadFederationPage();
+}
+async function fedCheckOne(id) {
+  const d = await _api('/api/federation/health?member_id='+encodeURIComponent(id));
+  toast('Ping tamamlandı','info'); loadFederationPage();
+}
+async function fedLoadInventory() {
+  const tb = document.getElementById('fed-inv-tbody');
+  const sm = document.getElementById('fed-inv-summary');
+  tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Çekiliyor...</td></tr>';
+  try {
+    const d = await _api('/api/federation/inventory/vms');
+    const vms = d.vms || [];
+    sm.textContent = `${d.total||0} VM, ${(d.members||[]).length} üye`;
+    tb.innerHTML = vms.length ? vms.map(v=>`<tr><td>${_esc(v._member_label||'-')}</td><td>${_esc(v._region||'-')}</td><td><code style="font-size:11px">${_esc((v.id||'').slice(0,8))}</code></td><td><b>${_esc(v.name||'-')}</b></td><td>${_esc(v.state||'-')}</td><td>${v.vcpus||0}</td><td>${(v.memory_mb||0).toLocaleString()} MB</td></tr>`).join('') :
+      '<tr><td colspan="7" class="text-center text-muted" style="padding:14px">—</td></tr>';
+  } catch(e) { tb.innerHTML = '<tr><td colspan="7" style="color:#f87171">Hata: '+_esc(e.message)+'</td></tr>'; }
 }
 
 // Disk Encryption
