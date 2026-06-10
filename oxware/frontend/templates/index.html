@@ -1272,7 +1272,7 @@
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Version</span>
-                  <span class="esxi-meta-val" id="ns-oxware-ver">2.6.3</span>
+                  <span class="esxi-meta-val" id="ns-oxware-ver">2.7.0</span>
                 </div>
                 <div class="esxi-meta-row">
                   <span class="esxi-meta-key">Kernel</span>
@@ -10753,7 +10753,7 @@ const PAGE_STRINGS = {
     'Analiz için Dry Run çalıştırın':'Run Dry Run for analysis',
     'Başlatılıyor...':'Starting...',
     'Rebalance çalışıyor...':'Rebalance running...',
-    /* ── v2.6.3 panels ── */
+    /* ── v2.7.0 panels ── */
     'Green Mode':'Green Mode',
     'Yeşil Skor':'Green Score',
     'Tasarruf Potansiyeli':'Savings Potential',
@@ -11366,7 +11366,7 @@ const PAGE_STRINGS = {
     'Analiz için Dry Run çalıştırın':'Ejecute Dry Run para análisis',
     'Başlatılıyor...':'Iniciando...',
     'Rebalance çalışıyor...':'Rebalanceo en curso...',
-    /* ── v2.6.3 panels ── */
+    /* ── v2.7.0 panels ── */
     'Green Mode':'Modo Verde',
     'Yeşil Skor':'Puntuación Verde',
     'Tasarruf Potansiyeli':'Potencial de Ahorro',
@@ -11969,7 +11969,7 @@ const PAGE_STRINGS = {
     'Analiz için Dry Run çalıştırın':'Dry Run für Analyse ausführen',
     'Başlatılıyor...':'Wird gestartet...',
     'Rebalance çalışıyor...':'Rebalancing läuft...',
-    /* ── v2.6.3 panels ── */
+    /* ── v2.7.0 panels ── */
     'Green Mode':'Grüner Modus',
     'Yeşil Skor':'Grüner Score',
     'Tasarruf Potansiyeli':'Einsparpotenzial',
@@ -12571,7 +12571,7 @@ const PAGE_STRINGS = {
     'Analiz için Dry Run çalıştırın':'运行Dry Run进行分析',
     'Başlatılıyor...':'正在启动...',
     'Rebalance çalışıyor...':'重新平衡运行中...',
-    /* ── v2.6.3 panels ── */
+    /* ── v2.7.0 panels ── */
     'Green Mode':'绿色模式',
     'Yeşil Skor':'绿色评分',
     'Tasarruf Potansiyeli':'节能潜力',
@@ -13369,7 +13369,7 @@ function buildContextNav(type) {
     <!-- Key facts -->
     <div style="display:flex;flex-direction:column;gap:3px;color:var(--text-muted);font-size:10px">
       <div style="display:flex;justify-content:space-between"><span>Host IP</span><span id="sb-host-ip" style="color:var(--text);font-family:monospace">—</span></div>
-      <div style="display:flex;justify-content:space-between"><span>Sürüm</span><span id="sb-version" style="color:var(--text)">2.6.3</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Sürüm</span><span id="sb-version" style="color:var(--text)">2.7.0</span></div>
       <div style="display:flex;justify-content:space-between"><span>Uptime</span><span id="sb-uptime" style="color:var(--text)">—</span></div>
       <div style="display:flex;justify-content:space-between"><span>CPU</span><span id="sb-cpu-count" style="color:var(--text)">—</span></div>
       <div style="display:flex;justify-content:space-between"><span>KVM</span><span id="sb-kvm" style="color:#22c55e">—</span></div>
@@ -14114,7 +14114,7 @@ async function _loadSidebarHost() {
       set('sb-host-name', hn);
       set('sb-uptime', h.uptime || '—');
       set('sb-host-ip', (h.ip || (h.ips && h.ips[0]) || '—'));
-      set('sb-version', info.oxware_version || '2.6.3');
+      set('sb-version', info.oxware_version || '2.7.0');
       const cpuN = h.cpu_count_logical || h.cpu_count || 0;
       set('sb-cpu-count', cpuN ? cpuN + ' vCPU' : '—');
       set('sb-kvm', h.kvm_available === false ? 'Yok' : 'Available');
@@ -14224,11 +14224,11 @@ async function loadNodeSummary() {
 
     // System info
     document.getElementById("ns-cpuinfo").textContent = `${cpuCount} x ${infoData.host?.cpu_model || "—"}`;
-    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.6.3"}-generic#${infoData.host?.distro || 'Linux'}`;
+    document.getElementById("ns-kernel").textContent = `OXware-${infoData.oxware_version || "2.7.0"}-generic#${infoData.host?.distro || 'Linux'}`;
     document.getElementById("ns-kvm").textContent = infoData.host?.kvm_available ? "Available " : "Not Available ";
     document.getElementById("ns-arch").textContent = infoData.host?.architecture || "—";
     document.getElementById("ns-iodelay").textContent = ((s.disk_io?.read_count || 0) > 0 ? "< 1%" : "0%");
-    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.6.3"}`;
+    document.getElementById("ns-hv").textContent = `OXware ${infoData.oxware_version || "2.7.0"}`;
 
     // Center panel: VM counts
     const _vmRun = vmSumData?.running ?? '—';
@@ -15452,7 +15452,7 @@ async function batchVmAction(action) {
   if (!_selectedVMs.size) return;
   if (!await showConfirm(`${_selectedVMs.size} VM üzerinde "${action}" işlemi uygulanacak.`, 'Toplu İşlem')) return;
   const vm_ids = [..._selectedVMs];
-  // v2.6.3 bulk endpoints: /api/vms/bulk/<action>
+  // v2.7.0 bulk endpoints: /api/vms/bulk/<action>
   const ep = {start:'start', stop:'stop', reboot:'stop'}[action];
   try {
     const d = await _api(`/api/vms/bulk/${action === 'reboot' ? 'stop' : action}`, 'POST', {vm_ids});
@@ -15466,7 +15466,7 @@ async function batchVmAction(action) {
   setTimeout(loadVMs, 800);
 }
 
-/* v2.6.3 — Bulk tag/vcpu/memory */
+/* v2.7.0 — Bulk tag/vcpu/memory */
 async function batchVmTag() {
   if (!_selectedVMs.size) return;
   const tag = prompt(`${_selectedVMs.size} VM'e eklenecek etiket:`);

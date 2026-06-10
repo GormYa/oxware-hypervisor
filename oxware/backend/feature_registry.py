@@ -146,6 +146,12 @@ FEATURE_MANIFEST = [
     {"id": "cloud_burst",   "name": "Cloud Bursting",         "category": "automation",   "module": "cloud_burst",         "status": "beta",   "version": "2.6.3"},
     {"id": "bare_metal",    "name": "Bare-Metal Provisioning","category": "lifecycle",    "module": "bare_metal",          "status": "beta",   "version": "2.6.3"},
     {"id": "oauth2_sso",    "name": "OAuth 2.0 SSO",          "category": "security",     "module": "oauth2_sso",          "status": "beta",   "version": "2.6.3"},
+
+    # ── v2.7.0 — Confidential VM ext, Runbook Executor, Cluster Federation ──
+    {"id": "vtpm_secboot",  "name": "vTPM + Secure Boot",     "category": "security",     "module": "confidential_vm",     "status": "beta",   "version": "2.7.0"},
+    {"id": "attestation",   "name": "Confidential Attestation","category":"security",     "module": "confidential_vm",     "status": "beta",   "version": "2.7.0"},
+    {"id": "runbook_exec",  "name": "Auto-Remediation Runbooks","category":"automation",  "module": "runbook_executor",    "status": "beta",   "version": "2.7.0"},
+    {"id": "federation",    "name": "Managed Cluster Federation","category":"automation", "module": "cluster_federation",  "status": "beta",   "version": "2.7.0"},
 ]
 
 

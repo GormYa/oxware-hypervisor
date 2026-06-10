@@ -60,7 +60,7 @@ detect_version() {
         v="$(grep -m1 -oE 'OXWARE_VERSION=["\x27]?[0-9]+\.[0-9]+\.[0-9]+' "$REPO_ROOT/install.sh" 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
     fi
     if [ -z "$v" ]; then
-        v="2.6.1"
+        v="2.7.0"
     fi
     echo "$v"
 }

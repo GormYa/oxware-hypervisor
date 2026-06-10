@@ -147,7 +147,7 @@ def install_app(app_id: str, target_dir=None) -> dict:
 
     if url:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OXware/2.6.3"})
+            req = urllib.request.Request(url, headers={"User-Agent": "OXware/2.7.0"})
             with urllib.request.urlopen(req, timeout=30) as resp, open(tarball_path, "wb") as f:
                 shutil.copyfileobj(resp, f)
             downloaded = True
@@ -202,7 +202,7 @@ def refresh_index() -> dict:
     _ensure_dirs()
     try:
         req = urllib.request.Request(REMOTE_INDEX_URL,
-                                     headers={"User-Agent": "OXware/2.6.3"})
+                                     headers={"User-Agent": "OXware/2.7.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         apps = data.get("apps", data) if isinstance(data, dict) else data

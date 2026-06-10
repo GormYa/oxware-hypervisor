@@ -311,7 +311,7 @@ def _http_post(url: str, data: dict, headers: Optional[dict] = None) -> dict:
     hdrs = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "application/json",
-        "User-Agent": "OXware-Hypervisor/2.6.3",
+        "User-Agent": "OXware-Hypervisor/2.7.0",
     }
     if headers:
         hdrs.update(headers)
@@ -337,7 +337,7 @@ def _http_get(url: str, access_token: str) -> dict:
     hdrs = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/json",
-        "User-Agent": "OXware-Hypervisor/2.6.3",
+        "User-Agent": "OXware-Hypervisor/2.7.0",
     }
     req = urllib.request.Request(url, headers=hdrs, method="GET")
     ctx = ssl.create_default_context()

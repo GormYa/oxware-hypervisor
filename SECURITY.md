@@ -31,7 +31,7 @@ Send a report to `security@oxware.top`.
 If you prefer encrypted email, use our PGP key. The current fingerprint is:
 
 ```
-PGP fingerprint: TBD (will be published before 2.6.4)
+PGP fingerprint: TBD (will be published before 2.7.1)
 ```
 
 Include in your report:

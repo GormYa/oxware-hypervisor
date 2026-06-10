@@ -1,6 +1,6 @@
 # OXware Hypervisor environment
 export OXWARE_HYPERVISOR=1
-export OXWARE_VERSION="2.6.1"
+export OXWARE_VERSION="2.7.0"
 
 # Only modify PS1 for interactive shells
 if [ -n "$PS1" ] && [ "$TERM" != "dumb" ]; then

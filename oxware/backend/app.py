@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OXware Hypervisor Management API v2.6.3
+OXware Hypervisor Management API v2.7.0
 Ubuntu/KVM tabanlı — VMware ESXi / Proxmox alternatifi
 """
 
@@ -208,14 +208,14 @@ kata_runtime     = _safe_import("kata_runtime")
 wasm_runtime     = _safe_import("wasm_runtime")
 edge_mode        = _safe_import("edge_mode")
 
-# ── v2.6.3 IaC + Clients modules ────────────────────────────────────────────
+# ── v2.7.0 IaC + Clients modules ────────────────────────────────────────────
 workflow_engine  = _safe_import("workflow_engine")
 opa_policy       = _safe_import("opa_policy")
 cloudevents_mod  = _safe_import("cloudevents")
 electron_client  = _safe_import("electron_client")
 cloud_export     = _safe_import("cloud_export")
 
-# ── v2.6.3 modules ───────────────────────────────────────────────────────────
+# ── v2.7.0 modules ───────────────────────────────────────────────────────────
 fault_tolerance_mgr  = _safe_import("fault_tolerance")
 storage_drs_mgr      = _safe_import("storage_drs")
 console_recorder_mgr = _safe_import("console_recorder")
@@ -226,7 +226,7 @@ bulk_vm_ops_mgr      = _safe_import("bulk_vm_ops")
 net_mode_mgr         = _safe_import("network_mode_manager")
 green_mode_mgr       = _safe_import("green_mode")
 
-# ── v2.6.3 modules ───────────────────────────────────────────────────────────
+# ── v2.7.0 modules ───────────────────────────────────────────────────────────
 multi_region_mgr     = _safe_import("multi_region")
 marketplace_mgr      = _safe_import("app_marketplace")
 cloud_burst_mgr      = _safe_import("cloud_burst")
@@ -812,12 +812,12 @@ def docs_page():
 
 # ── ISO Download ──────────────────────────────────────────────────────────────
 _ISO_SEARCH_PATHS = [
-    "/opt/oxware/OXware-Hypervisor-2.6.3-amd64.iso",
-    "/root/OXware-Hypervisor-2.6.3-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.6.3-amd64.iso",
-    "/opt/oxware/OXware-Hypervisor-2.6.3-amd64.iso",
-    "/root/OXware-Hypervisor-2.6.3-amd64.iso",
-    "/tmp/OXware-Hypervisor-2.6.3-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.7.0-amd64.iso",
+    "/root/OXware-Hypervisor-2.7.0-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.7.0-amd64.iso",
+    "/opt/oxware/OXware-Hypervisor-2.7.0-amd64.iso",
+    "/root/OXware-Hypervisor-2.7.0-amd64.iso",
+    "/tmp/OXware-Hypervisor-2.7.0-amd64.iso",
 ]
 
 @app.route("/download/iso")
@@ -4456,7 +4456,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.6.3",
+        oxware_version="2.7.0",
     )
 
 @app.route("/api/system/stats")
@@ -9795,7 +9795,7 @@ header span{font-size:12px;background:#1f6feb33;color:#58a6ff;padding:2px 8px;bo
 <body>
 <header>
   <h1>⚡ OXware API</h1>
-  <span id="ver-badge">v2.6.3</span>
+  <span id="ver-badge">v2.7.0</span>
   <span style="font-size:12px;color:#8b949e" id="ep-count"></span>
   <input id="search" type="search" placeholder="Endpoint ara...">
 </header>
@@ -10029,7 +10029,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.6.3",
+            "version": "2.7.0",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -11494,7 +11494,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.6.3", connected=True)
+    return ok(status="ok", panel=panel, version="2.7.0", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
@@ -18325,7 +18325,7 @@ def api_edge_profile():
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# v2.6.3 — IaC + Clients Endpoints (admin-only)
+# v2.7.0 — IaC + Clients Endpoints (admin-only)
 # workflow_engine / opa_policy / cloudevents / electron_client / cloud_export
 # All wrapped in try/except with safe defaults — modül yoksa boş döner.
 # ════════════════════════════════════════════════════════════════════════════
@@ -18684,7 +18684,7 @@ def api_cexport_targets():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# v2.6.3 — Enterprise Expansion Endpoints (admin-only)
+# v2.7.0 — Enterprise Expansion Endpoints (admin-only)
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Fault Tolerance ───────────────────────────────────────────────────────────
@@ -18901,7 +18901,7 @@ def api_plugin_template():
     if not plugin_sdk_mgr: return err("modül yok", 503)
     return ok(template=plugin_sdk_mgr.get_plugin_template())
 
-# ── Plugin SDK — geliştirme + marketplace (v2.6.3) ────────────────────────────
+# ── Plugin SDK — geliştirme + marketplace (v2.7.0) ────────────────────────────
 @app.route("/api/plugins/upload", methods=["POST"])
 @require_auth
 @require_role("admin", "administrator")
@@ -19107,7 +19107,7 @@ def api_bridge_status():
     if not net_mode_mgr: return ok(configured=False)
     return ok(**net_mode_mgr.get_bridge_setup_status())
 
-# ── Green Mode / Power Optimization (v2.6.2) ─────────────────────────────────
+# ── Green Mode / Power Optimization (v2.7.0) ─────────────────────────────────
 @app.route("/api/green-mode/config", methods=["GET"])
 @require_auth
 @require_role("admin", "administrator")
@@ -19193,7 +19193,7 @@ def api_green_history():
     return ok(history=green_mode_mgr.get_history(days))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# v2.6.3 — Multi-Region, Marketplace, Cloud Burst, Bare-Metal, OAuth2 SSO
+# v2.7.0 — Multi-Region, Marketplace, Cloud Burst, Bare-Metal, OAuth2 SSO
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Multi-Region ────────────────────────────────────────────────────────────
@@ -19529,7 +19529,7 @@ if plugin_sdk_mgr:
         log.warning("Plugin startup yükleme hatası: %s", _pse)
 
 if __name__ == "__main__":
-    log.info("OXware Hypervisor v2.6.3 başlatılıyor")
+    log.info("OXware Hypervisor v2.7.0 başlatılıyor")
     if ssh_watchdog:
         ssh_watchdog.start()
         log.info("SSH watchdog başlatıldı.")
