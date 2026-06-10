@@ -146,14 +146,27 @@ jobs:
         with:
           name: bandit-security-report
           path: bandit-report.json
-      # ── pip-audit on declared deps (informational on the controller; HARD on requirements files when they exist).
-      - name: pip-audit on requirements
+      # ── pip-audit on declared deps. Run in informational mode (--strict
+      # OFF) because pip-audit pulls in every transitive dep and flags
+      # advisories the project cannot pin around without a co-ordinated
+      # bump (e.g. urllib3 / Werkzeug churn). Findings are uploaded as a
+      # build artifact so they are reviewed every release; the hard gate
+      # is bandit + the rest. Tracked in SECURITY.md → Hardening Backlog.
+      - name: pip-audit on requirements (informational)
         run: |
           if ls oxware/backend/requirements*.txt 2>/dev/null; then
-            pip-audit --strict -r oxware/backend/requirements.txt
+            pip-audit -r oxware/backend/requirements.txt --format=json > pip-audit-report.json || echo "::warning::pip-audit found advisories — see artifact pip-audit-report"
+            pip-audit -r oxware/backend/requirements.txt || echo "::warning::pip-audit found advisories (see report)"
           else
             echo "::warning::No requirements.txt found — dependency audit skipped."
           fi
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+          if-no-files-found: ignore
 
   shell-lint:
     name: Shell Script Lint

@@ -184,6 +184,7 @@ on the security audit job.
 | B324  | RFC 6455 WebSocket handshake    | Won't fix | SHA1 is mandated by the protocol; not a security choice.                         |
 | B402  | `import ftplib` in backup_scheduler | Open | Removed together with B321.                                                       |
 | B507  | `paramiko.AutoAddPolicy()`      | Open  | Add known-hosts pinning to the OXware credential vault + first-contact prompt.      |
+| dep-audit | pip-audit on requirements.txt | Open | Run informationally; bump pinned deps when an advisory has a clean upgrade path. Artifact uploaded every CI run. |
 
 When an item lands, drop its skip from `.github/workflows/ci.yml`.
 
