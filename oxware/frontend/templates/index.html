@@ -9226,14 +9226,34 @@ function _tokenExpired() {
 })();
 
 /* ══ API helper ══ */
+/* SEC-014 — credentials:'include' makes the browser send the HttpOnly
+   oxware_access cookie on every API call. The legacy Bearer header is kept
+   for back-compat (older OAuth/login flows that still write sessionStorage).
+   When the cookie is present, the server prefers it. The X-CSRF-TOKEN
+   header echoes the readable oxware_csrf cookie that flask-jwt-extended
+   issues alongside the access cookie. */
+function _csrfFromCookie() {
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)oxware_csrf=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  } catch (e) { return ''; }
+}
 async function api(path, options = {}) {
+  const method = (options.method || (options.body ? 'POST' : 'GET')).toUpperCase();
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + TOKEN(),
+    ...(options.headers || {}),
+  };
+  // Send CSRF token only on state-changing requests.
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const c = _csrfFromCookie();
+    if (c && !headers['X-CSRF-TOKEN']) headers['X-CSRF-TOKEN'] = c;
+  }
   const res = await fetch("/api" + path, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + TOKEN(),
-      ...(options.headers || {}),
-    },
+    credentials: 'include',
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   if (res.status === 401) { _forceLogout(); return {}; }
@@ -9518,6 +9538,10 @@ function stateBadge(state) {
 /* ══ Logout ══ */
 async function logout() {
   if (!await showConfirm('Oturumunuz kapatılacak.', 'Çıkış Yap')) return;
+  // SEC-014 — hit server so the HttpOnly cookie is unset and the session is
+  // revoked across replicas. Local clear is the fallback if the call fails.
+  try { await fetch('/api/auth/logout', {method:'POST', credentials:'include',
+    headers:{'Authorization':'Bearer '+TOKEN(), 'X-CSRF-TOKEN':_csrfFromCookie()}}); } catch(e) {}
   _clearSession();
 }
 

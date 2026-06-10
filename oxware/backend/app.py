@@ -32,7 +32,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from flask import Flask, request, jsonify, send_from_directory, render_template, make_response, send_file
 from flask_socketio import SocketIO, emit
 from flask_jwt_extended import (
-    JWTManager, create_access_token, get_jwt_identity, verify_jwt_in_request
+    JWTManager, create_access_token, get_jwt_identity, verify_jwt_in_request,
+    set_access_cookies, unset_jwt_cookies,
 )
 from flask_cors import CORS
 
@@ -237,6 +238,7 @@ oauth2_sso_mgr       = _safe_import("oauth2_sso")
 # ── v2.7.0 modules ───────────────────────────────────────────────────────────
 runbook_exec     = _safe_import("runbook_executor")
 federation_mgr   = _safe_import("cluster_federation")
+bp_v270_mod      = _safe_import("bp_v270")  # v2.7 blueprint (modularization start)
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -260,6 +262,15 @@ app.config["JWT_DECODE_ALGORITHMS"]    = ["HS256"]
 app.config["JWT_COOKIE_SECURE"]        = True
 app.config["JWT_COOKIE_SAMESITE"]      = "Strict"
 app.config["JWT_COOKIE_CSRF_PROTECT"]  = True
+# SEC-014 — HttpOnly cookie session: cookie names + double-submit CSRF cookie.
+# Access cookie is HttpOnly (JS cannot read it). CSRF cookie is readable so the
+# frontend can echo it into X-CSRF-TOKEN. flask-jwt-extended verifies both.
+app.config["JWT_ACCESS_COOKIE_NAME"]      = "oxware_access"
+app.config["JWT_ACCESS_CSRF_COOKIE_NAME"] = "oxware_csrf"
+app.config["JWT_ACCESS_CSRF_HEADER_NAME"] = "X-CSRF-TOKEN"
+app.config["JWT_ACCESS_COOKIE_PATH"]      = "/"
+app.config["JWT_CSRF_IN_COOKIES"]         = True
+app.config["JWT_COOKIE_DOMAIN"]           = None  # default = request host
 
 # OXW-2026-002 fix: CORS origins operatör config'inden gelir, wildcard yok
 # /etc/oxware/oxware.conf → [server] → cors_origins = https://panel.example.com
@@ -731,6 +742,23 @@ def require_role(*allowed_roles):
     return decorator
 
 
+# ── SEC-014b — modularization seed: register the v2.7 blueprint.
+# New v2.7 endpoints live in bp_v270.py under /api/v2/... and inherit the same
+# auth + role decorators. Old /api/... routes in this file remain for
+# back-compat; once the panel migrates, they can be retired.
+if bp_v270_mod is not None:
+    try:
+        bp_v270_mod.init_bp_v270(
+            confidential_vm, runbook_exec, federation_mgr,
+            require_auth=require_auth, require_role=require_role,
+            ok=ok, err=err,
+        )
+        app.register_blueprint(bp_v270_mod.bp_v270)
+        log.info("v2.7 blueprint registered (/api/v2/...)")
+    except Exception as _bpe:
+        log.warning("bp_v270 register failed: %s", _bpe)
+
+
 def _vmuser_check(vm_id):
     """
     vm-user rolü için: JWT'den kullanıcıyı al, sadece atanmış VM'e erişime izin ver.
@@ -982,6 +1010,19 @@ def serve_novnc(filename="vnc.html"):
 def api_setup_status():
     return ok(done=cred_mgr.is_setup_done())
 
+def _attach_session_cookies(resp, token: str):
+    """SEC-014: emit JWT in HttpOnly + Secure + SameSite=Strict cookie alongside
+    the JSON body. Existing Bearer-token clients keep working; new clients can
+    move to credentials:'include' and stop touching localStorage entirely.
+    flask-jwt-extended will also drop a non-HttpOnly CSRF cookie that the
+    frontend must echo back as the X-CSRF-TOKEN header on writes."""
+    try:
+        set_access_cookies(resp, token)
+    except Exception as _e:
+        log.debug("set_access_cookies failed: %s", _e)
+    return resp
+
+
 def _is_local_request() -> bool:
     """Allow setup only from loopback or trusted unix socket / X-Real-IP local.
     Blocks remote first-admin takeover on a freshly booted, publicly-bound node.
@@ -1010,7 +1051,7 @@ def api_setup_init():
         cred_mgr.first_setup(username, password)
         ev.info(f"İlk kurulum tamamlandı. Kullanıcı: {username}", category="auth")
         token = create_access_token(identity=username)
-        return ok(token=token, username=username, message="Kurulum tamamlandı")
+        return _attach_session_cookies(ok(token=token, username=username, message="Kurulum tamamlandı"), token)
     except Exception as e:
         return err(e)
 
@@ -1167,7 +1208,33 @@ def api_login():
     _bg_notify(f"Giriş başarılı: {username}", level="INFO", category="auth",
                details={"user": username, "role": _role,
                         "ip": request.headers.get("X-Forwarded-For", request.remote_addr or "")})
-    return ok(token=token, username=username, role=_role)
+    return _attach_session_cookies(ok(token=token, username=username, role=_role), token)
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    """SEC-014 — server-side logout. Clears the JWT + CSRF cookies (no payload
+    needed). The frontend should also wipe sessionStorage/localStorage on its
+    side; this endpoint is the only way to invalidate the HttpOnly cookie."""
+    try:
+        # Revoke the session record so other replicas see the logout.
+        if sess_mgr:
+            tok_hdr = request.headers.get("Authorization", "")
+            if tok_hdr.startswith("Bearer "):
+                try:
+                    from flask_jwt_extended import decode_token
+                    decoded = decode_token(tok_hdr.split(" ", 1)[1])
+                    sess_mgr.revoke_session(decoded.get("jti", ""))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    resp = ok(message="logged_out")
+    try:
+        unset_jwt_cookies(resp)
+    except Exception as _ue:
+        log.debug("unset_jwt_cookies failed: %s", _ue)
+    return resp
+
 
 @app.route("/api/auth/2fa/verify-login", methods=["POST"])
 def api_2fa_verify_login():
@@ -1218,7 +1285,7 @@ def api_2fa_verify_login():
     except Exception:
         _2fa_role = "administrator"
     ev.info(f"2FA giriş başarılı: {username} ({_2fa_role}) / {request.remote_addr}", category="auth")
-    return ok(token=token, username=username, role=_2fa_role)
+    return _attach_session_cookies(ok(token=token, username=username, role=_2fa_role), token)
 
 @app.route("/api/auth/2fa/status", methods=["GET"])
 @require_auth
@@ -19560,7 +19627,10 @@ def api_oauth2_callback(provider):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Referrer-Policy"] = "no-referrer"
-        return resp
+        # SEC-014 — set HttpOnly cookie alongside the sessionStorage bridge.
+        # The cookie alone authenticates future requests; sessionStorage is the
+        # legacy-compat read path for the existing panel code.
+        return _attach_session_cookies(resp, token)
     except Exception as e:
         ev.warn(f"OAuth2 callback hatası: {provider} / {e}", category="auth")
         return err(str(e), 400)

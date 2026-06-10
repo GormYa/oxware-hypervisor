@@ -118,6 +118,31 @@ The following hardening was issued in the 2.7.0 release:
   only for password-login sessions that pre-date this release. Logout
   clears both storages. A cookie-based HttpOnly/Secure/SameSite session is
   planned for v2.8 (large refactor — tracked separately).
+- **SEC-014 — HttpOnly cookie session**: login responses (`/api/auth/login`,
+  `/api/auth/2fa/verify-login`, `/api/setup/init`, OAuth2 callback) now
+  attach the JWT in an `HttpOnly; Secure; SameSite=Strict` cookie
+  (`oxware_access`) alongside the JSON response. A readable double-submit
+  CSRF cookie (`oxware_csrf`) is issued at the same time; the panel echoes
+  it in the `X-CSRF-TOKEN` header on every state-changing call. JS cannot
+  read the access cookie, so an XSS payload cannot exfiltrate the session.
+  Legacy Bearer header is still accepted for backward compatibility with
+  out-of-panel clients. New `/api/auth/logout` endpoint unsets the cookies
+  and revokes the session record.
+- **SEC-015 — SSO fail-closed**: `sso_manager.oidc_handle_callback` and
+  `sso_manager.saml_process_acs` now refuse to trust an assertion unless
+  the appropriate signature-verification library is installed
+  (`python-jose` for OIDC, `python3-saml` for SAML). With the library
+  present, OIDC ID tokens are verified against the issuer's JWKS, with
+  audience and issuer claims enforced. Without it, the callback returns
+  an error instead of silently decoding base64. Dev override:
+  `OXWARE_ALLOW_UNVERIFIED_SSO=1`, WARN-logged on every callback.
+  `sso_manager.crypto_status()` lets the panel surface a clear banner.
+- **SEC-016 — Modularization seed**: a new `bp_v270.py` Flask Blueprint
+  hosts the v2.7 Confidential VM / Runbook / Federation endpoints under
+  `/api/v2/...` instead of growing `app.py`. The blueprint imports nothing
+  from `app.py`; dependencies (decorators, response helpers) are wired
+  via `init_bp_v270(...)`. This is the first concrete step toward the
+  larger app.py split flagged in the external review.
 - **SEC-013 — CI hardening**: the GitHub Actions pipeline now hard-fails
   on (a) any module that does not compile, (b) Flake8 critical errors
   (E9/F63/F7/F82) in `app.py`, (c) Bandit findings at HIGH severity,

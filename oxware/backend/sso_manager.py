@@ -1,14 +1,17 @@
 """
 OXware SSO Manager — SAML 2.0 + OpenID Connect
 ────────────────────────────────────────────────
-Provider-agnostic config + redirect flow stubs.
-Real cryptographic verification requires python3-saml / authlib (optional).
+Stores IdP configuration and processes authentication flows. Crypto
+verification is FAIL-CLOSED: when the required library is not installed,
+SAML/OIDC callbacks refuse the assertion instead of trusting an unsigned
+payload.
 
-This module:
-  - Stores IdP configuration (entity_id, metadata_url, x509 cert)
-  - Provides SAML AuthnRequest + ACS endpoints (stub-validated when libs missing)
-  - Provides OIDC authorize + callback endpoints
-  - Maps IdP attributes (email, role) to OXware user
+  - OIDC ID-token signature verification requires `python-jose` (jwt).
+  - SAML AssertionConsumerService signature verification requires
+    `python3-saml` (OneLogin_Saml2_Auth) or `xmlsec1` + signxml.
+
+Development override: `OXWARE_ALLOW_UNVERIFIED_SSO=1` re-enables the legacy
+stub paths and logs a WARN on every callback. Never use this in production.
 
 Config: /var/lib/oxware/sso_config.json
 """
@@ -18,6 +21,38 @@ from pathlib import Path
 
 log = logging.getLogger("sso_manager")
 _CFG = Path("/var/lib/oxware/sso_config.json")
+
+# ── Crypto capability probes ─────────────────────────────────────────────────
+try:
+    from jose import jwt as _jose_jwt  # type: ignore
+    _OIDC_VERIFY_AVAILABLE = True
+except Exception:
+    _jose_jwt = None
+    _OIDC_VERIFY_AVAILABLE = False
+
+try:
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth  # type: ignore
+    _SAML_VERIFY_AVAILABLE = True
+except Exception:
+    OneLogin_Saml2_Auth = None  # type: ignore
+    _SAML_VERIFY_AVAILABLE = False
+
+
+def _allow_unverified() -> bool:
+    if os.environ.get("OXWARE_ALLOW_UNVERIFIED_SSO") == "1":
+        log.warning("SSO unverified override active — INSECURE, do not use in production")
+        return True
+    return False
+
+
+def crypto_status() -> dict:
+    """Surface verify capability so the panel can show a clear banner."""
+    return {
+        "oidc_signature_verify": _OIDC_VERIFY_AVAILABLE,
+        "saml_signature_verify": _SAML_VERIFY_AVAILABLE,
+        "unverified_override":   bool(os.environ.get("OXWARE_ALLOW_UNVERIFIED_SSO") == "1"),
+        "production_ready":      _OIDC_VERIFY_AVAILABLE and _SAML_VERIFY_AVAILABLE,
+    }
 
 
 def _load() -> dict:
@@ -91,7 +126,12 @@ def saml_authn_request() -> dict:
 
 def saml_process_acs(saml_response_b64: str, relay_state: str = "") -> dict:
     """Process SAML AssertionConsumerService callback.
-    NOTE: Stub validation — production requires python3-saml signature check."""
+    Fail-closed: refuses the assertion unless python3-saml is installed
+    OR OXWARE_ALLOW_UNVERIFIED_SSO=1 is set (dev only)."""
+    if not _SAML_VERIFY_AVAILABLE and not _allow_unverified():
+        return {"ok": False,
+                "error": "SAML signature verification unavailable — "
+                         "install python3-saml or set OXWARE_ALLOW_UNVERIFIED_SSO=1 (dev only)"}
     try:
         decoded = base64.b64decode(saml_response_b64)
     except Exception:
@@ -163,9 +203,33 @@ def oidc_exchange_code(code: str, state: str = "") -> dict:
         ctx = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             tok = json.loads(resp.read().decode())
-        # Decode ID token payload (no signature verification — stub)
         id_tok = tok.get("id_token", "")
-        if id_tok and id_tok.count(".") == 2:
+        if not id_tok or id_tok.count(".") != 2:
+            return {"ok": False, "error": "no id_token in response"}
+
+        # ── Fail-closed signature verification ────────────────────────────
+        if _OIDC_VERIFY_AVAILABLE:
+            try:
+                jwks_url = cfg.get("jwks_url") or f"{cfg['issuer'].rstrip('/')}/.well-known/jwks.json"
+                with urllib.request.urlopen(jwks_url, timeout=10, context=ctx) as r:
+                    jwks = json.loads(r.read().decode())
+                claims = _jose_jwt.decode(  # type: ignore
+                    id_tok, jwks,
+                    audience=cfg["client_id"],
+                    issuer=cfg["issuer"].rstrip("/"),
+                    options={"verify_at_hash": False},
+                )
+            except Exception as ve:
+                return {"ok": False, "error": f"id_token verify failed: {ve}"}
+            return {
+                "ok": True,
+                "email": claims.get(cfg.get("claim_email", "email"), ""),
+                "role":  claims.get(cfg.get("claim_role", "role"), "vm-user"),
+                "claims": claims,
+                "verified": True,
+            }
+        if _allow_unverified():
+            # Dev-only: decode without verifying. Caller is logged.
             payload = id_tok.split(".")[1]
             payload += "=" * (4 - len(payload) % 4)
             claims  = json.loads(base64.urlsafe_b64decode(payload))
@@ -174,9 +238,12 @@ def oidc_exchange_code(code: str, state: str = "") -> dict:
                 "email": claims.get(cfg.get("claim_email", "email"), ""),
                 "role":  claims.get(cfg.get("claim_role", "role"), "vm-user"),
                 "claims": claims,
-                "warning": "JWT signature NOT verified — install authlib/python-jose for production",
+                "verified": False,
+                "warning": "id_token signature NOT verified (dev override)",
             }
-        return {"ok": False, "error": "no id_token in response"}
+        return {"ok": False,
+                "error": "OIDC signature verification unavailable — "
+                         "install python-jose or set OXWARE_ALLOW_UNVERIFIED_SSO=1 (dev only)"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
