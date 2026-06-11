@@ -13,24 +13,40 @@ import sys
 
 SRC = "oxware/frontend/templates/index.html"
 OUT_DIR = "tmp_i18n"
-MARKERS = [("en", 9764), ("es", 10859), ("de", 11471), ("zh", 12074)]
+LANGS = ("en", "es", "de", "zh")
 
 
-def extract_block(lines, start_line):
-    """Extract balanced { ... } block starting at start_line (1-indexed)."""
-    i = start_line - 1
-    depth = 0
-    started = False
-    for j in range(i, len(lines)):
-        for ch in lines[j]:
-            if ch == "{":
-                depth += 1
-                started = True
-            elif ch == "}":
-                depth -= 1
-                if started and depth == 0:
-                    return j + 1, "\n".join(lines[i:j + 1])
+def find_block_bounds(lines, lang_name, after_marker="const PAGE_STRINGS"):
+    """Locate `  <lang>: {` block inside PAGE_STRINGS (skipping LANGS dict)."""
+    pattern = re.compile(rf"^  {lang_name}: \{{")
+    anchor = None
+    for i, ln in enumerate(lines):
+        if after_marker in ln:
+            anchor = i
+            break
+    if anchor is None:
+        return None, None
+    for i in range(anchor, len(lines)):
+        if pattern.match(lines[i]):
+            depth = 0
+            started = False
+            for j in range(i, len(lines)):
+                for ch in lines[j]:
+                    if ch == "{":
+                        depth += 1
+                        started = True
+                    elif ch == "}":
+                        depth -= 1
+                        if started and depth == 0:
+                            return i + 1, j + 1
     return None, None
+
+
+def extract_block(lines, lang):
+    s, e = find_block_bounds(lines, lang)
+    if s is None:
+        return None, None
+    return e, "\n".join(lines[s - 1:e])
 
 
 def parse_entries(block_text):
@@ -89,13 +105,17 @@ def main():
     with open(SRC, encoding="utf-8") as f:
         lines = f.read().split("\n")
     results = {}
-    for lang, ln in MARKERS:
-        end, text = extract_block(lines, ln)
+    for lang in LANGS:
+        end, text = extract_block(lines, lang)
+        if text is None:
+            print(f"{lang}: BLOCK NOT FOUND")
+            results[lang] = {}
+            continue
         entries = parse_entries(text)
         results[lang] = dict(entries)
         json.dump(results[lang], open(f"{OUT_DIR}/{lang}.json", "w", encoding="utf-8"),
                   ensure_ascii=False, indent=2, sort_keys=True)
-        print(f"{lang}: {len(entries)} entries (lines {ln}..{end})")
+        print(f"{lang}: {len(entries)} entries (block ends line {end})")
     en_keys = set(results["en"].keys())
     for lang in ("es", "de", "zh"):
         missing = sorted(en_keys - set(results[lang].keys()))

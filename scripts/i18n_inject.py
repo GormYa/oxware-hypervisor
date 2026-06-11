@@ -68,7 +68,7 @@ def main():
     lines = src.split("\n")
 
     # Replace in reverse order so earlier line numbers stay valid
-    for lang in ("zh", "de", "es"):
+    for lang in ("zh", "de", "es", "en"):
         full = json.load(open(f"{OUT_DIR}/{lang}_full.json", encoding="utf-8"))
         start, end = find_block_bounds(lines, lang)
         if start is None:
