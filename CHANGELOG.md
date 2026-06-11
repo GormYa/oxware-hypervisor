@@ -9,6 +9,51 @@ Entries are written plainly. Marketing language is avoided.
 
 ---
 
+## [2.7.1] - 2026-06-11
+
+### Security
+- **SEC-017 (CRITICAL)** Runbook `api_call` SSRF: every URL is now passed through
+  `security_utils.validate_external_url`. Private (RFC 1918), loopback,
+  link-local, CGNAT, IPv6 ULA/link-local, and cloud metadata addresses are
+  rejected by default. `allow_loopback: true` opt-in per step for legitimate
+  internal calls.
+- **SEC-018 (CRITICAL)** Runbook `vm_action` argv injection: `vm_id` extracted
+  from `metric_key` is now strictly validated against
+  `^[A-Za-z0-9._-]{1,128}$`. `action` restricted to libvirt verb allowlist.
+  `virsh` invoked by absolute path.
+- **SEC-019 (HIGH)** Federation member URL SSRF + TLS bypass: `add_member` /
+  `update_member` validate URL scheme and host. `verify_tls=False` is coerced
+  back to `True` unless `OXWARE_FEDERATION_ALLOW_INSECURE=1`.
+- **SEC-020 (MEDIUM)** Federation `forward()` / `bulk_action()` path
+  allowlist. Auth, setup, internal admin, user, session paths blocked.
+- **SEC-021 (MEDIUM)** Federation `add_member` API pre-validates URL format
+  in `bp_v270.api_fed_add`.
+- **SEC-022 (MEDIUM)** Runbook `shell` step now restricted to a binary
+  allowlist; argv elements rejected if they contain shell metacharacters;
+  `api_call` capped at 120 invocations/runbook/hour.
+- **SEC-023 (MEDIUM)** `/api/v2/runbooks/<id>/run?force=true` requires a
+  rotating 60-second `confirm_token`.
+- **SEC-024 (MEDIUM)** Plugin SDK AST validator: sandbox-escape patterns
+  (`getattr/setattr/compile/eval/exec/__import__`, `__class__/__mro__/...`
+  chains, `importlib/marshal` calls) are now hard errors at upload time.
+- **SEC-027 (MEDIUM)** Plugin SDK route namespace: plugins receive a
+  `_PluginAppProxy` and may only register routes under
+  `/plugins/<plugin_id>/*`. Cannot overwrite core routes.
+- **SEC-025 (MEDIUM)** `bulk_delete` `confirm_token` is now a server-side
+  random nonce bound via HMAC-SHA256 to the exact VM-id set, single-use,
+  5-minute expiry, constant-time compared.
+- **SEC-026 (MEDIUM)** Bulk delete writes one append-only audit line per
+  VM to `/var/lib/oxware/bulk_audit.jsonl`.
+- **SEC-028 (LOW)** `confidential_vm.detect_support` reads
+  `/proc/cpuinfo` directly instead of via a `cat` subprocess.
+
+### Added
+- New `oxware/backend/security_utils.py` module with shared validators
+  (`validate_external_url`, `validate_vm_id`, `validate_forward_path`,
+  `safe_subprocess_arg`).
+
+---
+
 ## [2.7.0] - 2026-06-10 (in development)
 
 ### Added

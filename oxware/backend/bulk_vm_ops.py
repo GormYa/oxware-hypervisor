@@ -5,8 +5,11 @@ Apply tag/network/cpu/memory changes to multiple VMs simultaneously.
 All operations are idempotent and logged.
 """
 import hashlib
+import hmac
 import json
 import logging
+import os
+import secrets
 import subprocess
 import threading
 import time
@@ -17,8 +20,20 @@ from pathlib import Path
 _log = logging.getLogger("oxware.bulk_vm_ops")
 
 _JOBS_FILE = Path("/var/lib/oxware/bulk_jobs.json")
+_AUDIT_FILE = Path("/var/lib/oxware/bulk_audit.jsonl")
 _JOBS_LOCK = threading.Lock()
 _MAX_WORKERS = 4
+
+# SEC-025: confirm_token nonce store. Each call without a token mints a fresh
+# nonce that is bound to the exact VM-id set and expires after 5 minutes.
+_NONCE_TTL = 300
+_NONCES: dict = {}  # nonce -> {vm_ids_hash, expires_at}
+_NONCE_LOCK = threading.Lock()
+
+_CONFIRM_KEY = os.environ.get(
+    "OXWARE_BULK_CONFIRM_KEY",
+    "oxware-bulk-confirm-rotates-on-restart",
+).encode("utf-8")
 
 # _safe_import vm_manager
 try:
@@ -262,35 +277,92 @@ def bulk_set_memory(vm_ids: list, memory_mb: int) -> dict:
 
 # ─── delete ───────────────────────────────────────────────────────────────────
 
-def _generate_confirm_token(vm_ids: list) -> str:
-    payload = ",".join(sorted(vm_ids))
-    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+def _vm_ids_hash(vm_ids: list) -> str:
+    payload = ",".join(sorted(vm_ids)).encode("utf-8")
+    return hmac.new(_CONFIRM_KEY, payload, hashlib.sha256).hexdigest()
 
 
-def _delete_one(vm_id: str, delete_disk: bool = False) -> dict:
-    # destroy if running
+def _mint_confirm_token(vm_ids: list) -> str:
+    """SEC-025: confirm_token is a fresh random nonce bound server-side to a
+    specific VM-id set + a 5-minute expiry. Pre-image is unguessable even with
+    full knowledge of the VM list."""
+    nonce = secrets.token_urlsafe(24)
+    now = time.time()
+    with _NONCE_LOCK:
+        # prune expired
+        for k in [k for k, v in _NONCES.items() if v["expires_at"] < now]:
+            _NONCES.pop(k, None)
+        _NONCES[nonce] = {
+            "vm_ids_hash": _vm_ids_hash(vm_ids),
+            "expires_at": now + _NONCE_TTL,
+        }
+    return nonce
+
+
+def _consume_confirm_token(token: str, vm_ids: list) -> bool:
+    if not token:
+        return False
+    now = time.time()
+    expected_hash = _vm_ids_hash(vm_ids)
+    with _NONCE_LOCK:
+        entry = _NONCES.pop(token, None)
+    if not entry:
+        return False
+    if entry["expires_at"] < now:
+        return False
+    return hmac.compare_digest(entry["vm_ids_hash"], expected_hash)
+
+
+def _per_vm_audit(op: str, vm_id: str, result: dict, requester: str = "system"):
+    """SEC-026: each VM-affecting op gets its own audit-log line so admins can
+    trace exactly which VM was acted on, by whom, when, and with what outcome."""
+    try:
+        _AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "op": op,
+            "vm_id": vm_id,
+            "ok": bool(result.get("success", False)),
+            "message": result.get("message", "")[:500],
+            "requester": requester,
+        }
+        with open(_AUDIT_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        _log.warning("per-VM audit write failed: %s", e)
+
+
+def _delete_one(vm_id: str, delete_disk: bool = False, requester: str = "system") -> dict:
     _run_nofail(["virsh", "destroy", vm_id])
     args = ["virsh", "undefine", vm_id]
     if delete_disk:
         args.append("--remove-all-storage")
     r = _run_nofail(args)
     ok = r.returncode == 0
-    return {"success": ok, "message": (r.stdout.strip() or r.stderr.strip())}
+    result = {"success": ok, "message": (r.stdout.strip() or r.stderr.strip())}
+    _per_vm_audit("bulk_delete", vm_id, result, requester=requester)
+    return result
 
 
-def bulk_delete(vm_ids: list, delete_disk: bool = False, confirm_token: str = "") -> dict:
-    expected = _generate_confirm_token(vm_ids)
-    if confirm_token != expected:
+def bulk_delete(vm_ids: list, delete_disk: bool = False, confirm_token: str = "",
+                requester: str = "system") -> dict:
+    if not _consume_confirm_token(confirm_token, vm_ids):
+        nonce = _mint_confirm_token(vm_ids)
         return {
             "success": [],
             "failed": [],
             "job_id": "",
             "requires_confirmation": True,
-            "confirm_token": expected,
-            "message": f"Pass confirm_token='{expected}' to confirm deletion of {len(vm_ids)} VM(s).",
+            "confirm_token": nonce,
+            "expires_in_sec": _NONCE_TTL,
+            "message": (
+                f"Pass confirm_token='{nonce}' within {_NONCE_TTL}s to confirm "
+                f"deletion of {len(vm_ids)} VM(s). Token is single-use and bound "
+                f"to this exact VM list."
+            ),
         }
     job_id = str(uuid.uuid4())
-    result = _parallel(_delete_one, vm_ids, delete_disk=delete_disk)
+    result = _parallel(_delete_one, vm_ids, delete_disk=delete_disk, requester=requester)
     result["job_id"] = job_id
     _record_job(job_id, "bulk_delete", vm_ids, result)
     return result

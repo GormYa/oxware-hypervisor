@@ -27,12 +27,36 @@ import time
 import urllib.request
 from pathlib import Path
 
+try:
+    from . import security_utils as _sec
+except ImportError:
+    import security_utils as _sec
+
 log = logging.getLogger("oxware.runbook")
 
 _CATALOG = Path("/var/lib/oxware/runbooks.json")
 _HISTORY = Path("/var/lib/oxware/runbook_history.jsonl")
 _LOCK = threading.Lock()
 _LAST_RUN: dict = {}  # runbook_id -> [timestamps]
+_API_CALL_LOG: dict = {}  # runbook_id -> [timestamps] (per-step api_call quota)
+_API_CALL_MAX_PER_HOUR = 120  # global per-runbook ceiling on api_call steps
+
+# Shell step allowlist — only these absolute binaries may be invoked. Anything
+# else is rejected. The runbook author may still pass arbitrary argv, but the
+# program itself is constrained.
+_SHELL_BIN_ALLOWLIST = (
+    "/usr/bin/virsh",
+    "/usr/sbin/virsh",
+    "/usr/bin/systemctl",
+    "/bin/systemctl",
+    "/usr/bin/nft",
+    "/usr/sbin/nft",
+    "/usr/bin/journalctl",
+    "/usr/bin/echo",
+    "/bin/echo",
+    "/usr/bin/true",
+    "/bin/true",
+)
 
 DEFAULT_RUNBOOKS = [
     {
@@ -45,6 +69,7 @@ DEFAULT_RUNBOOKS = [
              "message": "Auto-throttle triggered by anomaly"},
             {"type": "api_call", "method": "POST",
              "url": "http://127.0.0.1:8080/api/internal/throttle_top_vms",
+             "allow_loopback": True, "allow_http": True,
              "json": {"cap_percent": 60, "duration_sec": 900}},
         ],
         "approval": "auto",
@@ -61,6 +86,7 @@ DEFAULT_RUNBOOKS = [
              "message": "Memory pressure — ballooning idle VMs"},
             {"type": "api_call", "method": "POST",
              "url": "http://127.0.0.1:8080/api/internal/balloon_idle_vms",
+             "allow_loopback": True, "allow_http": True,
              "json": {"reclaim_mb": 1024}},
         ],
         "approval": "auto",
@@ -75,6 +101,7 @@ DEFAULT_RUNBOOKS = [
         "steps": [
             {"type": "api_call", "method": "POST",
              "url": "http://127.0.0.1:8080/api/internal/throttle_batch_io",
+             "allow_loopback": True, "allow_http": True,
              "json": {"weight": 100}},
         ],
         "approval": "auto",
@@ -184,7 +211,21 @@ def _within_cooldown(rb_id: str, cooldown_sec: int) -> bool:
     return hist and (now - hist[-1] < cooldown_sec)
 
 
-def _run_step(step: dict, ctx: dict) -> dict:
+def _api_call_within_quota(rb_id: str) -> bool:
+    """Per-runbook per-hour cap on api_call step invocations (SEC-022)."""
+    now = time.time()
+    with _LOCK:
+        hist = _API_CALL_LOG.get(rb_id, [])
+        hist = [t for t in hist if now - t < 3600]
+        if len(hist) >= _API_CALL_MAX_PER_HOUR:
+            _API_CALL_LOG[rb_id] = hist
+            return False
+        hist.append(now)
+        _API_CALL_LOG[rb_id] = hist
+        return True
+
+
+def _run_step(step: dict, ctx: dict, rb_id: str = "") -> dict:
     t = step.get("type")
     if t == "notify":
         try:
@@ -199,47 +240,92 @@ def _run_step(step: dict, ctx: dict) -> dict:
         except Exception as e:
             return {"ok": False, "type": t, "error": str(e)}
     if t == "shell":
+        # SEC-022: shell steps restricted to allowlisted binaries.
         cmd = step.get("cmd")
-        if not isinstance(cmd, list):
-            return {"ok": False, "type": t, "error": "cmd must be a list"}
+        if not isinstance(cmd, list) or not cmd:
+            return {"ok": False, "type": t, "error": "cmd must be a non-empty list"}
+        if not all(isinstance(a, str) for a in cmd):
+            return {"ok": False, "type": t, "error": "cmd args must be strings"}
+        bin_path = cmd[0]
+        if bin_path not in _SHELL_BIN_ALLOWLIST:
+            return {"ok": False, "type": t,
+                    "error": f"binary not on allowlist: {bin_path}",
+                    "allowlist": list(_SHELL_BIN_ALLOWLIST)}
+        # Reject shell metacharacters in every argv element.
+        try:
+            for a in cmd:
+                _sec.safe_subprocess_arg(a)
+        except _sec.SecurityValidationError as e:
+            return {"ok": False, "type": t, "error": str(e)}
         try:
             r = subprocess.run(cmd, capture_output=True, text=True,
-                               timeout=step.get("timeout", 30))
+                               timeout=int(step.get("timeout", 30)))
             return {"ok": r.returncode == 0, "type": t,
                     "rc": r.returncode, "stdout": r.stdout[-2000:],
                     "stderr": r.stderr[-2000:]}
         except Exception as e:
             return {"ok": False, "type": t, "error": str(e)}
     if t == "api_call":
+        # SEC-017: SSRF guard — block private/loopback URLs.
+        # SEC-022: per-runbook hourly rate limit on api_call steps.
+        url = step.get("url", "")
+        try:
+            allow_lb = bool(step.get("allow_loopback", False))
+            allow_http = bool(step.get("allow_http", False)) or allow_lb
+            safe_url = _sec.validate_external_url(
+                url, allow_loopback=allow_lb, allow_http=allow_http,
+            )
+        except _sec.SecurityValidationError as e:
+            return {"ok": False, "type": t, "error": str(e)}
+        if rb_id and not _api_call_within_quota(rb_id):
+            return {"ok": False, "type": t,
+                    "error": f"api_call hourly quota ({_API_CALL_MAX_PER_HOUR}) exceeded"}
         try:
             data = None
             headers = {"Content-Type": "application/json"}
             if step.get("json") is not None:
                 data = json.dumps(step["json"]).encode("utf-8")
             req = urllib.request.Request(
-                step["url"], data=data, method=step.get("method", "GET"),
+                safe_url, data=data,
+                method=step.get("method", "GET"),
                 headers=headers,
             )
-            with urllib.request.urlopen(req, timeout=step.get("timeout", 15)) as resp:
+            with urllib.request.urlopen(req, timeout=int(step.get("timeout", 15))) as resp:
                 body = resp.read().decode("utf-8", "replace")[:4000]
                 return {"ok": 200 <= resp.status < 300, "type": t,
                         "status": resp.status, "body": body}
         except Exception as e:
             return {"ok": False, "type": t, "error": str(e)}
     if t == "vm_action":
+        # SEC-018: vm_id extracted from metric_key must be strictly validated
+        # before passing as a subprocess argv element to virsh.
         vm_id = ctx.get("vm_id")
         if not vm_id and step.get("extract_vm_id_from") == "metric_key":
             mk = ctx.get("metric_key", "")
-            # vm.<id>.<...>
             parts = mk.split(".")
             if len(parts) >= 2 and parts[0] == "vm":
                 vm_id = parts[1]
         action = step.get("action", "start")
+        if action not in ("start", "shutdown", "reboot", "destroy", "suspend", "resume"):
+            return {"ok": False, "type": t, "error": f"unsupported action: {action}"}
         try:
-            r = subprocess.run(["virsh", action, vm_id], capture_output=True,
-                               text=True, timeout=20)
+            vm_id = _sec.validate_vm_id(vm_id or "")
+        except _sec.SecurityValidationError as e:
+            return {"ok": False, "type": t, "error": str(e)}
+        try:
+            r = subprocess.run(["/usr/bin/virsh", action, vm_id],
+                               capture_output=True, text=True, timeout=20)
             return {"ok": r.returncode == 0, "type": t, "vm_id": vm_id,
                     "action": action, "stdout": r.stdout, "stderr": r.stderr}
+        except FileNotFoundError:
+            # virsh installed under /usr/sbin on some distros
+            try:
+                r = subprocess.run(["/usr/sbin/virsh", action, vm_id],
+                                   capture_output=True, text=True, timeout=20)
+                return {"ok": r.returncode == 0, "type": t, "vm_id": vm_id,
+                        "action": action, "stdout": r.stdout, "stderr": r.stderr}
+            except Exception as e:
+                return {"ok": False, "type": t, "error": str(e)}
         except Exception as e:
             return {"ok": False, "type": t, "error": str(e)}
     return {"ok": False, "type": t, "error": "unknown step type"}
@@ -261,7 +347,7 @@ def execute_runbook(rb_id: str, ctx: dict | None = None,
     ctx = ctx or {}
     results = []
     for step in rb.get("steps", []):
-        results.append(_run_step(step, ctx))
+        results.append(_run_step(step, ctx, rb_id=rb_id))
     summary = {
         "ok": all(s.get("ok") for s in results),
         "runbook_id": rb_id,

@@ -30,12 +30,21 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+try:
+    from . import security_utils as _sec
+except ImportError:
+    import security_utils as _sec
+
 log = logging.getLogger("oxware.federation")
 
 _ROSTER = Path("/etc/oxware/federation.json")
 _CACHE = Path("/var/lib/oxware/federation_cache.json")
 _LOCK = threading.Lock()
 _DEFAULT_TIMEOUT = 6
+
+# SEC-019: federation members must be https. Operators may set this env var
+# to allow loopback URLs during local testing only.
+_ALLOW_INSECURE = os.environ.get("OXWARE_FEDERATION_ALLOW_INSECURE") == "1"
 
 
 def _ensure():
@@ -82,11 +91,23 @@ def add_member(url: str, token: str, label: str = "",
         raise ValueError("url and token are required")
     if role not in ("leader", "follower", "observer"):
         raise ValueError("role must be leader|follower|observer")
+    # SEC-019 + SEC-021: validate URL format and block private/loopback IPs
+    # unless _ALLOW_INSECURE is set. Also normalizes the URL.
+    safe_url = _sec.validate_external_url(
+        url,
+        allow_loopback=_ALLOW_INSECURE,
+        allow_http=_ALLOW_INSECURE,
+    )
+    # SEC-019: TLS verification cannot be disabled in production. Operators
+    # who really need a local cluster bypass must set OXWARE_FEDERATION_ALLOW_INSECURE=1.
+    if not verify_tls and not _ALLOW_INSECURE:
+        log.warning("ignoring verify_tls=False (set OXWARE_FEDERATION_ALLOW_INSECURE=1 to override)")
+        verify_tls = True
     member = {
         "id": str(uuid.uuid4()),
-        "url": url.rstrip("/"),
+        "url": safe_url.rstrip("/"),
         "token": token,
-        "label": label or url,
+        "label": label or safe_url,
         "region": region,
         "role": role,
         "verify_tls": bool(verify_tls),
@@ -118,8 +139,19 @@ def update_member(member_id: str, patch: dict) -> dict | None:
         for m in d.get("members", []):
             if m.get("id") == member_id:
                 for k, v in (patch or {}).items():
-                    if k in ("url", "token", "label", "region", "role", "verify_tls"):
-                        m[k] = v
+                    if k not in ("url", "token", "label", "region", "role", "verify_tls"):
+                        continue
+                    # SEC-019: validate URL changes through the same guard as add_member.
+                    if k == "url":
+                        v = _sec.validate_external_url(
+                            v,
+                            allow_loopback=_ALLOW_INSECURE,
+                            allow_http=_ALLOW_INSECURE,
+                        ).rstrip("/")
+                    if k == "verify_tls" and not bool(v) and not _ALLOW_INSECURE:
+                        log.warning("update_member: ignored verify_tls=False")
+                        v = True
+                    m[k] = v
                 _save_roster(d)
                 return m
     return None
@@ -202,7 +234,14 @@ def inventory_vms() -> dict:
 def forward(member_id: str, path: str, method: str = "GET",
             payload: dict | None = None) -> dict:
     """Forward an API call to a single member. The member's own RBAC and
-    audit log enforce the action — this node only proxies."""
+    audit log enforce the action — this node only proxies.
+
+    SEC-020: path is restricted to the federation forward allowlist.
+    """
+    try:
+        path = _sec.validate_forward_path(path)
+    except _sec.SecurityValidationError as e:
+        return {"ok": False, "member_id": member_id, "error": str(e)}
     for m in list_members():
         if m.get("id") == member_id:
             try:
@@ -215,7 +254,14 @@ def forward(member_id: str, path: str, method: str = "GET",
 
 def bulk_action(member_ids: list, path: str, method: str = "POST",
                 payload: dict | None = None) -> list:
-    """Run the same call against many members in parallel."""
+    """Run the same call against many members in parallel.
+
+    SEC-020: path is restricted to the federation forward allowlist.
+    """
+    try:
+        path = _sec.validate_forward_path(path)
+    except _sec.SecurityValidationError as e:
+        return [{"ok": False, "member_id": mid, "error": str(e)} for mid in member_ids]
     members = [m for m in list_members() if m["id"] in set(member_ids)]
     out = []
     with _cf.ThreadPoolExecutor(max_workers=8) as ex:

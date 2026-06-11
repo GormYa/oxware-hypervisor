@@ -17,9 +17,32 @@ helpers (`ok`, `err`) on the app side without forcing this module to import
 the giant app.py.
 """
 from __future__ import annotations
+import hashlib
+import os
+import time
 from flask import Blueprint, request
 
+try:
+    from . import security_utils as _sec
+except ImportError:
+    import security_utils as _sec
+
 bp_v270 = Blueprint("v270", __name__)
+
+# SEC-023: force-run requires a fresh confirm_token derived from the runbook
+# id + a server-side rotation key. Cached for 60s so the operator confirms
+# once per minute, not per call.
+_FORCE_CONFIRM_TTL = 60
+_FORCE_CONFIRM_KEY = os.environ.get(
+    "OXWARE_FORCE_CONFIRM_KEY",
+    "oxware-force-confirm-rotates-on-restart",
+)
+
+
+def _force_token(rb_id: str) -> str:
+    bucket = int(time.time() // _FORCE_CONFIRM_TTL)
+    raw = f"{rb_id}|{bucket}|{_FORCE_CONFIRM_KEY}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:32]
 
 # Late-bound dependencies, wired by init_bp_v270 from app.py
 _cvm = None
@@ -117,7 +140,20 @@ def _register_routes():
         if not _rbx:
             return _err("modül yok", 503)
         d = request.get_json(silent=True) or {}
-        return _ok(**_rbx.execute_runbook(rb_id, d.get("ctx"), force=bool(d.get("force"))))
+        force = bool(d.get("force"))
+        # SEC-023: force=true bypasses cooldown+quota — require a server-side
+        # confirm_token rotating every 60s. Client first POSTs without
+        # confirm_token to obtain the expected one, then re-POSTs with it.
+        if force:
+            expected = _force_token(rb_id)
+            if d.get("confirm_token") != expected:
+                return _err({
+                    "requires_confirmation": True,
+                    "confirm_token": expected,
+                    "ttl_sec": _FORCE_CONFIRM_TTL,
+                    "message": "force=true requires confirm_token (rotates every 60s)",
+                }, 409)
+        return _ok(**_rbx.execute_runbook(rb_id, d.get("ctx"), force=force))
 
     @bp_v270.route("/api/v2/runbooks/history", methods=["GET"])
     @_require_auth
@@ -152,6 +188,16 @@ def _register_routes():
         if not _fed:
             return _err("modül yok", 503)
         d = request.get_json(silent=True) or {}
+        # SEC-021: pre-validate URL here so the API returns a clean 400 instead
+        # of a 500 from a deep ValueError chain. add_member() will re-validate.
+        try:
+            _sec.validate_external_url(
+                d.get("url", ""),
+                allow_loopback=os.environ.get("OXWARE_FEDERATION_ALLOW_INSECURE") == "1",
+                allow_http=os.environ.get("OXWARE_FEDERATION_ALLOW_INSECURE") == "1",
+            )
+        except _sec.SecurityValidationError as e:
+            return _err(str(e), 400)
         try:
             m = _fed.add_member(
                 url=d.get("url", ""), token=d.get("token", ""),

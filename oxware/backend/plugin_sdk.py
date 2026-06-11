@@ -46,6 +46,43 @@ def _save_state(data: dict):
     _STATE_FILE.write_text(json.dumps(data, indent=2))
 
 
+class _PluginAppProxy:
+    """SEC-027: Restrict plugin route registration to the /plugins/<id>/* prefix.
+
+    Plugins receive this proxy instead of the real Flask app. Calls to
+    .route() / .add_url_rule() are validated; any other attribute access is
+    forwarded to the real app so legitimate read-only operations (request
+    context, logger, etc.) still work.
+    """
+    def __init__(self, app, plugin_id: str):
+        self._app = app
+        self._plugin_id = plugin_id
+        self._prefix = f"/plugins/{plugin_id}"
+
+    def _enforce_prefix(self, rule: str) -> str:
+        if not isinstance(rule, str) or not rule.startswith("/"):
+            raise ValueError(f"plugin route must be absolute: {rule!r}")
+        if not (rule == self._prefix or rule.startswith(self._prefix + "/")):
+            raise ValueError(
+                f"plugin '{self._plugin_id}' attempted to register route "
+                f"'{rule}' outside its namespace '{self._prefix}/*' — denied"
+            )
+        return rule
+
+    def route(self, rule, **opts):
+        self._enforce_prefix(rule)
+        return self._app.route(rule, **opts)
+
+    def add_url_rule(self, rule, endpoint=None, view_func=None, **opts):
+        self._enforce_prefix(rule)
+        return self._app.add_url_rule(rule, endpoint=endpoint,
+                                      view_func=view_func, **opts)
+
+    def __getattr__(self, name):
+        # Read-only forward for anything else (logger, jinja_env, etc.)
+        return getattr(self._app, name)
+
+
 def load_plugin(plugin_dir: Path, app=None) -> dict:
     plugin_py = plugin_dir / "plugin.py"
     if not plugin_py.exists():
@@ -80,7 +117,9 @@ def load_plugin(plugin_dir: Path, app=None) -> dict:
 
     if app is not None and enabled and hasattr(module, "register_routes"):
         try:
-            module.register_routes(app)
+            # SEC-027: wrap the app so plugin register_routes() can only register
+            # routes under /plugins/<plugin_id>/*. Anything else is rejected.
+            module.register_routes(_PluginAppProxy(app, plugin_id))
         except Exception as e:
             _log.warning("Plugin %s register_routes failed: %s", plugin_id, e)
 
@@ -297,23 +336,58 @@ def validate_plugin_code(code: str) -> dict:
             errors.append(f"PLUGIN_META eksik anahtarlar: {sorted(missing)}")
 
     # 3) Tehlikeli çağrı taraması
+    # SEC-024: AST kapsamı genişletildi — getattr(os, "...") ile dolaylı çağrı,
+    # __builtins__ erişimi, __class__/__mro__/__subclasses__ zincirleri,
+    # encoded payload (chr/ord toplama, base64) ve compile()/marshal kullanımı
+    # da tespit edilir. Bunların hepsi error olarak yükselir (warning değil).
     _subprocess_danger = {"run", "Popen", "call", "check_output", "check_call"}
+    _BUILTIN_ESCAPE_ATTRS = {
+        "__class__", "__mro__", "__subclasses__", "__bases__",
+        "__globals__", "__builtins__", "__import__", "__loader__",
+        "__dict__", "__init_subclass__", "__base__",
+    }
+    _BUILTIN_ESCAPE_FUNCS = {
+        "getattr", "setattr", "delattr", "globals", "locals", "vars",
+        "compile", "open",  # open is also tracked separately below for paths
+    }
     for node in ast.walk(tree):
+        # Attribute access — chain like obj.__class__.__mro__ flagged as error.
+        if isinstance(node, ast.Attribute) and node.attr in _BUILTIN_ESCAPE_ATTRS:
+            errors.append(
+                f"sandbox kaçışı: '{node.attr}' özniteliğine erişim "
+                f"izin verilen değil (kod enjeksiyonu riski)"
+            )
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        # bare call — eval(...), exec(...)
+        # bare call — eval(...), exec(...), getattr(...), __import__()
         if isinstance(func, ast.Name):
             key = (None, func.id)
             if key in _DANGEROUS_CALLS:
-                warnings.append(_DANGEROUS_CALLS[key])
+                # eval/exec/__import__ → error, not just warning
+                errors.append(_DANGEROUS_CALLS[key])
+            if func.id in _BUILTIN_ESCAPE_FUNCS and func.id != "open":
+                # getattr(os, "system") style indirection — error
+                errors.append(
+                    f"sandbox kaçışı: '{func.id}()' yansıma/dinamik erişim "
+                    f"izin verilen değil"
+                )
+            # compile() / marshal.loads() — error
+            if func.id == "compile":
+                errors.append("compile() kullanımı tespit edildi — dinamik kod yürütme riski")
         # attribute call — os.system(...), socket.socket(...)
         elif isinstance(func, ast.Attribute):
             mod = func.value.id if isinstance(func.value, ast.Name) else None
             key = (mod, func.attr)
             if key in _DANGEROUS_CALLS:
-                warnings.append(_DANGEROUS_CALLS[key])
-            # subprocess shell=True
+                errors.append(_DANGEROUS_CALLS[key])
+            # importlib / marshal / pickle — error
+            if mod in ("importlib", "marshal", "pickle", "dill", "cloudpickle"):
+                errors.append(
+                    f"sandbox kaçışı: '{mod}.{func.attr}()' "
+                    f"izin verilen değil"
+                )
+            # subprocess shell=True intent — error
             if func.attr in _subprocess_danger:
                 for kw in node.keywords:
                     if (
@@ -321,7 +395,7 @@ def validate_plugin_code(code: str) -> dict:
                         and isinstance(kw.value, ast.Constant)
                         and kw.value.value is True
                     ):
-                        warnings.append(
+                        errors.append(
                             f"subprocess.{func.attr}(shell=True) tespit edildi"
                             " — shell enjeksiyonu riski"
                         )

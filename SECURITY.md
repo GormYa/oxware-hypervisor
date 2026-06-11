@@ -150,6 +150,92 @@ The following hardening was issued in the 2.7.0 release:
   (e) regression of the token-in-URL pattern. Style nits, mypy hints, and
   shellcheck warnings remain informational by design.
 
+The following patches were issued in the 2.7.1 release:
+
+- **SEC-017 — Runbook api_call SSRF (CRITICAL)**: `runbook_executor._run_step`
+  now passes every `api_call` step URL through `security_utils.validate_external_url`
+  before invoking `urllib.request.urlopen`. Private (RFC 1918), loopback,
+  link-local, CGNAT, and IPv6 ULA/link-local ranges are rejected. The cloud
+  metadata addresses (`169.254.169.254`, IPv6 `fd00:ec2::/32`) and raw
+  `localhost` are blocked. Operators who really need to call a loopback
+  internal API from a runbook must opt-in per step with
+  `allow_loopback: true` (the four default `DEFAULT_RUNBOOKS` are updated
+  accordingly). Default scheme is `https`.
+- **SEC-018 — Runbook vm_action argv injection (CRITICAL)**: `vm_id` extracted
+  from `ctx["metric_key"]` is validated against
+  `^[A-Za-z0-9._-]{1,128}$` via `security_utils.validate_vm_id` before being
+  passed as a `virsh` argv element. The `action` field is also restricted to
+  the libvirt verb allowlist (`start`, `shutdown`, `reboot`, `destroy`,
+  `suspend`, `resume`). `virsh` is invoked by absolute path
+  (`/usr/bin/virsh`, fallback `/usr/sbin/virsh`) so a poisoned `$PATH`
+  cannot redirect the call.
+- **SEC-019 — Federation member URL SSRF + TLS bypass (HIGH)**:
+  `cluster_federation.add_member` and `cluster_federation.update_member`
+  now validate URLs through `security_utils.validate_external_url`. The
+  same private/loopback/link-local/metadata block list applies. `verify_tls=False`
+  is silently coerced back to `True` unless `OXWARE_FEDERATION_ALLOW_INSECURE=1`
+  is set in the environment, which is for local-cluster testing only and
+  produces a WARN log on every coercion.
+- **SEC-020 — Federation forward path allowlist (MEDIUM)**:
+  `cluster_federation.forward` and `cluster_federation.bulk_action` now
+  validate the `path` argument against an allowlist (`/api/vms`,
+  `/api/hosts`, `/api/alerts`, `/api/networks`, `/api/storage`,
+  `/api/monitoring`, `/api/health`). Auth, setup, internal admin, user
+  management, and session paths are explicitly blocked. A federation admin
+  on this node can no longer proxy a request to the remote member's
+  `/api/auth/*` or `/api/internal/*`.
+- **SEC-021 — Federation add_member URL pre-validation (MEDIUM)**:
+  `bp_v270.api_fed_add` pre-validates the URL before invoking
+  `add_member`, so a malformed URL returns a clean `400` instead of a 500
+  with a stack trace.
+- **SEC-022 — Runbook shell allowlist + per-step rate limit (MEDIUM)**:
+  Runbook `shell` steps may only invoke binaries on a fixed allowlist
+  (`/usr/bin/virsh`, `/bin/systemctl`, `/usr/bin/nft`,
+  `/usr/bin/journalctl`, plus a few diagnostics). Every argv element is
+  scanned for shell metacharacters via
+  `security_utils.safe_subprocess_arg`. `api_call` steps are additionally
+  capped at 120 invocations per runbook per hour to prevent a single
+  runbook from being used as a request-flooder against an internal API.
+- **SEC-023 — Force-run confirmation (MEDIUM)**: `POST /api/v2/runbooks/<id>/run`
+  with `force: true` now requires a `confirm_token` derived from the
+  runbook id, a 60-second time bucket, and a server-side rotation key.
+  The first force call returns `409` with the expected token; the second
+  call (within 60 seconds) executes. This stops a stolen admin session
+  from chain-running a single runbook past its quota.
+- **SEC-024 — Plugin SDK AST sandbox hardening (MEDIUM)**: The plugin
+  validator now treats sandbox-escape patterns as **errors** instead of
+  warnings, including `eval/exec/__import__/compile`,
+  `getattr/setattr/delattr/globals/locals/vars`,
+  `os.system/os.popen/subprocess.run(shell=True)`,
+  `importlib/marshal` serialization calls (and `dill`/`cloudpickle`
+  variants), and attribute chains through
+  `__class__/__mro__/__subclasses__/__bases__/__globals__/__builtins__`.
+  A plugin that hits any of these is rejected at upload and never
+  written to `/opt/oxware/plugins/<id>/plugin.py`.
+- **SEC-027 — Plugin route namespace enforcement (MEDIUM)**: Plugins are
+  no longer handed the live Flask app object. Instead they receive
+  `plugin_sdk._PluginAppProxy`, which only allows `app.route(...)` /
+  `app.add_url_rule(...)` for paths under `/plugins/<plugin_id>/*`.
+  A malicious or buggy plugin can no longer overwrite `/api/auth/login`
+  or any other core route. All other Flask attributes are read-only
+  forwarded so the existing plugin API remains usable.
+- **SEC-025 — Bulk-delete confirm token nonce (MEDIUM)**: The bulk-delete
+  confirm token is now a server-side random nonce (`secrets.token_urlsafe(24)`)
+  bound to the exact sorted VM-id set via HMAC-SHA256, single-use,
+  five-minute expiry, and constant-time compared. The old
+  `sha256(sorted_ids)[:16]` token was deterministic and brute-forceable
+  offline.
+- **SEC-026 — Per-VM bulk audit (MEDIUM)**: Bulk deletions now write
+  one append-only audit line per VM to
+  `/var/lib/oxware/bulk_audit.jsonl` with `ts`, `op`, `vm_id`, `ok`,
+  `message`, and `requester` fields. The single per-job summary in
+  `bulk_jobs.json` is preserved for backwards compatibility, but
+  per-VM traceability is now available for forensic review.
+- **SEC-028 — confidential_vm CPUID read (LOW)**: `confidential_vm.detect_support`
+  reads `/proc/cpuinfo` directly via `pathlib.Path.read_text` instead of
+  spawning `cat /proc/cpuinfo` through a subprocess. Removes one
+  unnecessary external command from the hot path.
+
 The following patches were issued in the 2.6.1 release:
 
 - SEC-001: API keys are read from `/etc/oxware/oxware.conf` (mode 0600)

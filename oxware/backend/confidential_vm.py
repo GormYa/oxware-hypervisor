@@ -35,11 +35,11 @@ def detect_support() -> dict:
                 pass
     except Exception as e:
         log.warning("detect_support: %s", e)
-    # CPUID quick check (best-effort)
+    # CPUID quick check — direct read (no subprocess) — SEC-028
     try:
-        r = subprocess.run(["cat", "/proc/cpuinfo"], capture_output=True, text=True, timeout=3)
-        if "sev" in r.stdout.lower(): out["details"]["cpu_sev_flag"] = True
-        if "tdx" in r.stdout.lower(): out["details"]["cpu_tdx_flag"] = True
+        cpuinfo = Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").lower()
+        if "sev" in cpuinfo: out["details"]["cpu_sev_flag"] = True
+        if "tdx" in cpuinfo: out["details"]["cpu_tdx_flag"] = True
     except Exception:
         pass
     return out

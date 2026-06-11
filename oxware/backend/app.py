@@ -4539,7 +4539,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.7.0",
+        oxware_version="2.7.1",
     )
 
 @app.route("/api/system/stats")
@@ -10112,7 +10112,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.7.0",
+            "version": "2.7.1",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -11577,7 +11577,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.7.0", connected=True)
+    return ok(status="ok", panel=panel, version="2.7.1", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])
