@@ -185,7 +185,7 @@ In short:
 
 Full text: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
 
-Report code of conduct issues to `conduct@oxware.top`.
+Report code of conduct issues to `root@oxware.top`.
 
 ---
 
@@ -203,8 +203,8 @@ license covers both inbound and outbound contributions.
 
 - GitHub Discussions:
   https://github.com/ShinnAsukha/oxware-hypervisor/discussions
-- Email (non-security): `hello@oxware.top`
-- Security: `security@oxware.top` (see `SECURITY.md`)
+- Email (non-security): `root@oxware.top`
+- Security: `root@oxware.top` (see `SECURITY.md`)
 
 Please use Discussions for usage questions. Issues are for bugs and concrete
 feature requests.

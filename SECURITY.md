@@ -26,7 +26,7 @@ We will not produce patches for end-of-life branches.
 
 Do not open a public GitHub issue for a security vulnerability.
 
-Send a report to `security@oxware.top`.
+Send a report to `root@oxware.top`.
 
 If you prefer encrypted email, use our PGP key. The current fingerprint is:
 
@@ -380,6 +380,6 @@ on the project website and linked from this document.
 
 ## Contact
 
-- Security email: `security@oxware.top`
-- General contact: `hello@oxware.top`
+- Security email: `root@oxware.top`
+- General contact: `root@oxware.top`
 - GitHub: https://github.com/ShinnAsukha/oxware-hypervisor
