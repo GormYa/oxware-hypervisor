@@ -1,13 +1,39 @@
 # OXware Hypervisor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.7.0-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
+[![Version](https://img.shields.io/badge/version-2.7.2-brightgreen.svg)](https://github.com/ShinnAsukha/oxware-hypervisor/releases)
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04+%20%7C%20Debian%2012+-orange.svg)]()
 [![KVM](https://img.shields.io/badge/hypervisor-KVM%2FQEMU-red.svg)]()
 
 A KVM/QEMU management platform for single-node and small-cluster deployments. Built on libvirt, Python/Flask, noVNC, and nftables. Provides a web UI, REST API, and CLI for VM lifecycle, networking, storage, and access control.
 
 This project is **early-stage and self-funded**. It is suitable for homelab, lab environments, and small production workloads where the operator is willing to read the source. It is not a drop-in replacement for VMware vSphere or Proxmox VE for large enterprises.
+
+---
+
+## What's New in v2.7.2
+
+**Security (SEC-029..033):**
+- Safe archive extraction via `security_utils.safe_tar_extract`/`safe_zip_extract` — rejects path traversal, symlink escape, device-file members (B202).
+- DNS rebinding mitigation: `resolve_safe_host()` resolves once, returns IP literal for direct connect.
+- FTP backup deprecated behind `OXWARE_ENABLE_INSECURE_FTP=1` (B321/B402).
+- SSH known-hosts replaces `paramiko.AutoAddPolicy`; pending fingerprint approvals queued for panel review (B507).
+- `make security` runs Bandit + pip-audit; CI publishes SBOM artifact.
+
+**New feature modules (~25 new REST endpoints):**
+- **Kubernetes CSI driver** — expose OXware storage pools as PersistentVolumes.
+- **KubeVirt bridge** — serve as the underlying hypervisor for KubeVirt CRs.
+- **GitOps manager** — ArgoCD/Flux-style VM manifest sync.
+- **Firecracker microVM runtime** — second-tier VM type with <125 ms boot.
+- **OAuth2 provider presets** — Keycloak, Authentik, Okta, Entra, Google, GitLab.
+- **Audit-log retention policy** — age + size cap, JSONL trim pass.
+- **CycloneDX SBOM generator** — per-release Software Bill of Materials.
+- **PWA offline mode** — service worker + read-only fallback view.
+
+**i18n parity:**
+- 6th interface language added: French (FR), full parity (2214 entries).
+- CI workflow blocks merges that introduce untranslated Turkish strings.
+- `make i18n` + pre-commit hook auto-refresh `PAGE_STRINGS` whenever `index.html` changes.
 
 ---
 
