@@ -1715,8 +1715,22 @@ def main():
     zh = json.load(open(f"{OUT_DIR}/zh.json", encoding="utf-8"))
     fr = json.load(open(f"{OUT_DIR}/fr.json", encoding="utf-8"))
 
-    missing_path = f"{OUT_DIR}/missing_html_tr.txt"
-    missing = [ln.strip() for ln in open(missing_path, encoding="utf-8") if ln.strip()]
+    # Union HTML scan + JS literal scan output so we catch hardcoded TR
+    # strings in both DOM text nodes and JS toast/confirm/prompt calls.
+    missing = []
+    seen = set()
+    for path in (f"{OUT_DIR}/missing_html_tr.txt", f"{OUT_DIR}/missing_js_tr.txt"):
+        try:
+            for ln in open(path, encoding="utf-8"):
+                # Strip only the trailing newline; preserve in-string whitespace
+                # so a JS literal like 'AI analyse error: ' stays exactly equal
+                # to the key we'll write into PAGE_STRINGS.
+                k = ln.rstrip("\r\n")
+                if k and k not in seen:
+                    seen.add(k)
+                    missing.append(k)
+        except FileNotFoundError:
+            pass
     print(f"Augmenting with {len(missing)} TR strings...")
 
     added_en = 0
