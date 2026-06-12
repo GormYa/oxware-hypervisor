@@ -29,8 +29,17 @@ import uuid
 import os
 import subprocess
 import logging
-import ftplib
 import io
+
+# SEC-031: FTP backup target is opt-in. Plain-text FTP is deprecated; SFTP is
+# the recommended path. Operators that need legacy FTP must set the env var
+# OXWARE_ENABLE_INSECURE_FTP=1 before service start. ftplib is therefore
+# imported lazily so the import alone doesn't pull in plaintext-credential code.
+_FTP_ENABLED = os.environ.get("OXWARE_ENABLE_INSECURE_FTP") == "1"
+if _FTP_ENABLED:
+    import ftplib  # noqa: F401  (only imported when explicitly enabled)
+else:
+    ftplib = None  # type: ignore[assignment]
 
 log = logging.getLogger("oxware.backup_scheduler")
 
@@ -298,6 +307,12 @@ def _upload_ftp(vm_name, snap_name, cfg):
         filename   = f"{snap_name}.json"
         payload    = json.dumps({"vm_name": vm_name, "snapshot": snap_name,
                                  "ts": time.time()}).encode("utf-8")
+        # SEC-031: refuse to use plaintext FTP unless explicitly enabled.
+        if not _FTP_ENABLED or ftplib is None:
+            log.warning("_upload_ftp: plain-text FTP target attempted but "
+                        "OXWARE_ENABLE_INSECURE_FTP is not set; aborting and "
+                        "recommending SFTP instead.")
+            return
         import io
         ftp = ftplib.FTP()
         ftp.connect(host, port, timeout=30)
@@ -334,7 +349,16 @@ def _upload_sftp(vm_name, snap_name, cfg):
         }).encode("utf-8")
 
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # SEC-032: known_hosts + first-contact prompt instead of trust-on-sight.
+        try:
+            from . import ssh_known_hosts as _kh  # type: ignore
+        except Exception:
+            import ssh_known_hosts as _kh  # type: ignore
+        _hk = _kh.load_known_hosts()
+        if _hk is not None:
+            ssh._host_keys = _hk
+            ssh._host_keys_filename = None
+        ssh.set_missing_host_key_policy(_kh.OxwarePolicy())
         if key_path and os.path.isfile(key_path):
             pkey = paramiko.RSAKey.from_private_key_file(key_path)
             ssh.connect(host, port=port, username=user, pkey=pkey, timeout=30)

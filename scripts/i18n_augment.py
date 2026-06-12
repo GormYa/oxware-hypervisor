@@ -1713,6 +1713,7 @@ def main():
     es = json.load(open(f"{OUT_DIR}/es.json", encoding="utf-8"))
     de = json.load(open(f"{OUT_DIR}/de.json", encoding="utf-8"))
     zh = json.load(open(f"{OUT_DIR}/zh.json", encoding="utf-8"))
+    fr = json.load(open(f"{OUT_DIR}/fr.json", encoding="utf-8"))
 
     missing_path = f"{OUT_DIR}/missing_html_tr.txt"
     missing = [ln.strip() for ln in open(missing_path, encoding="utf-8") if ln.strip()]
@@ -1726,14 +1727,14 @@ def main():
         en_val = translate_tr_to_en(tr)
         en[tr] = en_val
         added_en += 1
-        for lang_dict, lang_code in ((es, "es"), (de, "de"), (zh, "zh")):
+        for lang_dict, lang_code in ((es, "es"), (de, "de"), (zh, "zh"), (fr, "fr")):
             if tr not in lang_dict:
                 lang_dict[tr] = translate_one(en_val, lang_code)
                 added_other += 1
 
     print(f"Added {added_en} EN entries, {added_other} ES/DE/ZH entries combined")
 
-    for name, data in (("en", en), ("es", es), ("de", de), ("zh", zh)):
+    for name, data in (("en", en), ("es", es), ("de", de), ("zh", zh), ("fr", fr)):
         json.dump(data, open(f"{OUT_DIR}/{name}_full.json", "w", encoding="utf-8"),
                   ensure_ascii=False, indent=2, sort_keys=True)
         print(f"  {name}_full.json: {len(data)} entries")

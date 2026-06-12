@@ -159,3 +159,116 @@ def safe_subprocess_arg(value: str) -> str:
                 f"subprocess argument contains shell metacharacter: {ch!r}"
             )
     return value
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# SEC-029: safe archive extraction (replaces unguarded extractall() calls)
+# ─────────────────────────────────────────────────────────────────────────
+import os as _os
+import tarfile as _tarfile
+import zipfile as _zipfile
+
+
+def _is_within(target: str, root: str) -> bool:
+    """Return True if `target` resolves inside `root` (no traversal)."""
+    target_abs = _os.path.realpath(target)
+    root_abs = _os.path.realpath(root)
+    rel = _os.path.relpath(target_abs, root_abs)
+    return not rel.startswith("..") and not _os.path.isabs(rel)
+
+
+def safe_tar_extract(archive_path: str, dest_dir: str) -> int:
+    """Extract a tar archive into dest_dir, rejecting any member that:
+      * is an absolute path
+      * contains a `..` parent reference
+      * is a symlink or hardlink pointing outside dest_dir
+      * is a special file (block / char device / FIFO)
+    Returns the number of members extracted. Raises SecurityValidationError
+    on the first violation; partial extraction is left in place for the
+    caller to clean up.
+    """
+    _os.makedirs(dest_dir, exist_ok=True)
+    count = 0
+    with _tarfile.open(archive_path) as tf:
+        for member in tf.getmembers():
+            name = member.name
+            if _os.path.isabs(name) or ".." in name.replace("\\", "/").split("/"):
+                raise SecurityValidationError(
+                    f"tar member rejected (path traversal): {name!r}"
+                )
+            if member.isdev():
+                raise SecurityValidationError(
+                    f"tar member rejected (device file): {name!r}"
+                )
+            target = _os.path.join(dest_dir, name)
+            if not _is_within(target, dest_dir):
+                raise SecurityValidationError(
+                    f"tar member rejected (escapes dest): {name!r}"
+                )
+            if member.issym() or member.islnk():
+                link_target = _os.path.join(_os.path.dirname(target),
+                                            member.linkname)
+                if not _is_within(link_target, dest_dir):
+                    raise SecurityValidationError(
+                        f"tar member link target escapes dest: {name!r}"
+                        f" -> {member.linkname!r}"
+                    )
+        # On Python >= 3.12, also apply tarfile's data_filter as a belt+braces
+        # defense. The membership scan above already rejected everything
+        # data_filter would, but the filter additionally strips setuid bits.
+        try:
+            tf.extractall(dest_dir, filter="data")  # type: ignore[arg-type]
+        except TypeError:
+            tf.extractall(dest_dir)  # Python < 3.12 fallback
+        count = sum(1 for _ in tf.getmembers())
+    return count
+
+
+def safe_zip_extract(archive_path: str, dest_dir: str) -> int:
+    """Extract a zip archive with the same path-traversal guarantees as
+    safe_tar_extract."""
+    _os.makedirs(dest_dir, exist_ok=True)
+    count = 0
+    with _zipfile.ZipFile(archive_path) as zf:
+        for info in zf.infolist():
+            name = info.filename
+            if _os.path.isabs(name) or ".." in name.replace("\\", "/").split("/"):
+                raise SecurityValidationError(
+                    f"zip member rejected (path traversal): {name!r}"
+                )
+            target = _os.path.join(dest_dir, name)
+            if not _is_within(target, dest_dir):
+                raise SecurityValidationError(
+                    f"zip member rejected (escapes dest): {name!r}"
+                )
+            count += 1
+        zf.extractall(dest_dir)
+    return count
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# SEC-030: DNS rebinding mitigation
+# ─────────────────────────────────────────────────────────────────────────
+import socket as _socket
+
+
+def resolve_safe_host(host: str, *, allow_loopback: bool = False) -> str:
+    """Resolve `host` to a single IP and verify it is not in any blocked
+    range. The caller should then connect to that IP directly (bypassing the
+    OS resolver) so a DNS rebinding attack cannot point the connection at a
+    different IP between the resolve and the connect. Returns the IP string.
+    """
+    try:
+        infos = _socket.getaddrinfo(host, None,
+                                    type=_socket.SOCK_STREAM)
+    except _socket.gaierror as e:
+        raise SecurityValidationError(f"DNS resolution failed: {e}")
+    if not infos:
+        raise SecurityValidationError(f"no DNS records for {host!r}")
+    ip = infos[0][4][0]
+    if not allow_loopback and _ip_is_private(ip):
+        raise SecurityValidationError(
+            f"refusing to connect to private/loopback address {ip} "
+            f"resolved from {host!r}"
+        )
+    return ip

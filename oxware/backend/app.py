@@ -239,6 +239,7 @@ oauth2_sso_mgr       = _safe_import("oauth2_sso")
 runbook_exec     = _safe_import("runbook_executor")
 federation_mgr   = _safe_import("cluster_federation")
 bp_v270_mod      = _safe_import("bp_v270")  # v2.7 blueprint (modularization start)
+bp_v272_mod      = _safe_import("bp_v272")  # v2.7.2 + v2.8 + v2.9 + v3.0 blueprint
 
 # Central feature registry
 feature_reg      = _safe_import("feature_registry")
@@ -757,6 +758,21 @@ if bp_v270_mod is not None:
         log.info("v2.7 blueprint registered (/api/v2/...)")
     except Exception as _bpe:
         log.warning("bp_v270 register failed: %s", _bpe)
+
+# v2.7.2 + v2.8 + v2.9 + v3.0 blueprint: CSI, KubeVirt, GitOps,
+# Firecracker, OAuth2 presets, audit retention, SBOM, PWA, SSH known-hosts.
+if bp_v272_mod is not None:
+    try:
+        bp_v272_mod.init_bp_v272(
+            require_auth=require_auth, require_role=require_role,
+            ok=ok, err=err,
+        )
+        app.register_blueprint(bp_v272_mod.bp_v272)
+        log.info("v2.7.2/2.8/2.9/3.0 blueprint registered "
+                 "(/api/v2/csi, /api/v2/kubevirt, /api/v2/gitops, "
+                 "/api/v3/firecracker, /api/v3/pwa, ...)")
+    except Exception as _bpe2:
+        log.warning("bp_v272 register failed: %s", _bpe2)
 
 
 def _vmuser_check(vm_id):
@@ -4539,7 +4555,7 @@ def api_system_info():
     return ok(
         host=system_monitor.get_host_info(),
         libvirt=system_monitor.get_libvirt_version(),
-        oxware_version="2.7.1",
+        oxware_version="2.7.2",
     )
 
 @app.route("/api/system/stats")
@@ -6446,16 +6462,20 @@ def api_backup_sftp_download():
 
             # ── Trigger full import pipeline inline ────────────────────────────
             try:
-                import tarfile as _tar2, zipfile as _zip2, shutil as _sh2
+                # SEC-029: archive extraction via security_utils — path
+                # traversal, symlink, and device-file members are rejected.
+                import shutil as _sh2
+                try:
+                    from . import security_utils as _sec_ext  # type: ignore
+                except Exception:
+                    import security_utils as _sec_ext  # type: ignore
                 extract_dir2 = save_dir / (fname + "_extracted")
                 extract_dir2.mkdir(exist_ok=True)
                 _fl2 = fname.lower()
                 if _fl2.endswith((".ova", ".tar", ".tar.gz")):
-                    with _tar2.open(str(save_path)) as tf2:
-                        tf2.extractall(str(extract_dir2))
+                    _sec_ext.safe_tar_extract(str(save_path), str(extract_dir2))
                 elif _fl2.endswith(".zip"):
-                    with _zip2.ZipFile(str(save_path)) as zf2:
-                        zf2.extractall(str(extract_dir2))
+                    _sec_ext.safe_zip_extract(str(save_path), str(extract_dir2))
                 else:
                     _sh2.copy(str(save_path), str(extract_dir2 / fname))
 
@@ -10112,7 +10132,7 @@ def api_openapi_spec():
         "openapi": "3.0.3",
         "info": {
             "title": "OXware Hypervisor API",
-            "version": "2.7.1",
+            "version": "2.7.2",
             "description": "KVM tabanlı hypervisor yönetim API'si"
         },
         "servers": [{"url": "/api", "description": "OXware API"}],
@@ -10941,18 +10961,19 @@ def api_import_ova():
     def _do_import():
         try:
             _import_job_update(job_id, step="Arşiv açılıyor", percent=10)
-            import tarfile as _tar
-            import zipfile as _zip
+            # SEC-029: archive extraction goes through security_utils.
+            try:
+                from . import security_utils as _sec_ext  # type: ignore
+            except Exception:
+                import security_utils as _sec_ext  # type: ignore
             extract_dir = _IMPORT_DIR / (fname + "_extracted")
             extract_dir.mkdir(exist_ok=True)
 
             _fl = fname.lower()
             if _fl.endswith((".ova", ".tar", ".tar.gz")):
-                with _tar.open(str(save_path)) as tf:
-                    tf.extractall(str(extract_dir))
+                _sec_ext.safe_tar_extract(str(save_path), str(extract_dir))
             elif _fl.endswith(".zip"):
-                with _zip.ZipFile(str(save_path)) as zf:
-                    zf.extractall(str(extract_dir))
+                _sec_ext.safe_zip_extract(str(save_path), str(extract_dir))
             else:
                 import shutil as _sh
                 _sh.copy(str(save_path), str(extract_dir / fname))
@@ -11577,7 +11598,7 @@ def api_provision_ping():
     else:
         panel = "Billing Panel"
     ev.info(f"Provisioning: {panel} baglantisi dogrulandi — IP: {client_ip}", category="provision")
-    return ok(status="ok", panel=panel, version="2.7.1", connected=True)
+    return ok(status="ok", panel=panel, version="2.7.2", connected=True)
 
 
 @app.route("/api/provision/create", methods=["POST"])

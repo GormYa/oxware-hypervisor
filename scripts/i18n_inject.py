@@ -8,6 +8,7 @@ Run after i18n_extract.py and i18n_translate.py.
 """
 from __future__ import annotations
 import json
+import os
 import re
 
 SRC = "oxware/frontend/templates/index.html"
@@ -68,8 +69,12 @@ def main():
     lines = src.split("\n")
 
     # Replace in reverse order so earlier line numbers stay valid
-    for lang in ("zh", "de", "es", "en"):
-        full = json.load(open(f"{OUT_DIR}/{lang}_full.json", encoding="utf-8"))
+    for lang in ("fr", "zh", "de", "es", "en"):
+        # Prefer _full.json (augmented) if present, else fall back to raw.
+        full_path = f"{OUT_DIR}/{lang}_full.json"
+        if not os.path.exists(full_path):
+            full_path = f"{OUT_DIR}/{lang}.json"
+        full = json.load(open(full_path, encoding="utf-8"))
         start, end = find_block_bounds(lines, lang)
         if start is None:
             print(f"!! {lang}: block not found, skipping")

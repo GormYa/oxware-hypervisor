@@ -13,7 +13,7 @@ import sys
 
 SRC = "oxware/frontend/templates/index.html"
 OUT_DIR = "tmp_i18n"
-LANGS = ("en", "es", "de", "zh")
+LANGS = ("en", "es", "de", "zh", "fr")
 
 
 def find_block_bounds(lines, lang_name, after_marker="const PAGE_STRINGS"):
@@ -117,7 +117,7 @@ def main():
                   ensure_ascii=False, indent=2, sort_keys=True)
         print(f"{lang}: {len(entries)} entries (block ends line {end})")
     en_keys = set(results["en"].keys())
-    for lang in ("es", "de", "zh"):
+    for lang in ("es", "de", "zh", "fr"):
         missing = sorted(en_keys - set(results[lang].keys()))
         with open(f"{OUT_DIR}/missing_{lang}.txt", "w", encoding="utf-8") as f:
             for k in missing:

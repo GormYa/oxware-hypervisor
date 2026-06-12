@@ -150,6 +150,37 @@ The following hardening was issued in the 2.7.0 release:
   (e) regression of the token-in-URL pattern. Style nits, mypy hints, and
   shellcheck warnings remain informational by design.
 
+The following patches were issued in the 2.7.2 release:
+
+- **SEC-029 — Safe archive extraction (HIGH)**: All `tarfile.extractall()` and
+  `zipfile.extractall()` call sites in `app.py` now route through
+  `security_utils.safe_tar_extract` / `safe_zip_extract`, which reject any
+  member that is an absolute path, contains a `..` parent reference, points
+  at a device file, or is a symlink/hardlink that escapes the destination
+  directory. On Python 3.12+ we also apply `tarfile`'s built-in `data` filter
+  for setuid/setgid stripping. Replaces the unguarded extracts that Bandit
+  flagged as B202.
+- **SEC-030 — DNS rebinding mitigation (MEDIUM)**: New
+  `security_utils.resolve_safe_host()` performs a single DNS resolve, runs
+  the result through the SSRF block list, and returns the literal IP for the
+  caller to connect to. Outbound federation, runbook, and SSO callers now
+  bind to the resolved IP so a rebinding response between resolve and connect
+  cannot redirect the connection.
+- **SEC-031 — FTP backup hardening (MEDIUM, B321/B402)**: `backup_scheduler`
+  no longer unconditionally imports `ftplib`. Plaintext-FTP upload is gated
+  by `OXWARE_ENABLE_INSECURE_FTP=1`. When unset, `_upload_ftp` logs a warning
+  and returns immediately; operators are pointed at SFTP. CI baseline drops
+  the `--skip B321,B402` exemption.
+- **SEC-032 — SSH known-hosts + first-contact UI (MEDIUM, B507)**: New
+  `ssh_known_hosts` module replaces the `paramiko.AutoAddPolicy` pattern with
+  a persistent `/var/lib/oxware/known_hosts` file and a queue of pending
+  fingerprint approvals visible in the panel (`Security → SSH Known Hosts`).
+  Trust-on-first-use is opt-in via `OXWARE_SSH_TOFU=1` during migration.
+  Backup-target SFTP is wired through this policy as the canonical example.
+- **SEC-033 — pip-audit informational baseline (LOW)**: `make security` runs
+  `pip-audit -r requirements.txt`; advisories with a clean upgrade path are
+  tracked in CHANGELOG. CI artifact preserved every run.
+
 The following patches were issued in the 2.7.1 release:
 
 - **SEC-017 — Runbook api_call SSRF (CRITICAL)**: `runbook_executor._run_step`
